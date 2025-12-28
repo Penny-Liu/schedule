@@ -1,5 +1,5 @@
 {
-  "name": "影像醫學部排班系統",
+  "name": "schedule",
   "description": "現代化醫療人員排班與輪班管理系統，具備做四休二自動排程、請假管理與崗位分配功能。",
   "requestFramePermissions": []
 }
