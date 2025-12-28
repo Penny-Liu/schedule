@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { User, UserRole, LeaveRequest, LeaveType, LeaveStatus, SPECIAL_ROLES } from '../types';
 import { db } from '../services/store';
-import { Plus, Check, X, Clock, CalendarDays, ArrowRightLeft, AlertTriangle, ChevronLeft, ChevronRight, Calendar, UserCheck, Briefcase, ThumbsUp } from 'lucide-react';
+import { Plus, Check, X, Clock, CalendarDays, ArrowRightLeft, AlertTriangle, ChevronLeft, ChevronRight, Calendar, UserCheck, Briefcase, ThumbsUp, ThumbsDown } from 'lucide-react';
 
 interface LeavePageProps {
   currentUser: User;
@@ -166,11 +166,13 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
     endDate: '',
     type: LeaveType.PRE_SCHEDULED,
     reason: '',
-    targetUserId: ''
+    targetUserId: '',
+    roleToSwap: '' // For specific role selection
   });
 
   const [validationMsg, setValidationMsg] = useState('');
   const [swapCandidates, setSwapCandidates] = useState<User[]>([]);
+  const [mySwappableRoles, setMySwappableRoles] = useState<string[]>([]);
 
   // Reset form when modal opens
   useEffect(() => {
@@ -180,10 +182,12 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
         endDate: '',
         type: LeaveType.PRE_SCHEDULED,
         reason: '',
-        targetUserId: ''
+        targetUserId: '',
+        roleToSwap: ''
       });
       setValidationMsg('');
       setSwapCandidates([]);
+      setMySwappableRoles([]);
     }
   }, [isModalOpen]);
 
@@ -191,6 +195,7 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
   useEffect(() => {
     setValidationMsg('');
     setSwapCandidates([]);
+    setMySwappableRoles([]);
 
     if (!formData.startDate) return;
 
@@ -214,21 +219,31 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
            setSwapCandidates(candidates);
        }
     } else if (formData.type === LeaveType.DUTY_SWAP) {
-        // Special Logic for Duty Swap (Opening/Late)
+        // Special Logic for Duty Swap (Opening/Late/Assist/Scheduler)
         const shifts = db.getShifts(formData.startDate, formData.startDate);
         const myShift = shifts.find(s => s.userId === currentUser.id);
         
-        // 1. Check if I have a special role
-        const myRole = myShift?.specialRoles?.find(r => r === SPECIAL_ROLES.OPENING || r === SPECIAL_ROLES.LATE);
+        // 1. Get my special roles (Allow ALL special roles: Opening, Late, Assist, Scheduler)
+        const validSpecialRoles = Object.values(SPECIAL_ROLES);
+        const myRoles = myShift?.specialRoles?.filter(r => validSpecialRoles.includes(r)) || [];
         
-        if (!myRole) {
-            setValidationMsg('您在該日期沒有被分配「開機」或「晚班」任務，無法申請任務換班。');
+        if (myRoles.length === 0) {
+            setValidationMsg('您在該日期沒有被分配特殊任務（如開機、晚班、輔班、排班），無法申請任務換班。');
         } else {
+            setMySwappableRoles(myRoles);
+            
+            // If user only has one role, auto select it. If multiple, they must choose (handled in form render)
+            if (myRoles.length === 1 && !formData.roleToSwap) {
+                setFormData(prev => ({...prev, roleToSwap: myRoles[0]}));
+            }
+
             // 2. Find eligible candidates (Must be WORKING that day + Have Capability + NOT have conflicting role)
             const workers = db.getUsersWorkingOnDate(formData.startDate).filter(u => u.id !== currentUser.id);
+            const roleToCheck = formData.roleToSwap || myRoles[0]; // Use selected or first for initial filtering
+
             const validCandidates = workers.filter(u => {
                 // Must have the skill for myRole
-                if (!u.capabilities?.includes(myRole)) return false;
+                if (!u.capabilities?.includes(roleToCheck)) return false;
                 
                 // Must not already have a special role (to keep it simple, or check specific conflicts)
                 const theirShift = shifts.find(s => s.userId === u.id);
@@ -238,13 +253,13 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
             });
             
             if (validCandidates.length === 0) {
-                 setValidationMsg(`該日期沒有其他合格且無特殊任務的同事可供交換「${myRole}」。`);
+                 setValidationMsg(`該日期沒有其他具備「${roleToCheck}」資格且無任務的同事可供交換。`);
             } else {
                  setSwapCandidates(validCandidates);
             }
         }
     }
-  }, [formData.startDate, formData.type, currentUser.id]);
+  }, [formData.startDate, formData.type, formData.roleToSwap, currentUser.id]);
 
 
   const handleCreateLeave = (e: React.FormEvent) => {
@@ -280,9 +295,15 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
     }
 
     // Swap Validation
-    if ((formData.type === LeaveType.SWAP_SHIFT || formData.type === LeaveType.DUTY_SWAP) && !formData.targetUserId) {
-        setValidationMsg('請選擇欲換假的對象。');
-        return;
+    if ((formData.type === LeaveType.SWAP_SHIFT || formData.type === LeaveType.DUTY_SWAP)) {
+        if (!formData.targetUserId) {
+            setValidationMsg('請選擇欲換假的對象。');
+            return;
+        }
+        if (formData.type === LeaveType.DUTY_SWAP && !formData.roleToSwap) {
+             setValidationMsg('請選擇要交換的任務類型。');
+             return;
+        }
     }
 
     const newLeave: LeaveRequest = {
@@ -291,39 +312,45 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
       startDate: formData.startDate,
       endDate: finalEndDate,
       type: formData.type,
-      status: LeaveStatus.PENDING, // This will be overridden in db.addLeave for Swaps
+      status: LeaveStatus.PENDING,
       reason: formData.reason,
       targetUserId: formData.targetUserId || undefined,
+      roleToSwap: formData.roleToSwap || undefined,
+      targetApproval: (formData.type === LeaveType.SWAP_SHIFT || formData.type === LeaveType.DUTY_SWAP) ? 'PENDING' : undefined,
       createdAt: new Date().toISOString()
     };
     
     db.addLeave(newLeave);
-    setLeaves(db.getLeaves());
+    setLeaves([...db.getLeaves()]); // Fix: Force new array for re-render
     setIsModalOpen(false);
   };
 
   const handleStatusChange = (id: string, status: LeaveStatus) => {
-    // Pass current user ID as approver
+    // Alert logic handled by window.alert
     db.updateLeaveStatus(id, status, currentUser.id);
-    setLeaves(db.getLeaves()); // Refresh
+    setLeaves([...db.getLeaves()]); // Fix: Force new array for re-render
     
-    // Add alert for confirmation as requested
-    setTimeout(() => {
-        if (status === LeaveStatus.APPROVED) {
-            alert('申請已成功核准！');
-        } else if (status === LeaveStatus.REJECTED) {
-            alert('申請已駁回。');
-        } else if (status === LeaveStatus.PENDING) {
-             alert('已同意換班，申請已送出待主管審核。');
-        }
-    }, 100);
+    if (status === LeaveStatus.APPROVED) {
+        window.alert('已成功核准該申請，並自動更新排班表。');
+    } else {
+        window.alert('已駁回該申請。');
+    }
+  };
+
+  const handleTargetApproval = (id: string, approvalStatus: 'AGREED' | 'REJECTED') => {
+      db.updateLeaveTargetApproval(id, approvalStatus);
+      setLeaves([...db.getLeaves()]); // Fix: Force new array for re-render
+      if (approvalStatus === 'AGREED') {
+          window.alert('您已同意此換班申請，該申請將送交主管審核。');
+      } else {
+          window.alert('您已拒絕此換班申請，該申請將被標記為駁回。');
+      }
   };
 
   const getStatusColor = (status: LeaveStatus) => {
     switch (status) {
       case LeaveStatus.APPROVED: return 'bg-green-50 text-green-700 border-green-200';
       case LeaveStatus.REJECTED: return 'bg-red-50 text-red-700 border-red-200';
-      case LeaveStatus.WAITING_FOR_TARGET: return 'bg-indigo-50 text-indigo-700 border-indigo-200';
       default: return 'bg-yellow-50 text-yellow-700 border-yellow-200';
     }
   };
@@ -334,7 +361,7 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
       return <CalendarDays size={14} className="text-teal-500" />;
   };
 
-  // Filter leaves: Supervisor & Admin see ALL. Employee sees own.
+  // Filter leaves: Supervisor & Admin see ALL. Employee sees own (as requestor or target).
   const displayedLeaves = (currentUser.role === UserRole.SUPERVISOR || currentUser.role === UserRole.SYSTEM_ADMIN)
     ? leaves 
     : leaves.filter(l => l.userId === currentUser.id || l.targetUserId === currentUser.id);
@@ -362,7 +389,10 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
           const approver = leave.approverId ? users.find(u => u.id === leave.approverId) : null;
           const days = Math.ceil((new Date(leave.endDate).getTime() - new Date(leave.startDate).getTime()) / (1000 * 3600 * 24)) + 1;
           
-          const isTargetUser = leave.targetUserId === currentUser.id;
+          // Determine if target approval flow is active
+          const isSwap = leave.type === LeaveType.SWAP_SHIFT || leave.type === LeaveType.DUTY_SWAP;
+          const needsTargetAction = isSwap && leave.status === LeaveStatus.PENDING && leave.targetApproval === 'PENDING';
+          const waitingForSupervisor = !isSwap || (isSwap && leave.targetApproval === 'AGREED');
 
           return (
             <div key={leave.id} className="bg-white rounded-xl shadow-[0_2px_12px_rgba(0,0,0,0.03)] border border-gray-100 p-5 flex flex-col hover:border-teal-100 transition-colors">
@@ -377,11 +407,12 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
                   <div>
                     <div className="font-bold text-gray-800 flex items-center gap-1">
                         {requestor?.name}
-                        {(leave.type === LeaveType.SWAP_SHIFT || leave.type === LeaveType.DUTY_SWAP) && <ArrowRightLeft size={12} className="text-gray-400" />}
+                        {isSwap && <ArrowRightLeft size={12} className="text-gray-400" />}
                         {targetUser && <span className="text-blue-600">{targetUser.name}</span>}
                     </div>
                     <div className="text-xs text-gray-500 font-medium flex items-center gap-1 mt-0.5">
                         {getTypeIcon(leave.type)} {leave.type}
+                        {leave.roleToSwap && <span className="text-indigo-600">({leave.roleToSwap})</span>}
                     </div>
                   </div>
                 </div>
@@ -415,25 +446,25 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
               <div className="mt-auto pt-4 border-t border-gray-50 flex flex-col gap-2">
                 
                 {/* 1. Target User Approval Step */}
-                {leave.status === LeaveStatus.WAITING_FOR_TARGET && isTargetUser && (
-                    <div className="flex gap-2 w-full">
+                {needsTargetAction && currentUser.id === leave.targetUserId && (
+                    <div className="flex gap-2 w-full animate-pulse">
                         <button 
-                          onClick={() => handleStatusChange(leave.id, LeaveStatus.REJECTED)}
-                          className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
+                          onClick={() => handleTargetApproval(leave.id, 'REJECTED')}
+                          className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors border border-red-100"
                         >
-                          <X size={14} /> 拒絕
+                          <ThumbsDown size={14} /> 拒絕
                         </button>
                         <button 
-                          onClick={() => handleStatusChange(leave.id, LeaveStatus.PENDING)}
-                          className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors"
+                          onClick={() => handleTargetApproval(leave.id, 'AGREED')}
+                          className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-xs font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors border border-blue-100"
                         >
                           <ThumbsUp size={14} /> 同意
                         </button>
                     </div>
                 )}
 
-                {/* 2. Supervisor Approval Step (Only show for PENDING) */}
-                {(currentUser.role === UserRole.SUPERVISOR || currentUser.role === UserRole.SYSTEM_ADMIN) && leave.status === LeaveStatus.PENDING && (
+                {/* 2. Supervisor Approval Step (Only if Target Agreed OR Not a Swap) */}
+                {(currentUser.role === UserRole.SUPERVISOR || currentUser.role === UserRole.SYSTEM_ADMIN) && leave.status === LeaveStatus.PENDING && waitingForSupervisor && (
                   <div className="flex gap-2 w-full">
                     <button 
                       onClick={() => handleStatusChange(leave.id, LeaveStatus.REJECTED)}
@@ -455,12 +486,9 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
                     {leave.status === LeaveStatus.PENDING ? (
                         <div className="text-xs text-gray-400 flex items-center gap-1 bg-gray-50 px-2 py-1 rounded">
                             <Clock size={12} /> 
-                            {leave.targetUserId === currentUser.id ? '等待主管審核' : '等待審核'}
-                        </div>
-                    ) : leave.status === LeaveStatus.WAITING_FOR_TARGET ? (
-                         <div className="text-xs text-indigo-400 flex items-center gap-1 bg-indigo-50 px-2 py-1 rounded font-bold">
-                            <Clock size={12} /> 
-                            等待 {targetUser?.name} 同意
+                            {needsTargetAction 
+                                ? `等待 ${targetUser?.name} 同意` 
+                                : (waitingForSupervisor ? '等待主管審核' : '處理中')}
                         </div>
                     ) : (
                          <div className="text-[10px] text-gray-400 flex items-center gap-1">
@@ -531,6 +559,25 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
                     />
                   )}
               </div>
+
+              {/* Duty Swap: Select specific role if needed */}
+              {formData.type === LeaveType.DUTY_SWAP && mySwappableRoles.length > 0 && (
+                  <div className="animate-in fade-in duration-300">
+                      <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">選擇要交換的任務</label>
+                      <div className="flex gap-2">
+                        {mySwappableRoles.map(role => (
+                            <button
+                                key={role}
+                                type="button"
+                                onClick={() => setFormData({...formData, roleToSwap: role})}
+                                className={`flex-1 py-2 text-xs rounded-lg border font-bold transition-all ${formData.roleToSwap === role ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : 'bg-white text-gray-500 border-gray-200'}`}
+                            >
+                                {role}
+                            </button>
+                        ))}
+                      </div>
+                  </div>
+              )}
 
               {/* Swap Shift Target Selection */}
               {(formData.type === LeaveType.SWAP_SHIFT || formData.type === LeaveType.DUTY_SWAP) && (

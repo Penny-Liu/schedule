@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { User, UserRole, StaffGroup, SYSTEM_OFF, StationDefault, SPECIAL_ROLES } from '../types';
 import { db } from '../services/store';
-import { Mail, Shield, Users, Trash2, Plus, Check, CheckSquare, Square, Pencil, X, Save, Palette, AlertCircle, Star, BookOpen } from 'lucide-react';
+import { Mail, Shield, Users, Trash2, Plus, Check, CheckSquare, Square, Pencil, X, Save, Palette, AlertCircle, Star, BookOpen, Key } from 'lucide-react';
 import ConfirmModal from '../components/ConfirmModal';
 
 interface StaffPageProps {
@@ -137,6 +137,15 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
     } else {
       resetForm();
     }
+  };
+
+  const handleResetPassword = () => {
+      if (editingId) {
+          if (window.confirm('確定要將此使用者的密碼重置為預設值 (1234) 嗎？')) {
+              db.resetPassword(editingId);
+              alert('密碼已重置為 1234。');
+          }
+      }
   };
 
   // 3-State Toggle: None -> Certified -> Learning -> None
@@ -379,27 +388,39 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                 </div>
               </div>
 
-              <div className="pt-2 flex gap-2">
-                 {editingId && (
+              <div className="pt-2 flex flex-col gap-2">
+                 <div className="flex gap-2">
+                    {editingId && (
+                        <button 
+                            type="button" 
+                            onClick={handleCancelEdit}
+                            className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold py-2.5 rounded-lg transition-colors text-sm"
+                        >
+                            取消
+                        </button>
+                    )}
                     <button 
-                        type="button" 
-                        onClick={handleCancelEdit}
-                        className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold py-2.5 rounded-lg transition-colors text-sm"
+                        type="submit" 
+                        className={`flex-1 font-bold py-2.5 rounded-lg transition-colors text-sm flex items-center justify-center gap-2 shadow-sm ${
+                            editingId 
+                            ? 'bg-teal-600 hover:bg-teal-700 text-white shadow-teal-200' 
+                            : 'bg-gray-800 hover:bg-gray-900 text-white shadow-gray-300'
+                        }`}
                     >
-                        取消
+                        {editingId ? <Save size={16} /> : <Plus size={16} />} 
+                        {editingId ? '儲存變更' : '建立帳號'}
                     </button>
+                 </div>
+                 
+                 {editingId && (
+                     <button 
+                        type="button"
+                        onClick={handleResetPassword}
+                        className="w-full border border-gray-300 hover:bg-gray-50 text-gray-600 font-medium py-2 rounded-lg transition-colors text-xs flex items-center justify-center gap-1"
+                     >
+                         <Key size={12} /> 重置密碼 (預設1234)
+                     </button>
                  )}
-                 <button 
-                    type="submit" 
-                    className={`flex-1 font-bold py-2.5 rounded-lg transition-colors text-sm flex items-center justify-center gap-2 shadow-sm ${
-                        editingId 
-                        ? 'bg-teal-600 hover:bg-teal-700 text-white shadow-teal-200' 
-                        : 'bg-gray-800 hover:bg-gray-900 text-white shadow-gray-300'
-                    }`}
-                >
-                    {editingId ? <Save size={16} /> : <Plus size={16} />} 
-                    {editingId ? '儲存變更' : '建立帳號'}
-                 </button>
               </div>
             </form>
           </div>

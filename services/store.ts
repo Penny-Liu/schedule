@@ -1,6 +1,6 @@
-
-import { User, Shift, LeaveRequest, SystemSettings, UserRole, StaffGroup, StationDefault, SYSTEM_OFF, RosterCycle, LeaveStatus, LeaveType, Holiday, DateEventType, SPECIAL_ROLES } from '../types';
+import { User, Shift, LeaveRequest, SystemSettings, StationDefault, SYSTEM_OFF, RosterCycle, DateEventType, Holiday, LeaveStatus, LeaveType, StaffGroup, SPECIAL_ROLES } from '../types';
 import { MOCK_USERS, MOCK_LEAVES } from './mockData';
+import { supabase } from './supabaseClient';
 
 class Store {
   users: User[] = [];
@@ -15,100 +15,111 @@ class Store {
     stationDisplayOrder: []
   };
   currentUser: User | null = null;
+  isLoaded: boolean = false;
 
   constructor() {
-    this.load();
+    // We do not load in constructor anymore because it needs to be async
   }
 
-  private load() {
+  // New method to fetch all data from Supabase
+  async initializeData() {
+    if (this.isLoaded) return;
+
     try {
-      const storedUsers = localStorage.getItem('med_users');
-      const storedShifts = localStorage.getItem('med_shifts');
-      const storedLeaves = localStorage.getItem('med_leaves');
-      const storedSettings = localStorage.getItem('med_settings');
+      console.log('Fetching data from Supabase...');
       
-      this.users = storedUsers ? JSON.parse(storedUsers) : MOCK_USERS;
-      this.shifts = storedShifts ? JSON.parse(storedShifts) : [];
-      this.leaves = storedLeaves ? JSON.parse(storedLeaves) : MOCK_LEAVES;
-      
-      if (storedSettings) {
-        this.settings = JSON.parse(storedSettings);
-        
-        // Migration: Check if stationRequirements exists and is in correct format
-        if (!this.settings.stationRequirements) {
-            this.settings.stationRequirements = {};
-        }
-        
-        // Migration: Check cycleStartDate
-        if (!this.settings.cycleStartDate) {
-            this.settings.cycleStartDate = '2024-01-01';
-        }
+      const [usersRes, shiftsRes, leavesRes, settingsRes] = await Promise.all([
+        supabase.from('users').select('*'),
+        supabase.from('shifts').select('*'),
+        supabase.from('leaves').select('*'),
+        supabase.from('settings').select('data').eq('id', 1).single()
+      ]);
 
-        // Migration: Check display order
-        if (!this.settings.stationDisplayOrder) {
-            this.settings.stationDisplayOrder = [];
-        }
+      if (usersRes.data && usersRes.data.length > 0) {
+        this.users = usersRes.data;
+      } else {
+        // If DB is empty, use Mock and seed DB (Optional, executed only once)
+        console.log('Database empty, seeding mock users...');
+        this.users = MOCK_USERS;
+        await supabase.from('users').insert(MOCK_USERS);
+      }
 
-        // Migration: Check if holidays exists and ensure 'type' exists
+      if (shiftsRes.data) this.shifts = shiftsRes.data;
+      if (leavesRes.data) {
+          // If empty, maybe seed mock leaves
+          if (leavesRes.data.length === 0 && this.users === MOCK_USERS) {
+               this.leaves = MOCK_LEAVES;
+               await supabase.from('leaves').insert(MOCK_LEAVES);
+          } else {
+               this.leaves = leavesRes.data;
+          }
+      }
+
+      if (settingsRes.data && settingsRes.data.data) {
+        this.settings = { ...this.settings, ...settingsRes.data.data };
+      } else {
+        // Init settings row
+        await this.saveSettings();
+      }
+
+      // Migration checks (Same as before)
+      this.ensureSettingsIntegrity();
+
+      this.isLoaded = true;
+      console.log('Data initialized successfully');
+    } catch (e) {
+      console.error("Failed to fetch data from Supabase", e);
+      // Fallback to local storage or mock if critical failure
+      this.loadFromLocalStorage();
+    }
+  }
+
+  private loadFromLocalStorage() {
+      // Legacy fallback
+      try {
+        const storedUsers = localStorage.getItem('med_users');
+        if (storedUsers) this.users = JSON.parse(storedUsers);
+        else this.users = MOCK_USERS;
+        // ... Load others if needed
+        this.isLoaded = true;
+      } catch (e) { console.error(e); }
+  }
+
+  private ensureSettingsIntegrity() {
+      // Logic from previous load() to ensure structure is correct
+        if (!this.settings.stationRequirements) this.settings.stationRequirements = {};
+        if (!this.settings.cycleStartDate) this.settings.cycleStartDate = '2024-01-01';
+        if (!this.settings.stationDisplayOrder) this.settings.stationDisplayOrder = [];
         if (!this.settings.holidays) {
             this.settings.holidays = [];
         } else {
-            // Migration for old data without type
             this.settings.holidays = this.settings.holidays.map(h => ({
                 ...h,
                 type: h.type || DateEventType.NATIONAL
             }));
         }
-
-        // Ensure every station has a 7-day array
         this.settings.stations.forEach(s => {
             if (s !== SYSTEM_OFF) {
                 const req = this.settings.stationRequirements[s];
-                // If undefined or old number format, reset to array of 1s
                 if (!req || !Array.isArray(req)) {
                     const oldVal = typeof req === 'number' ? req : 1;
                     this.settings.stationRequirements[s] = [oldVal, oldVal, oldVal, oldVal, oldVal, oldVal, oldVal];
                 }
             }
         });
-
-      } else {
-        // Initialize defaults
-        const defaultStations = Object.values(StationDefault);
-        const defaultRequirements: Record<string, number[]> = {};
-        defaultStations.forEach(s => {
-             if (s !== SYSTEM_OFF && s !== StationDefault.UNASSIGNED) {
-                 defaultRequirements[s] = [1, 1, 1, 1, 1, 1, 1]; // Sun to Sat
-             }
-        });
-
-        this.settings = {
-          stations: defaultStations,
-          cycles: [],
-          holidays: [],
-          stationRequirements: defaultRequirements,
-          cycleStartDate: '2024-01-01',
-          stationDisplayOrder: []
-        };
-      }
-    } catch (e) {
-      console.error("Failed to load data", e);
-      this.users = MOCK_USERS;
-      this.shifts = [];
-      this.leaves = MOCK_LEAVES;
-      this.settings = { stations: Object.values(StationDefault), cycles: [], holidays: [], stationRequirements: {}, cycleStartDate: '2024-01-01', stationDisplayOrder: [] };
-    }
   }
 
-  private save() {
-    try {
-      localStorage.setItem('med_users', JSON.stringify(this.users));
-      localStorage.setItem('med_shifts', JSON.stringify(this.shifts));
-      localStorage.setItem('med_leaves', JSON.stringify(this.leaves));
-      localStorage.setItem('med_settings', JSON.stringify(this.settings));
-    } catch (e) {
-      console.error("Failed to save data", e);
-    }
+  // --- Data Persistence Methods (Sync Local + Async Remote) ---
+
+  // Settings
+  private async saveSettings() {
+    // 1. Local update (already done by caller usually)
+    // 2. Remote update
+    const { error } = await supabase
+        .from('settings')
+        .upsert({ id: 1, data: this.settings });
+    
+    if (error) console.error('Error saving settings:', error);
   }
 
   // Auth
@@ -125,82 +136,109 @@ class Store {
     this.currentUser = null;
   }
 
+  async changePassword(userId: string, newPass: string) {
+      const u = this.users.find(u => u.id === userId);
+      if (u) {
+          u.password = newPass;
+          // Sync DB
+          await supabase.from('users').update({ password: newPass }).eq('id', userId);
+      }
+  }
+
+  async resetPassword(userId: string) {
+      const u = this.users.find(u => u.id === userId);
+      if (u) {
+          u.password = '1234';
+          // Sync DB
+          await supabase.from('users').update({ password: '1234' }).eq('id', userId);
+      }
+  }
+
   // Users
   getUsers() { return this.users; }
-  addUser(user: User) {
+  
+  async addUser(user: User) {
     this.users.push(user);
-    this.save();
+    await supabase.from('users').insert(user);
   }
-  updateUser(id: string, updates: Partial<User>) {
+  
+  async updateUser(id: string, updates: Partial<User>) {
     this.users = this.users.map(u => u.id === id ? { ...u, ...updates } : u);
-    this.save();
+    await supabase.from('users').update(updates).eq('id', id);
   }
-  deleteUser(id: string) {
+  
+  async deleteUser(id: string) {
     this.users = this.users.filter(u => u.id !== id);
-    this.save();
+    await supabase.from('users').delete().eq('id', id);
   }
 
   // Shifts
   getShifts(startDate: string, endDate: string) {
-    // If no dates provided, return all (simplified for demo)
     if (!startDate && !endDate) return this.shifts;
     return this.shifts.filter(s => s.date >= startDate && s.date <= endDate);
   }
   
-  upsertShift(shift: Shift) {
+  async upsertShift(shift: Shift) {
     const index = this.shifts.findIndex(s => s.userId === shift.userId && s.date === shift.date);
     if (index >= 0) {
       this.shifts[index] = shift;
     } else {
       this.shifts.push(shift);
     }
-    this.save();
+    // Sync DB
+    await supabase.from('shifts').upsert(shift);
   }
 
   // Leaves
   getLeaves() { return this.leaves; }
   
-  addLeave(leave: LeaveRequest) {
-    // If it's a swap type, status starts as WAITING_FOR_TARGET
-    if (leave.type === LeaveType.SWAP_SHIFT || leave.type === LeaveType.DUTY_SWAP) {
-        leave.status = LeaveStatus.WAITING_FOR_TARGET;
-    } else {
-        leave.status = LeaveStatus.PENDING;
-    }
+  async addLeave(leave: LeaveRequest) {
     this.leaves.push(leave);
-    this.save();
+    await supabase.from('leaves').insert(leave);
   }
 
-  updateLeaveStatus(id: string, status: LeaveStatus, approverId: string) {
+  async updateLeaveTargetApproval(id: string, approvalStatus: 'AGREED' | 'REJECTED') {
+      const leaveIndex = this.leaves.findIndex(l => l.id === id);
+      if (leaveIndex === -1) return;
+      
+      const leave = this.leaves[leaveIndex];
+      const newStatus = approvalStatus === 'REJECTED' ? LeaveStatus.REJECTED : leave.status;
+
+      const updates = { targetApproval: approvalStatus, status: newStatus };
+      this.leaves[leaveIndex] = { ...leave, ...updates };
+      
+      await supabase.from('leaves').update(updates).eq('id', id);
+  }
+
+  async updateLeaveStatus(id: string, status: LeaveStatus, approverId: string) {
     const leaveIndex = this.leaves.findIndex(l => l.id === id);
     if (leaveIndex === -1) return;
 
     const leave = this.leaves[leaveIndex];
+    const processedAt = new Date().toISOString();
     
-    // Update the leave record
-    // Only update processedAt if it's a final state (Approved/Rejected)
-    const isFinal = status === LeaveStatus.APPROVED || status === LeaveStatus.REJECTED;
-    
-    const updatedLeave = { 
-        ...leave, 
-        status, 
-        approverId: isFinal ? approverId : undefined, 
-        processedAt: isFinal ? new Date().toISOString() : undefined
-    };
+    // 1. Update Leave Record
+    const updatedLeave = { ...leave, status, approverId, processedAt };
     this.leaves[leaveIndex] = updatedLeave;
     
-    // LOGIC: If Approved, update shifts immediately
+    await supabase.from('leaves').update({ status, approverId, processedAt }).eq('id', id);
+    
+    // 2. If Approved, update shifts (Logic remains same, but calls upsertShift which handles DB)
     if (status === LeaveStatus.APPROVED) {
+        await this.applyLeaveToShifts(updatedLeave);
+    }
+  }
+
+  // Helper to apply approved leave to shifts
+  private async applyLeaveToShifts(leave: LeaveRequest) {
         const startDate = new Date(leave.startDate);
         const endDate = new Date(leave.endDate);
         
-        // Only loop once (usually) unless long leave
         for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
             const dateStr = d.toISOString().split('T')[0];
 
             if (leave.type === LeaveType.PRE_SCHEDULED || leave.type === LeaveType.LONG_LEAVE) {
-                // Requestor -> OFF
-                this.upsertShift({
+                await this.upsertShift({
                     id: `${leave.userId}-${dateStr}`,
                     userId: leave.userId,
                     date: dateStr,
@@ -209,18 +247,16 @@ class Store {
                     isAutoGenerated: false
                 });
             } else if (leave.type === LeaveType.CANCEL_LEAVE) {
-                // Requestor -> Unassigned (Available for work)
-                this.upsertShift({
+                await this.upsertShift({
                     id: `${leave.userId}-${dateStr}`,
                     userId: leave.userId,
                     date: dateStr,
-                    station: StationDefault.UNASSIGNED, // Put back to pool
+                    station: StationDefault.UNASSIGNED,
                     specialRoles: [],
                     isAutoGenerated: false
                 });
             } else if (leave.type === LeaveType.SWAP_SHIFT) {
-                // Requestor -> OFF
-                this.upsertShift({
+                await this.upsertShift({
                     id: `${leave.userId}-${dateStr}`,
                     userId: leave.userId,
                     date: dateStr,
@@ -228,10 +264,8 @@ class Store {
                     specialRoles: [],
                     isAutoGenerated: false
                 });
-
-                // Target -> Unassigned (Available for work, cancelling their OFF)
                 if (leave.targetUserId) {
-                    this.upsertShift({
+                    await this.upsertShift({
                         id: `${leave.targetUserId}-${dateStr}`,
                         userId: leave.targetUserId,
                         date: dateStr,
@@ -241,28 +275,22 @@ class Store {
                     });
                 }
             } else if (leave.type === LeaveType.DUTY_SWAP) {
-                // Special Role Swap (Opening/Late)
-                // 1. Find the Shift of the Requestor (Who has the role)
+                // Logic for Duty Swap
                 const requestorShift = this.shifts.find(s => s.userId === leave.userId && s.date === dateStr);
-                // 2. Find the Shift of the Target (Who will take the role)
                 const targetShift = this.shifts.find(s => s.userId === leave.targetUserId && s.date === dateStr);
 
                 if (requestorShift && leave.targetUserId) {
-                    // Identify which special roles the Requestor has
                     const rolesToSwap = requestorShift.specialRoles.filter(r => 
-                        r === SPECIAL_ROLES.OPENING || r === SPECIAL_ROLES.LATE
+                        leave.roleToSwap ? r === leave.roleToSwap : Object.values(SPECIAL_ROLES).includes(r)
                     );
 
-                    // Remove roles from Requestor
                     const newRequestorRoles = requestorShift.specialRoles.filter(r => !rolesToSwap.includes(r));
-                    this.upsertShift({
+                    await this.upsertShift({
                         ...requestorShift,
                         specialRoles: newRequestorRoles,
-                        isAutoGenerated: false // Manual override now
+                        isAutoGenerated: false
                     });
 
-                    // Add roles to Target
-                    // Ensure we create a shift object if target doesn't have one yet (unlikely if they are 'WORK')
                     const newTargetShift = targetShift ? { ...targetShift } : {
                         id: `${leave.targetUserId}-${dateStr}`,
                         userId: leave.targetUserId,
@@ -272,114 +300,102 @@ class Store {
                         isAutoGenerated: false
                     };
                     
-                    newTargetShift.specialRoles = [...new Set([...newTargetShift.specialRoles, ...rolesToSwap])]; // Unique add
+                    newTargetShift.specialRoles = [...new Set([...newTargetShift.specialRoles, ...rolesToSwap])];
                     newTargetShift.isAutoGenerated = false;
-                    this.upsertShift(newTargetShift);
+                    await this.upsertShift(newTargetShift);
                 }
             }
         }
-    }
-    // If Rejected, we simply don't touch the shifts.
-
-    this.save();
   }
-  
+
   // Settings: Stations
   getStations() { return this.settings.stations; }
   getStationRequirements() { return this.settings.stationRequirements || {}; }
   
-  addStation(name: string) {
+  async addStation(name: string) {
     if (!this.settings.stations.includes(name)) {
       this.settings.stations.push(name);
-      // Default requirement [1,1,1,1,1,1,1]
       this.settings.stationRequirements[name] = [1, 1, 1, 1, 1, 1, 1];
-      this.save();
+      await this.saveSettings();
     }
   }
-  removeStation(name: string) {
+  async removeStation(name: string) {
     this.settings.stations = this.settings.stations.filter(s => s !== name);
     delete this.settings.stationRequirements[name];
-    this.save();
+    await this.saveSettings();
   }
-  updateStationRequirement(name: string, dayIndex: number, count: number) {
+  async updateStationRequirement(name: string, dayIndex: number, count: number) {
     if (this.settings.stationRequirements[name]) {
         this.settings.stationRequirements[name][dayIndex] = count;
-        this.save();
+        await this.saveSettings();
     }
   }
 
   // Settings: Display Order
   getStationDisplayOrder(): string[] {
-      // Ensure we have a valid order list that contains all current stations AND special roles AND system rows
       const currentStations = this.settings.stations.filter(s => s !== SYSTEM_OFF && s !== StationDefault.UNASSIGNED);
       const specialRoles = [SPECIAL_ROLES.OPENING, SPECIAL_ROLES.LATE, SPECIAL_ROLES.ASSIST, SPECIAL_ROLES.SCHEDULER];
-      const systemRows = [StationDefault.UNASSIGNED, SYSTEM_OFF]; // Explicitly track these so they can be reordered
-      
+      const systemRows = [StationDefault.UNASSIGNED, SYSTEM_OFF];
       const allItems = [...new Set([...currentStations, ...specialRoles, ...systemRows])];
       const savedOrder = this.settings.stationDisplayOrder || [];
-
-      // Merge: Keep saved order for valid items, append new/missing items at the end
       const mergedOrder = [
-          ...savedOrder.filter(item => allItems.includes(item)), // Keep existing validity & order
-          ...allItems.filter(item => !savedOrder.includes(item)) // Add new ones
+          ...savedOrder.filter(item => allItems.includes(item)),
+          ...allItems.filter(item => !savedOrder.includes(item))
       ];
-
       return mergedOrder;
   }
 
-  updateStationDisplayOrder(newOrder: string[]) {
+  async updateStationDisplayOrder(newOrder: string[]) {
       this.settings.stationDisplayOrder = newOrder;
-      this.save();
+      await this.saveSettings();
   }
 
   // Settings: Cycles
   getCycles() { return this.settings.cycles; }
-  addCycle(cycle: RosterCycle) {
+  async addCycle(cycle: RosterCycle) {
     this.settings.cycles.push(cycle);
     this.settings.cycles.sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime());
-    this.save();
+    await this.saveSettings();
   }
-  deleteCycle(id: string) {
+  async deleteCycle(id: string) {
     this.settings.cycles = this.settings.cycles.filter(c => c.id !== id);
-    this.save();
+    await this.saveSettings();
   }
 
   getCycleStartDate() {
       return this.settings.cycleStartDate || '2024-01-01';
   }
 
-  updateCycleStartDate(date: string) {
+  async updateCycleStartDate(date: string) {
       this.settings.cycleStartDate = date;
-      this.save();
+      await this.saveSettings();
   }
 
   // Settings: Holidays / Events
   getHolidays() { return this.settings.holidays || []; }
   
-  addHoliday(holiday: Holiday) {
+  async addHoliday(holiday: Holiday) {
       if (!this.settings.holidays) this.settings.holidays = [];
-      // Avoid duplicates
       if (!this.settings.holidays.some(h => h.date === holiday.date)) {
           this.settings.holidays.push(holiday);
           this.settings.holidays.sort((a, b) => a.date.localeCompare(b.date));
-          this.save();
+          await this.saveSettings();
       }
   }
   
-  removeHoliday(date: string) {
+  async removeHoliday(date: string) {
       if (this.settings.holidays) {
           this.settings.holidays = this.settings.holidays.filter(h => h.date !== date);
-          this.save();
+          await this.saveSettings();
       }
   }
 
-  // Helper to find special event for a date
   getEvent(date: string): Holiday | undefined {
       return this.settings.holidays?.find(h => h.date === date);
   }
 
   importTaiwanHolidays() {
-      // Hardcoded list of Taiwan Holidays for 2025-2026
+      // ... (Keep existing holiday list logic)
       const rawHolidays = [
           { date: '2025-01-01', name: '元旦' },
           { date: '2025-01-27', name: '農曆春節' },
@@ -396,7 +412,7 @@ class Store {
           { date: '2025-10-06', name: '中秋節' },
           { date: '2025-10-10', name: '國慶日' },
           { date: '2026-01-01', name: '元旦' },
-          { date: '2026-02-16', name: '除夕' }, // Approx
+          { date: '2026-02-16', name: '除夕' }, 
           { date: '2026-02-17', name: '春節' },
           { date: '2026-02-28', name: '和平紀念日' },
           { date: '2026-04-04', name: '兒童清明' },
@@ -424,62 +440,45 @@ class Store {
       });
 
       this.settings.holidays.sort((a, b) => a.date.localeCompare(b.date));
-      this.save();
+      this.saveSettings();
       return addedCount;
   }
 
-  // 4-on-2-off Logic with Dynamic Start Date
   calculateBaseStatus(dateStr: string, groupId: StaffGroup): string | null {
+    // Keep exact logic, this is pure calculation
     const referenceDate = new Date(this.settings.cycleStartDate || '2024-01-01');
     const targetDate = new Date(dateStr);
-    
-    // Ensure accurate day difference calculation
-    // Reset time to midnight for both to avoid timezone/hour issues
     const ref = new Date(referenceDate.getFullYear(), referenceDate.getMonth(), referenceDate.getDate());
     const target = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate());
-
     const diffTime = target.getTime() - ref.getTime();
     const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24)); 
-    
-    // Handle negative difference if target is before ref
     if (diffDays < 0) return null;
-
     let offset = 0;
     if (groupId === StaffGroup.GROUP_B) offset = 2;
     if (groupId === StaffGroup.GROUP_C) offset = 4;
-
     const cycleDay = (diffDays + offset) % 6;
-
     if (cycleDay >= 4) {
       return SYSTEM_OFF;
     }
     return null;
   }
 
-  // Helper: Check if user is OFF on a specific date (Considering Shifts, CLOSED events and Base Cycle)
   getUserStatusOnDate(userId: string, dateStr: string): 'WORK' | 'OFF' {
+    // Keep exact logic
     const user = this.users.find(u => u.id === userId);
     if (!user) return 'OFF';
-
-    // 0. Check Manual Shift Override (Highest Priority)
     const shift = this.shifts.find(s => s.userId === userId && s.date === dateStr);
     if (shift) {
         return shift.station === SYSTEM_OFF ? 'OFF' : 'WORK';
     }
-
-    // 1. Check System Event (CLINIC CLOSED)
     const event = this.getEvent(dateStr);
     if (event && event.type === DateEventType.CLOSED) {
         return 'OFF';
     }
-
-    // 2. Check Natural Cycle
     const baseStatus = this.calculateBaseStatus(dateStr, user.groupId);
     if (baseStatus === SYSTEM_OFF) {
         return 'OFF';
     }
-
-    // 3. Check Approved Leaves
     const approvedLeave = this.leaves.find(l => 
         l.userId === userId && 
         l.status === LeaveStatus.APPROVED &&
@@ -487,38 +486,37 @@ class Store {
         dateStr <= l.endDate
     );
     if (approvedLeave) return 'OFF';
-
     return 'WORK';
   }
 
-  // Helper: Get all users who are OFF on a specific date
   getUsersOffOnDate(dateStr: string): User[] {
     return this.users.filter(user => this.getUserStatusOnDate(user.id, dateStr) === 'OFF');
   }
 
-  // Helper: Get all users who are WORKING on a specific date
   getUsersWorkingOnDate(dateStr: string): User[] {
     return this.users.filter(user => this.getUserStatusOnDate(user.id, dateStr) === 'WORK');
   }
 
-  // --- Dedicated Auto Assign for Special Roles (Opening/Late) ---
-  // Updated: Prevents consecutive days and ensures fairness
-  autoAssignSpecialRoles(startDate: string, endDate: string) {
+  // --- Auto Schedule Functions ---
+  // Note: These modify "this.shifts" in a loop.
+  // To optimize, we should batch database updates, but for simplicity/code preservation, 
+  // we will call upsertShift inside (which awaits DB). 
+  // It might be slower but ensures consistency.
+  
+  async autoAssignSpecialRoles(startDate: string, endDate: string) {
+      // ... (Existing Logic, but make it async to wait for DB saves)
       const start = new Date(startDate);
       const end = new Date(endDate);
       const specialRolesToAssign = [SPECIAL_ROLES.OPENING, SPECIAL_ROLES.LATE];
 
-      // 1. Calculate Historical Load for Fairness
       const roleCounts: Record<string, Record<string, number>> = {
           [SPECIAL_ROLES.OPENING]: {},
           [SPECIAL_ROLES.LATE]: {}
       };
-      
       this.users.forEach(u => {
           roleCounts[SPECIAL_ROLES.OPENING][u.id] = 0;
           roleCounts[SPECIAL_ROLES.LATE][u.id] = 0;
       });
-
       this.shifts.forEach(s => {
           if (s.specialRoles) {
               s.specialRoles.forEach(r => {
@@ -529,11 +527,8 @@ class Store {
           }
       });
 
-      // Loop through each day in range
       for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
           const dateStr = d.toISOString().split('T')[0];
-          
-          // Calculate yesterday string for consecutive check
           const yesterday = new Date(d);
           yesterday.setDate(yesterday.getDate() - 1);
           const yesterdayStr = yesterday.toISOString().split('T')[0];
@@ -558,24 +553,14 @@ class Store {
                   });
                   
                   if (eligible.length > 0) {
-                      // SORTING LOGIC: 
-                      // 1. Avoid Consecutive (High Penalty)
-                      // 2. Average Load (Fairness)
-                      // 3. Random
                       eligible.sort((a, b) => {
-                          // Check if A or B had this role YESTERDAY
                           const aHadYesterday = this.shifts.some(s => s.userId === a.id && s.date === yesterdayStr && s.specialRoles.includes(role));
                           const bHadYesterday = this.shifts.some(s => s.userId === b.id && s.date === yesterdayStr && s.specialRoles.includes(role));
-
-                          if (aHadYesterday && !bHadYesterday) return 1; // A bad, B good -> B first
-                          if (!aHadYesterday && bHadYesterday) return -1; // A good, B bad -> A first
-
-                          // Check Load
+                          if (aHadYesterday && !bHadYesterday) return 1; 
+                          if (!aHadYesterday && bHadYesterday) return -1;
                           const countA = roleCounts[role][a.id] || 0;
                           const countB = roleCounts[role][b.id] || 0;
                           if (countA !== countB) return countA - countB;
-                          
-                          // Random
                           return Math.random() - 0.5;
                       });
 
@@ -586,15 +571,15 @@ class Store {
                       if (existingShiftIdx >= 0) {
                           const s = this.shifts[existingShiftIdx];
                           s.specialRoles = [...s.specialRoles, role];
-                          // If they now have Opening/Late, clear conflicting stations if assigned
                           if (role === SPECIAL_ROLES.OPENING || role === SPECIAL_ROLES.LATE) {
                               if (s.station === StationDefault.FLOOR_CONTROL || s.station === StationDefault.REMOTE) {
                                   s.station = StationDefault.UNASSIGNED; 
                               }
                           }
-                          s.isAutoGenerated = true; 
+                          s.isAutoGenerated = true;
+                          await this.upsertShift(s); // Async Update
                       } else {
-                          this.shifts.push({
+                          await this.upsertShift({
                               id: `${selectedUser.id}-${dateStr}`,
                               userId: selectedUser.id,
                               date: dateStr,
@@ -607,48 +592,29 @@ class Store {
               }
           }
       }
-      this.save();
   }
 
-  // Auto Schedule Function (For Stations Only)
-  // Updated: Ensures no unassigned people if possible, AND prevents duplicate certified staff
-  autoSchedule(startDate: string, endDate: string) {
+  async autoSchedule(startDate: string, endDate: string) {
     const start = new Date(startDate);
     const end = new Date(endDate);
     
-    // 1. Clear existing Auto-Generated Shifts in this range to allow reshuffling
-    // We do NOT clear manual locks (isAutoGenerated !== true) or Special Roles logic here
+    // Clear auto-generated
     for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
         const dateStr = d.toISOString().split('T')[0];
-        this.shifts.forEach(s => {
-            if (s.date === dateStr && s.isAutoGenerated) {
-                // Keep station if user manually locked? (Current logic assumes isAutoGenerated means fully auto)
-                // If we want "change every time", we must reset the station.
-                // But preserve special roles!
-                s.station = StationDefault.UNASSIGNED;
-            }
-        });
+        // We iterate copy to allow mutation calls
+        const shiftsOfDay = this.shifts.filter(s => s.date === dateStr && s.isAutoGenerated);
+        for (const s of shiftsOfDay) {
+            s.station = StationDefault.UNASSIGNED;
+            await this.upsertShift(s);
+        }
     }
 
-    // Reset date for assignment loop
     start.setTime(new Date(startDate).getTime());
-
-    // Sort stations by Priority (Scarcity logic implies filling hard stations first)
     const priorityList = [
-        '遠距', '遠班', 
-        '場控', 
-        'MR3T', 
-        'MR1.5T', 
-        'CT', 
-        'US1', 'US2', 'US3', 'US4', 'US',
-        'BMD', 'BMD/DX',
-        '大直', 
-        '技術支援', 
-        '行政'
+        '遠距', '遠班', '場控', 'MR3T', 'MR1.5T', 'CT', 'US1', 'US2', 'US3', 'US4', 'US',
+        'BMD', 'BMD/DX', '大直', '技術支援', '行政'
     ];
-    
     let activeStations = this.settings.stations.filter(s => s !== SYSTEM_OFF && s !== StationDefault.UNASSIGNED);
-    
     activeStations = activeStations.sort((a, b) => {
         const idxA = priorityList.findIndex(p => a.includes(p));
         const idxB = priorityList.findIndex(p => b.includes(p));
@@ -656,10 +622,8 @@ class Store {
         const valB = idxB === -1 ? 99 : idxB;
         return valA - valB;
     });
-
     const requirements = this.settings.stationRequirements;
 
-    // Loop through each day in range
     for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
       const dateStr = d.toISOString().split('T')[0];
       const dayOfWeek = d.getDay();
@@ -667,40 +631,28 @@ class Store {
       const event = this.getEvent(dateStr);
       if (event && event.type === DateEventType.CLOSED) continue; 
 
-      // Identify Available Candidates for the day
       let candidates = this.users.filter(user => {
         const status = this.getUserStatusOnDate(user.id, dateStr);
         return status === 'WORK';
       });
-
-      // Shuffle candidates for Station Assignment to distribute popular stations fairly and create randomness
       candidates = candidates.sort(() => Math.random() - 0.5);
 
-      // --- PHASE 1: FILL REQUIREMENTS ---
-      // This phase respects `requiredCount`. If manager sets requirement to 1, only 1 gets assigned.
       for (const station of activeStations) {
         const reqArray = requirements[station];
         const requiredCount = reqArray ? reqArray[dayOfWeek] : 0;
-        
         if (requiredCount <= 0) continue;
 
         const currentAssigned = this.shifts.filter(s => s.date === dateStr && s.station === station);
         let assignedCount = currentAssigned.length;
-        
         if (assignedCount >= requiredCount) continue; 
 
         const capableCandidates = candidates.filter(u => {
             if (!u.capabilities?.includes(station)) return false;
-            
             const existingShift = this.shifts.find(s => s.userId === u.id && s.date === dateStr);
-            
-            // Constraint: Opening/Late CANNOT do Floor Control or Remote
             if (existingShift && (existingShift.specialRoles.includes(SPECIAL_ROLES.OPENING) || existingShift.specialRoles.includes(SPECIAL_ROLES.LATE))) {
                 if (station === StationDefault.FLOOR_CONTROL || station.includes('場控')) return false;
                 if (station === StationDefault.REMOTE || station.includes('遠')) return false;
             }
-
-            // Check if user already has a station assigned
             if (existingShift && existingShift.station !== StationDefault.UNASSIGNED && existingShift.station !== '未分配') {
                 return false; 
             }
@@ -709,14 +661,14 @@ class Store {
 
         for (const user of capableCandidates) {
             if (assignedCount >= requiredCount) break;
-
             const existingShiftIdx = this.shifts.findIndex(s => s.userId === user.id && s.date === dateStr);
-            
             if (existingShiftIdx >= 0) {
-                this.shifts[existingShiftIdx].station = station;
-                this.shifts[existingShiftIdx].isAutoGenerated = true;
+                const s = this.shifts[existingShiftIdx];
+                s.station = station;
+                s.isAutoGenerated = true;
+                await this.upsertShift(s);
             } else {
-                this.shifts.push({
+                await this.upsertShift({
                   id: `${user.id}-${dateStr}`,
                   userId: user.id,
                   date: dateStr,
@@ -729,20 +681,14 @@ class Store {
         }
       }
 
-      // --- PHASE 2: ELIMINATE UNASSIGNED (No blanks) ---
-      // Try to fit unassigned people into ANY station they can do, ignoring limits if necessary.
-      // Constraint Added: Unless learning, do not put > 1 person in same station (except Pools).
-      
+      // Phase 2: Unassigned
       const unassignedUsers = candidates.filter(u => {
           const s = this.shifts.find(shift => shift.userId === u.id && shift.date === dateStr);
           return !s || s.station === StationDefault.UNASSIGNED || s.station === '未分配';
       });
 
       if (unassignedUsers.length > 0) {
-          // Define pool stations that allow multiple certified staff
           const poolStations = [StationDefault.TECH_SUPPORT, StationDefault.ADMIN];
-          
-          // Prioritize overflow targets: Tech Support/Admin first, then others
           const overflowStations = [...poolStations, StationDefault.FLOOR_CONTROL, ...activeStations];
           const uniqueOverflowStations = [...new Set(overflowStations)];
           
@@ -753,48 +699,36 @@ class Store {
               const validStation = uniqueOverflowStations.find(st => {
                   const isCertified = user.capabilities?.includes(st);
                   const isLearning = user.learningCapabilities?.includes(st);
-
-                  // 1. Capability Check (Certified OR Learning)
                   if (!isCertified && !isLearning) return false;
-                  
-                  // 2. Role Constraint (Opening/Late != Remote/FloorControl)
                   if (hasOpeningLate) {
                       if (st === StationDefault.FLOOR_CONTROL || st.includes('場控')) return false;
                       if (st === StationDefault.REMOTE || st.includes('遠')) return false;
                   }
-
-                  // 3. "No > 1 Certified Person" Constraint
-                  // Check if this station is a Pool Station (Allow multiples)
                   const isPool = poolStations.some(p => st.includes(p)) || st.includes('技術支援') || st.includes('行政');
-
                   if (!isPool) {
                       const currentAssignments = this.shifts.filter(s => s.date === dateStr && s.station === st);
                       if (currentAssignments.length > 0) {
-                          // Station is occupied.
-                          // Allow if user is Learning (Learner can join)
                           if (!isLearning) {
-                              // User is Certified.
-                              // Check if there is already a Certified person.
                               const hasCertifiedAssignee = currentAssignments.some(shift => {
                                   const assignee = this.users.find(u => u.id === shift.userId);
                                   return assignee && assignee.capabilities?.includes(st);
                               });
-                              
-                              if (hasCertifiedAssignee) return false; // Block 2nd certified person
+                              if (hasCertifiedAssignee) return false; 
                           }
                       }
                   }
-                  
                   return true;
               });
 
               if (validStation) {
                    const existingShiftIdx = this.shifts.findIndex(s => s.userId === user.id && s.date === dateStr);
                    if (existingShiftIdx >= 0) {
-                       this.shifts[existingShiftIdx].station = validStation;
-                       this.shifts[existingShiftIdx].isAutoGenerated = true;
+                       const s = this.shifts[existingShiftIdx];
+                       s.station = validStation;
+                       s.isAutoGenerated = true;
+                       await this.upsertShift(s);
                    } else {
-                       this.shifts.push({
+                       await this.upsertShift({
                         id: `${user.id}-${dateStr}`,
                         userId: user.id,
                         date: dateStr,
@@ -807,7 +741,7 @@ class Store {
           }
       }
     }
-    
-    this.save();
   }
 }
+
+export const db = new Store();

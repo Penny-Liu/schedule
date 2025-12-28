@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { User } from './types';
 import Sidebar from './components/Sidebar';
 import LoginPage from './pages/LoginPage';
@@ -9,10 +9,21 @@ import StaffPage from './pages/StaffPage';
 import SettingsPage from './pages/SettingsPage';
 import StatisticsPage from './pages/StatisticsPage';
 import { db } from './services/store';
+import { Loader2 } from 'lucide-react';
 
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [currentPage, setCurrentPage] = useState('dashboard');
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Init Data from Supabase
+  useEffect(() => {
+    const init = async () => {
+      await db.initializeData();
+      setIsLoading(false);
+    };
+    init();
+  }, []);
 
   const handleLogin = (user: User) => {
     setCurrentUser(user);
@@ -23,6 +34,16 @@ const App: React.FC = () => {
     db.logout();
     setCurrentUser(null);
   };
+
+  if (isLoading) {
+    return (
+      <div className="h-screen w-full flex flex-col items-center justify-center bg-gray-50 text-gray-500">
+        <Loader2 size={48} className="animate-spin text-teal-600 mb-4" />
+        <p className="text-lg font-medium">系統載入中...</p>
+        <p className="text-sm">正在從資料庫同步最新排班資訊</p>
+      </div>
+    );
+  }
 
   if (!currentUser) {
     return <LoginPage onLogin={handleLogin} />;

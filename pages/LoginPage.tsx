@@ -28,13 +28,13 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // Simple password check for demo purposes
-    if (password === '1234') {
-        if (selectedUser) {
+    if (selectedUser) {
+        const targetPassword = selectedUser.password || '1234';
+        if (password === targetPassword) {
             onLogin(selectedUser);
+        } else {
+            setError('密碼錯誤，請重試');
         }
-    } else {
-        setError('密碼錯誤，請重試');
     }
   };
 

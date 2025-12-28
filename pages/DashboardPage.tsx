@@ -928,7 +928,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                   <div className={`flex items-center justify-center px-1 py-1 rounded-md shadow-sm border w-full max-w-[50px] ${getStationStyle(station)}`}>
                                     <span className="text-[10px] font-bold truncate tracking-tight">{station}</span>
                                     {isLearning && (
-                                        <span className="text-[9px] bg-white/50 text-gray-800 font-extrabold px-0.5 rounded ml-0.5 leading-none">學</span>
+                                        <span className="text-[9px] bg-white/50 text-slate-900 font-extrabold px-0.5 rounded ml-0.5 leading-none">學</span>
                                     )}
                                   </div>
                                 ) : (
@@ -1036,7 +1036,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                     
                                                     // Check if this user is a Learner for this specific station
                                                     const isLearner = item.user?.learningCapabilities?.includes(row.label);
-                                                    // Add White override logic for learners in Station View
+                                                    // Revert: White override logic for learners in Station View
                                                     if (isLearner) {
                                                         chipClass = 'bg-white text-slate-500 border-slate-200 border-dashed';
                                                     }
@@ -1109,13 +1109,13 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                     <div className="flex items-center gap-2"><span className="w-3 h-3 bg-orange-100 border border-orange-200 rounded-sm"></span> <span>MR</span></div>
                     <div className="flex items-center gap-2"><span className="w-3 h-3 bg-emerald-100 border border-emerald-200 rounded-sm"></span> <span>US</span></div>
                      <div className="flex items-center gap-2"><span className="w-3 h-3 bg-sky-100 border border-sky-200 rounded-sm"></span> <span>CT</span></div>
-                    <div className="flex items-center gap-2"><span className="w-3 h-3 bg-white border border-slate-300 rounded-sm"></span> <span>學習崗位 (同色 + 學)</span></div>
+                    <div className="flex items-center gap-2"><span className="w-3 h-3 bg-teal-100 border border-teal-200 rounded-sm flex items-center justify-center text-[8px] text-teal-800">學</span> <span>學習崗位</span></div>
                 </>
             ) : (
                 <>
                     <div className="flex items-center gap-2"><LayoutList size={14} /><span>崗位視角說明：</span></div>
                     <div className="flex items-center gap-2"><span className="w-3 h-3 bg-teal-100 border border-teal-200 rounded-sm"></span> <span>正式人員</span></div>
-                    <div className="flex items-center gap-2"><span className="w-3 h-3 bg-white border border-slate-200 border-dashed rounded-sm"></span> <span>學習人員 (排序於後)</span></div>
+                    <div className="flex items-center gap-2"><span className="w-3 h-3 bg-white border border-slate-200 border-dashed rounded-sm flex items-center justify-center text-[8px] text-slate-500">學</span> <span>學習人員 (排序於後)</span></div>
                     {isEditMode && <div className="flex items-center gap-2 text-teal-600 font-bold ml-auto">可使用左側箭頭調整顯示順序</div>}
                 </>
             )}

@@ -22,6 +22,7 @@ export interface User {
   avatarUrl?: string; // Kept for backward compatibility
   capabilities?: string[]; // List of station names user is CERTIFIED in
   learningCapabilities?: string[]; // New: List of station names user is LEARNING
+  password?: string; // User defined password
 }
 
 // Updated Station Defaults: MR moved before US
@@ -70,7 +71,6 @@ export enum LeaveType {
 }
 
 export enum LeaveStatus {
-  WAITING_FOR_TARGET = '等待對象同意', // New status for Swap flow
   PENDING = '待審核',
   APPROVED = '已核准',
   REJECTED = '已駁回'
@@ -88,6 +88,10 @@ export interface LeaveRequest {
   createdAt: string;
   approverId?: string; // Who approved/rejected it
   processedAt?: string; // When it was processed
+  
+  // New fields for Duty Swap specificity & 2-step approval
+  roleToSwap?: string; // E.g., '開機' or '晚班'
+  targetApproval?: 'PENDING' | 'AGREED' | 'REJECTED'; // Status of the target user's agreement
 }
 
 export interface RosterCycle {
