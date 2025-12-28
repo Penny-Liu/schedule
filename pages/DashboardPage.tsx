@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { User, Shift, UserRole, SYSTEM_OFF, SPECIAL_ROLES, LeaveRequest, LeaveStatus, LeaveType, StationDefault, DateEventType } from '../types';
 import { db } from '../services/store';
-import { ChevronLeft, ChevronRight, Briefcase, Moon, Sun, Monitor, Activity, Calendar as CalendarIcon, Filter, Wand2, Users, LayoutList, Star, AlertCircle, Plus, X, Download, BarChart2, Sparkles, ChevronDown, ChevronUp, GripVertical, BookOpen, Lock, Unlock, CheckCircle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Briefcase, Moon, Sun, Monitor, Activity, Calendar as CalendarIcon, Filter, Wand2, Users, LayoutList, Star, AlertCircle, Plus, X, Download, BarChart2, Sparkles, ChevronDown, ChevronUp, GripVertical, BookOpen, Lock, Unlock, CheckCircle, Loader2 } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import ConfirmModal from '../components/ConfirmModal';
@@ -15,7 +15,16 @@ type ViewMode = 'user' | 'station';
 
 const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [selectedCycleId, setSelectedCycleId] = useState<string>('rolling'); // 'rolling' or cycle ID
+  
+  // --- Cycle Selection Logic ---
+  const cycles = db.getCycles();
+  // Determine default cycle: If today falls within a cycle, select it. Otherwise 'rolling'.
+  const [selectedCycleId, setSelectedCycleId] = useState<string>(() => {
+      const todayStr = new Date().toISOString().split('T')[0];
+      const activeCycle = cycles.find(c => todayStr >= c.startDate && todayStr <= c.endDate);
+      return activeCycle ? activeCycle.id : 'rolling';
+  });
+  
   const [viewMode, setViewMode] = useState<ViewMode>('user'); // Toggle state
   
   // Auto Schedule Modal State (Stations)
@@ -33,7 +42,6 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
   const users = db.getUsers().filter(u => u.role !== UserRole.SYSTEM_ADMIN);
   const holidays = db.getHolidays();
   
-  const cycles = db.getCycles();
   const pendingLeaves = db.getLeaves().filter(l => l.status === LeaveStatus.PENDING);
   const [shifts, setShifts] = useState<Shift[]>(db.getShifts('', '')); 
   const [isEditMode, setIsEditMode] = useState(false);
@@ -206,22 +214,24 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
   const onAutoScheduleClick = () => setIsAutoScheduleOpen(true);
   const onSpecialRoleClick = () => setIsSpecialRoleModalOpen(true);
 
-  const handleAutoScheduleConfirm = () => {
+  // Fix: Async/Await to ensure DB calculation finishes before UI update
+  const handleAutoScheduleConfirm = async () => {
     setIsProcessing(true);
-    setTimeout(() => {
-        db.autoSchedule(scheduleRange.start, scheduleRange.end);
-        setShifts([...db.shifts]); 
-        setIsProcessing(false);
-    }, 500); 
+    // Await the heavy calculation and DB updates
+    await db.autoSchedule(scheduleRange.start, scheduleRange.end);
+    // Force update local state from the store
+    setShifts([...db.getShifts('', '')]); 
+    setIsProcessing(false);
+    setIsAutoScheduleOpen(false); // Close modal
   };
 
-  const handleSpecialRoleConfirm = () => {
+  // Fix: Async/Await for Special Roles too
+  const handleSpecialRoleConfirm = async () => {
     setIsProcessing(true);
-    setTimeout(() => {
-        db.autoAssignSpecialRoles(scheduleRange.start, scheduleRange.end);
-        setShifts([...db.shifts]);
-        setIsProcessing(false);
-    }, 500);
+    await db.autoAssignSpecialRoles(scheduleRange.start, scheduleRange.end);
+    setShifts([...db.getShifts('', '')]);
+    setIsProcessing(false);
+    setIsSpecialRoleModalOpen(false); // Close modal
   };
   
   const handleToggleCycleConfirm = async () => {
@@ -567,9 +577,14 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                     <p>• <span className="font-bold text-red-600">不會</span>更動或分配開機/晚班等特殊任務。</p>
                     <p>• 優先填補空缺，不覆蓋手動鎖定。</p>
                 </div>
+                {isProcessing && (
+                  <div className="flex items-center justify-center gap-2 text-purple-600 font-bold text-sm">
+                    <Loader2 className="animate-spin" size={16} /> 計算中...
+                  </div>
+                )}
             </div>
         }
-        confirmText="執行崗位排班"
+        confirmText={isProcessing ? "處理中..." : "執行崗位排班"}
         confirmColor="purple"
       />
 
@@ -613,9 +628,14 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                     <p>3. 遇休假或已排定任務自動跳過。</p>
                     <p>4. 已排定者無法更改。</p>
                 </div>
+                {isProcessing && (
+                  <div className="flex items-center justify-center gap-2 text-indigo-600 font-bold text-sm">
+                    <Loader2 className="animate-spin" size={16} /> 計算中...
+                  </div>
+                )}
             </div>
         }
-        confirmText="執行任務分配"
+        confirmText={isProcessing ? "處理中..." : "執行任務分配"}
         confirmColor="teal"
       />
       
