@@ -1,3 +1,4 @@
+
 import { User, Shift, LeaveRequest, SystemSettings, StationDefault, SYSTEM_OFF, RosterCycle, DateEventType, Holiday, LeaveStatus, LeaveType, StaffGroup, SPECIAL_ROLES } from '../types';
 import { MOCK_USERS, MOCK_LEAVES } from './mockData';
 import { supabase } from './supabaseClient';
@@ -360,6 +361,14 @@ class Store {
   async deleteCycle(id: string) {
     this.settings.cycles = this.settings.cycles.filter(c => c.id !== id);
     await this.saveSettings();
+  }
+  
+  async toggleCycleConfirmation(cycleId: string, isConfirmed: boolean) {
+      const cycleIndex = this.settings.cycles.findIndex(c => c.id === cycleId);
+      if (cycleIndex >= 0) {
+          this.settings.cycles[cycleIndex].isConfirmed = isConfirmed;
+          await this.saveSettings();
+      }
   }
 
   getCycleStartDate() {

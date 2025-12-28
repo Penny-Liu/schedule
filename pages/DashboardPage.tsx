@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { User, Shift, UserRole, SYSTEM_OFF, SPECIAL_ROLES, LeaveRequest, LeaveStatus, LeaveType, StationDefault, DateEventType } from '../types';
 import { db } from '../services/store';
-import { ChevronLeft, ChevronRight, Briefcase, Moon, Sun, Monitor, Activity, Calendar as CalendarIcon, Filter, Wand2, Users, LayoutList, Star, AlertCircle, Plus, X, Download, BarChart2, Sparkles, ChevronDown, ChevronUp, GripVertical, BookOpen } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Briefcase, Moon, Sun, Monitor, Activity, Calendar as CalendarIcon, Filter, Wand2, Users, LayoutList, Star, AlertCircle, Plus, X, Download, BarChart2, Sparkles, ChevronDown, ChevronUp, GripVertical, BookOpen, Lock, Unlock, CheckCircle } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import ConfirmModal from '../components/ConfirmModal';
@@ -22,6 +22,9 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
   const [isAutoScheduleOpen, setIsAutoScheduleOpen] = useState(false);
   // Auto Schedule Modal State (Special Roles)
   const [isSpecialRoleModalOpen, setIsSpecialRoleModalOpen] = useState(false);
+  
+  // Confirmation Modal State
+  const [isConfirmCycleOpen, setIsConfirmCycleOpen] = useState(false);
 
   // Unified Range State for schedulers
   const [scheduleRange, setScheduleRange] = useState({ start: '', end: '' });
@@ -40,20 +43,24 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
   // Local state for reordering to trigger re-renders
   const [displayOrder, setDisplayOrder] = useState<string[]>(db.getStationDisplayOrder());
 
+  // Get current selected cycle object
+  const currentCycle = useMemo(() => {
+      return cycles.find(c => c.id === selectedCycleId);
+  }, [selectedCycleId, cycles]);
+
+  const isCycleConfirmed = currentCycle?.isConfirmed || false;
+
   // Determine the Date Range
   const dateRange = useMemo(() => {
-    if (selectedCycleId !== 'rolling') {
-      const cycle = cycles.find(c => c.id === selectedCycleId);
-      if (cycle) {
-        const dates = [];
-        const start = new Date(cycle.startDate);
-        const end = new Date(cycle.endDate);
-        if (start <= end) {
-          for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-            dates.push(d.toISOString().split('T')[0]);
-          }
-          return dates;
+    if (selectedCycleId !== 'rolling' && currentCycle) {
+      const dates = [];
+      const start = new Date(currentCycle.startDate);
+      const end = new Date(currentCycle.endDate);
+      if (start <= end) {
+        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+          dates.push(d.toISOString().split('T')[0]);
         }
+        return dates;
       }
     }
 
@@ -69,31 +76,36 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
       dates.push(d.toISOString().split('T')[0]);
     }
     return dates;
-  }, [currentDate, selectedCycleId, cycles]);
+  }, [currentDate, selectedCycleId, currentCycle]);
 
   // Update schedule range when cycle changes OR when view changes
   useEffect(() => {
-      if (selectedCycleId !== 'rolling') {
-          const cycle = cycles.find(c => c.id === selectedCycleId);
-          if (cycle) {
-              setScheduleRange({ start: cycle.startDate, end: cycle.endDate });
-          }
+      if (selectedCycleId !== 'rolling' && currentCycle) {
+          setScheduleRange({ start: currentCycle.startDate, end: currentCycle.endDate });
       } else {
           // If rolling, default to visible range
           if (dateRange.length > 0) {
              setScheduleRange({ start: dateRange[0], end: dateRange[dateRange.length - 1] });
           }
       }
-  }, [selectedCycleId, cycles, dateRange]);
+  }, [selectedCycleId, currentCycle, dateRange]);
 
 
   const getCycleTitle = () => {
       if (selectedCycleId === 'rolling') return '連續排班視圖';
-      const cycle = cycles.find(c => c.id === selectedCycleId);
-      if (!cycle) return '未知週期';
-      const match = cycle.name.match(/^(\d{4})\/(\d{1,2})$/);
+      if (!currentCycle) return '未知週期';
+      const match = currentCycle.name.match(/^(\d{4})\/(\d{1,2})$/);
       if (match) return `${match[1]}年第${match[2]}週期`;
-      return cycle.name;
+      return currentCycle.name;
+  };
+
+  // Export Title Logic
+  const getExportHeader = () => {
+      const title = getCycleTitle();
+      const start = dateRange[0];
+      const end = dateRange[dateRange.length - 1];
+      const days = dateRange.length;
+      return `${title} (${start} ~ ${end} / 共${days}天)`;
   };
 
   const formatName = (name: string) => {
@@ -110,32 +122,41 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
         return;
     }
     try {
+        // Temporarily reveal to capture
         tableElement.style.display = 'block'; 
+        
+        // Wait for render
+        await new Promise(resolve => setTimeout(resolve, 100));
+
         const canvas = await html2canvas(tableElement, {
-            scale: 2, useCORS: true, backgroundColor: '#ffffff', logging: false,
-            onclone: (clonedDoc) => {
-                const clonedElement = clonedDoc.getElementById('print-container');
-                if (clonedElement) {
-                    clonedElement.style.display = 'block';
-                    const allElements = clonedElement.getElementsByTagName('*');
-                    for (let i = 0; i < allElements.length; i++) {
-                        (allElements[i] as HTMLElement).style.color = 'black';
-                    }
-                }
-            }
+            scale: 3, // High resolution for crisp text
+            useCORS: true, 
+            backgroundColor: '#ffffff', 
+            logging: false
         });
-        const imgWidth = 297; 
-        const pageHeight = 210; 
-        const imgHeight = (canvas.height * imgWidth) / canvas.width;
-        let pdf = new jsPDF('l', 'mm', imgHeight > pageHeight ? [imgWidth, imgHeight + 20] : 'a4');
+
+        // A4 Landscape dimensions in mm
+        const a4Width = 297; 
+        
+        // Minimize margin to 3mm to maximize content size
+        const margin = 3; 
+        const printableWidth = a4Width - (margin * 2);
+        
+        // Calculate aspect ratio to fit width
+        const imgHeight = (canvas.height * printableWidth) / canvas.width;
+        
+        let pdf = new jsPDF('l', 'mm', 'a4');
         const imgData = canvas.toDataURL('image/png');
-        pdf.addImage(imgData, 'PNG', 0, 10, imgWidth, imgHeight);
-        const fileName = `${getCycleTitle().replace(/[/\\?%*:|"<>]/g, '-')}_${viewMode === 'user' ? '人員表' : '崗位表'}.pdf`;
+        
+        pdf.addImage(imgData, 'PNG', margin, margin, printableWidth, imgHeight);
+        
+        const fileName = `${getExportHeader().replace(/[/\\?%*:|"<>]/g, '-')}_${viewMode === 'user' ? '人員表' : '崗位表'}.pdf`;
         pdf.save(fileName);
     } catch (err) {
         console.error("Export failed", err);
         alert("匯出失敗，請稍後再試");
     } finally {
+        tableElement.style.display = 'none'; // Hide again
         setIsExporting(false);
     }
   };
@@ -202,6 +223,14 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
         setIsProcessing(false);
     }, 500);
   };
+  
+  const handleToggleCycleConfirm = async () => {
+      if (selectedCycleId === 'rolling') return;
+      
+      const newStatus = !isCycleConfirmed;
+      await db.toggleCycleConfirmation(selectedCycleId, newStatus);
+      setShifts([...db.shifts]); 
+  };
 
   const handleSpecialRoleToggle = (userId: string, dateStr: string, role: string, currentStation: string, currentRoles: string[]) => {
     let newRoles = [...currentRoles];
@@ -235,7 +264,6 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
           if (shift) return shift.station === StationDefault.UNASSIGNED || shift.station === '未分配';
           return true;
       });
-      // Map to structure needed by renderer
       return unassigned.map(u => {
           const s = shifts.find(shift => shift.userId === u.id && shift.date === dateStr);
           return {
@@ -250,7 +278,6 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
 
   const getOffStaff = (dateStr: string) => {
       const offUsers = users.filter(user => db.getUserStatusOnDate(user.id, dateStr) === 'OFF');
-      // Map to structure needed by renderer
       return offUsers.map(u => {
           const s = shifts.find(shift => shift.userId === u.id && shift.date === dateStr);
           return {
@@ -353,7 +380,6 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
   };
 
   // --- Styles ---
-  // Unified style for all stations to ensure consistency (Used in User View)
   const getStationStyle = (station: string) => {
     if (station.includes('MR')) return 'bg-orange-50 text-orange-800 border-orange-300';
     if (station.includes('US')) return 'bg-emerald-50 text-emerald-800 border-emerald-300';
@@ -369,8 +395,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
     return 'bg-teal-50 text-teal-800 border-teal-200'; 
   };
 
-  // NEW: Get CHIP style based on station name (Used in Station View)
-  // Maps station color themes to chip colors (slightly darker/more saturated for visibility)
+  // For Screen View only
   const getStationChipStyle = (name: string) => {
         if (Object.values(SPECIAL_ROLES).includes(name)) {
              if (name === SPECIAL_ROLES.OPENING) return 'bg-blue-100 text-blue-900 border-blue-200';
@@ -413,23 +438,6 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
       );
   };
   
-  // Style for Print View only
-  const getPrintStationStyle = (station: string) => {
-      if (!station) return '';
-      if (station.includes('MR')) return 'bg-[#FFF7ED] text-[#9A3412]'; 
-      if (station.includes('US')) return 'bg-[#ECFDF5] text-[#065F46]'; 
-      if (station.includes('CT')) return 'bg-[#F0F9FF] text-[#075985]'; 
-      if (station.includes('場控')) return 'bg-[#FEF2F2] text-[#B91C1C]'; 
-      if (station.includes('遠班') || station.includes('遠距')) return 'bg-[#FDF4FF] text-[#86198F]'; 
-      if (station.includes('BMD')) return 'bg-[#F5F3FF] text-[#5B21B6]'; 
-      if (station.includes('大直')) return 'bg-[#EFF6FF] text-[#1E40AF]'; 
-      if (station.includes('支援')) return 'bg-[#F7FEE7] text-[#3F6212]'; 
-      if (station.includes('行政')) return 'bg-gray-100 text-gray-700';
-      if (station === SYSTEM_OFF) return 'bg-gray-200 text-gray-500';
-      if (station === StationDefault.UNASSIGNED) return 'bg-white text-gray-400 border border-dashed border-gray-400';
-      return 'bg-white text-gray-800';
-  };
-
   const specialRolesList = [
       SPECIAL_ROLES.OPENING,
       SPECIAL_ROLES.LATE,
@@ -437,7 +445,6 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
       SPECIAL_ROLES.SCHEDULER
   ];
 
-  // Helper for User Capability filtering in user view dropdown
   const allStationsSorted = useMemo(() => {
       const rawStations = db.getStations().filter(s => s !== SYSTEM_OFF && s !== StationDefault.UNASSIGNED);
       const priorities = [
@@ -457,11 +464,8 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
       });
   }, []);
 
-  // --- Row Configuration for Station View ---
   const rowConfigs = useMemo(() => {
-      // Direct map of displayOrder from DB, which now includes UNASSIGNED and SYSTEM_OFF
       return displayOrder.map(item => {
-          // Check if it's a special role
           if (Object.values(SPECIAL_ROLES).includes(item)) {
               let colorClass = 'bg-gray-50 border-gray-200 text-gray-700';
               if (item === SPECIAL_ROLES.OPENING) colorClass = 'bg-blue-50 border-blue-200 text-blue-700';
@@ -493,8 +497,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                   getData: (date: string) => getUnassignedStaff(date)
               };
           } else {
-              // It's a Station
-              let colorClass = 'bg-teal-50 text-teal-800 border-teal-200'; // Default
+              let colorClass = 'bg-teal-50 text-teal-800 border-teal-200';
               if (item.includes('MR')) colorClass = 'bg-orange-50 text-orange-800 border-orange-300';
               else if (item.includes('US')) colorClass = 'bg-emerald-50 text-emerald-800 border-emerald-300';
               else if (item.includes('CT')) colorClass = 'bg-sky-50 text-sky-800 border-sky-300';
@@ -511,11 +514,23 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
               };
           }
       });
-  }, [displayOrder, shifts]); // Re-calc if shifts change (though logic mainly depends on date)
+  }, [displayOrder, shifts]);
 
   return (
     <div className="h-full flex flex-col bg-slate-50 relative">
-      {/* Modal for Station Auto Schedule */}
+      <ConfirmModal 
+        isOpen={isConfirmCycleOpen}
+        onClose={() => setIsConfirmCycleOpen(false)}
+        onConfirm={handleToggleCycleConfirm}
+        title={isCycleConfirmed ? "解鎖排班週期" : "確認並鎖定排班"}
+        message={isCycleConfirmed 
+            ? "解鎖後將可以重新使用自動排班功能。確定要解鎖此週期嗎？" 
+            : "鎖定後，此週期的「自動排崗位」與「自動排任務」功能將失效，以防止意外覆蓋已確認的班表。後續調整需手動進行。確定要鎖定嗎？"
+        }
+        confirmText={isCycleConfirmed ? "解鎖" : "確認鎖定"}
+        confirmColor={isCycleConfirmed ? "purple" : "teal"}
+      />
+
       <ConfirmModal 
         isOpen={isAutoScheduleOpen}
         onClose={() => setIsAutoScheduleOpen(false)}
@@ -558,7 +573,6 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
         confirmColor="purple"
       />
 
-      {/* Modal for Special Role Auto Schedule */}
       <ConfirmModal 
         isOpen={isSpecialRoleModalOpen}
         onClose={() => setIsSpecialRoleModalOpen(false)}
@@ -605,25 +619,34 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
         confirmColor="teal"
       />
       
-      {/* ... (Hidden Print Container Code Omitted for Brevity - Keeps structure) ... */}
-      <div id="print-container" className="fixed top-0 left-[-9999px] w-max bg-white p-8 text-black" style={{ fontFamily: '"Noto Sans TC", sans-serif' }}>
-          <div className="text-2xl font-bold text-center mb-4 border-b-2 border-black pb-2 text-black">
-              {getCycleTitle()} - {viewMode === 'user' ? '人員排班表' : '崗位分配表'}
+      {/* --- Optimized A4 Landscape Print Container --- */}
+      {/* Width set to 1600px to allow larger text size relative to A4 page when scaled down */}
+      <div id="print-container" className="fixed top-0 left-[-9999px] bg-white hidden" style={{ width: '1600px', fontFamily: '"Noto Sans TC", sans-serif' }}>
+          <div className="flex flex-col items-center mb-4 mt-2">
+              <h1 className="text-3xl font-bold text-gray-900 tracking-wide mb-1">影像醫學部 - {viewMode === 'user' ? '人員排班表' : '崗位分配表'}</h1>
+              <div className="text-xl font-medium text-gray-600 border-b-2 border-gray-800 pb-2 px-8">
+                  {getExportHeader()}
+              </div>
           </div>
-          <table className="border-collapse border border-black text-center text-[11px] w-full text-black">
+          
+          <table className="w-full border-collapse table-fixed text-xs shadow-sm">
               <thead>
-                  <tr className="bg-gray-200">
-                      <th className="border border-black px-1 py-2 w-24 bg-gray-300 text-sm text-black">
+                  <tr className="bg-gray-100 text-gray-700 h-10">
+                      {/* Thinner border color: border-gray-400 (which will look like 0.5px when scaled) */}
+                      <th className="border-[0.5px] border-gray-400 p-1 w-20 font-bold bg-gray-200 text-sm">
                            {viewMode === 'user' ? '姓名' : '崗位'}
                       </th>
                       {dateRange.map(date => {
                           const d = new Date(date);
                           const weekDays = ['日', '一', '二', '三', '四', '五', '六'];
                           const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+                          const todayStr = new Date().toISOString().split('T')[0];
+                          const isPrintToday = date === todayStr;
+                          
                           return (
-                              <th key={date} className={`border border-black px-0.5 py-1 min-w-[32px] ${isWeekend ? 'bg-red-50 text-black' : 'text-black'}`}>
-                                  <div className="text-xs">{weekDays[d.getDay()]}</div>
-                                  <div className="text-sm font-bold">{d.getDate()}</div>
+                              <th key={date} className={`border-[0.5px] border-gray-400 p-1 min-w-[40px] ${isWeekend ? 'bg-red-50 text-gray-900' : 'text-gray-800'} ${isPrintToday ? 'bg-yellow-200 border-b-2 border-red-500' : ''}`}>
+                                  <div className="text-[10px] font-medium">{weekDays[d.getDay()]}</div>
+                                  <div className={`text-base ${isPrintToday ? 'font-bold text-red-600' : 'font-medium'}`}>{d.getDate()}</div>
                               </th>
                           );
                       })}
@@ -631,29 +654,56 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
               </thead>
               <tbody>
                   {viewMode === 'user' ? (
-                      users.map(user => (
-                          <tr key={user.id}>
-                              <td className="border border-black px-1 py-1 font-bold bg-gray-50 text-left text-sm text-black">{user.name}</td>
+                      users.map((user, idx) => (
+                          <tr key={user.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
+                              <td className="border-[0.5px] border-gray-400 p-1 font-bold text-left pl-2 text-gray-900 bg-gray-50 text-sm whitespace-nowrap overflow-hidden">
+                                  {user.name}
+                              </td>
                               {dateRange.map(date => {
                                   const { station, specialRoles, isOff } = getDayShift(user.id, date);
                                   const event = holidays.find(h => h.date === date);
                                   const isClosed = event?.type === DateEventType.CLOSED;
                                   
-                                  let content = '';
+                                  let content: React.ReactNode = '';
+                                  let cellClass = '';
+
                                   if (isOff || isClosed) {
-                                      content = '休';
+                                      content = (
+                                          <div className="flex items-center justify-center h-full">
+                                              <span className="text-gray-300 font-bold text-lg">休</span>
+                                          </div>
+                                      );
+                                      cellClass = 'text-gray-400 bg-gray-100';
                                   } else {
-                                      if (station && station !== StationDefault.UNASSIGNED) {
-                                           content = station;
-                                           if (specialRoles.length > 0) content += `(${specialRoles.map(r => r[0]).join('')})`;
-                                      } else if (specialRoles.length > 0) {
-                                          content = specialRoles.map(r => r[0]).join(''); 
-                                      } else {
-                                          content = '-';
-                                      }
+                                      // Force layout: Station at Top (Full Bg), Special Roles at Bottom (Text Only)
+                                      content = (
+                                          <div className="flex flex-col h-full w-full">
+                                              {/* Top: Station (Fill remaining space) */}
+                                              <div className="flex-1 w-full flex items-center justify-center">
+                                                  {station && station !== StationDefault.UNASSIGNED ? (
+                                                      // Removed rounded, added w-full h-full to fill
+                                                      <div className={`w-full h-full flex items-center justify-center ${getStationStyle(station).replace('border-teal-200', 'border-gray-300').replace('shadow-sm', '').replace('rounded-md', '')}`}>
+                                                          <span className="font-bold text-sm leading-none text-center">{station}</span>
+                                                      </div>
+                                                  ) : (
+                                                      <span className="text-gray-200 text-xs">-</span>
+                                                  )}
+                                              </div>
+                                              
+                                              {/* Bottom: Special Roles (Text only, 12px, regular weight) */}
+                                              {specialRoles.length > 0 && (
+                                                  <div className="w-full flex justify-center items-end bg-white/50 border-t-[0.5px] border-gray-100">
+                                                      <div className="flex gap-0.5 text-[12px] text-black leading-tight py-0.5">
+                                                          {specialRoles.map(r => r[0]).join('')}
+                                                      </div>
+                                                  </div>
+                                              )}
+                                          </div>
+                                      );
                                   }
+                                  
                                   return (
-                                      <td key={date} className={`border border-black px-0.5 py-1 text-black`}>
+                                      <td key={date} className={`border-[0.5px] border-gray-400 p-0 text-center align-top h-16 ${cellClass}`}>
                                           {content}
                                       </td>
                                   );
@@ -662,21 +712,38 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                       ))
                   ) : (
                       <>
-                        {rowConfigs.map((row) => (
-                             <tr key={row.id}>
-                                <td className={`border border-black px-1 py-1 font-bold text-sm text-black ${getPrintStationStyle(row.label)}`}>
-                                    {row.label}
+                        {rowConfigs.map((row, idx) => (
+                             <tr key={row.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
+                                <td className={`border-[0.5px] border-gray-400 p-1 font-bold text-gray-800`}>
+                                    <div className={`px-1 py-1 rounded border ${row.colorClass} text-center text-xs whitespace-nowrap`}>
+                                        {row.label}
+                                    </div>
                                 </td>
                                 {dateRange.map(date => {
                                     const staff = row.getData(date);
+                                    
                                     return (
-                                        <td key={date} className="border border-black px-0.5 py-1 text-black">
-                                            {staff.map(s => {
-                                                let name = formatName(s.user?.name || '');
-                                                if (s.shift.specialRoles.includes(SPECIAL_ROLES.OPENING)) name += '(開)';
-                                                if (s.shift.specialRoles.includes(SPECIAL_ROLES.LATE)) name += '(晚)';
-                                                return name;
-                                            }).join(',')}
+                                        <td key={date} className={`border-[0.5px] border-gray-400 p-0 align-middle h-16`}>
+                                            <div className="flex flex-col justify-center h-full w-full">
+                                                {staff.map((s, i) => {
+                                                    let name = formatName(s.user?.name || '');
+                                                    const isOpening = s.shift.specialRoles.includes(SPECIAL_ROLES.OPENING);
+                                                    const isLate = s.shift.specialRoles.includes(SPECIAL_ROLES.LATE);
+                                                    
+                                                    // Determine highlight for special roles inside station view: Text suffix
+                                                    let roleSuffix = '';
+                                                    if (isOpening) roleSuffix = '(開)';
+                                                    if (isLate) roleSuffix = '(晚)';
+
+                                                    // Use minimal styling for export list
+                                                    return (
+                                                        <div key={i} className={`text-sm text-center leading-tight font-bold text-gray-800`}>
+                                                            {name}
+                                                            <span className="text-[10px] font-normal ml-0.5">{roleSuffix}</span>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
                                         </td>
                                     );
                                 })}
@@ -686,14 +753,24 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                   )}
               </tbody>
           </table>
+          <div className="mt-2 flex gap-6 text-[10px] text-gray-500 font-medium justify-end">
+              <span>* 匯出時間: {new Date().toLocaleString('zh-TW')}</span>
+              <div className="flex items-center gap-2"><span className="w-3 h-3 bg-gray-100 border border-gray-400"></span> <span>休假</span></div>
+              <div className="flex items-center gap-2"><span className="w-3 h-3 bg-yellow-200 border border-red-500"></span> <span>今日</span></div>
+          </div>
       </div>
 
       {/* Header Area */}
       <div className="flex-none px-6 py-4 bg-white border-b border-slate-200 shadow-sm z-10">
         <div className="flex justify-between items-center">
           <div className="flex items-center gap-4">
-            <h2 className="text-xl font-bold text-slate-800 tracking-tight">
+            <h2 className="text-xl font-bold text-slate-800 tracking-tight flex items-center gap-2">
                 {getCycleTitle()}
+                {isCycleConfirmed && (
+                    <span className="bg-red-50 text-red-600 text-xs px-2 py-0.5 rounded border border-red-100 flex items-center gap-1">
+                        <Lock size={10} /> 已鎖定
+                    </span>
+                )}
             </h2>
             
             <div className="flex bg-slate-100 p-0.5 rounded-lg border border-slate-200">
@@ -726,7 +803,9 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
               >
                 <option value="rolling">連續排班視圖</option>
                 {cycles.map(c => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
+                  <option key={c.id} value={c.id}>
+                      {c.name} {c.isConfirmed ? '(🔒)' : ''}
+                  </option>
                 ))}
               </select>
             </div>
@@ -762,6 +841,21 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                 </div>
             )}
             
+            {(currentUser.role === UserRole.SUPERVISOR || currentUser.role === UserRole.SYSTEM_ADMIN) && selectedCycleId !== 'rolling' && (
+                <button
+                    onClick={() => setIsConfirmCycleOpen(true)}
+                    className={`px-3 py-1.5 rounded-lg text-sm font-medium border flex items-center gap-1.5 shadow-sm transition-all ${
+                        isCycleConfirmed 
+                        ? 'bg-gray-100 text-gray-600 border-gray-200 hover:bg-gray-200' 
+                        : 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                    }`}
+                    title={isCycleConfirmed ? "解鎖排班" : "確認並鎖定排班"}
+                >
+                    {isCycleConfirmed ? <Lock size={14} /> : <CheckCircle size={14} />}
+                    {isCycleConfirmed ? '已鎖定' : '確認排班'}
+                </button>
+            )}
+
             <div className="h-6 w-px bg-slate-200 mx-1"></div>
 
             <button 
@@ -782,9 +876,13 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                         {/* Auto Station Button */}
                         <button 
                             onClick={onAutoScheduleClick}
-                            disabled={isProcessing}
-                            className="px-3 py-1.5 rounded-lg text-sm font-medium bg-gradient-to-r from-purple-600 to-purple-500 text-white hover:from-purple-700 hover:to-purple-600 transition-all flex items-center gap-1.5 shadow-sm shadow-purple-200"
-                            title="自動分配一般工作崗位 (CT/MR/US...)"
+                            disabled={isProcessing || isCycleConfirmed}
+                            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-1.5 shadow-sm ${
+                                (isProcessing || isCycleConfirmed) 
+                                ? 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200'
+                                : 'bg-gradient-to-r from-purple-600 to-purple-500 text-white hover:from-purple-700 hover:to-purple-600 shadow-purple-200'
+                            }`}
+                            title={isCycleConfirmed ? "排班已鎖定，無法自動排程" : "自動分配一般工作崗位 (CT/MR/US...)"}
                         >
                             <Wand2 size={14} />
                             <span className="hidden xl:inline">排崗位</span>
@@ -793,11 +891,15 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                         {/* Special Role Button */}
                         <button 
                             onClick={onSpecialRoleClick}
-                            disabled={isProcessing}
-                            className="px-3 py-1.5 rounded-lg text-sm font-medium bg-white text-indigo-600 border border-indigo-200 hover:bg-indigo-50 hover:border-indigo-300 transition-all flex items-center gap-1.5 shadow-sm"
-                            title="自動分配 開機/晚班 任務"
+                            disabled={isProcessing || isCycleConfirmed}
+                            className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-all flex items-center gap-1.5 shadow-sm ${
+                                (isProcessing || isCycleConfirmed)
+                                ? 'bg-gray-50 text-gray-400 border-gray-200 cursor-not-allowed'
+                                : 'bg-white text-indigo-600 border-indigo-200 hover:bg-indigo-50 hover:border-indigo-300'
+                            }`}
+                            title={isCycleConfirmed ? "排班已鎖定，無法自動分配" : "自動分配 開機/晚班 任務"}
                         >
-                            <Sparkles size={14} className="fill-indigo-100" />
+                            <Sparkles size={14} className={isCycleConfirmed ? "text-gray-400" : "fill-indigo-100"} />
                             <span className="hidden xl:inline">排任務</span>
                         </button>
                      </>
@@ -819,11 +921,11 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
         </div>
       </div>
       
-      {/* ... (Rest of the table UI remains same as previous version) ... */}
+      {/* ... (Rest of the table UI) ... */}
       <div id="roster-table" className="flex-1 overflow-auto bg-white p-2">
          {/* ... Table Content ... */}
          <table className="w-full border-collapse bg-white table-fixed">
-          {/* ... Table Header & Body ... */}
+          {/* ... Table Header ... */}
           <thead className="sticky top-0 z-20 shadow-sm">
             <tr>
               <th className="sticky left-0 z-30 bg-slate-50/95 backdrop-blur border-b border-r border-slate-200 p-0 w-[120px] shadow-[4px_0_8px_rgba(0,0,0,0.02)]">

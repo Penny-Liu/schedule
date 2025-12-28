@@ -99,6 +99,7 @@ export interface RosterCycle {
   name: string; 
   startDate: string;
   endDate: string;
+  isConfirmed?: boolean; // New: Lock status for the cycle
 }
 
 export enum DateEventType {
