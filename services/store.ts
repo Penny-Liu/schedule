@@ -167,7 +167,23 @@ class Store {
     }
 
     // Users
-    getUsers() { return this.users; }
+    getUsers() {
+        if (!this.settings.userDisplayOrder || this.settings.userDisplayOrder.length === 0) {
+            return this.users;
+        }
+        const orderMap = new Map(this.settings.userDisplayOrder.map((id, index) => [id, index]));
+        // Sort users: ordered ones first, then others
+        return [...this.users].sort((a, b) => {
+            const orderA = orderMap.has(a.id) ? orderMap.get(a.id)! : 9999;
+            const orderB = orderMap.has(b.id) ? orderMap.get(b.id)! : 9999;
+            return orderA - orderB;
+        });
+    }
+
+    async updateUserDisplayOrder(newOrder: string[]) {
+        this.settings.userDisplayOrder = newOrder;
+        await this.saveSettings();
+    }
 
     async addUser(user: User) {
         this.users.push(user);
