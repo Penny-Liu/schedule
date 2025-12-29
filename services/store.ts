@@ -39,7 +39,6 @@ class Store {
             if (usersRes.data && usersRes.data.length > 0) {
                 this.users = usersRes.data;
             } else {
-                // Enforce DB Usage: Do not seed mock users
                 console.log('Database empty, pending manual user addition...');
                 this.users = [];
             }
@@ -49,15 +48,26 @@ class Store {
                 this.leaves = leavesRes.data;
             }
 
+            // Enhanced Settings Fetch: Try ID=1 first, then fallback to ANY row
+            let finalSettingsData = null;
+
             if (settingsRes.data && settingsRes.data.data) {
-                this.settings = { ...this.settings, ...settingsRes.data.data };
+                finalSettingsData = settingsRes.data.data;
+            } else if (settingsRes.error && settingsRes.error.code === 'PGRST116') {
+                // ID=1 not found. Try fetching ANY settings row (fallback)
+                const fallbackRes = await supabase.from('settings').select('data').limit(1).single();
+                if (fallbackRes.data && fallbackRes.data.data) {
+                    console.log('[DEBUG] Found settings with non-standard ID. Using it.');
+                    finalSettingsData = fallbackRes.data.data;
+                }
+            }
+
+            if (finalSettingsData) {
+                console.log('[DEBUG] Applied Settings:', finalSettingsData);
+                this.settings = { ...this.settings, ...finalSettingsData };
             } else {
-                // If it's a "No rows found" error (PGRST116), we can try to seed.
-                // If it's permission/auth error, we should NOT try to write (it will fail with RLS).
-                if (settingsRes.error && settingsRes.error.code !== 'PGRST116') {
-                    console.warn("Settings fetch failed (permissions/network). Using local defaults. Detail:", settingsRes.error.message);
-                } else {
-                    // Init settings row (only if genuinely missing)
+                console.warn('[DEBUG] No settings found in DB. Creating default (ID=1)...');
+                if (!settingsRes.error || settingsRes.error.code === 'PGRST116') {
                     await this.saveSettings();
                 }
             }
