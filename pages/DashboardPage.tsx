@@ -277,23 +277,14 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                     const rowData: any[] = [{ content: row.label, styles: { fontStyle: 'bold' } }];
                     dateRange.forEach(date => {
                         const staff = row.getData(date);
-                        // For station view, we might have multiple people. 
-                        // The user request likely focused on User View ("Name part"), 
-                        // but let's try to support the same coloring if applicable.
-                        // Station view text is already complex: "Name(Role)".
-                        // Let's keep Station View roughly standard but formatted nicely.
-                        // Converting string content to object for consistency.
-                        const cellText = staff.map(s => {
-                            let name = formatName(s.user?.name || '');
-                            const isOpening = s.shift.specialRoles.includes(SPECIAL_ROLES.OPENING);
-                            const isLate = s.shift.specialRoles.includes(SPECIAL_ROLES.LATE);
-                            let suffix = '';
-                            if (isOpening) suffix = '(開)';
-                            if (isLate) suffix = '(晚)';
-                            return name + suffix;
-                        }).join('\n');
-
-                        rowData.push({ content: cellText });
+                        // Pass full staff object for custom rendering
+                        rowData.push({
+                            content: '', // Empty content -> custom draw
+                            staff: staff.map(s => ({
+                                name: formatName(s.user?.name || ''),
+                                roles: s.shift.specialRoles
+                            }))
+                        });
                     });
                     return rowData;
                 });
@@ -307,61 +298,32 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                 body: bodyRows,
                 theme: 'grid',
                 styles: {
-                    fontSize: 8, // Base font size for stations
+                    fontSize: 8, // Base font size
                     cellPadding: 0.1,
                     halign: 'center',
                     valign: 'middle',
-                    minCellHeight: 8, // Request: 11mm height
+                    minCellHeight: 9, // Standard height
                     font: fontName,
                     lineColor: [0, 0, 0],
                     lineWidth: 0.1,
+                    textColor: [0, 0, 0],
                 },
                 headStyles: {
-                    fillColor: [255, 255, 255],
+                    fillColor: [240, 240, 240],
                     textColor: [0, 0, 0],
-                    fontStyle: 'normal',
+                    fontStyle: 'bold',
+                    lineWidth: 0.1,
+                    lineColor: [0, 0, 0],
                 },
+                margin: 1,
+                tableLineWidth: 0.1,
+                tableLineColor: [0, 0, 0],
+
                 columnStyles: {
-                    0: { cellWidth: 20, fontSize: 11, fontStyle: 'bold' }, // Request: Name size 11
+                    0: { cellWidth: 20, fontSize: 11, fontStyle: 'bold' },
                 },
-                didDrawCell: function (data: any) {
-                    if (data.section === 'body' && data.column.index > 0 && viewMode === 'user') {
-                        const raw = data.cell.raw;
-                        // Determine if it's our custom object with station/roles
-                        if (raw && typeof raw === 'object' && 'station' in raw) {
-                            const { station, roles } = raw;
-
-                            // 1. Draw Station Name (Standard Size, Centered)
-                            if (station) {
-                                doc.setFontSize(8);
-                                doc.setTextColor(0, 0, 0);
-                                const textHeight = doc.getLineHeight() / doc.internal.scaleFactor;
-                                // Shift up slightly to make room for role below
-                                doc.text(station, data.cell.x + data.cell.width / 2, data.cell.y + data.cell.height / 2 - 1.5, { align: 'center', baseline: 'middle' });
-                            }
-
-                            // 2. Draw Roles (Size 6, Colored, Next Line)
-                            if (roles && roles.length > 0) {
-                                doc.setFontSize(6);
-                                let roleText = roles.join(' ');
-                                // Determine color based on priority or first role found
-                                let color: [number, number, number] = [0, 0, 0]; // Default black
-
-                                // Check roles for specific colors
-                                if (roles.includes(SPECIAL_ROLES.OPENING)) color = roleColors[SPECIAL_ROLES.OPENING];
-                                else if (roles.includes(SPECIAL_ROLES.LATE)) color = roleColors[SPECIAL_ROLES.LATE];
-                                else if (roles.includes(SPECIAL_ROLES.ASSIST)) color = roleColors[SPECIAL_ROLES.ASSIST];
-                                else if (roles.includes(SPECIAL_ROLES.SCHEDULER)) color = roleColors[SPECIAL_ROLES.SCHEDULER];
-
-                                doc.setTextColor(color[0], color[1], color[2]);
-                                // Draw below station
-                                doc.text(roleText, data.cell.x + data.cell.width / 2, data.cell.y + data.cell.height / 2 + 2.5, { align: 'center', baseline: 'middle' });
-                            }
-                        }
-                    }
-                },
-                // Highlight weekends in header
                 didParseCell: function (data: any) {
+                    // Header Logic (Weekends)
                     if (data.section === 'head' && data.column.index > 0) {
                         const dayIndex = (data.column.index - 1);
                         const dateStr = dateRange[dayIndex];
@@ -372,7 +334,120 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                             data.cell.styles.textColor = [150, 0, 0];
                         }
                     }
-                }
+
+                    // Row-Specific Styling (Station View)
+                    if (viewMode === 'station' && data.section === 'body') {
+                        const rawRow = data.row.raw as any[];
+                        const rowLabel = rawRow[0]?.content; // First column is label
+
+                        // Check for specific rows to shrink
+                        const isCompactRow = rowLabel === SPECIAL_ROLES.ASSIST ||
+                            rowLabel === SPECIAL_ROLES.SCHEDULER ||
+                            rowLabel === '輔班' ||
+                            rowLabel === '排班';
+
+                        if (isCompactRow) {
+                            data.cell.styles.minCellHeight = 7; // Request: Height 7
+                            data.cell.styles.fontSize = 7;      // Request: Font 7
+                            // Also ensure column 0 (label) gets this size
+                            if (data.column.index === 0) {
+                                data.cell.styles.fontSize = 7;
+                            }
+                        }
+                    }
+                },
+                didDrawCell: function (data: any) {
+                    // User View Logic
+                    if (data.section === 'body' && data.column.index > 0 && viewMode === 'user') {
+                        const raw = data.cell.raw;
+                        // Determine if it's our custom object with station/roles
+                        if (raw && typeof raw === 'object' && 'station' in raw) {
+                            const { station, roles } = raw;
+
+                            // 1. Draw Station (+ Auto-Scale)
+                            if (station) {
+                                let fontSize = 8;
+                                doc.setFontSize(fontSize);
+                                doc.setTextColor(0, 0, 0);
+
+                                const cellWidth = data.cell.width;
+                                const padding = 1;
+                                const availableWidth = cellWidth - padding;
+                                let textWidth = doc.getTextWidth(station);
+
+                                while (textWidth > availableWidth && fontSize > 4) {
+                                    fontSize -= 0.5;
+                                    doc.setFontSize(fontSize);
+                                    textWidth = doc.getTextWidth(station);
+                                }
+
+                                doc.text(station, data.cell.x + data.cell.width / 2, data.cell.y + data.cell.height / 2 - 1.5, { align: 'center', baseline: 'middle' });
+                            }
+
+                            // 2. Draw Roles
+                            if (roles && roles.length > 0) {
+                                doc.setFontSize(6);
+                                let roleText = roles.join(' ');
+                                let color: [number, number, number] = [0, 0, 0];
+                                if (roles.includes(SPECIAL_ROLES.OPENING)) color = roleColors[SPECIAL_ROLES.OPENING];
+                                else if (roles.includes(SPECIAL_ROLES.LATE)) color = roleColors[SPECIAL_ROLES.LATE];
+                                else if (roles.includes(SPECIAL_ROLES.ASSIST)) color = roleColors[SPECIAL_ROLES.ASSIST];
+                                else if (roles.includes(SPECIAL_ROLES.SCHEDULER)) color = roleColors[SPECIAL_ROLES.SCHEDULER];
+
+                                doc.setTextColor(color[0], color[1], color[2]);
+                                doc.text(roleText, data.cell.x + data.cell.width / 2, data.cell.y + data.cell.height / 2 + 2.5, { align: 'center', baseline: 'middle' });
+                            }
+                        }
+                    }
+
+                    // Station View Logic
+                    if (data.section === 'body' && data.column.index > 0 && viewMode === 'station') {
+                        const raw = data.cell.raw;
+                        if (raw && typeof raw === 'object' && 'staff' in raw) {
+                            const staff = raw.staff as { name: string, roles: string[] }[];
+
+                            const isCompact = data.cell.styles.fontSize === 7;
+                            const baseFontSize = isCompact ? 7 : 8;
+                            const roleFontSize = isCompact ? 6 : 6;
+
+                            if (staff.length > 0) {
+                                let startY = data.cell.y + data.cell.height / 2;
+                                staff.forEach((s, idx) => {
+                                    // 1. Name (Black)
+                                    doc.setFontSize(baseFontSize);
+                                    doc.setTextColor(0, 0, 0);
+
+                                    // Center Y: If single person, name is slightly up, role is slightly down
+                                    // Name
+                                    doc.text(s.name, data.cell.x + data.cell.width / 2, startY - 1.5, { align: 'center', baseline: 'middle' });
+
+                                    // 2. Role (Colored, Next Line)
+                                    if (s.roles.length > 0) {
+                                        doc.setFontSize(roleFontSize);
+                                        // Priority Coloring
+                                        let color: [number, number, number] = [0, 0, 0];
+                                        if (s.roles.includes(SPECIAL_ROLES.OPENING)) color = roleColors[SPECIAL_ROLES.OPENING];
+                                        else if (s.roles.includes(SPECIAL_ROLES.LATE)) color = roleColors[SPECIAL_ROLES.LATE];
+                                        else if (s.roles.includes(SPECIAL_ROLES.ASSIST)) color = roleColors[SPECIAL_ROLES.ASSIST];
+                                        else if (s.roles.includes(SPECIAL_ROLES.SCHEDULER)) color = roleColors[SPECIAL_ROLES.SCHEDULER];
+
+                                        doc.setTextColor(color[0], color[1], color[2]);
+
+                                        let roleLabel = '';
+                                        if (s.roles.includes(SPECIAL_ROLES.OPENING)) roleLabel = '開機';
+                                        else if (s.roles.includes(SPECIAL_ROLES.LATE)) roleLabel = '晚班';
+                                        else if (s.roles.includes(SPECIAL_ROLES.ASSIST)) roleLabel = '輔班';
+                                        else if (s.roles.includes(SPECIAL_ROLES.SCHEDULER)) roleLabel = '排班';
+
+                                        if (!roleLabel) roleLabel = s.roles[0]; // Fallback
+
+                                        doc.text(roleLabel, data.cell.x + data.cell.width / 2, startY + 2.5, { align: 'center', baseline: 'middle' });
+                                    }
+                                });
+                            }
+                        }
+                    }
+                },
             });
 
             const fileName = `${getExportHeader().replace(/[/\\?%*:|"<>]/g, '-')}_${viewMode === 'user' ? '人員表' : '崗位表'}.pdf`;
