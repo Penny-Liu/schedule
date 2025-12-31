@@ -273,21 +273,23 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                 });
             } else {
                 // Station View
-                bodyRows = rowConfigs.map(row => {
-                    const rowData: any[] = [{ content: row.label, styles: { fontStyle: 'bold' } }];
-                    dateRange.forEach(date => {
-                        const staff = row.getData(date);
-                        // Pass full staff object for custom rendering
-                        rowData.push({
-                            content: '', // Empty content -> custom draw
-                            staff: staff.map(s => ({
-                                name: formatName(s.user?.name || ''),
-                                roles: s.shift.specialRoles
-                            }))
+                bodyRows = rowConfigs
+                    .filter(row => row.label !== StationDefault.UNASSIGNED && row.label !== '未分配')
+                    .map(row => {
+                        const rowData: any[] = [{ content: row.label, styles: { fontStyle: 'bold' } }];
+                        dateRange.forEach(date => {
+                            const staff = row.getData(date);
+                            // Pass full staff object for custom rendering
+                            rowData.push({
+                                content: '', // Empty content -> custom draw
+                                staff: staff.map(s => ({
+                                    name: formatName(s.user?.name || ''),
+                                    roles: s.shift.specialRoles
+                                }))
+                            });
                         });
+                        return rowData;
                     });
-                    return rowData;
-                });
             }
 
             console.log('Generating PDF with font:', fontName);
