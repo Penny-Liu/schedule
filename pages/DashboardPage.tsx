@@ -4,7 +4,8 @@ import { User, Shift, UserRole, SYSTEM_OFF, SPECIAL_ROLES, LeaveRequest, LeaveSt
 import { db } from '../services/store';
 import { ChevronLeft, ChevronRight, Briefcase, Moon, Sun, Monitor, Activity, Calendar as CalendarIcon, Filter, Wand2, Users, LayoutList, Star, AlertCircle, Plus, X, Download, BarChart2, Sparkles, ChevronDown, ChevronUp, GripVertical, BookOpen, Lock, Unlock, CheckCircle, Loader2 } from 'lucide-react';
 import html2canvas from 'html2canvas';
-import { jsPDF } from 'jspdf';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import ConfirmModal from '../components/ConfirmModal';
 
 interface DashboardPageProps {
@@ -143,49 +144,243 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
         });
     };
 
-    const handleExportPDF = async () => {
+    const handleExportPDF = async (e?: React.MouseEvent) => {
+        if (e) e.preventDefault();
         setIsExporting(true);
-        const tableElement = document.getElementById('print-container');
-        if (!tableElement) {
-            setIsExporting(false);
-            return;
-        }
         try {
-            // Temporarily reveal to capture
-            tableElement.style.display = 'block';
+            const doc = new jsPDF('l', 'mm', 'a4');
+            let fontName = 'helvetica'; // Default fallback
 
-            // Wait for render
-            await new Promise(resolve => setTimeout(resolve, 100));
+            // Load Open Huninn font for Chinese support (Lightweight ~4.8MB)
+            try {
+                // Determine base path explicitly or try potential paths
+                const pathsToTry = [
+                    '/schedule/fonts/jf-openhuninn-2.1.ttf',
+                    '/fonts/jf-openhuninn-2.1.ttf'
+                ];
 
-            const canvas = await html2canvas(tableElement, {
-                scale: 3, // High resolution for crisp text
-                useCORS: true,
-                backgroundColor: '#ffffff',
-                logging: false
+                let response: Response | null = null;
+
+                // Helper to check if response is valid font (not HTML)
+                const isValidFontResponse = (res: Response) => {
+                    const type = res.headers.get('content-type');
+                    // Must be OK and NOT text/html
+                    return res.ok && (!type || !type.includes('text/html'));
+                };
+
+                for (const path of pathsToTry) {
+                    try {
+                        const res = await fetch(path);
+                        if (isValidFontResponse(res)) {
+                            response = res;
+                            console.log('Font found at:', path);
+                            break;
+                        }
+                    } catch (e) { /* continue */ }
+                }
+
+                if (!response) {
+                    throw new Error('Font file not found at any known path');
+                }
+
+                const blob = await response.blob();
+                const reader = new FileReader();
+
+                await new Promise((resolve, reject) => {
+                    reader.onloadend = () => {
+                        const base64data = reader.result as string;
+                        if (base64data && base64data.includes('base64,')) {
+                            const content = base64data.split('base64,')[1];
+                            if (content) {
+                                doc.addFileToVFS('jf-openhuninn-2.1.ttf', content);
+                                doc.addFont('jf-openhuninn-2.1.ttf', 'OpenHuninn', 'normal');
+                                doc.addFont('jf-openhuninn-2.1.ttf', 'OpenHuninn', 'bold');
+                                doc.addFont('jf-openhuninn-2.1.ttf', 'OpenHuninn', 'italic');
+                                doc.setFont('OpenHuninn');
+                                fontName = 'OpenHuninn';
+                                resolve(true);
+                            } else {
+                                reject('Invalid font content');
+                            }
+                        } else {
+                            reject('Invalid base64 data');
+                        }
+                    };
+                    reader.onerror = reject;
+                    reader.readAsDataURL(blob);
+                });
+            } catch (error) {
+                console.error('Failed to load font:', error);
+                alert('字體載入失敗，將使用預設字體（中文可能會顯示為亂碼）。請確認網路連線或聯繫管理員。');
+            }
+
+            const title = `影像醫學部 - ${viewMode === 'user' ? '人員排班表' : '崗位分配表'}`;
+            const subtitle = getExportHeader();
+            const fullTitle = `${title}   ${subtitle}`;
+            const exportDate = `匯出日期: ${new Date().toLocaleDateString('zh-TW')}`;
+
+            doc.setFontSize(14);
+            doc.text(fullTitle, 14, 15);
+
+            doc.setFontSize(9);
+            const pageWidth = doc.internal.pageSize.width;
+            doc.text(exportDate, pageWidth - 14, 15, { align: 'right' });
+
+            const weekDays = ['日', '一', '二', '三', '四', '五', '六'];
+
+            // Prepare Headers
+            const dateHeaders = dateRange.map(date => {
+                const d = new Date(date);
+                return `${d.getDate()}\n${weekDays[d.getDay()]}`;
             });
 
-            // A4 Landscape dimensions in mm
-            const a4Width = 297;
+            const headRow = [[viewMode === 'user' ? '姓名' : '崗位', ...dateHeaders]];
 
-            // Minimize margin to 3mm to maximize content size
-            const margin = 3;
-            const printableWidth = a4Width - (margin * 2);
+            // Prepare Body
+            let bodyRows: any[] = [];
 
-            // Calculate aspect ratio to fit width
-            const imgHeight = (canvas.height * printableWidth) / canvas.width;
+            const roleColors: Record<string, [number, number, number]> = {
+                [SPECIAL_ROLES.OPENING]: [0, 0, 255],    // Blue
+                [SPECIAL_ROLES.LATE]: [165, 42, 42],     // Brown
+                [SPECIAL_ROLES.ASSIST]: [0, 128, 0],     // Green
+                [SPECIAL_ROLES.SCHEDULER]: [139, 0, 0],  // Dark Red
+            };
 
-            let pdf = new jsPDF('l', 'mm', 'a4');
-            const imgData = canvas.toDataURL('image/png');
+            if (viewMode === 'user') {
+                bodyRows = users.map(user => {
+                    // Column 0: Name (Size 11 handled by columnStyles)
+                    const rowData: any[] = [{ content: user.name, styles: { fontStyle: 'bold' } }];
 
-            pdf.addImage(imgData, 'PNG', margin, margin, printableWidth, imgHeight);
+                    dateRange.forEach(date => {
+                        const { station, specialRoles, isOff } = getDayShift(user.id, date);
+                        const event = holidays.find(h => h.date === date);
+                        const isClosed = event?.type === DateEventType.CLOSED;
+
+                        if (isOff || isClosed) {
+                            // Fix: Use simple string content for 'Off' so custom drawer doesn't duplicate it
+                            rowData.push('休');
+                        } else {
+                            let stationText = station && station !== StationDefault.UNASSIGNED ? station : '';
+                            // Pass structured data for custom rendering
+                            rowData.push({
+                                content: '', // Empty content so we can draw manually without overlap
+                                station: stationText,
+                                roles: specialRoles,
+                            });
+                        }
+                    });
+                    return rowData;
+                });
+            } else {
+                // Station View
+                bodyRows = rowConfigs.map(row => {
+                    const rowData: any[] = [{ content: row.label, styles: { fontStyle: 'bold' } }];
+                    dateRange.forEach(date => {
+                        const staff = row.getData(date);
+                        // For station view, we might have multiple people. 
+                        // The user request likely focused on User View ("Name part"), 
+                        // but let's try to support the same coloring if applicable.
+                        // Station view text is already complex: "Name(Role)".
+                        // Let's keep Station View roughly standard but formatted nicely.
+                        // Converting string content to object for consistency.
+                        const cellText = staff.map(s => {
+                            let name = formatName(s.user?.name || '');
+                            const isOpening = s.shift.specialRoles.includes(SPECIAL_ROLES.OPENING);
+                            const isLate = s.shift.specialRoles.includes(SPECIAL_ROLES.LATE);
+                            let suffix = '';
+                            if (isOpening) suffix = '(開)';
+                            if (isLate) suffix = '(晚)';
+                            return name + suffix;
+                        }).join('\n');
+
+                        rowData.push({ content: cellText });
+                    });
+                    return rowData;
+                });
+            }
+
+            console.log('Generating PDF with font:', fontName);
+
+            autoTable(doc, {
+                startY: 18,
+                head: headRow,
+                body: bodyRows,
+                theme: 'grid',
+                styles: {
+                    fontSize: 8, // Base font size for stations
+                    cellPadding: 0.1,
+                    halign: 'center',
+                    valign: 'middle',
+                    minCellHeight: 8, // Request: 11mm height
+                    font: fontName,
+                    lineColor: [0, 0, 0],
+                    lineWidth: 0.1,
+                },
+                headStyles: {
+                    fillColor: [255, 255, 255],
+                    textColor: [0, 0, 0],
+                    fontStyle: 'normal',
+                },
+                columnStyles: {
+                    0: { cellWidth: 20, fontSize: 11, fontStyle: 'bold' }, // Request: Name size 11
+                },
+                didDrawCell: function (data: any) {
+                    if (data.section === 'body' && data.column.index > 0 && viewMode === 'user') {
+                        const raw = data.cell.raw;
+                        // Determine if it's our custom object with station/roles
+                        if (raw && typeof raw === 'object' && 'station' in raw) {
+                            const { station, roles } = raw;
+
+                            // 1. Draw Station Name (Standard Size, Centered)
+                            if (station) {
+                                doc.setFontSize(8);
+                                doc.setTextColor(0, 0, 0);
+                                const textHeight = doc.getLineHeight() / doc.internal.scaleFactor;
+                                // Shift up slightly to make room for role below
+                                doc.text(station, data.cell.x + data.cell.width / 2, data.cell.y + data.cell.height / 2 - 1.5, { align: 'center', baseline: 'middle' });
+                            }
+
+                            // 2. Draw Roles (Size 6, Colored, Next Line)
+                            if (roles && roles.length > 0) {
+                                doc.setFontSize(6);
+                                let roleText = roles.join(' ');
+                                // Determine color based on priority or first role found
+                                let color: [number, number, number] = [0, 0, 0]; // Default black
+
+                                // Check roles for specific colors
+                                if (roles.includes(SPECIAL_ROLES.OPENING)) color = roleColors[SPECIAL_ROLES.OPENING];
+                                else if (roles.includes(SPECIAL_ROLES.LATE)) color = roleColors[SPECIAL_ROLES.LATE];
+                                else if (roles.includes(SPECIAL_ROLES.ASSIST)) color = roleColors[SPECIAL_ROLES.ASSIST];
+                                else if (roles.includes(SPECIAL_ROLES.SCHEDULER)) color = roleColors[SPECIAL_ROLES.SCHEDULER];
+
+                                doc.setTextColor(color[0], color[1], color[2]);
+                                // Draw below station
+                                doc.text(roleText, data.cell.x + data.cell.width / 2, data.cell.y + data.cell.height / 2 + 2.5, { align: 'center', baseline: 'middle' });
+                            }
+                        }
+                    }
+                },
+                // Highlight weekends in header
+                didParseCell: function (data: any) {
+                    if (data.section === 'head' && data.column.index > 0) {
+                        const dayIndex = (data.column.index - 1);
+                        const dateStr = dateRange[dayIndex];
+                        const d = new Date(dateStr);
+                        const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+                        if (isWeekend) {
+                            data.cell.styles.fillColor = [255, 235, 235];
+                            data.cell.styles.textColor = [150, 0, 0];
+                        }
+                    }
+                }
+            });
 
             const fileName = `${getExportHeader().replace(/[/\\?%*:|"<>]/g, '-')}_${viewMode === 'user' ? '人員表' : '崗位表'}.pdf`;
-            pdf.save(fileName);
-        } catch (err) {
-            console.error("Export failed", err);
-            alert("匯出失敗，請稍後再試");
+            doc.save(fileName);
+        } catch (e) {
+            console.error('PDF Generation Error:', e);
+            alert('PDF 匯出發生錯誤');
         } finally {
-            tableElement.style.display = 'none'; // Hide again
             setIsExporting(false);
         }
     };
@@ -662,7 +857,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
 
             {/* --- Optimized A4 Landscape Print Container --- */}
             {/* Width set to 1600px to allow larger text size relative to A4 page when scaled down */}
-            <div id="print-container" className="fixed top-0 left-[-9999px] bg-white hidden" style={{ width: '1600px', fontFamily: '"Noto Sans TC", sans-serif' }}>
+            <div id="print-container" className="fixed top-0 left-[-9999px] bg-white hidden" style={{ width: '1600px', fontFamily: '"Open Huninn", "Noto Sans TC", sans-serif' }}>
                 <div className="flex flex-col items-center mb-4 mt-2">
                     <h1 className="text-3xl font-bold text-gray-900 tracking-wide mb-1">影像醫學部 - {viewMode === 'user' ? '人員排班表' : '崗位分配表'}</h1>
                     <div className="text-xl font-medium text-gray-600 border-b-2 border-gray-800 pb-2 px-8">
@@ -897,7 +1092,8 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                         <div className="h-6 w-px bg-slate-200 mx-1"></div>
 
                         <button
-                            onClick={handleExportPDF}
+                            type="button"
+                            onClick={(e) => handleExportPDF(e)}
                             disabled={isExporting}
                             className="px-3 py-1.5 rounded-lg text-sm font-medium border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 flex items-center gap-1.5 shadow-sm transition-all"
                             title="匯出 PDF"
@@ -1278,7 +1474,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                     )}
                 </div>
             </div>
-        </div>
+        </div >
     );
 };
 

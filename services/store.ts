@@ -12,7 +12,7 @@ class Store {
         cycles: [],
         holidays: [],
         stationRequirements: {},
-        cycleStartDate: '2024-01-01',
+        cycleStartDate: '2025-11-06',
         stationDisplayOrder: []
     };
     currentUser: User | null = null;
@@ -39,8 +39,8 @@ class Store {
             if (usersRes.data && usersRes.data.length > 0) {
                 this.users = usersRes.data;
             } else {
-                console.log('Database empty, pending manual user addition...');
-                this.users = [];
+                console.log('Database empty, loading mock data...');
+                this.users = MOCK_USERS;
             }
 
             if (shiftsRes.data) this.shifts = shiftsRes.data;
