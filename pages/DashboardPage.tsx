@@ -314,7 +314,8 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                     content: '',
                                     staff: staff.map(s => ({
                                         name: formatName(s.user?.name || ''),
-                                        roles: s.shift.specialRoles
+                                        roles: s.shift.specialRoles,
+                                        isLearner: s.user?.learningCapabilities?.includes(row.label) || false
                                     }))
                                 });
                             }
@@ -378,8 +379,23 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                         const d = new Date(dateStr);
                         const isWeekend = d.getDay() === 0 || d.getDay() === 6;
                         if (isWeekend) {
-                            data.cell.styles.fillColor = [255, 235, 235];
-                            data.cell.styles.textColor = [150, 0, 0];
+                        }
+                    }
+
+                    // User View: Cell Backgrounds
+                    if (viewMode === 'user' && data.section === 'body' && data.column.index > 0) {
+                        const raw = data.cell.raw;
+                        if (raw && typeof raw === 'object' && 'station' in raw) {
+                            const station = raw.station;
+                            if (station) {
+                                if (station.includes('場控')) {
+                                    data.cell.styles.fillColor = [252, 252, 190]; // #fcfcbe (Red text handled in didDrawCell)
+                                } else if (station.includes('遠')) {
+                                    data.cell.styles.fillColor = [255, 225, 225]; // #ffe1e1 (Black text default)
+                                } else if (station === SYSTEM_OFF) {
+                                    data.cell.styles.fillColor = [220, 220, 220]; // #dcdcdc (Black text default)
+                                }
+                            }
                         }
                     }
 
@@ -491,9 +507,16 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                 staff.forEach((s, idx) => {
                                     const blockY = startY + (idx * lineHeight);
 
-                                    // 1. Name (Black)
+                                    // 1. Name 
                                     doc.setFontSize(baseFontSize);
-                                    doc.setTextColor(0, 0, 0);
+
+                                    // Learner Name Color: #dc6262
+                                    if (s.isLearner) {
+                                        doc.setTextColor(220, 98, 98);
+                                    } else {
+                                        doc.setTextColor(0, 0, 0);
+                                    }
+
                                     doc.text(s.name, data.cell.x + data.cell.width / 2, blockY - 1, { align: 'center', baseline: 'middle' });
 
                                     // 2. Role (Colored)
