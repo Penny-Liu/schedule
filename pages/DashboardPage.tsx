@@ -274,19 +274,31 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
             } else {
                 // Station View
                 bodyRows = rowConfigs
-                    .filter(row => row.label !== StationDefault.UNASSIGNED && row.label !== '未分配')
+                    .filter(row =>
+                        row.label !== StationDefault.UNASSIGNED &&
+                        row.label !== '未分配' &&
+                        row.label !== SPECIAL_ROLES.OPENING &&
+                        row.label !== SPECIAL_ROLES.LATE
+                    )
                     .map(row => {
                         const rowData: any[] = [{ content: row.label, styles: { fontStyle: 'bold' } }];
                         dateRange.forEach(date => {
                             const staff = row.getData(date);
-                            // Pass full staff object for custom rendering
-                            rowData.push({
-                                content: '', // Empty content -> custom draw
-                                staff: staff.map(s => ({
-                                    name: formatName(s.user?.name || ''),
-                                    roles: s.shift.specialRoles
-                                }))
-                            });
+
+                            // Special handling for "Off" row to allow auto-height
+                            if (row.label === SYSTEM_OFF) {
+                                const names = staff.map(s => formatName(s.user?.name || '')).filter(n => n).join(' ');
+                                rowData.push({ content: names });
+                            } else {
+                                // Pass full staff object for custom rendering
+                                rowData.push({
+                                    content: '', // Empty content -> custom draw
+                                    staff: staff.map(s => ({
+                                        name: formatName(s.user?.name || ''),
+                                        roles: s.shift.specialRoles
+                                    }))
+                                });
+                            }
                         });
                         return rowData;
                     });
@@ -408,44 +420,56 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                         if (raw && typeof raw === 'object' && 'staff' in raw) {
                             const staff = raw.staff as { name: string, roles: string[] }[];
 
-                            const isCompact = data.cell.styles.fontSize === 7;
+                            const isCompact = data.cell.styles.fontSize === 7; // Assist/Scheduler
                             const baseFontSize = isCompact ? 7 : 8;
                             const roleFontSize = isCompact ? 6 : 6;
 
                             if (staff.length > 0) {
-                                let startY = data.cell.y + data.cell.height / 2;
-                                staff.forEach((s, idx) => {
-                                    // 1. Name (Black)
+                                // For Compact rows (Assist/Scheduler), we only show NAME, no Role, and center content.
+                                if (isCompact) {
                                     doc.setFontSize(baseFontSize);
                                     doc.setTextColor(0, 0, 0);
 
-                                    // Center Y: If single person, name is slightly up, role is slightly down
-                                    // Name
-                                    doc.text(s.name, data.cell.x + data.cell.width / 2, startY - 1.5, { align: 'center', baseline: 'middle' });
+                                    // Join all names with slash or space
+                                    const names = staff.map(s => s.name).join('/');
+                                    doc.text(names, data.cell.x + data.cell.width / 2, data.cell.y + data.cell.height / 2, { align: 'center', baseline: 'middle' });
 
-                                    // 2. Role (Colored, Next Line)
-                                    if (s.roles.length > 0) {
-                                        doc.setFontSize(roleFontSize);
-                                        // Priority Coloring
-                                        let color: [number, number, number] = [0, 0, 0];
-                                        if (s.roles.includes(SPECIAL_ROLES.OPENING)) color = roleColors[SPECIAL_ROLES.OPENING];
-                                        else if (s.roles.includes(SPECIAL_ROLES.LATE)) color = roleColors[SPECIAL_ROLES.LATE];
-                                        else if (s.roles.includes(SPECIAL_ROLES.ASSIST)) color = roleColors[SPECIAL_ROLES.ASSIST];
-                                        else if (s.roles.includes(SPECIAL_ROLES.SCHEDULER)) color = roleColors[SPECIAL_ROLES.SCHEDULER];
+                                } else {
+                                    // Standard Rows: Name + Role on new line
+                                    let startY = data.cell.y + data.cell.height / 2;
+                                    staff.forEach((s, idx) => {
+                                        // 1. Name (Black)
+                                        doc.setFontSize(baseFontSize);
+                                        doc.setTextColor(0, 0, 0);
 
-                                        doc.setTextColor(color[0], color[1], color[2]);
+                                        // Center Y: If single person, name is slightly up, role is slightly down
+                                        // Name
+                                        doc.text(s.name, data.cell.x + data.cell.width / 2, startY - 1.5, { align: 'center', baseline: 'middle' });
 
-                                        let roleLabel = '';
-                                        if (s.roles.includes(SPECIAL_ROLES.OPENING)) roleLabel = '開機';
-                                        else if (s.roles.includes(SPECIAL_ROLES.LATE)) roleLabel = '晚班';
-                                        else if (s.roles.includes(SPECIAL_ROLES.ASSIST)) roleLabel = '輔班';
-                                        else if (s.roles.includes(SPECIAL_ROLES.SCHEDULER)) roleLabel = '排班';
+                                        // 2. Role (Colored, Next Line)
+                                        if (s.roles.length > 0) {
+                                            doc.setFontSize(roleFontSize);
+                                            // Priority Coloring
+                                            let color: [number, number, number] = [0, 0, 0];
+                                            if (s.roles.includes(SPECIAL_ROLES.OPENING)) color = roleColors[SPECIAL_ROLES.OPENING];
+                                            else if (s.roles.includes(SPECIAL_ROLES.LATE)) color = roleColors[SPECIAL_ROLES.LATE];
+                                            else if (s.roles.includes(SPECIAL_ROLES.ASSIST)) color = roleColors[SPECIAL_ROLES.ASSIST];
+                                            else if (s.roles.includes(SPECIAL_ROLES.SCHEDULER)) color = roleColors[SPECIAL_ROLES.SCHEDULER];
 
-                                        if (!roleLabel) roleLabel = s.roles[0]; // Fallback
+                                            doc.setTextColor(color[0], color[1], color[2]);
 
-                                        doc.text(roleLabel, data.cell.x + data.cell.width / 2, startY + 2.5, { align: 'center', baseline: 'middle' });
-                                    }
-                                });
+                                            let roleLabel = '';
+                                            if (s.roles.includes(SPECIAL_ROLES.OPENING)) roleLabel = '開機';
+                                            else if (s.roles.includes(SPECIAL_ROLES.LATE)) roleLabel = '晚班';
+                                            else if (s.roles.includes(SPECIAL_ROLES.ASSIST)) roleLabel = '輔班';
+                                            else if (s.roles.includes(SPECIAL_ROLES.SCHEDULER)) roleLabel = '排班';
+
+                                            if (!roleLabel) roleLabel = s.roles[0]; // Fallback
+
+                                            doc.text(roleLabel, data.cell.x + data.cell.width / 2, startY + 2.5, { align: 'center', baseline: 'middle' });
+                                        }
+                                    });
+                                }
                             }
                         }
                     }
