@@ -289,10 +289,12 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                             if (row.label === SYSTEM_OFF) {
                                 const names = staff.map(s => formatName(s.user?.name || '')).filter(n => n).join(' ');
                                 rowData.push({ content: names });
-                            } else {
                                 // Pass full staff object for custom rendering
+                                // Generate filler text to force autoTable to expand height
+                                // Each person needs ~2 lines (Name + Role). Using '.\n.' per person as invisible filler.
+                                const fillerText = staff.map(() => '.\n.').join('\n');
                                 rowData.push({
-                                    content: '', // Empty content -> custom draw
+                                    content: fillerText,
                                     staff: staff.map(s => ({
                                         name: formatName(s.user?.name || ''),
                                         roles: s.shift.specialRoles
@@ -305,6 +307,23 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
             }
 
             console.log('Generating PDF with font:', fontName);
+
+
+            // Calculate equal column widths for date columns
+            // pageWidth is already defined in scope (line 226)
+            const margins = 2; // 1mm left + 1mm right
+            const nameColWidth = 20;
+            const availableWidth = pageWidth - margins - nameColWidth;
+            const dateColWidth = availableWidth / dateRange.length;
+
+            const dynamicColumnStyles: Record<string, any> = {
+                0: { cellWidth: nameColWidth, fontSize: 11, fontStyle: 'bold' }
+            };
+
+            // Apply calculated width to all date columns (index 1 to N)
+            for (let i = 0; i < dateRange.length; i++) {
+                dynamicColumnStyles[i + 1] = { cellWidth: dateColWidth };
+            }
 
             autoTable(doc, {
                 startY: 18,
@@ -333,9 +352,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                 tableLineWidth: 0.1,
                 tableLineColor: [0, 0, 0],
 
-                columnStyles: {
-                    0: { cellWidth: 20, fontSize: 11, fontStyle: 'bold' },
-                },
+                columnStyles: dynamicColumnStyles,
                 didParseCell: function (data: any) {
                     // Header Logic (Weekends)
                     if (data.section === 'head' && data.column.index > 0) {
@@ -366,6 +383,12 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                             // Also ensure column 0 (label) gets this size
                             if (data.column.index === 0) {
                                 data.cell.styles.fontSize = 7;
+                            }
+                        } else if (data.column.index > 0) {
+                            // Standard Rows: Hide "Filler" text (content) so we can draw custom content
+                            const cellRaw = data.cell.raw;
+                            if (cellRaw && typeof cellRaw === 'object' && 'staff' in cellRaw) {
+                                data.cell.styles.textColor = [255, 255, 255]; // White/Invisible
                             }
                         }
                     }
@@ -435,18 +458,29 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                     doc.text(names, data.cell.x + data.cell.width / 2, data.cell.y + data.cell.height / 2, { align: 'center', baseline: 'middle' });
 
                                 } else {
-                                    // Standard Rows: Name + Role on new line
-                                    let startY = data.cell.y + data.cell.height / 2;
+                                    // Standard Rows: Stacked Content logic
+                                    // We used filler text to finish cell expansion.
+                                    // Now we draw manually over it.
+
+                                    // Calculate center start based on count
+                                    // Height per person block ~ 3.5mm
+                                    // autoTable has already centered the invisible filler text block.
+                                    // We can map our custom draw to the same positions?
+                                    // No, easier to just calculate absolute position relative to cell.
+
+                                    const lineHeight = 3.5;
+                                    const totalBlockHeight = staff.length * lineHeight;
+                                    let startY = (data.cell.y + data.cell.height / 2) - (totalBlockHeight / 2) + 1.2; // +1.2 adjustment for visual centering
+
                                     staff.forEach((s, idx) => {
+                                        const blockY = startY + (idx * lineHeight);
+
                                         // 1. Name (Black)
                                         doc.setFontSize(baseFontSize);
                                         doc.setTextColor(0, 0, 0);
+                                        doc.text(s.name, data.cell.x + data.cell.width / 2, blockY - 1, { align: 'center', baseline: 'middle' });
 
-                                        // Center Y: If single person, name is slightly up, role is slightly down
-                                        // Name
-                                        doc.text(s.name, data.cell.x + data.cell.width / 2, startY - 1.5, { align: 'center', baseline: 'middle' });
-
-                                        // 2. Role (Colored, Next Line)
+                                        // 2. Role (Colored)
                                         if (s.roles.length > 0) {
                                             doc.setFontSize(roleFontSize);
                                             // Priority Coloring
@@ -466,7 +500,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
 
                                             if (!roleLabel) roleLabel = s.roles[0]; // Fallback
 
-                                            doc.text(roleLabel, data.cell.x + data.cell.width / 2, startY + 2.5, { align: 'center', baseline: 'middle' });
+                                            doc.text(roleLabel, data.cell.x + data.cell.width / 2, blockY + 1.5, { align: 'center', baseline: 'middle' });
                                         }
                                     });
                                 }
