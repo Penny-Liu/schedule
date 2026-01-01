@@ -51,13 +51,22 @@ class Store {
             if (usersRes.data && usersRes.data.length > 0) {
                 this.users = usersRes.data;
             } else {
-                console.log('Database empty, loading mock data...');
+                console.log('Database empty, seeding init data...');
                 this.users = MOCK_USERS;
+                // Auto-seed Users
+                const { error } = await supabase.from('users').insert(MOCK_USERS);
+                if (error) console.error('Failed to seed users:', error);
             }
 
             if (shiftsRes.data) this.shifts = shiftsRes.data;
-            if (leavesRes.data) {
+            if (leavesRes.data && leavesRes.data.length > 0) {
                 this.leaves = leavesRes.data;
+            } else {
+                console.log('Database empty (leaves), seeding init data...');
+                this.leaves = MOCK_LEAVES;
+                // Auto-seed Leaves
+                const { error } = await supabase.from('leaves').insert(MOCK_LEAVES);
+                if (error) console.error('Failed to seed leaves:', error);
             }
 
             // Enhanced Settings Fetch: Try ID=1 first, then fallback to ANY row
@@ -235,7 +244,11 @@ class Store {
 
     async addLeave(leave: LeaveRequest) {
         this.leaves.push(leave);
-        await supabase.from('leaves').insert(leave);
+        const { error } = await supabase.from('leaves').insert(leave);
+        if (error) {
+            console.error('Failed to insert leave:', error);
+            // Optional: Rollback local state if needed, but for now just log
+        }
         this.notifyListeners();
     }
 
@@ -249,7 +262,9 @@ class Store {
         const updates = { targetApproval: approvalStatus, status: newStatus };
         this.leaves[leaveIndex] = { ...leave, ...updates };
 
-        await supabase.from('leaves').update(updates).eq('id', id);
+        const { error } = await supabase.from('leaves').update(updates).eq('id', id);
+        if (error) console.error('Failed to update leave target approval:', error);
+
         this.notifyListeners();
     }
 
@@ -557,119 +572,7 @@ class Store {
 
     // --- Auto Schedule Functions ---
 
-    async autoAssignSpecialRoles(startDate: string, endDate: string) {
-        const start = new Date(startDate);
-        const end = new Date(endDate);
-        const specialRolesToAssign = [SPECIAL_ROLES.OPENING, SPECIAL_ROLES.LATE];
 
-        const roleCounts: Record<string, Record<string, number>> = {
-            [SPECIAL_ROLES.OPENING]: {},
-            [SPECIAL_ROLES.LATE]: {}
-        };
-
-        this.users.forEach(u => {
-            roleCounts[SPECIAL_ROLES.OPENING][u.id] = 0;
-            roleCounts[SPECIAL_ROLES.LATE][u.id] = 0;
-        });
-        // Initialize counts from existing history
-        this.shifts.forEach(s => {
-            if (s.specialRoles) {
-                s.specialRoles.forEach(r => {
-                    if (roleCounts[r] && roleCounts[r][s.userId] !== undefined) {
-                        roleCounts[r][s.userId]++;
-                    }
-                });
-            }
-        });
-
-        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-            const dateStr = d.toISOString().split('T')[0];
-            const yesterday = new Date(d);
-            yesterday.setDate(yesterday.getDate() - 1);
-            const yesterdayStr = yesterday.toISOString().split('T')[0];
-
-            const event = this.getEvent(dateStr);
-            if (event && event.type === DateEventType.CLOSED) continue;
-
-            let candidates = this.users.filter(user => {
-                const status = this.getUserStatusOnDate(user.id, dateStr);
-                return status === 'WORK';
-            });
-
-            const dailyUpdates: Shift[] = [];
-
-            for (const role of specialRolesToAssign) {
-                const isRoleAssigned = this.shifts.some(s => s.date === dateStr && s.specialRoles.includes(role));
-
-                if (!isRoleAssigned) {
-                    const eligible = candidates.filter(u => {
-                        if (!u.capabilities?.includes(role)) return false;
-                        const userShift = this.shifts.find(s => s.userId === u.id && s.date === dateStr);
-                        if (userShift && userShift.specialRoles.length > 0) return false;
-                        return true;
-                    });
-
-                    if (eligible.length > 0) {
-                        eligible.sort((a, b) => {
-                            const aHadYesterday = this.shifts.some(s => s.userId === a.id && s.date === yesterdayStr && s.specialRoles.includes(role));
-                            const bHadYesterday = this.shifts.some(s => s.userId === b.id && s.date === yesterdayStr && s.specialRoles.includes(role));
-                            if (aHadYesterday && !bHadYesterday) return 1;
-                            if (!aHadYesterday && bHadYesterday) return -1;
-                            const countA = roleCounts[role][a.id] || 0;
-                            const countB = roleCounts[role][b.id] || 0;
-                            if (countA !== countB) return countA - countB;
-                            return Math.random() - 0.5;
-                        });
-
-                        const selectedUser = eligible[0];
-                        roleCounts[role][selectedUser.id] = (roleCounts[role][selectedUser.id] || 0) + 1;
-
-                        const existingShiftIdx = this.shifts.findIndex(s => s.userId === selectedUser.id && s.date === dateStr);
-                        // Check if we already staged an update for this user today (unlikely for different roles if filtered, but safe to check)
-                        let s: Shift;
-                        if (existingShiftIdx >= 0) {
-                            s = { ...this.shifts[existingShiftIdx] };
-                        } else {
-                            s = {
-                                id: `${selectedUser.id}-${dateStr}`,
-                                userId: selectedUser.id,
-                                date: dateStr,
-                                station: StationDefault.UNASSIGNED,
-                                specialRoles: [],
-                                isAutoGenerated: true
-                            };
-                        }
-
-                        // Check if already in dailyUpdates to allow accumulation
-                        const stagedIdx = dailyUpdates.findIndex(du => du.id === s.id);
-                        if (stagedIdx >= 0) {
-                            s = dailyUpdates[stagedIdx];
-                        }
-
-                        s.specialRoles = [...s.specialRoles, role];
-                        if (role === SPECIAL_ROLES.OPENING || role === SPECIAL_ROLES.LATE) {
-                            if (s.station === StationDefault.FLOOR_CONTROL || s.station === StationDefault.REMOTE) {
-                                s.station = StationDefault.UNASSIGNED;
-                            }
-                        }
-                        s.isAutoGenerated = true;
-
-                        if (stagedIdx >= 0) dailyUpdates[stagedIdx] = s;
-                        else dailyUpdates.push(s);
-
-                        // Critical: Must update local store immediately for logic to see it (e.g. conflict checks)
-                        // even if we batch the DB call
-                        if (existingShiftIdx >= 0) this.shifts[existingShiftIdx] = s;
-                        else this.shifts.push(s);
-                    }
-                }
-            }
-
-            if (dailyUpdates.length > 0) {
-                await this.upsertShifts(dailyUpdates);
-            }
-        }
-    }
 
     // Optimized Auto Schedule with Strict Priority and Gap Minimization
     async autoSchedule(startDate: string, endDate: string) {
@@ -754,8 +657,9 @@ class Store {
                 for (const slot of slots) {
                     const candidateIndex = pool.findIndex(u => {
                         const isCertified = u.capabilities?.includes(slot);
-                        const isLearning = u.learningCapabilities?.includes(slot);
-                        if (!isCertified && !isLearning) return false;
+                        // Explicitly exclude learners from auto-schedule
+                        if (!isCertified) return false;
+
                         const existingShift = this.shifts.find(s => s.userId === u.id && s.date === dateStr);
                         if (existingShift) {
                             const hasSpecial = existingShift.specialRoles.includes(SPECIAL_ROLES.OPENING) || existingShift.specialRoles.includes(SPECIAL_ROLES.LATE);
@@ -822,6 +726,128 @@ class Store {
 
             await this.upsertShifts(dailyBatch);
         }
+    }
+
+    // --- Auto Schedule Special Roles ---
+    async autoAssignSpecialRoles(startDate: string, endDate: string, targetRoles: string[]) {
+        console.log('[Store] autoAssignSpecialRoles called', { startDate, endDate, targetRoles });
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        const dateRange = [];
+        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+            dateRange.push(d.toISOString().split('T')[0]);
+        }
+
+        // 1. Initialize Fairness Counters (Count existing special roles in this range)
+        const roleCounts: Record<string, Record<string, number>> = {}; // { userId: { ROLE: count } }
+        this.users.forEach(u => {
+            roleCounts[u.id] = {};
+            targetRoles.forEach(r => roleCounts[u.id][r] = 0);
+        });
+
+        // Pre-count existing assignments to ensure global fairness
+        const shiftsInRange = this.getShifts(startDate, endDate);
+        shiftsInRange.forEach(s => {
+            s.specialRoles.forEach(r => {
+                if (roleCounts[s.userId] && roleCounts[s.userId][r] !== undefined) {
+                    roleCounts[s.userId][r]++;
+                }
+            });
+        });
+
+        // 2. Iterate each day
+        for (const dateStr of dateRange) {
+            // Shuffle roles to avoid priority bias
+            const dailyRoles = [...targetRoles].sort(() => Math.random() - 0.5);
+
+            for (const role of dailyRoles) {
+                // Check if role is already filled for this day
+                const filledShifts = this.getShifts(dateStr, dateStr).filter(s => s.specialRoles.includes(role));
+                if (filledShifts.length > 0) continue; // Already assigned
+
+                // Find Candidates
+                // Randomize candidates FIRST to ensure "Random Start" when counts are tied
+                const shuffledUsers = [...this.users].sort(() => Math.random() - 0.5);
+
+                const candidates = shuffledUsers.filter(u => {
+                    // a. Must be WORKING
+                    const status = this.getUserStatusOnDate(u.id, dateStr);
+                    if (status !== 'WORK') return false;
+
+                    // b. Must have Capability (assuming capability check logic)
+                    if (u.capabilities && u.capabilities.length > 0 && !u.capabilities.includes(role)) {
+                        return false;
+                    }
+
+                    // c. Conflict Check (Relaxed): Allow Opening + Assist
+                    const shift = this.getShifts(dateStr, dateStr).find(s => s.userId === u.id);
+                    if (shift && shift.specialRoles.length > 0) {
+                        const existing = shift.specialRoles;
+                        const isOpening = existing.includes(SPECIAL_ROLES.OPENING);
+                        const isAssist = existing.includes(SPECIAL_ROLES.ASSIST);
+                        const targetIsOpening = role === SPECIAL_ROLES.OPENING;
+                        const targetIsAssist = role === SPECIAL_ROLES.ASSIST;
+
+                        // Allow overlap ONLY if (Opening + Assist)
+                        // If I have Opening, can I accept Assist? YES.
+                        // If I have Assist, can I accept Opening? YES.
+                        if ((isOpening && targetIsAssist) || (isAssist && targetIsOpening)) {
+                            // Allowed overlap
+                            return true;
+                        }
+
+                        // Otherwise, strict conflict (cannot have any other role)
+                        return false;
+                    }
+
+                    return true;
+                });
+
+                if (candidates.length === 0) continue;
+
+                // Sort by Fairness (Count) then Randomness
+                // Since we already shuffled users, the random tie-breaker is implicit in the stable sort 
+                // but we add it explicitly to be safe.
+                candidates.sort((a, b) => {
+                    const countA = roleCounts[a.id][role] || 0;
+                    const countB = roleCounts[b.id][role] || 0;
+                    // Lower count has PRIORITY (Ascending sort)
+                    return countA - countB;
+                });
+
+                // Pick the winner
+                const winner = candidates[0];
+
+                // Assign
+                const winnerShift = this.getShifts(dateStr, dateStr).find(s => s.userId === winner.id);
+                if (winnerShift) {
+                    const newRoles = [...winnerShift.specialRoles, role];
+                    // De-duplicate just in case
+                    const uniqueRoles = [...new Set(newRoles)];
+
+                    await this.upsertShift({
+                        ...winnerShift,
+                        specialRoles: uniqueRoles
+                    });
+
+                    // Update Count
+                    roleCounts[winner.id][role]++;
+                } else {
+                    // Create new shift if strictly needed (unlikely if we filtered by WORK/Schedule existence)
+                    // But filtered by WORK doesn't guarantee a shift object exists in DB if it's purely default
+                    await this.upsertShift({
+                        id: `${winner.id}-${dateStr}`,
+                        userId: winner.id,
+                        date: dateStr,
+                        station: StationDefault.UNASSIGNED,
+                        specialRoles: [role],
+                        isAutoGenerated: true
+                    });
+                    roleCounts[winner.id][role]++;
+                }
+            }
+        }
+        this.notifyListeners();
     }
 }
 

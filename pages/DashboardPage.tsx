@@ -601,7 +601,34 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
     };
 
     const onAutoScheduleClick = () => setIsAutoScheduleOpen(true);
+    // Special Roles Selection State
+    const [specialRolesToSchedule, setSpecialRolesToSchedule] = useState<string[]>([
+        SPECIAL_ROLES.OPENING,
+        SPECIAL_ROLES.LATE,
+        SPECIAL_ROLES.ASSIST,
+        SPECIAL_ROLES.SCHEDULER
+    ]);
+
     const onSpecialRoleClick = () => setIsSpecialRoleModalOpen(true);
+
+    const handleSpecialRoleConfirm = async () => {
+        console.log('Starting Special Role Auto Schedule...', { range: scheduleRange, roles: specialRolesToSchedule });
+        setIsProcessing(true);
+        // Wait briefly for UI to update
+        await new Promise(r => setTimeout(r, 100));
+
+        try {
+            await db.autoAssignSpecialRoles(scheduleRange.start, scheduleRange.end, specialRolesToSchedule);
+            setShifts([...db.getShifts('', '')]); // Refresh
+            alert('特殊班分配完成！');
+        } catch (error) {
+            console.error(error);
+            alert('分配失敗');
+        } finally {
+            setIsProcessing(false);
+            setIsSpecialRoleModalOpen(false);
+        }
+    };
 
     // Fix: Async/Await to ensure DB calculation finishes before UI update
     const handleAutoScheduleConfirm = async () => {
@@ -614,14 +641,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
         setIsAutoScheduleOpen(false); // Close modal
     };
 
-    // Fix: Async/Await for Special Roles too
-    const handleSpecialRoleConfirm = async () => {
-        setIsProcessing(true);
-        await db.autoAssignSpecialRoles(scheduleRange.start, scheduleRange.end);
-        setShifts([...db.getShifts('', '')]);
-        setIsProcessing(false);
-        setIsSpecialRoleModalOpen(false); // Close modal
-    };
+
 
     const handleToggleCycleConfirm = async () => {
         if (selectedCycleId === 'rolling') return;
@@ -1026,6 +1046,85 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                 }
                 confirmText={isProcessing ? "處理中..." : "執行任務分配"}
                 confirmColor="teal"
+            />
+
+            {/* Special Role Auto Schedule Modal */}
+            <ConfirmModal
+                isOpen={isSpecialRoleModalOpen}
+                onClose={() => setIsSpecialRoleModalOpen(false)}
+                onConfirm={handleSpecialRoleConfirm}
+                title="自動排班 (特殊任務)"
+                message={
+                    <div className="space-y-4 text-left">
+                        <p className="font-medium text-gray-800">請設定排班條件</p>
+
+                        {/* Date Range Selection (Shared State) */}
+                        <div className="grid grid-cols-2 gap-2">
+                            <div>
+                                <label className="text-xs text-gray-500 font-bold block mb-1">開始日期</label>
+                                <input
+                                    type="date"
+                                    className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:ring-2 focus:ring-indigo-500 outline-none"
+                                    value={scheduleRange.start}
+                                    onChange={(e) => setScheduleRange({ ...scheduleRange, start: e.target.value })}
+                                />
+                            </div>
+                            <div>
+                                <label className="text-xs text-gray-500 font-bold block mb-1">結束日期</label>
+                                <input
+                                    type="date"
+                                    className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:ring-2 focus:ring-indigo-500 outline-none"
+                                    value={scheduleRange.end}
+                                    onChange={(e) => setScheduleRange({ ...scheduleRange, end: e.target.value })}
+                                />
+                            </div>
+                        </div>
+
+                        {/* Role Selection */}
+                        <div>
+                            <label className="text-xs text-gray-500 font-bold block mb-2">選擇要自動分配的任務</label>
+                            <div className="grid grid-cols-2 gap-2">
+                                {[
+                                    { id: SPECIAL_ROLES.OPENING, label: '開機', color: 'text-blue-700 bg-blue-50 border-blue-200' },
+                                    { id: SPECIAL_ROLES.LATE, label: '晚班', color: 'text-amber-700 bg-amber-50 border-amber-200' },
+                                    { id: SPECIAL_ROLES.ASSIST, label: '輔班', color: 'text-emerald-700 bg-emerald-50 border-emerald-200' },
+                                    { id: SPECIAL_ROLES.SCHEDULER, label: '排班', color: 'text-red-700 bg-red-50 border-red-200' },
+                                ].map(role => (
+                                    <label key={role.id} className={`flex items-center gap-2 p-2 rounded border cursor-pointer hover:opacity-80 transition-all ${specialRolesToSchedule.includes(role.id) ? role.color + ' ring-1 ring-offset-1' : 'bg-white border-gray-200 text-gray-500'}`}>
+                                        <input
+                                            type="checkbox"
+                                            checked={specialRolesToSchedule.includes(role.id)}
+                                            onChange={(e) => {
+                                                if (e.target.checked) {
+                                                    setSpecialRolesToSchedule([...specialRolesToSchedule, role.id]);
+                                                } else {
+                                                    setSpecialRolesToSchedule(specialRolesToSchedule.filter(r => r !== role.id));
+                                                }
+                                            }}
+                                            className="rounded text-indigo-600 focus:ring-indigo-500"
+                                        />
+                                        <span className="text-sm font-bold">{role.label}</span>
+                                    </label>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="bg-purple-50 p-3 rounded text-xs text-purple-800 space-y-1 border border-purple-100">
+                            <div className="font-bold mb-1 flex items-center gap-1"><Sparkles size={12} /> 分配原則：</div>
+                            <p>1. 優先分配給負責次數較少的人員 (平均分配)。</p>
+                            <p>2. 次數相同時，隨機選取 (避免固定順序)。</p>
+                            <p>3. 若當日已排其他任務或休假則跳過。</p>
+                        </div>
+
+                        {isProcessing && (
+                            <div className="flex items-center justify-center gap-2 text-indigo-600 font-bold text-sm">
+                                <Loader2 className="animate-spin" size={16} /> 計算中...
+                            </div>
+                        )}
+                    </div>
+                }
+                confirmText={isProcessing ? "處理中..." : "開始分配"}
+                confirmColor="purple"
             />
 
             {/* --- Optimized A4 Landscape Print Container --- */}
