@@ -243,7 +243,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                 [SPECIAL_ROLES.OPENING]: [0, 0, 255],    // Blue
                 [SPECIAL_ROLES.LATE]: [165, 42, 42],     // Brown
                 [SPECIAL_ROLES.ASSIST]: [0, 128, 0],     // Green
-                [SPECIAL_ROLES.SCHEDULER]: [139, 0, 0],  // Dark Red
+                [SPECIAL_ROLES.SCHEDULER]: [255, 20, 147], // Deep Pink (User requested Pink)
             };
 
             if (viewMode === 'user') {
