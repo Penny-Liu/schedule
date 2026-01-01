@@ -285,6 +285,15 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                         dateRange.forEach(date => {
                             const staff = row.getData(date);
 
+                            // Sort: Learners (user.learningCapabilities includes row.label) go to bottom
+                            staff.sort((a, b) => {
+                                const isALearner = a.user?.learningCapabilities?.includes(row.label) || false;
+                                const isBLearner = b.user?.learningCapabilities?.includes(row.label) || false;
+
+                                if (isALearner === isBLearner) return 0; // Keep existing order if both same status
+                                return isALearner ? 1 : -1; // Learner (true) > Non-learner (false) -> Learner goes last
+                            });
+
                             // Construct content
                             const names = staff.map(s => formatName(s.user?.name || '')).filter(n => n).join(' ');
 
