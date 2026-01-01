@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { User } from './types';
+import { User, LeaveStatus } from './types';
 import Sidebar from './components/Sidebar';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
@@ -34,6 +34,40 @@ const App: React.FC = () => {
     db.logout();
     setCurrentUser(null);
   };
+
+  // --- Notification Logic ---
+  const [hasPendingLeaves, setHasPendingLeaves] = useState(false);
+
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const checkNotifications = () => {
+      const leaves = db.getLeaves();
+      let hasPending = false;
+
+      if (currentUser.role === 'SUPERVISOR' || currentUser.role === 'SYSTEM_ADMIN') {
+        // Supervisor: Check for any PENDING leaves
+        hasPending = leaves.some(l => l.status === LeaveStatus.PENDING);
+      }
+
+      if (!hasPending) {
+        // All Users: Check for Swap requests needing their agreement
+        hasPending = leaves.some(l =>
+          l.targetUserId === currentUser.id &&
+          l.targetApproval === 'PENDING'
+        );
+      }
+
+      setHasPendingLeaves(hasPending);
+    };
+
+    // Initial check
+    checkNotifications();
+
+    // Subscribe to store updates
+    const unsubscribe = db.subscribe(checkNotifications);
+    return () => unsubscribe();
+  }, [currentUser]);
 
   if (isLoading) {
     return (
@@ -69,13 +103,14 @@ const App: React.FC = () => {
   return (
     <div className="flex flex-col h-screen bg-gray-50 text-gray-900 font-sans overflow-hidden">
       {/* Top Navigation */}
-      <Sidebar 
-        currentUser={currentUser} 
-        onNavigate={setCurrentPage} 
+      <Sidebar
+        currentUser={currentUser}
+        onNavigate={setCurrentPage}
         currentPage={currentPage}
         onLogout={handleLogout}
+        hasPendingLeaves={hasPendingLeaves}
       />
-      
+
       {/* Main Content Area */}
       <main className="flex-1 overflow-hidden relative">
         {renderPage()}

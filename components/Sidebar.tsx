@@ -8,51 +8,52 @@ interface SidebarProps {
   onNavigate: (page: string) => void;
   currentPage: string;
   onLogout: () => void;
+  hasPendingLeaves?: boolean;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ currentUser, onNavigate, currentPage, onLogout }) => {
+const Sidebar: React.FC<SidebarProps> = ({ currentUser, onNavigate, currentPage, onLogout, hasPendingLeaves }) => {
   // Define permissions based on requirements:
   // Supervisor & System Admin: Full Access (Dashboard, Stats, Leave, Staff, Settings(Admin only/Shared))
   // Employee: Dashboard, Stats, Leave
   const navItems = [
-    { 
-      id: 'dashboard', 
-      label: '排班總覽', 
-      icon: LayoutDashboard, 
-      roles: [UserRole.SUPERVISOR, UserRole.EMPLOYEE, UserRole.SYSTEM_ADMIN] 
+    {
+      id: 'dashboard',
+      label: '排班總覽',
+      icon: LayoutDashboard,
+      roles: [UserRole.SUPERVISOR, UserRole.EMPLOYEE, UserRole.SYSTEM_ADMIN]
     },
-    { 
-      id: 'statistics', 
-      label: '工作統計', 
-      icon: BarChart3, 
-      roles: [UserRole.SUPERVISOR, UserRole.EMPLOYEE, UserRole.SYSTEM_ADMIN] 
+    {
+      id: 'statistics',
+      label: '工作統計',
+      icon: BarChart3,
+      roles: [UserRole.SUPERVISOR, UserRole.SYSTEM_ADMIN]
     },
-    { 
-      id: 'leave', 
-      label: '請假管理', 
-      icon: FileText, 
-      roles: [UserRole.SUPERVISOR, UserRole.EMPLOYEE, UserRole.SYSTEM_ADMIN] 
+    {
+      id: 'leave',
+      label: '請假管理',
+      icon: FileText,
+      roles: [UserRole.SUPERVISOR, UserRole.EMPLOYEE, UserRole.SYSTEM_ADMIN]
     },
-    { 
-      id: 'staff', 
-      label: '人員管理', 
-      icon: Users, 
-      roles: [UserRole.SUPERVISOR, UserRole.SYSTEM_ADMIN] 
+    {
+      id: 'staff',
+      label: '人員管理',
+      icon: Users,
+      roles: [UserRole.SUPERVISOR, UserRole.SYSTEM_ADMIN]
     },
-    { 
-      id: 'settings', 
-      label: '系統與個人設定', 
-      icon: Settings, 
-      roles: [UserRole.SUPERVISOR, UserRole.SYSTEM_ADMIN, UserRole.EMPLOYEE] 
+    {
+      id: 'settings',
+      label: '系統與個人設定',
+      icon: Settings,
+      roles: [UserRole.SUPERVISOR, UserRole.SYSTEM_ADMIN, UserRole.EMPLOYEE]
     },
   ];
 
   const getRoleLabel = (role: UserRole) => {
-      switch(role) {
-          case UserRole.SUPERVISOR: return '部門主管';
-          case UserRole.SYSTEM_ADMIN: return '系統管理員';
-          default: return '放射師';
-      }
+    switch (role) {
+      case UserRole.SUPERVISOR: return '部門主管';
+      case UserRole.SYSTEM_ADMIN: return '系統管理員';
+      default: return '放射師';
+    }
   };
 
   return (
@@ -74,14 +75,16 @@ const Sidebar: React.FC<SidebarProps> = ({ currentUser, onNavigate, currentPage,
             <button
               key={item.id}
               onClick={() => onNavigate(item.id)}
-              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
-                isActive 
-                  ? 'bg-teal-50 text-teal-700 shadow-sm ring-1 ring-teal-100' 
-                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-              }`}
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${isActive
+                ? 'bg-teal-50 text-teal-700 shadow-sm ring-1 ring-teal-100'
+                : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                }`}
             >
               <Icon size={18} className={`transition-colors ${isActive ? 'text-teal-600' : 'text-gray-400'}`} />
               <span className="hidden sm:inline">{item.label}</span>
+              {item.id === 'leave' && hasPendingLeaves && (
+                <span className="w-2 h-2 bg-red-500 rounded-full ml-1 animate-pulse" />
+              )}
             </button>
           );
         })}
@@ -90,7 +93,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentUser, onNavigate, currentPage,
       {/* Right: User Profile & Logout */}
       <div className="flex items-center gap-4">
         <div className="flex items-center gap-2 pl-4 border-l border-gray-100">
-          <div 
+          <div
             className="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-xs shadow-sm ring-2 ring-white"
             style={{ backgroundColor: currentUser.color || '#9CA3AF' }}
           >

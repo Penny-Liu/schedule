@@ -68,10 +68,10 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
                         <div className="w-16 h-16 bg-gradient-to-br from-teal-400 to-teal-600 rounded-2xl flex items-center justify-center text-white font-bold text-3xl shadow-lg shadow-teal-200 mb-6">
                             影
                         </div>
-                        <h1 className="text-3xl font-bold text-slate-800 tracking-tight leading-tight">
+                        <h1 className="text-2xl font-normal text-slate-800 tracking-tight leading-tight">
                             臺北市北投健康管理醫院<br />排班管理系統
                         </h1>
-                        <p className="mt-4 text-slate-500 text-sm leading-relaxed">
+                        <p className="mt-4 text-slate-600 text-sm leading-relaxed">
                             放射師排班系統<br />
                             輕鬆管理輪班、請假與人力調度。
                         </p>

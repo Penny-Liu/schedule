@@ -17,9 +17,21 @@ class Store {
     };
     currentUser: User | null = null;
     isLoaded: boolean = false;
+    private listeners: (() => void)[] = [];
 
     constructor() {
         // We do not load in constructor anymore because it needs to be async
+    }
+
+    subscribe(listener: () => void) {
+        this.listeners.push(listener);
+        return () => {
+            this.listeners = this.listeners.filter(l => l !== listener);
+        };
+    }
+
+    private notifyListeners() {
+        this.listeners.forEach(l => l());
     }
 
     // New method to fetch all data from Supabase
@@ -215,6 +227,7 @@ class Store {
         }
         // Sync DB
         await supabase.from('shifts').upsert(shift);
+        this.notifyListeners();
     }
 
     // Leaves
@@ -223,6 +236,7 @@ class Store {
     async addLeave(leave: LeaveRequest) {
         this.leaves.push(leave);
         await supabase.from('leaves').insert(leave);
+        this.notifyListeners();
     }
 
     async updateLeaveTargetApproval(id: string, approvalStatus: 'AGREED' | 'REJECTED') {
@@ -236,6 +250,7 @@ class Store {
         this.leaves[leaveIndex] = { ...leave, ...updates };
 
         await supabase.from('leaves').update(updates).eq('id', id);
+        this.notifyListeners();
     }
 
     async updateLeaveStatus(id: string, status: LeaveStatus, approverId: string) {
@@ -255,6 +270,7 @@ class Store {
         if (status === LeaveStatus.APPROVED) {
             await this.applyLeaveToShifts(updatedLeave);
         }
+        this.notifyListeners();
     }
 
     // Helper to apply approved leave to shifts
