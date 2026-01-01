@@ -285,16 +285,24 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                         dateRange.forEach(date => {
                             const staff = row.getData(date);
 
-                            // Special handling for "Off" row to allow auto-height
-                            if (row.label === SYSTEM_OFF) {
-                                const names = staff.map(s => formatName(s.user?.name || '')).filter(n => n).join(' ');
+                            // Construct content
+                            const names = staff.map(s => formatName(s.user?.name || '')).filter(n => n).join(' ');
+
+                            // Check for compact rows
+                            const isCompactRow = row.label === SPECIAL_ROLES.ASSIST ||
+                                row.label === SPECIAL_ROLES.SCHEDULER ||
+                                row.label === '輔班' ||
+                                row.label === '排班';
+
+                            if (row.label === SYSTEM_OFF || isCompactRow) {
+                                // Off rows & Compact rows: Use standard text rendering
                                 rowData.push({ content: names });
-                                // Pass full staff object for custom rendering
-                                // Generate filler text to force autoTable to expand height
-                                // Each person needs ~2 lines (Name + Role). Using '.\n.' per person as invisible filler.
-                                const fillerText = staff.map(() => '.\n.').join('\n');
+                            } else {
+                                // Standard Rows: Custom Rendering (Name + Role Stacked)
+                                // content is empty to suppress default drawing.
+                                // We calculate height in didParseCell.
                                 rowData.push({
-                                    content: fillerText,
+                                    content: '',
                                     staff: staff.map(s => ({
                                         name: formatName(s.user?.name || ''),
                                         roles: s.shift.specialRoles
@@ -385,10 +393,19 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                 data.cell.styles.fontSize = 7;
                             }
                         } else if (data.column.index > 0) {
-                            // Standard Rows: Hide "Filler" text (content) so we can draw custom content
+                            // Standard Rows: Custom Height Calculation
                             const cellRaw = data.cell.raw;
                             if (cellRaw && typeof cellRaw === 'object' && 'staff' in cellRaw) {
-                                data.cell.styles.textColor = [255, 255, 255]; // White/Invisible
+                                const staff = cellRaw.staff;
+                                if (staff && staff.length > 0) {
+                                    // Calculate required height based on staff count
+                                    // Stack safely. 3.5mm per person block.
+                                    // Base spacing is minCellHeight 9.
+                                    const requiredHeight = (staff.length * 3.5) + 4; // 4mm padding buffer
+                                    if (requiredHeight > data.cell.styles.minCellHeight) {
+                                        data.cell.styles.minCellHeight = requiredHeight;
+                                    }
+                                }
                             }
                         }
                     }
@@ -443,67 +460,56 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                         if (raw && typeof raw === 'object' && 'staff' in raw) {
                             const staff = raw.staff as { name: string, roles: string[] }[];
 
-                            const isCompact = data.cell.styles.fontSize === 7; // Assist/Scheduler
-                            const baseFontSize = isCompact ? 7 : 8;
-                            const roleFontSize = isCompact ? 6 : 6;
+                            // Note: We only pass 'staff' object for Standard Rows now.
+                            // Compact rows and Off rows use string content, so this block won't run for them.
 
                             if (staff.length > 0) {
-                                // For Compact rows (Assist/Scheduler), we only show NAME, no Role, and center content.
-                                if (isCompact) {
+                                const baseFontSize = 8;
+                                const roleFontSize = 6;
+
+                                // Standard Rows: Stacked Content logic
+
+                                // Calculate center start based on count
+                                // Height per person block ~ 3.5mm
+                                // autoTable has already centered the invisible filler text block.
+                                // We can map our custom draw to the same positions?
+                                // No, easier to just calculate absolute position relative to cell.
+
+                                const lineHeight = 3.5;
+                                const totalBlockHeight = staff.length * lineHeight;
+                                let startY = (data.cell.y + data.cell.height / 2) - (totalBlockHeight / 2) + 1.2; // +1.2 adjustment for visual centering
+
+                                staff.forEach((s, idx) => {
+                                    const blockY = startY + (idx * lineHeight);
+
+                                    // 1. Name (Black)
                                     doc.setFontSize(baseFontSize);
                                     doc.setTextColor(0, 0, 0);
+                                    doc.text(s.name, data.cell.x + data.cell.width / 2, blockY - 1, { align: 'center', baseline: 'middle' });
 
-                                    // Join all names with slash or space
-                                    const names = staff.map(s => s.name).join('/');
-                                    doc.text(names, data.cell.x + data.cell.width / 2, data.cell.y + data.cell.height / 2, { align: 'center', baseline: 'middle' });
+                                    // 2. Role (Colored)
+                                    if (s.roles.length > 0) {
+                                        doc.setFontSize(roleFontSize);
+                                        // Priority Coloring
+                                        let color: [number, number, number] = [0, 0, 0];
+                                        if (s.roles.includes(SPECIAL_ROLES.OPENING)) color = roleColors[SPECIAL_ROLES.OPENING];
+                                        else if (s.roles.includes(SPECIAL_ROLES.LATE)) color = roleColors[SPECIAL_ROLES.LATE];
+                                        else if (s.roles.includes(SPECIAL_ROLES.ASSIST)) color = roleColors[SPECIAL_ROLES.ASSIST];
+                                        else if (s.roles.includes(SPECIAL_ROLES.SCHEDULER)) color = roleColors[SPECIAL_ROLES.SCHEDULER];
 
-                                } else {
-                                    // Standard Rows: Stacked Content logic
-                                    // We used filler text to finish cell expansion.
-                                    // Now we draw manually over it.
+                                        doc.setTextColor(color[0], color[1], color[2]);
 
-                                    // Calculate center start based on count
-                                    // Height per person block ~ 3.5mm
-                                    // autoTable has already centered the invisible filler text block.
-                                    // We can map our custom draw to the same positions?
-                                    // No, easier to just calculate absolute position relative to cell.
+                                        let roleLabel = '';
+                                        if (s.roles.includes(SPECIAL_ROLES.OPENING)) roleLabel = '開機';
+                                        else if (s.roles.includes(SPECIAL_ROLES.LATE)) roleLabel = '晚班';
+                                        else if (s.roles.includes(SPECIAL_ROLES.ASSIST)) roleLabel = '輔班';
+                                        else if (s.roles.includes(SPECIAL_ROLES.SCHEDULER)) roleLabel = '排班';
 
-                                    const lineHeight = 3.5;
-                                    const totalBlockHeight = staff.length * lineHeight;
-                                    let startY = (data.cell.y + data.cell.height / 2) - (totalBlockHeight / 2) + 1.2; // +1.2 adjustment for visual centering
+                                        if (!roleLabel) roleLabel = s.roles[0]; // Fallback
 
-                                    staff.forEach((s, idx) => {
-                                        const blockY = startY + (idx * lineHeight);
-
-                                        // 1. Name (Black)
-                                        doc.setFontSize(baseFontSize);
-                                        doc.setTextColor(0, 0, 0);
-                                        doc.text(s.name, data.cell.x + data.cell.width / 2, blockY - 1, { align: 'center', baseline: 'middle' });
-
-                                        // 2. Role (Colored)
-                                        if (s.roles.length > 0) {
-                                            doc.setFontSize(roleFontSize);
-                                            // Priority Coloring
-                                            let color: [number, number, number] = [0, 0, 0];
-                                            if (s.roles.includes(SPECIAL_ROLES.OPENING)) color = roleColors[SPECIAL_ROLES.OPENING];
-                                            else if (s.roles.includes(SPECIAL_ROLES.LATE)) color = roleColors[SPECIAL_ROLES.LATE];
-                                            else if (s.roles.includes(SPECIAL_ROLES.ASSIST)) color = roleColors[SPECIAL_ROLES.ASSIST];
-                                            else if (s.roles.includes(SPECIAL_ROLES.SCHEDULER)) color = roleColors[SPECIAL_ROLES.SCHEDULER];
-
-                                            doc.setTextColor(color[0], color[1], color[2]);
-
-                                            let roleLabel = '';
-                                            if (s.roles.includes(SPECIAL_ROLES.OPENING)) roleLabel = '開機';
-                                            else if (s.roles.includes(SPECIAL_ROLES.LATE)) roleLabel = '晚班';
-                                            else if (s.roles.includes(SPECIAL_ROLES.ASSIST)) roleLabel = '輔班';
-                                            else if (s.roles.includes(SPECIAL_ROLES.SCHEDULER)) roleLabel = '排班';
-
-                                            if (!roleLabel) roleLabel = s.roles[0]; // Fallback
-
-                                            doc.text(roleLabel, data.cell.x + data.cell.width / 2, blockY + 1.5, { align: 'center', baseline: 'middle' });
-                                        }
-                                    });
-                                }
+                                        doc.text(roleLabel, data.cell.x + data.cell.width / 2, blockY + 1.5, { align: 'center', baseline: 'middle' });
+                                    }
+                                });
                             }
                         }
                     }
