@@ -1578,7 +1578,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                     // --- Daily View Implementation ---
                     <div className="max-w-4xl mx-auto space-y-6">
                         {/* Daily Controls */}
-                        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex items-center justify-between">
+                        <div className="sticky top-0 z-30 bg-white rounded-xl shadow-md border border-slate-200 p-4 flex items-center justify-between">
                             <div className="flex items-center gap-4">
                                 <button
                                     onClick={() => {
