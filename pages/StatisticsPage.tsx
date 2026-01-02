@@ -20,8 +20,8 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
     });
     const [currentDate, setCurrentDate] = useState(new Date());
 
-    // Filter out SYSTEM_ADMIN from statistics
-    const users = db.getUsers().filter(u => u.role !== UserRole.SYSTEM_ADMIN);
+    // Include all users including SYSTEM_ADMIN as requested
+    const users = db.getUsers();
     const shifts = db.getShifts('', '');
     const holidays = db.getHolidays();
 
