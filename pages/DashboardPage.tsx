@@ -1,8 +1,9 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { User, Shift, UserRole, SYSTEM_OFF, SPECIAL_ROLES, LeaveRequest, LeaveStatus, LeaveType, StationDefault, DateEventType } from '../types';
+import type { User, Shift } from '../types';
+import { UserRole, SYSTEM_OFF, SPECIAL_ROLES, LeaveRequest, LeaveStatus, LeaveType, StationDefault, DateEventType } from '../types';
 import { db } from '../services/store';
-import { ChevronLeft, ChevronRight, Briefcase, Moon, Sun, Monitor, Activity, Calendar as CalendarIcon, Filter, Wand2, Users, LayoutList, Star, AlertCircle, Plus, X, Download, BarChart2, Sparkles, ChevronDown, ChevronUp, GripVertical, BookOpen, Lock, Unlock, CheckCircle, Loader2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Briefcase, Moon, Sun, Monitor, Activity, Calendar as CalendarIcon, Filter, Wand2, Users, LayoutList, Star, AlertCircle, Plus, X, Download, BarChart2, Sparkles, ChevronDown, ChevronUp, GripVertical, BookOpen, Lock, Unlock, CheckCircle, Loader2, User as UserIcon } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -605,8 +606,24 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                 },
             });
 
-            const fileName = `${getExportHeader().replace(/[/\\?%*:|"<>]/g, '-')}_${viewMode === 'user' ? '人員表' : '崗位表'}.pdf`;
-            doc.save(fileName);
+            // Explicit Blob Download to ensure correct filename handling
+            const cleanTitle = getCycleTitle().replace(/[/\\?%*:|"<>\s]/g, '_');
+            const fileName = `${cleanTitle}_${viewMode === 'user' ? '人員表' : '崗位表'}.pdf`;
+
+            const blob = doc.output('blob');
+
+            if (blob.size === 0) {
+                throw new Error('Generated PDF is empty (0 bytes).');
+            }
+
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = fileName;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
         } catch (e) {
             console.error('PDF Generation Error:', e);
             const msg = e instanceof Error ? e.message : String(e);
@@ -1457,16 +1474,18 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
 
                         <div className="h-6 w-px bg-slate-200 mx-1"></div>
 
-                        <button
-                            type="button"
-                            onClick={(e) => handleExportPDF(e)}
-                            disabled={isExporting}
-                            className="px-3 py-1.5 rounded-lg text-sm font-medium border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 flex items-center gap-1.5 shadow-sm transition-all"
-                            title="匯出 PDF"
-                        >
-                            <Download size={14} />
-                            {isExporting ? '處理中...' : '匯出'}
-                        </button>
+                        {!isMobile && (
+                            <button
+                                type="button"
+                                onClick={(e) => handleExportPDF(e)}
+                                disabled={isExporting}
+                                className="px-3 py-1.5 rounded-lg text-sm font-medium border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 flex items-center gap-1.5 shadow-sm transition-all"
+                                title="匯出 PDF"
+                            >
+                                <Download size={14} />
+                                {isExporting ? '處理中...' : '匯出'}
+                            </button>
+                        )}
 
                         {(currentUser.role === UserRole.SUPERVISOR || currentUser.role === UserRole.SYSTEM_ADMIN) && (
                             <>
@@ -1633,8 +1652,8 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                         '遠距', '場控', '輔班', '排班',
                                         StationDefault.MR3T, StationDefault.MR1_5T,
                                         StationDefault.US1, StationDefault.US2, StationDefault.US3, StationDefault.US4,
-                                        StationDefault.CT, StationDefault.BMD_DX
-                                        // Others fall here
+                                        StationDefault.CT, StationDefault.BMD_DX,
+                                        '技術支援', '行政', '大直'
                                     ];
 
                                     // Helper function to get assignments
@@ -1675,7 +1694,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                                     <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white ${u.color || 'bg-slate-400'}`}>
                                                                         {u.alias || u.name[0]}
                                                                     </div>
-                                                                    <div className="text-xs font-medium text-slate-700">
+                                                                    <div className="text-base font-medium text-slate-700">
                                                                         {u.name} {s.specialRoles.filter(r => r !== '輔班' && r !== '排班').map(r => <span key={r} className="text-[10px] text-teal-600 ml-1">({r})</span>)}
                                                                     </div>
                                                                 </div>
@@ -1713,16 +1732,18 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                             {/* ... Table Header ... */}
                             <thead className="sticky top-0 z-20 shadow-sm">
                                 <tr>
-                                    <th className="sticky left-0 z-30 bg-slate-50/95 backdrop-blur border-b border-r border-slate-200 p-0 w-[120px] shadow-[4px_0_8px_rgba(0,0,0,0.02)]">
-                                        <div className="p-2 text-left text-xs font-extrabold text-slate-600 uppercase tracking-wider">
-                                            {viewMode === 'user' ? '放射師' : '工作崗位'}
+                                    {/* Left Sticky Header */}
+                                    <th className={`sticky left-0 z-30 bg-slate-50/95 backdrop-blur border-b border-r border-slate-200 shadow-[4px_0_8px_rgba(0,0,0,0.02)] ${isMobile ? (viewMode === 'user' ? 'p-1 w-[50px] min-w-[50px]' : 'p-1 w-[85px] min-w-[85px]') : 'p-2 w-[120px] text-left'}`}>
+                                        <div className={`flex items-center font-bold text-xs text-slate-600 ${isMobile ? 'justify-center' : 'gap-2'}`}>
+                                            <UserIcon size={14} className="text-teal-600" />
+                                            {!isMobile && (viewMode === 'user' ? '放射師' : '工作崗位')}
                                         </div>
                                     </th>
                                     {viewMode === 'user' && (
-                                        <th className="sticky left-[120px] z-30 bg-slate-50/95 backdrop-blur border-b border-r border-slate-200 p-0 w-[50px] shadow-[4px_0_8px_rgba(0,0,0,0.02)]">
+                                        <th className={`sticky z-30 bg-slate-50/95 backdrop-blur border-b border-r border-slate-200 p-0 w-[50px] shadow-[4px_0_8px_rgba(0,0,0,0.02)] ${isMobile ? 'left-[50px]' : 'left-[120px]'}`}>
                                             <div className="p-2 text-center text-[10px] font-bold text-slate-500 uppercase tracking-wider flex flex-col items-center">
                                                 <BarChart2 size={12} className="mb-0.5 text-teal-600" />
-                                                統計
+                                                {!isMobile && '統計'}
                                             </div>
                                         </th>
                                     )}
@@ -1771,9 +1792,10 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                         );
                                         return (
                                             <tr key={user.id} className="group hover:bg-slate-50/50 transition-colors">
-                                                <td className="sticky left-0 z-10 bg-white group-hover:bg-slate-50 border-r border-slate-200 p-2 shadow-[4px_0_8px_rgba(0,0,0,0.02)]">
-                                                    <div className="flex items-center gap-2">
-                                                        {isEditMode && (
+                                                <td className={`sticky left-0 z-10 bg-white group-hover:bg-slate-50 border-r border-slate-200 shadow-[4px_0_8px_rgba(0,0,0,0.02)] ${isMobile ? 'p-1 w-[50px] min-w-[50px]' : 'p-2'}`}>
+                                                    <div className={`flex items-center ${isMobile ? 'justify-center' : 'gap-2'}`}>
+                                                        {/* Edit Buttons (Up/Down) */}
+                                                        {isEditMode && !isMobile && (
                                                             <div className="flex flex-col gap-0.5">
                                                                 <button
                                                                     disabled={isFirst}
@@ -1791,15 +1813,27 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                                 </button>
                                                             </div>
                                                         )}
-                                                        <div className="w-7 h-7 rounded-full flex items-center justify-center text-white font-bold text-xs shadow-sm flex-shrink-0 ring-2 ring-white" style={{ backgroundColor: user.color || '#9CA3AF' }}>
-                                                            {user.alias || user.name.charAt(0)}
-                                                        </div>
+
+                                                        {/* Avatar - Hide on Mobile */}
+                                                        {!isMobile && (
+                                                            <div className="w-7 h-7 rounded-full flex items-center justify-center text-white font-bold text-xs shadow-sm flex-shrink-0 ring-2 ring-white" style={{ backgroundColor: user.color || '#9CA3AF' }}>
+                                                                {user.alias || user.name.charAt(0)}
+                                                            </div>
+                                                        )}
+
+                                                        {/* Name / Alias Display */}
                                                         <div className="min-w-0">
-                                                            <div className="text-xs font-bold text-slate-800 truncate leading-tight">{user.name}</div>
+                                                            <div
+                                                                className={`font-bold truncate leading-tight ${isMobile ? 'text-center text-sm' : 'text-xs text-slate-800'}`}
+                                                                style={isMobile && user.color ? { color: user.color } : {}}
+                                                            >
+                                                                {isMobile ? (user.alias || user.name.charAt(0)) : user.name}
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 </td>
-                                                <td className="sticky left-[120px] z-10 bg-white group-hover:bg-slate-50 border-r border-slate-200 p-0 text-center shadow-[4px_0_8px_rgba(0,0,0,0.02)]">
+                                                {/* Sticky Count Column - Adjust Offset for Mobile */}
+                                                <td className={`sticky z-10 bg-white group-hover:bg-slate-50 border-r border-slate-200 p-0 text-center shadow-[4px_0_8px_rgba(0,0,0,0.02)] ${isMobile ? 'left-[50px]' : 'left-[120px]'}`}>
                                                     <div className="text-[10px] font-bold text-slate-600 bg-slate-100 mx-1.5 py-0.5 rounded border border-slate-200">
                                                         {workDaysCount}
                                                     </div>
@@ -1885,9 +1919,9 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                             const isLast = idx === rowConfigs.length - 1;
                                             return (
                                                 <tr key={row.id} className="group hover:bg-slate-50/50 transition-colors relative">
-                                                    <td className="sticky left-0 z-10 bg-white group-hover:bg-slate-50 border-r border-slate-200 p-2 shadow-[4px_0_8px_rgba(0,0,0,0.02)]">
+                                                    <td className={`sticky left-0 z-10 bg-white group-hover:bg-slate-50 border-r border-slate-200 shadow-[4px_0_8px_rgba(0,0,0,0.02)] ${isMobile ? 'p-1 w-[85px] min-w-[85px]' : 'p-2'}`}>
                                                         <div className="flex items-center justify-between">
-                                                            <div className={`flex items-center gap-1.5 font-bold text-xs px-2 py-1.5 rounded-md border ${row.colorClass} flex-1 mr-1`}>
+                                                            <div className={`flex items-center gap-1.5 font-bold ${isMobile ? 'text-sm' : 'text-xs'} px-2 py-1.5 rounded-md border ${row.colorClass} flex-1 mr-1`}>
                                                                 <div className="truncate">{row.label}</div>
                                                             </div>
                                                             {isEditMode && (
