@@ -822,6 +822,7 @@ class Store {
 
             for (const role of dailyRoles) {
                 // Check if role is already filled for this day
+                // STRICT RULE: Only 1 person per role per day
                 const filledShifts = this.getShifts(dateStr, dateStr).filter(s => s.specialRoles.includes(role));
                 if (filledShifts.length > 0) continue; // Already assigned
 
@@ -834,30 +835,23 @@ class Store {
                     const status = this.getUserStatusOnDate(u.id, dateStr);
                     if (status !== 'WORK') return false;
 
-                    // b. Must have Capability (assuming capability check logic)
+                    // b. Must have Capability
                     if (u.capabilities && u.capabilities.length > 0 && !u.capabilities.includes(role)) {
                         return false;
                     }
 
-                    // c. Conflict Check (Relaxed): Allow Opening + Assist
                     const shift = this.getShifts(dateStr, dateStr).find(s => s.userId === u.id);
-                    if (shift && shift.specialRoles.length > 0) {
-                        const existing = shift.specialRoles;
-                        const isOpening = existing.includes(SPECIAL_ROLES.OPENING);
-                        const isAssist = existing.includes(SPECIAL_ROLES.ASSIST);
-                        const targetIsOpening = role === SPECIAL_ROLES.OPENING;
-                        const targetIsAssist = role === SPECIAL_ROLES.ASSIST;
 
-                        // Allow overlap ONLY if (Opening + Assist)
-                        // If I have Opening, can I accept Assist? YES.
-                        // If I have Assist, can I accept Opening? YES.
-                        if ((isOpening && targetIsAssist) || (isAssist && targetIsOpening)) {
-                            // Allowed overlap
-                            return true;
+                    if (shift) {
+                        // STRICT RULE: No Special Role Overlaps (One person can ONLY have ONE special role)
+                        if (shift.specialRoles.length > 0) return false;
+
+                        // STRICT RULE: Conflict with specific Stations
+                        // If manually assigned to '場控', '遠距', '大直', '遠班', CANNOT have special roles
+                        const station = shift.station || '';
+                        if (station.includes('場控') || station.includes('遠') || station.includes('大直')) {
+                            return false;
                         }
-
-                        // Otherwise, strict conflict (cannot have any other role)
-                        return false;
                     }
 
                     return true;
@@ -881,20 +875,17 @@ class Store {
                 // Assign
                 const winnerShift = this.getShifts(dateStr, dateStr).find(s => s.userId === winner.id);
                 if (winnerShift) {
-                    const newRoles = [...winnerShift.specialRoles, role];
-                    // De-duplicate just in case
-                    const uniqueRoles = [...new Set(newRoles)];
+                    const newRoles = [role]; // STRICT replace (though previous check ensures empty)
 
                     await this.upsertShift({
                         ...winnerShift,
-                        specialRoles: uniqueRoles
+                        specialRoles: newRoles
                     });
 
                     // Update Count
                     roleCounts[winner.id][role]++;
                 } else {
                     // Create new shift if strictly needed (unlikely if we filtered by WORK/Schedule existence)
-                    // But filtered by WORK doesn't guarantee a shift object exists in DB if it's purely default
                     await this.upsertShift({
                         id: `${winner.id}-${dateStr}`,
                         userId: winner.id,
