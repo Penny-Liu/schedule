@@ -693,34 +693,26 @@ class Store {
 
                         const existingShift = this.shifts.find(s => s.userId === u.id && s.date === dateStr);
                         if (existingShift) {
+                            // STRICT RULE: If assigning Field Control, Remote, or Dazhi, User CANNOT have any Special Role
                             const roles = existingShift.specialRoles || [];
-                            const hasOpening = roles.includes(SPECIAL_ROLES.OPENING);
-                            const hasLate = roles.includes(SPECIAL_ROLES.LATE);
-                            const hasAssist = roles.includes(SPECIAL_ROLES.ASSIST);
-                            const hasScheduler = roles.includes(SPECIAL_ROLES.SCHEDULER);
+                            const hasAnySpecialRole = roles.length > 0;
 
-                            // Strict Rules for Da Zhi (大直)
-                            // CONFLICTS: Scheduler, Assist, Opening, Late
+                            // 1. Dazhi (大直) Strict Rules
+                            // CANNOT have any special role
                             if (slot.includes('大直')) {
-                                if (hasScheduler || hasAssist || hasOpening || hasLate) return false;
+                                if (hasAnySpecialRole) return false;
                             }
 
-                            // Strict Rules for Floor Control (場控)
-                            // CONFLICTS: Scheduler, Assist, Opening, Late
+                            // 2. Field Control (場控) Strict Rules
+                            // CANNOT have any special role
                             if (slot.includes('場控')) {
-                                if (hasScheduler || hasAssist || hasOpening || hasLate) return false;
+                                if (hasAnySpecialRole) return false;
                             }
 
-                            // Strict Rules for Remote (遠班)
-                            // CONFLICTS: Opening, Late, Assist
+                            // 3. Remote (遠班/距) Strict Rules
+                            // CANNOT have any special role
                             if (slot.includes('遠')) {
-                                if (hasOpening || hasLate || hasAssist) return false;
-                            }
-
-                            // Legacy Check (just in case logic misses something above, though specific rules should cover it)
-                            const hasSpecial = hasOpening || hasLate;
-                            if (hasSpecial) {
-                                if (slot.includes('場控') || slot.includes('遠') || slot.includes('大直')) return false;
+                                if (hasAnySpecialRole) return false;
                             }
                         }
                         return true;
