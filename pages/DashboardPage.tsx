@@ -3,7 +3,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import type { User, Shift } from '../types';
 import { UserRole, SYSTEM_OFF, SPECIAL_ROLES, LeaveRequest, LeaveStatus, LeaveType, StationDefault, DateEventType } from '../types';
 import { db } from '../services/store';
-import { ChevronLeft, ChevronRight, Briefcase, Moon, Sun, Monitor, Activity, Calendar as CalendarIcon, Filter, Wand2, Users, LayoutList, Star, AlertCircle, Plus, X, Download, BarChart2, Sparkles, ChevronDown, ChevronUp, GripVertical, BookOpen, Lock, Unlock, CheckCircle, Loader2, User as UserIcon } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Briefcase, Moon, Sun, Monitor, Activity, Calendar as CalendarIcon, Filter, Wand2, Users, LayoutList, Star, AlertCircle, Plus, X, Download, BarChart2, Sparkles, ChevronDown, ChevronUp, GripVertical, BookOpen, Lock, Unlock, CheckCircle, Loader2, User as UserIcon, Key } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -27,7 +27,10 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
         return activeCycle ? activeCycle.id : 'rolling';
     });
 
-    const [viewMode, setViewMode] = useState<ViewMode>('user'); // Toggle state
+    const [viewMode, setViewMode] = useState<ViewMode>(() => {
+        // Default to 'daily' for mobile (Today's Stations), 'user' for desktop
+        return window.innerWidth < 768 ? 'daily' : 'user';
+    });
     // Daily View Date State
     const [dailyDate, setDailyDate] = useState(new Date());
 
@@ -42,8 +45,8 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
     // Unified Range State for schedulers
     const [scheduleRange, setScheduleRange] = useState({ start: '', end: '' });
 
-    // Filter out SYSTEM_ADMIN from the roster view
-    const [users, setUsers] = useState<User[]>(() => db.getUsers().filter(u => u.role !== UserRole.SYSTEM_ADMIN));
+    // Include all users including SYSTEM_ADMIN as requested
+    const [users, setUsers] = useState<User[]>(() => db.getUsers());
     const holidays = db.getHolidays();
 
     const pendingLeaves = db.getLeaves().filter(l => l.status === LeaveStatus.PENDING);
@@ -65,6 +68,35 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
     const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
     // Track 7-day offset for mobile view
     const [mobileOffset, setMobileOffset] = useState(0);
+
+    // Force Password Change State
+    const [showForcePwdModal, setShowForcePwdModal] = useState(false);
+    const [forcePwdData, setForcePwdData] = useState({ new: '', confirm: '' });
+
+    // Initial check for password change requirement
+    useEffect(() => {
+        if (currentUser.mustChangePassword) {
+            setShowForcePwdModal(true);
+        }
+    }, [currentUser]);
+
+    const handleForcePasswordSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (forcePwdData.new !== forcePwdData.confirm) {
+            alert('新密碼與確認密碼不符');
+            return;
+        }
+        if (forcePwdData.new.length < 4) {
+            alert('密碼長度至少需 4 碼');
+            return;
+        }
+        await db.changePassword(currentUser.id, forcePwdData.new);
+        alert('密碼修改成功！請繼續使用。');
+        setShowForcePwdModal(false);
+        // Force page reload or state update might be needed if user object isn't reactive enough, 
+        // but store update should propagate via db.subscribe potentially if we subscribed, 
+        // or just local state is enough since we hide modal.
+    };
 
     useEffect(() => {
         const handleResize = () => setIsMobile(window.innerWidth < 768);
@@ -1461,11 +1493,14 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                         {!isMobile && (currentUser.role === UserRole.SUPERVISOR || currentUser.role === UserRole.SYSTEM_ADMIN) && selectedCycleId !== 'rolling' && (
                             <button
                                 onClick={() => setIsConfirmCycleOpen(true)}
+                                disabled={isCycleConfirmed && currentUser.role !== UserRole.SYSTEM_ADMIN}
                                 className={`px-3 py-1.5 rounded-lg text-sm font-medium border flex items-center gap-1.5 shadow-sm transition-all ${isCycleConfirmed
-                                    ? 'bg-gray-100 text-gray-600 border-gray-200 hover:bg-gray-200'
+                                    ? (currentUser.role === UserRole.SYSTEM_ADMIN ? 'bg-gray-100 text-gray-600 border-gray-200 hover:bg-gray-200' : 'bg-gray-50 text-gray-400 border-gray-100 cursor-not-allowed')
                                     : 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
                                     }`}
-                                title={isCycleConfirmed ? "解鎖排班" : "確認並鎖定排班"}
+                                title={isCycleConfirmed
+                                    ? (currentUser.role === UserRole.SYSTEM_ADMIN ? "解鎖排班" : "排班已鎖定 (僅系統管理員可解鎖)")
+                                    : "確認並鎖定排班"}
                             >
                                 {isCycleConfirmed ? <Lock size={14} /> : <CheckCircle size={14} />}
                                 {isCycleConfirmed ? '已鎖定' : '確認排班'}
@@ -2065,6 +2100,53 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                     </div>
                 )}
             </div>
+            {/* Force Password Change Modal */}
+            {showForcePwdModal && (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6 border-2 border-red-100 animate-in fade-in zoom-in-95">
+                        <div className="flex flex-col items-center gap-3 text-center mb-6">
+                            <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center text-red-600">
+                                <Key size={24} />
+                            </div>
+                            <div>
+                                <h3 className="text-xl font-bold text-gray-800">請修改您的密碼</h3>
+                                <p className="text-sm text-gray-500 mt-1">為了確保帳戶安全，首次登入或密碼重置後必須修改密碼。</p>
+                            </div>
+                        </div>
+
+                        <form onSubmit={handleForcePasswordSubmit} className="space-y-4">
+                            <div>
+                                <label className="text-xs font-bold text-gray-600 mb-1 block">新密碼</label>
+                                <input
+                                    type="password"
+                                    value={forcePwdData.new}
+                                    onChange={(e) => setForcePwdData({ ...forcePwdData, new: e.target.value })}
+                                    className="w-full px-3 py-2 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-red-500"
+                                    placeholder="請輸入新密碼"
+                                    required
+                                />
+                            </div>
+                            <div>
+                                <label className="text-xs font-bold text-gray-600 mb-1 block">確認新密碼</label>
+                                <input
+                                    type="password"
+                                    value={forcePwdData.confirm}
+                                    onChange={(e) => setForcePwdData({ ...forcePwdData, confirm: e.target.value })}
+                                    className="w-full px-3 py-2 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-red-500"
+                                    placeholder="請再次輸入新密碼"
+                                    required
+                                />
+                            </div>
+                            <button
+                                type="submit"
+                                className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-xl shadow-lg shadow-red-200 transition-all mt-2"
+                            >
+                                確認修改並登入
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

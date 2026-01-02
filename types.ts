@@ -23,6 +23,7 @@ export interface User {
   capabilities?: string[]; // List of station names user is CERTIFIED in
   learningCapabilities?: string[]; // New: List of station names user is LEARNING
   password?: string; // User defined password
+  mustChangePassword?: boolean; // New: Force password change on next login
 }
 
 // Updated Station Defaults: MR moved before US

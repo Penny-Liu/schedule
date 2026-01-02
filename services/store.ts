@@ -173,8 +173,9 @@ class Store {
         const u = this.users.find(u => u.id === userId);
         if (u) {
             u.password = newPass;
+            u.mustChangePassword = false; // Clear flag
             // Sync DB
-            await supabase.from('users').update({ password: newPass }).eq('id', userId);
+            await supabase.from('users').update({ password: newPass, mustChangePassword: false }).eq('id', userId);
         }
     }
 
@@ -182,8 +183,9 @@ class Store {
         const u = this.users.find(u => u.id === userId);
         if (u) {
             u.password = '1234';
+            u.mustChangePassword = true; // Force change on next login
             // Sync DB
-            await supabase.from('users').update({ password: '1234' }).eq('id', userId);
+            await supabase.from('users').update({ password: '1234', mustChangePassword: true }).eq('id', userId);
         }
     }
 
