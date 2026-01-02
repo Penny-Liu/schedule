@@ -591,6 +591,27 @@ class Store {
         }
         await this.upsertShifts(shiftsToClear);
 
+        // Initialize Station Counts for Fairness
+        const stationCounts: Record<string, Record<string, number>> = {};
+        this.users.forEach(u => {
+            stationCounts[u.id] = {};
+            this.settings.stations.forEach(s => stationCounts[u.id][s] = 0);
+        });
+
+        // Pre-count existing assignments
+        const shiftsInRange = this.getShifts(startDate, endDate);
+        shiftsInRange.forEach(s => {
+            if (s.station && s.station !== StationDefault.UNASSIGNED && s.station !== SYSTEM_OFF) {
+                if (stationCounts[s.userId]) {
+                    if (stationCounts[s.userId][s.station] !== undefined) {
+                        stationCounts[s.userId][s.station]++;
+                    } else {
+                        stationCounts[s.userId][s.station] = 1;
+                    }
+                }
+            }
+        });
+
         // 2. Define Strict Priority Order
         const strictPriority = [
             '大直',
@@ -655,6 +676,16 @@ class Store {
                 const unfilledSlots: string[] = [];
 
                 for (const slot of slots) {
+                    // Pre-sort pool by fairness if slot is Floor Control
+                    if (slot.includes('場控')) {
+                        pool.sort((a, b) => {
+                            const countA = stationCounts[a.id][slot] || 0;
+                            const countB = stationCounts[b.id][slot] || 0;
+                            if (countA !== countB) return countA - countB;
+                            return Math.random() - 0.5;
+                        });
+                    }
+
                     const candidateIndex = pool.findIndex(u => {
                         const isCertified = u.capabilities?.includes(slot);
                         // Explicitly exclude learners from auto-schedule
@@ -662,16 +693,46 @@ class Store {
 
                         const existingShift = this.shifts.find(s => s.userId === u.id && s.date === dateStr);
                         if (existingShift) {
-                            const hasSpecial = existingShift.specialRoles.includes(SPECIAL_ROLES.OPENING) || existingShift.specialRoles.includes(SPECIAL_ROLES.LATE);
+                            const roles = existingShift.specialRoles || [];
+                            const hasOpening = roles.includes(SPECIAL_ROLES.OPENING);
+                            const hasLate = roles.includes(SPECIAL_ROLES.LATE);
+                            const hasAssist = roles.includes(SPECIAL_ROLES.ASSIST);
+                            const hasScheduler = roles.includes(SPECIAL_ROLES.SCHEDULER);
+
+                            // Strict Rules for Da Zhi (大直)
+                            // CONFLICTS: Scheduler, Assist, Opening, Late
+                            if (slot.includes('大直')) {
+                                if (hasScheduler || hasAssist || hasOpening || hasLate) return false;
+                            }
+
+                            // Strict Rules for Floor Control (場控)
+                            // CONFLICTS: Scheduler, Assist, Opening, Late
+                            if (slot.includes('場控')) {
+                                if (hasScheduler || hasAssist || hasOpening || hasLate) return false;
+                            }
+
+                            // Strict Rules for Remote (遠班)
+                            // CONFLICTS: Opening, Late, Assist
+                            if (slot.includes('遠')) {
+                                if (hasOpening || hasLate || hasAssist) return false;
+                            }
+
+                            // Legacy Check (just in case logic misses something above, though specific rules should cover it)
+                            const hasSpecial = hasOpening || hasLate;
                             if (hasSpecial) {
-                                if (slot.includes('場控') || slot.includes('遠')) return false;
+                                if (slot.includes('場控') || slot.includes('遠') || slot.includes('大直')) return false;
                             }
                         }
                         return true;
                     });
 
                     if (candidateIndex >= 0) {
-                        currentAllocation.push({ userId: pool[candidateIndex].id, station: slot });
+                        const winner = pool[candidateIndex];
+                        currentAllocation.push({ userId: winner.id, station: slot });
+
+                        // Note: For simulation we just optimistically count
+                        // We don't modify real counts here, just rely on pool sort logic which uses the 'base' count
+
                         pool.splice(candidateIndex, 1);
                     } else {
                         unfilledSlots.push(slot);
@@ -682,6 +743,13 @@ class Store {
                     minUnfilledCount = unfilledSlots.length;
                     bestAllocation = currentAllocation;
                     if (minUnfilledCount === 0 && attempt > 10) break;
+                }
+            }
+
+            // Update Real Counts based on Best Allocation
+            for (const alloc of bestAllocation) {
+                if (stationCounts[alloc.userId] && stationCounts[alloc.userId][alloc.station] !== undefined) {
+                    stationCounts[alloc.userId][alloc.station]++;
                 }
             }
 

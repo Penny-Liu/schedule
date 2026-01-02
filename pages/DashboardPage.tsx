@@ -12,7 +12,7 @@ interface DashboardPageProps {
     currentUser: User;
 }
 
-type ViewMode = 'user' | 'station';
+type ViewMode = 'user' | 'station' | 'daily';
 
 const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
     const [currentDate, setCurrentDate] = useState(new Date());
@@ -27,6 +27,8 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
     });
 
     const [viewMode, setViewMode] = useState<ViewMode>('user'); // Toggle state
+    // Daily View Date State
+    const [dailyDate, setDailyDate] = useState(new Date());
 
     // Auto Schedule Modal State (Stations)
     const [isAutoScheduleOpen, setIsAutoScheduleOpen] = useState(false);
@@ -59,8 +61,33 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
 
     const isCycleConfirmed = currentCycle?.isConfirmed || false;
 
+    const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+    // Track 7-day offset for mobile view
+    const [mobileOffset, setMobileOffset] = useState(0);
+
+    useEffect(() => {
+        const handleResize = () => setIsMobile(window.innerWidth < 768);
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
+
     // Determine the Date Range
     const dateRange = useMemo(() => {
+        // Mobile: Always force 7-day Rolling View starting from Today + Offset
+        if (isMobile) {
+            const dates = [];
+            const start = new Date(currentDate);
+            // Apply offset: 7 days * offset
+            start.setDate(start.getDate() + (mobileOffset * 7));
+
+            for (let i = 0; i < 7; i++) {
+                const d = new Date(start);
+                d.setDate(start.getDate() + i);
+                dates.push(d.toISOString().split('T')[0]);
+            }
+            return dates;
+        }
+
         if (selectedCycleId !== 'rolling' && currentCycle) {
             const dates = [];
             const start = new Date(currentCycle.startDate);
@@ -75,17 +102,28 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
 
         const dates = [];
         const start = new Date(currentDate);
-        // Align view to start 2 days before current
-        const viewStart = new Date(start);
-        viewStart.setDate(viewStart.getDate() - 2);
 
-        for (let i = 0; i < 21; i++) {
-            const d = new Date(viewStart);
-            d.setDate(viewStart.getDate() + i);
-            dates.push(d.toISOString().split('T')[0]);
+        // Mobile: Show Today + 7 days
+        if (isMobile) {
+            for (let i = 0; i < 7; i++) {
+                const d = new Date(start);
+                d.setDate(start.getDate() + i);
+                dates.push(d.toISOString().split('T')[0]);
+            }
+        } else {
+            // Desktop: Show -2 days + 21 days (3 weeks)
+            // Align view to start 2 days before current
+            const viewStart = new Date(start);
+            viewStart.setDate(viewStart.getDate() - 2);
+
+            for (let i = 0; i < 21; i++) {
+                const d = new Date(viewStart);
+                d.setDate(viewStart.getDate() + i);
+                dates.push(d.toISOString().split('T')[0]);
+            }
         }
         return dates;
-    }, [currentDate, selectedCycleId, currentCycle]);
+    }, [currentDate, selectedCycleId, currentCycle, isMobile, mobileOffset]);
 
     // Update schedule range when cycle changes OR when view changes
     useEffect(() => {
@@ -372,28 +410,47 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
 
                 columnStyles: dynamicColumnStyles,
                 didParseCell: function (data: any) {
-                    // Header Logic (Weekends)
+                    // Header Logic (Weekends & Holidays)
                     if (data.section === 'head' && data.column.index > 0) {
                         const dayIndex = (data.column.index - 1);
                         const dateStr = dateRange[dayIndex];
                         const d = new Date(dateStr);
-                        const isWeekend = d.getDay() === 0 || d.getDay() === 6;
-                        if (isWeekend) {
+                        const dayOfWeek = d.getDay();
+
+                        // Check for Holiday/Event
+                        const event = holidays.find(h => h.date === dateStr);
+
+                        // Default Black
+                        data.cell.styles.textColor = [0, 0, 0];
+
+                        // Priority: Meeting (Blue) > Holiday/Sun (Red) > Sat (Green)
+
+                        if (event?.type === DateEventType.MEETING || event?.name.includes('科會')) {
+                            data.cell.styles.textColor = [0, 0, 255]; // Blue
+                        } else if (dayOfWeek === 0 || event?.type === DateEventType.NATIONAL || event?.type === DateEventType.CLOSED) {
+                            data.cell.styles.textColor = [255, 0, 0]; // Red
+                        } else if (dayOfWeek === 6) {
+                            data.cell.styles.textColor = [0, 128, 0]; // Green
                         }
                     }
 
                     // User View: Cell Backgrounds
                     if (viewMode === 'user' && data.section === 'body' && data.column.index > 0) {
                         const raw = data.cell.raw;
-                        if (raw && typeof raw === 'object' && 'station' in raw) {
+
+                        // Handle Off/Closed explicitly (pushed as string '休')
+                        if (raw === '休') {
+                            data.cell.styles.fillColor = [240, 240, 240]; // Light Gray
+                        }
+                        else if (raw && typeof raw === 'object' && 'station' in raw) {
                             const station = raw.station;
                             if (station) {
                                 if (station.includes('場控')) {
-                                    data.cell.styles.fillColor = [252, 252, 190]; // #fcfcbe (Red text handled in didDrawCell)
+                                    data.cell.styles.fillColor = [252, 252, 190]; // #fcfcbe
                                 } else if (station.includes('遠')) {
-                                    data.cell.styles.fillColor = [255, 225, 225]; // #ffe1e1 (Black text default)
+                                    data.cell.styles.fillColor = [255, 225, 225]; // #ffe1e1
                                 } else if (station === SYSTEM_OFF) {
-                                    data.cell.styles.fillColor = [220, 220, 220]; // #dcdcdc (Black text default)
+                                    data.cell.styles.fillColor = [240, 240, 240]; // Light Gray
                                 }
                             }
                         }
@@ -483,7 +540,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                     if (data.section === 'body' && data.column.index > 0 && viewMode === 'station') {
                         const raw = data.cell.raw;
                         if (raw && typeof raw === 'object' && 'staff' in raw) {
-                            const staff = raw.staff as { name: string, roles: string[] }[];
+                            const staff = raw.staff as { name: string, roles: string[], isLearner: boolean }[];
 
                             // Note: We only pass 'staff' object for Standard Rows now.
                             // Compact rows and Off rows use string content, so this block won't run for them.
@@ -552,7 +609,8 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
             doc.save(fileName);
         } catch (e) {
             console.error('PDF Generation Error:', e);
-            alert('PDF 匯出發生錯誤');
+            const msg = e instanceof Error ? e.message : String(e);
+            alert(`PDF 匯出發生錯誤: ${msg}`);
         } finally {
             setIsExporting(false);
         }
@@ -1273,7 +1331,8 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                 <div className="flex justify-between items-center">
                     <div className="flex items-center gap-4">
                         <h2 className="text-xl font-bold text-slate-800 tracking-tight flex items-center gap-2">
-                            {getCycleTitle()}
+                            {/* Hide Cycle Title on Mobile */}
+                            {!isMobile && getCycleTitle()}
                             {isCycleConfirmed && (
                                 <span className="bg-red-50 text-red-600 text-xs px-2 py-0.5 rounded border border-red-100 flex items-center gap-1">
                                     <Lock size={10} /> 已鎖定
@@ -1287,36 +1346,69 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${viewMode === 'user' ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
                                     }`}
                             >
-                                <Users size={14} /> 人員視角
+                                {!isMobile && <Users size={14} />} <span>人員視角</span>
                             </button>
                             <button
                                 onClick={() => setViewMode('station')}
                                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${viewMode === 'station' ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
                                     }`}
                             >
-                                <LayoutList size={14} /> 崗位視角
+                                {!isMobile && <LayoutList size={14} />} <span>崗位視角</span>
+                            </button>
+                            <button
+                                onClick={() => {
+                                    setViewMode('daily');
+                                    setDailyDate(new Date()); // Reset to today when clicking tab
+                                }}
+                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${viewMode === 'daily' ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                                    }`}
+                            >
+                                {!isMobile && <Activity size={14} />} <span>今日崗位</span>
                             </button>
                         </div>
                     </div>
 
                     <div className="flex items-center gap-3">
-                        <div className="flex items-center bg-slate-50 hover:bg-slate-100 rounded-lg px-2 py-1.5 transition-colors border border-slate-200">
-                            <Filter size={14} className="text-slate-500 mr-2" />
-                            <select
-                                value={selectedCycleId}
-                                onChange={(e) => setSelectedCycleId(e.target.value)}
-                                className="text-sm bg-transparent border-none focus:ring-0 text-slate-700 font-medium cursor-pointer py-0 pl-0 pr-8"
-                            >
-                                <option value="rolling">連續排班視圖</option>
-                                {cycles.map(c => (
-                                    <option key={c.id} value={c.id}>
-                                        {c.name} {c.isConfirmed ? '(🔒)' : ''}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
 
-                        {selectedCycleId === 'rolling' ? (
+                        {isMobile ? (
+                            // Mobile Header: Simple Nav + Date Range Only
+                            <div className="flex items-center gap-2 bg-slate-100 rounded-lg p-1">
+                                <button
+                                    onClick={() => setMobileOffset(prev => prev - 1)}
+                                    className="p-2 bg-white rounded shadow-sm text-slate-600 active:scale-95 transition-transform"
+                                >
+                                    <ChevronLeft size={16} />
+                                </button>
+                                <span className="text-xs font-bold text-slate-700 min-w-[80px] text-center">
+                                    {dateRange[0].substring(5)} ~ {dateRange[dateRange.length - 1].substring(5)}
+                                </span>
+                                <button
+                                    onClick={() => setMobileOffset(prev => prev + 1)}
+                                    className="p-2 bg-white rounded shadow-sm text-slate-600 active:scale-95 transition-transform"
+                                >
+                                    <ChevronRight size={16} />
+                                </button>
+                            </div>
+                        ) : (
+                            // Desktop: Full Controls
+                            <div className="flex items-center bg-slate-50 hover:bg-slate-100 rounded-lg px-2 py-1.5 transition-colors border border-slate-200">
+                                <Filter size={14} className="text-slate-500 mr-2" />
+                                <select
+                                    value={selectedCycleId}
+                                    onChange={(e) => setSelectedCycleId(e.target.value)}
+                                    className="text-sm bg-transparent border-none focus:ring-0 text-slate-700 font-medium cursor-pointer py-0 pl-0 pr-8"
+                                >
+                                    <option value="rolling">連續排班視圖</option>
+                                    {cycles.map(c => (
+                                        <option key={c.id} value={c.id}>
+                                            {c.name} {c.isConfirmed ? '(🔒)' : ''}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
+
+                        {!isMobile && selectedCycleId === 'rolling' && (
                             <div className="flex items-center bg-white rounded-lg border border-slate-200 p-0.5 shadow-sm gap-1">
                                 <button onClick={() => handleNavigate('prev')} className="p-1.5 hover:bg-slate-50 rounded text-slate-500" title="上一週">
                                     <ChevronLeft size={16} />
@@ -1340,14 +1432,16 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                     <ChevronRight size={16} />
                                 </button>
                             </div>
-                        ) : (
+                        )}
+
+                        {!isMobile && selectedCycleId !== 'rolling' && (
                             <div className="flex items-center gap-2 px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-lg text-xs font-bold border border-indigo-100">
                                 <CalendarIcon size={14} />
                                 {cycles.find(c => c.id === selectedCycleId)?.startDate} ~ {cycles.find(c => c.id === selectedCycleId)?.endDate}
                             </div>
                         )}
 
-                        {(currentUser.role === UserRole.SUPERVISOR || currentUser.role === UserRole.SYSTEM_ADMIN) && selectedCycleId !== 'rolling' && (
+                        {!isMobile && (currentUser.role === UserRole.SUPERVISOR || currentUser.role === UserRole.SYSTEM_ADMIN) && selectedCycleId !== 'rolling' && (
                             <button
                                 onClick={() => setIsConfirmCycleOpen(true)}
                                 className={`px-3 py-1.5 rounded-lg text-sm font-medium border flex items-center gap-1.5 shadow-sm transition-all ${isCycleConfirmed
@@ -1377,7 +1471,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                         {(currentUser.role === UserRole.SUPERVISOR || currentUser.role === UserRole.SYSTEM_ADMIN) && (
                             <>
                                 {/* Action Buttons: Only show when viewing Users and usually in custom or rolling range */}
-                                {viewMode === 'user' && (
+                                {!isMobile && (
                                     <>
                                         {/* Auto Station Button */}
                                         <button
@@ -1425,328 +1519,519 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
             </div>
 
             {/* ... (Rest of the table UI) ... */}
-            <div id="roster-table" className="flex-1 overflow-auto bg-white p-2">
-                {/* ... Table Content ... */}
-                <table className="w-full border-collapse bg-white table-fixed">
-                    {/* ... Table Header ... */}
-                    <thead className="sticky top-0 z-20 shadow-sm">
-                        <tr>
-                            <th className="sticky left-0 z-30 bg-slate-50/95 backdrop-blur border-b border-r border-slate-200 p-0 w-[120px] shadow-[4px_0_8px_rgba(0,0,0,0.02)]">
-                                <div className="p-2 text-left text-xs font-extrabold text-slate-600 uppercase tracking-wider">
-                                    {viewMode === 'user' ? '放射師' : '工作崗位'}
+            <div className="flex-1 overflow-auto bg-slate-50 p-4">
+                {viewMode === 'daily' ? (
+                    // --- Daily View Implementation ---
+                    <div className="max-w-4xl mx-auto space-y-6">
+                        {/* Daily Controls */}
+                        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex items-center justify-between">
+                            <div className="flex items-center gap-4">
+                                <button
+                                    onClick={() => {
+                                        const d = new Date(dailyDate);
+                                        d.setDate(d.getDate() - 1);
+                                        setDailyDate(d);
+                                    }}
+                                    className="p-2 hover:bg-slate-100 rounded-full text-slate-500 transition-colors"
+                                >
+                                    <ChevronLeft size={20} />
+                                </button>
+                                <div className="text-center">
+                                    <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2 justify-center">
+                                        <CalendarIcon size={18} className="text-teal-600" />
+                                        {dailyDate.toLocaleDateString('zh-TW', { year: 'numeric', month: 'long', day: 'numeric' })}
+                                        <span className="text-sm font-normal text-slate-500">
+                                            ({['日', '一', '二', '三', '四', '五', '六'][dailyDate.getDay()]})
+                                        </span>
+                                    </h2>
                                 </div>
-                            </th>
-                            {viewMode === 'user' && (
-                                <th className="sticky left-[120px] z-30 bg-slate-50/95 backdrop-blur border-b border-r border-slate-200 p-0 w-[50px] shadow-[4px_0_8px_rgba(0,0,0,0.02)]">
-                                    <div className="p-2 text-center text-[10px] font-bold text-slate-500 uppercase tracking-wider flex flex-col items-center">
-                                        <BarChart2 size={12} className="mb-0.5 text-teal-600" />
-                                        統計
-                                    </div>
-                                </th>
-                            )}
-                            {dateRange.map(date => {
-                                const d = new Date(date);
-                                const isToday = new Date().toISOString().split('T')[0] === date;
-                                const weekDays = ['日', '一', '二', '三', '四', '五', '六'];
-                                const isWeekend = d.getDay() === 0 || d.getDay() === 6;
-                                const holiday = holidays.find(h => h.date === date);
-                                const isClosed = holiday?.type === DateEventType.CLOSED;
+                                <button
+                                    onClick={() => {
+                                        const d = new Date(dailyDate);
+                                        d.setDate(d.getDate() + 1);
+                                        setDailyDate(d);
+                                    }}
+                                    className="p-2 hover:bg-slate-100 rounded-full text-slate-500 transition-colors"
+                                >
+                                    <ChevronRight size={20} />
+                                </button>
+                            </div>
+
+                            <button
+                                onClick={() => setDailyDate(new Date())}
+                                className="px-3 py-1.5 text-sm bg-teal-50 text-teal-700 font-bold rounded-lg border border-teal-100 hover:bg-teal-100 transition-colors"
+                            >
+                                回到今天
+                            </button>
+                        </div>
+
+                        {/* My Assignment Card */}
+                        <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl shadow-lg p-6 text-white relative overflow-hidden">
+                            <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2 blur-2xl"></div>
+                            <h3 className="text-indigo-100 font-medium text-sm mb-4 flex items-center gap-2">
+                                <Activity size={16} /> 我的今日任務
+                            </h3>
+
+                            {(() => {
+                                const dateStr = dailyDate.toISOString().split('T')[0];
+                                const myShift = getDayShift(currentUser.id, dateStr);
+                                const event = holidays.find(h => h.date === dateStr);
+                                const isClosed = event?.type === DateEventType.CLOSED;
+
+                                if (myShift.isOff || isClosed) {
+                                    return (
+                                        <div className="flex flex-col items-center py-6">
+                                            <div className="text-4xl font-bold mb-2">休假</div>
+                                            <p className="text-indigo-100 opacity-80">好好休息，充電再出發！</p>
+                                        </div>
+                                    );
+                                }
+
                                 return (
-                                    <th key={date} className={`border-b border-slate-200 py-1.5 min-w-[52px] text-center ${isToday ? 'bg-teal-50/50' : (isClosed ? 'bg-slate-100' : 'bg-white')}`}>
-                                        <div className="flex flex-col items-center gap-0.5">
-                                            <span className={`text-[10px] font-bold ${isToday ? 'text-teal-700' : (isWeekend ? 'text-red-500' : 'text-slate-400')}`}>
-                                                {weekDays[d.getDay()]}
-                                            </span>
-                                            <span className={`text-sm font-bold leading-none ${holiday ? 'text-red-600' : (isToday ? 'text-teal-800' : 'text-slate-800')}`}>
-                                                {d.getDate()}
-                                            </span>
-                                            {holiday && (
-                                                <span className="text-[9px] px-1 rounded-sm leading-tight mt-0.5 bg-red-100 text-red-700 border border-red-200">
-                                                    {holiday.name}
-                                                </span>
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            {myShift.station ? (
+                                                <div className="text-5xl font-bold mb-2 tracking-tight">{myShift.station}</div>
+                                            ) : (
+                                                <div className="text-3xl font-bold mb-2 opacity-50">未分配崗位</div>
                                             )}
+
+                                            <div className="flex gap-2 mt-3">
+                                                {myShift.specialRoles.map(role => (
+                                                    <span key={role} className="px-2 py-1 bg-white/20 backdrop-blur-sm rounded-lg text-sm font-bold border border-white/10">
+                                                        {role}
+                                                    </span>
+                                                ))}
+                                                {(!myShift.station && myShift.specialRoles.length === 0) && (
+                                                    <span className="text-indigo-200 text-sm">暫無特殊任務</span>
+                                                )}
+                                            </div>
+                                        </div>
+                                        <div className="bg-white/10 p-4 rounded-full backdrop-blur-sm">
+                                            <Briefcase size={40} className="text-indigo-100" />
+                                        </div>
+                                    </div>
+                                );
+                            })()}
+                        </div>
+
+                        {/* All Staff Status Grid */}
+                        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+                                <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                                    <Users size={18} className="text-slate-500" /> 全員崗位概況
+                                </h3>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 p-4">
+                                {(() => {
+                                    // Station-based grouping logic
+                                    const dateStr = dailyDate.toISOString().split('T')[0];
+
+                                    // Define requested order
+                                    const stationOrder = [
+                                        '遠距', '場控', '輔班', '排班',
+                                        StationDefault.MR3T, StationDefault.MR1_5T,
+                                        StationDefault.US1, StationDefault.US2, StationDefault.US3, StationDefault.US4,
+                                        StationDefault.CT, StationDefault.BMD_DX
+                                        // Others fall here
+                                    ];
+
+                                    // Helper function to get assignments
+                                    const getAssignmentsForStation = (stationName: string) => {
+                                        return users.filter(u => {
+                                            const s = getDayShift(u.id, dateStr);
+                                            // Check Roles First (since they are treated like stations in the request)
+                                            if (stationName === '遠距' && s.station?.includes('遠')) return true;
+                                            if (stationName === '場控' && s.station?.includes('場控')) return true;
+                                            if (stationName === '輔班' && s.specialRoles.includes(SPECIAL_ROLES.ASSIST)) return true;
+                                            if (stationName === '排班' && s.specialRoles.includes(SPECIAL_ROLES.SCHEDULER)) return true;
+
+                                            // Then Check Exact Station Match
+                                            return s.station === stationName;
+                                        });
+                                    };
+
+                                    const processedStations = new Set<string>();
+                                    const cards: React.ReactNode[] = [];
+
+                                    stationOrder.forEach(st => {
+                                        processedStations.add(st);
+                                        const assignedUsers = getAssignmentsForStation(st);
+
+                                        if (assignedUsers.length > 0) {
+                                            cards.push(
+                                                <div key={st} className="bg-slate-50 border border-slate-200 rounded-lg p-3">
+                                                    <div className={`text-sm font-bold mb-2 flex items-center justify-between ${getStationChipStyle(st)} px-2 py-1 rounded`}>
+                                                        {st}
+                                                        <span className="text-xs opacity-70 bg-white/30 px-1.5 rounded-full">{assignedUsers.length}</span>
+                                                    </div>
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {assignedUsers.map(u => {
+                                                            const s = getDayShift(u.id, dateStr);
+                                                            const isSelf = u.id === currentUser.id;
+                                                            return (
+                                                                <div key={u.id} className={`flex items-center gap-2 bg-white px-2 py-1.5 rounded border shadow-sm ${isSelf ? 'border-teal-200 bg-teal-50' : 'border-slate-100'}`}>
+                                                                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white ${u.color || 'bg-slate-400'}`}>
+                                                                        {u.alias || u.name[0]}
+                                                                    </div>
+                                                                    <div className="text-xs font-medium text-slate-700">
+                                                                        {u.name} {s.specialRoles.filter(r => r !== '輔班' && r !== '排班').map(r => <span key={r} className="text-[10px] text-teal-600 ml-1">({r})</span>)}
+                                                                    </div>
+                                                                </div>
+                                                            )
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            );
+                                        }
+                                    });
+
+                                    // Handle Unassigned / Others if needed? Or just focus on the Station list.
+                                    // User mainly asked for "All Staff Status... arranged by station". 
+                                    // Usually it's good to show unassigned too, but let's stick to the requested structure first.
+
+                                    return cards;
+                                })()}
+                            </div>
+
+                            {/* Off Staff Summary */}
+                            <div className="px-6 py-3 bg-slate-50 border-t border-slate-200 text-xs text-slate-500 flex flex-wrap gap-2 items-center">
+                                <span className="font-bold">今日休假:</span>
+                                {users.filter(u => getDayShift(u.id, dailyDate.toISOString().split('T')[0]).isOff).map(u => (
+                                    <span key={u.id} className="bg-white border border-slate-200 px-1.5 py-0.5 rounded text-slate-400">
+                                        {u.name}
+                                    </span>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                ) : (
+                    <div id="roster-table" className="h-full bg-white overflow-auto p-2">
+                        {/* ... Table Content ... */}
+                        <table className="w-full border-collapse bg-white table-fixed">
+                            {/* ... Table Header ... */}
+                            <thead className="sticky top-0 z-20 shadow-sm">
+                                <tr>
+                                    <th className="sticky left-0 z-30 bg-slate-50/95 backdrop-blur border-b border-r border-slate-200 p-0 w-[120px] shadow-[4px_0_8px_rgba(0,0,0,0.02)]">
+                                        <div className="p-2 text-left text-xs font-extrabold text-slate-600 uppercase tracking-wider">
+                                            {viewMode === 'user' ? '放射師' : '工作崗位'}
                                         </div>
                                     </th>
-                                );
-                            })}
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                        {viewMode === 'user' ? (
-                            // --- User View ---
-                            users.map((user, idx) => {
-                                const isFirst = idx === 0;
-                                const isLast = idx === users.length - 1;
-                                const workDaysCount = dateRange.filter(date => {
-                                    const status = getDayShift(user.id, date);
-                                    return !status.isOff;
-                                }).length;
-                                const userCapableStations = allStationsSorted.filter(s =>
-                                    user.capabilities?.includes(s) ||
-                                    user.learningCapabilities?.includes(s) ||
-                                    s === StationDefault.UNASSIGNED ||
-                                    s === '未分配'
-                                );
-                                return (
-                                    <tr key={user.id} className="group hover:bg-slate-50/50 transition-colors">
-                                        <td className="sticky left-0 z-10 bg-white group-hover:bg-slate-50 border-r border-slate-200 p-2 shadow-[4px_0_8px_rgba(0,0,0,0.02)]">
-                                            <div className="flex items-center gap-2">
-                                                {isEditMode && (
-                                                    <div className="flex flex-col gap-0.5">
-                                                        <button
-                                                            disabled={isFirst}
-                                                            onClick={() => handleMoveUser(idx, 'up')}
-                                                            className={`p-0.5 rounded ${isFirst ? 'text-gray-200' : 'text-gray-400 hover:text-teal-600 hover:bg-gray-100'}`}
-                                                        >
-                                                            <ChevronUp size={12} />
-                                                        </button>
-                                                        <button
-                                                            disabled={isLast}
-                                                            onClick={() => handleMoveUser(idx, 'down')}
-                                                            className={`p-0.5 rounded ${isLast ? 'text-gray-200' : 'text-gray-400 hover:text-teal-600 hover:bg-gray-100'}`}
-                                                        >
-                                                            <ChevronDown size={12} />
-                                                        </button>
-                                                    </div>
-                                                )}
-                                                <div className="w-7 h-7 rounded-full flex items-center justify-center text-white font-bold text-xs shadow-sm flex-shrink-0 ring-2 ring-white" style={{ backgroundColor: user.color || '#9CA3AF' }}>
-                                                    {user.alias || user.name.charAt(0)}
-                                                </div>
-                                                <div className="min-w-0">
-                                                    <div className="text-xs font-bold text-slate-800 truncate leading-tight">{user.name}</div>
-                                                </div>
+                                    {viewMode === 'user' && (
+                                        <th className="sticky left-[120px] z-30 bg-slate-50/95 backdrop-blur border-b border-r border-slate-200 p-0 w-[50px] shadow-[4px_0_8px_rgba(0,0,0,0.02)]">
+                                            <div className="p-2 text-center text-[10px] font-bold text-slate-500 uppercase tracking-wider flex flex-col items-center">
+                                                <BarChart2 size={12} className="mb-0.5 text-teal-600" />
+                                                統計
                                             </div>
-                                        </td>
-                                        <td className="sticky left-[120px] z-10 bg-white group-hover:bg-slate-50 border-r border-slate-200 p-0 text-center shadow-[4px_0_8px_rgba(0,0,0,0.02)]">
-                                            <div className="text-[10px] font-bold text-slate-600 bg-slate-100 mx-1.5 py-0.5 rounded border border-slate-200">
-                                                {workDaysCount}
-                                            </div>
-                                        </td>
-                                        {dateRange.map(date => {
-                                            const { station, specialRoles, isOff } = getDayShift(user.id, date);
-                                            const isToday = new Date().toISOString().split('T')[0] === date;
-                                            const pendingReq = getPendingRequest(user.id, date);
-                                            const event = holidays.find(h => h.date === date);
-                                            const isClosed = event?.type === DateEventType.CLOSED;
-                                            const isLearning = station && user.learningCapabilities?.includes(station);
-
-                                            return (
-                                                <td key={date} className={`p-0.5 border-r border-slate-100 align-top h-16 ${isToday ? 'bg-teal-50/10' : ''} ${isOff ? 'bg-slate-100/60' : (isClosed ? 'bg-slate-100/30' : '')} relative`}>
-                                                    {pendingReq && getLeaveBadge(pendingReq.type)}
-                                                    {isOff ? (
-                                                        <div className="h-full w-full flex flex-col items-center justify-center gap-1">
-                                                            <span className="text-slate-300 font-bold select-none text-[12px]">休</span>
-                                                            {isEditMode && (
-                                                                <button onClick={() => handleUpdateShift(user.id, date, '未分配', [])} className="text-[10px] text-teal-600 hover:text-white hover:bg-teal-500 bg-white border border-teal-200 px-1.5 rounded shadow-sm transition-all">+</button>
-                                                            )}
+                                        </th>
+                                    )}
+                                    {dateRange.map(date => {
+                                        const d = new Date(date);
+                                        const isToday = new Date().toISOString().split('T')[0] === date;
+                                        const weekDays = ['日', '一', '二', '三', '四', '五', '六'];
+                                        const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+                                        const holiday = holidays.find(h => h.date === date);
+                                        const isClosed = holiday?.type === DateEventType.CLOSED;
+                                        return (
+                                            <th key={date} className={`border-b border-slate-200 py-1.5 min-w-[52px] text-center ${isToday ? 'bg-teal-50/50' : (isClosed ? 'bg-slate-100' : 'bg-white')}`}>
+                                                <div className="flex flex-col items-center gap-0.5">
+                                                    <span className={`text-[10px] font-bold ${isToday ? 'text-teal-700' : (isWeekend ? 'text-red-500' : 'text-slate-400')}`}>
+                                                        {weekDays[d.getDay()]}
+                                                    </span>
+                                                    <span className={`text-sm font-bold leading-none ${holiday ? 'text-red-600' : (isToday ? 'text-teal-800' : 'text-slate-800')}`}>
+                                                        {d.getDate()}
+                                                    </span>
+                                                    {holiday && (
+                                                        <span className="text-[9px] px-1 rounded-sm leading-tight mt-0.5 bg-red-100 text-red-700 border border-red-200">
+                                                            {holiday.name}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </th>
+                                        );
+                                    })}
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                                {viewMode === 'user' ? (
+                                    // --- User View ---
+                                    users.map((user, idx) => {
+                                        const isFirst = idx === 0;
+                                        const isLast = idx === users.length - 1;
+                                        const workDaysCount = dateRange.filter(date => {
+                                            const status = getDayShift(user.id, date);
+                                            return !status.isOff;
+                                        }).length;
+                                        const userCapableStations = allStationsSorted.filter(s =>
+                                            user.capabilities?.includes(s) ||
+                                            user.learningCapabilities?.includes(s) ||
+                                            s === StationDefault.UNASSIGNED ||
+                                            s === '未分配'
+                                        );
+                                        return (
+                                            <tr key={user.id} className="group hover:bg-slate-50/50 transition-colors">
+                                                <td className="sticky left-0 z-10 bg-white group-hover:bg-slate-50 border-r border-slate-200 p-2 shadow-[4px_0_8px_rgba(0,0,0,0.02)]">
+                                                    <div className="flex items-center gap-2">
+                                                        {isEditMode && (
+                                                            <div className="flex flex-col gap-0.5">
+                                                                <button
+                                                                    disabled={isFirst}
+                                                                    onClick={() => handleMoveUser(idx, 'up')}
+                                                                    className={`p-0.5 rounded ${isFirst ? 'text-gray-200' : 'text-gray-400 hover:text-teal-600 hover:bg-gray-100'}`}
+                                                                >
+                                                                    <ChevronUp size={12} />
+                                                                </button>
+                                                                <button
+                                                                    disabled={isLast}
+                                                                    onClick={() => handleMoveUser(idx, 'down')}
+                                                                    className={`p-0.5 rounded ${isLast ? 'text-gray-200' : 'text-gray-400 hover:text-teal-600 hover:bg-gray-100'}`}
+                                                                >
+                                                                    <ChevronDown size={12} />
+                                                                </button>
+                                                            </div>
+                                                        )}
+                                                        <div className="w-7 h-7 rounded-full flex items-center justify-center text-white font-bold text-xs shadow-sm flex-shrink-0 ring-2 ring-white" style={{ backgroundColor: user.color || '#9CA3AF' }}>
+                                                            {user.alias || user.name.charAt(0)}
                                                         </div>
-                                                    ) : (
-                                                        <div className="flex flex-col gap-1 h-full justify-start pt-1 items-center">
-                                                            {isEditMode ? (
-                                                                <select value={station || ''} onChange={(e) => handleUpdateShift(user.id, date, e.target.value || SYSTEM_OFF, specialRoles)} className="w-full text-[10px] py-1 px-0.5 border border-slate-300 rounded bg-white focus:ring-2 focus:ring-teal-500 outline-none font-medium text-slate-800">
-                                                                    <option value="">...</option>
-                                                                    {userCapableStations.map(s => <option key={s} value={s}>{s}</option>)}
-                                                                    <option value={SYSTEM_OFF}>休假</option>
-                                                                </select>
-                                                            ) : (
-                                                                station ? (
-                                                                    <div className={`flex items-center justify-center px-1 py-1 rounded-md shadow-sm border w-full max-w-[50px] ${getStationStyle(station)}`}>
-                                                                        <span className="text-[10px] font-bold truncate tracking-tight">{station}</span>
-                                                                        {isLearning && (
-                                                                            <span className="text-[9px] bg-white/50 text-slate-900 font-extrabold px-0.5 rounded ml-0.5 leading-none">學</span>
-                                                                        )}
-                                                                    </div>
-                                                                ) : (
-                                                                    <div className="flex-1 flex items-center justify-center">
-                                                                        <div className="text-[10px] text-slate-300 font-light">-</div>
-                                                                    </div>
-                                                                )
-                                                            )}
-                                                            {isEditMode ? (
-                                                                <div className="flex flex-wrap gap-0.5 justify-center">
-                                                                    {specialRolesList.map(role => {
-                                                                        const isSelected = specialRoles.includes(role);
-                                                                        return (
-                                                                            <button key={role} onClick={() => handleSpecialRoleToggle(user.id, date, role, station || StationDefault.UNASSIGNED, specialRoles)} className={`px-1 py-0.5 text-[9px] rounded border transition-all font-bold ${isSelected ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-slate-400 border-slate-200 hover:border-purple-300 hover:text-purple-500'}`}>{role[0]}</button>
-                                                                        );
-                                                                    })}
+                                                        <div className="min-w-0">
+                                                            <div className="text-xs font-bold text-slate-800 truncate leading-tight">{user.name}</div>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td className="sticky left-[120px] z-10 bg-white group-hover:bg-slate-50 border-r border-slate-200 p-0 text-center shadow-[4px_0_8px_rgba(0,0,0,0.02)]">
+                                                    <div className="text-[10px] font-bold text-slate-600 bg-slate-100 mx-1.5 py-0.5 rounded border border-slate-200">
+                                                        {workDaysCount}
+                                                    </div>
+                                                </td>
+                                                {dateRange.map(date => {
+                                                    const { station, specialRoles, isOff } = getDayShift(user.id, date);
+                                                    const isToday = new Date().toISOString().split('T')[0] === date;
+                                                    const pendingReq = getPendingRequest(user.id, date);
+                                                    const event = holidays.find(h => h.date === date);
+                                                    const isClosed = event?.type === DateEventType.CLOSED;
+                                                    const isLearning = station && user.learningCapabilities?.includes(station);
+
+                                                    return (
+                                                        <td key={date} className={`p-0.5 border-r border-slate-100 align-top h-16 ${isToday ? 'bg-teal-50/10' : ''} ${isOff ? 'bg-slate-100/60' : (isClosed ? 'bg-slate-100/30' : '')} relative`}>
+                                                            {pendingReq && getLeaveBadge(pendingReq.type)}
+                                                            {isOff ? (
+                                                                <div className="h-full w-full flex flex-col items-center justify-center gap-1">
+                                                                    <span className="text-slate-300 font-bold select-none text-[12px]">休</span>
+                                                                    {isEditMode && (
+                                                                        <button onClick={() => handleUpdateShift(user.id, date, '未分配', [])} className="text-[10px] text-teal-600 hover:text-white hover:bg-teal-500 bg-white border border-teal-200 px-1.5 rounded shadow-sm transition-all">+</button>
+                                                                    )}
                                                                 </div>
                                                             ) : (
-                                                                specialRoles.length > 0 && (
-                                                                    <div className="flex flex-wrap gap-0.5 justify-center w-full">
-                                                                        {specialRoles.map(role => (
-                                                                            <span key={role} className={`w-full text-center px-0.5 rounded-[2px] text-[10px] leading-tight font-extrabold border mb-0.5 ${role === SPECIAL_ROLES.OPENING ? 'bg-blue-100/80 text-blue-900 border-blue-200/50' :
-                                                                                role === SPECIAL_ROLES.LATE ? 'bg-amber-100/80 text-amber-900 border-amber-200/50' :
-                                                                                    role === SPECIAL_ROLES.ASSIST ? 'bg-emerald-100/80 text-emerald-900 border-emerald-200/50' :
-                                                                                        role === SPECIAL_ROLES.SCHEDULER ? 'bg-red-100/80 text-red-900 border-red-200/50' :
-                                                                                            'bg-purple-100 text-purple-700 border-purple-200'
-                                                                                }`}>
-                                                                                {role}
-                                                                            </span>
-                                                                        ))}
-                                                                    </div>
-                                                                )
-                                                            )}
-                                                        </div>
-                                                    )}
-                                                </td>
-                                            );
-                                        })}
-                                    </tr>
-                                )
-                            })
-                        ) : (
-                            // --- Station View (Unified & Reorderable) ---
-                            <>
-                                {rowConfigs.map((row, idx) => {
-                                    const isFirst = idx === 0;
-                                    const isLast = idx === rowConfigs.length - 1;
-                                    return (
-                                        <tr key={row.id} className="group hover:bg-slate-50/50 transition-colors relative">
-                                            <td className="sticky left-0 z-10 bg-white group-hover:bg-slate-50 border-r border-slate-200 p-2 shadow-[4px_0_8px_rgba(0,0,0,0.02)]">
-                                                <div className="flex items-center justify-between">
-                                                    <div className={`flex items-center gap-1.5 font-bold text-xs px-2 py-1.5 rounded-md border ${row.colorClass} flex-1 mr-1`}>
-                                                        <div className="truncate">{row.label}</div>
-                                                    </div>
-                                                    {isEditMode && (
-                                                        <div className="flex flex-col gap-0.5">
-                                                            <button
-                                                                disabled={isFirst}
-                                                                onClick={() => handleMoveRow(idx, 'up')}
-                                                                className={`p-0.5 rounded ${isFirst ? 'text-gray-200' : 'text-gray-400 hover:text-teal-600 hover:bg-gray-100'}`}
-                                                            >
-                                                                <ChevronUp size={12} />
-                                                            </button>
-                                                            <button
-                                                                disabled={isLast}
-                                                                onClick={() => handleMoveRow(idx, 'down')}
-                                                                className={`p-0.5 rounded ${isLast ? 'text-gray-200' : 'text-gray-400 hover:text-teal-600 hover:bg-gray-100'}`}
-                                                            >
-                                                                <ChevronDown size={12} />
-                                                            </button>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </td>
-                                            {dateRange.map(date => {
-                                                const staff = row.getData(date);
-                                                // Sort staff: Certified First, Learners Last
-                                                const sortedStaff = [...staff].sort((a, b) => {
-                                                    if (!a.user || !b.user) return 0;
-                                                    const isALearner = a.user.learningCapabilities?.includes(row.label);
-                                                    const isBLearner = b.user.learningCapabilities?.includes(row.label);
-
-                                                    if (isALearner && !isBLearner) return 1; // A is learner, goes after
-                                                    if (!isALearner && isBLearner) return -1; // B is learner, goes after
-                                                    return 0;
-                                                });
-
-                                                const isToday = new Date().toISOString().split('T')[0] === date;
-                                                // Unified Cell Content Logic for both Roles and Stations (Chips)
-                                                return (
-                                                    <td key={date} className={`p-0.5 border-r border-slate-100 align-top h-16 ${isToday ? 'bg-teal-50/10' : ''}`}>
-                                                        <div className="h-full flex flex-col items-center justify-start pt-1 relative group/cell">
-                                                            <div className="flex flex-wrap gap-1 justify-center w-full px-0.5">
-                                                                {sortedStaff.map((item, i) => {
-                                                                    const isOpening = item.shift.specialRoles.includes(SPECIAL_ROLES.OPENING);
-                                                                    const isLate = item.shift.specialRoles.includes(SPECIAL_ROLES.LATE);
-                                                                    const isAssist = item.shift.specialRoles.includes(SPECIAL_ROLES.ASSIST);
-                                                                    const isScheduler = item.shift.specialRoles.includes(SPECIAL_ROLES.SCHEDULER);
-
-                                                                    // Only show suffix if the row itself isn't that role
-                                                                    const showSuffix = row.type === 'STATION';
-
-                                                                    // Use Station Theme Color instead of User Color
-                                                                    let chipClass = getStationChipStyle(row.label);
-
-                                                                    // Check if this user is a Learner for this specific station
-                                                                    const isLearner = item.user?.learningCapabilities?.includes(row.label);
-                                                                    // Revert: White override logic for learners in Station View
-                                                                    if (isLearner) {
-                                                                        chipClass = 'bg-white text-slate-500 border-slate-200 border-dashed';
-                                                                    }
-
-                                                                    return (
-                                                                        <div
-                                                                            key={i}
-                                                                            className={`px-1 py-1 rounded text-sm font-bold shadow-sm flex flex-col items-center w-full max-w-[60px] relative group/chip border ${chipClass}`}
-                                                                        >
-                                                                            <span className="truncate text-xs leading-tight mb-0.5">
-                                                                                {item.user?.name ? formatName(item.user.name) : ''}
-                                                                                {isLearner && <span className="text-[9px] ml-0.5">(學)</span>}
-                                                                            </span>
-
-                                                                            {showSuffix && (isOpening || isLate || isAssist || isScheduler) && (
-                                                                                <div className="flex flex-col gap-0.5 mt-0.5 w-full items-center">
-                                                                                    {isOpening && <span className="w-full text-center bg-blue-100/80 px-0.5 rounded-[2px] text-[10px] leading-tight text-blue-900 font-extrabold border border-blue-200/50">開機</span>}
-                                                                                    {isLate && <span className="w-full text-center bg-amber-100/80 px-0.5 rounded-[2px] text-[10px] leading-tight text-amber-900 font-extrabold border border-amber-200/50">晚班</span>}
-                                                                                    {isAssist && <span className="w-full text-center bg-emerald-100/80 px-0.5 rounded-[2px] text-[10px] leading-tight text-emerald-900 font-extrabold border border-emerald-200/50">輔班</span>}
-                                                                                    {isScheduler && <span className="w-full text-center bg-red-100/80 px-0.5 rounded-[2px] text-[10px] leading-tight text-red-900 font-extrabold border border-red-200/50">排班</span>}
-                                                                                </div>
-                                                                            )}
-
-                                                                            {isEditMode && (
-                                                                                <button
-                                                                                    onClick={(e) => {
-                                                                                        e.stopPropagation();
-                                                                                        if (row.type === 'STATION') handleRemoveUserFromStation(item.user!.id, date);
-                                                                                        else handleRemoveUserFromRole(item.user!.id, date, row.label);
-                                                                                    }}
-                                                                                    className="absolute -top-1 -right-1 bg-white text-red-500 rounded-full p-0.5 opacity-0 group-hover/chip:opacity-100 transition-opacity shadow-sm border border-red-100 z-10"
-                                                                                >
-                                                                                    <X size={8} />
-                                                                                </button>
-                                                                            )}
+                                                                <div className="flex flex-col gap-1 h-full justify-start pt-1 items-center">
+                                                                    {isEditMode ? (
+                                                                        <select value={station || ''} onChange={(e) => handleUpdateShift(user.id, date, e.target.value || SYSTEM_OFF, specialRoles)} className="w-full text-[10px] py-1 px-0.5 border border-slate-300 rounded bg-white focus:ring-2 focus:ring-teal-500 outline-none font-medium text-slate-800">
+                                                                            <option value="">...</option>
+                                                                            {userCapableStations.map(s => <option key={s} value={s}>{s}</option>)}
+                                                                            <option value={SYSTEM_OFF}>休假</option>
+                                                                        </select>
+                                                                    ) : (
+                                                                        station ? (
+                                                                            <div className={`flex items-center justify-center px-1 py-1 rounded-md shadow-sm border w-full max-w-[50px] ${getStationStyle(station)}`}>
+                                                                                <span className="text-[10px] font-bold truncate tracking-tight">{station}</span>
+                                                                                {isLearning && (
+                                                                                    <span className="text-[9px] bg-white/50 text-slate-900 font-extrabold px-0.5 rounded ml-0.5 leading-none">學</span>
+                                                                                )}
+                                                                            </div>
+                                                                        ) : (
+                                                                            <div className="flex-1 flex items-center justify-center">
+                                                                                <div className="text-[10px] text-slate-300 font-light">-</div>
+                                                                            </div>
+                                                                        )
+                                                                    )}
+                                                                    {isEditMode ? (
+                                                                        <div className="flex flex-wrap gap-0.5 justify-center">
+                                                                            {specialRolesList.map(role => {
+                                                                                const isSelected = specialRoles.includes(role);
+                                                                                return (
+                                                                                    <button key={role} onClick={() => handleSpecialRoleToggle(user.id, date, role, station || StationDefault.UNASSIGNED, specialRoles)} className={`px-1 py-0.5 text-[9px] rounded border transition-all font-bold ${isSelected ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-slate-400 border-slate-200 hover:border-purple-300 hover:text-purple-500'}`}>{role[0]}</button>
+                                                                                );
+                                                                            })}
                                                                         </div>
-                                                                    );
-                                                                })}
+                                                                    ) : (
+                                                                        specialRoles.length > 0 && (
+                                                                            <div className="flex flex-wrap gap-0.5 justify-center w-full">
+                                                                                {specialRoles.map(role => (
+                                                                                    <span key={role} className={`w-full text-center px-0.5 rounded-[2px] text-[10px] leading-tight font-extrabold border mb-0.5 ${role === SPECIAL_ROLES.OPENING ? 'bg-blue-100/80 text-blue-900 border-blue-200/50' :
+                                                                                        role === SPECIAL_ROLES.LATE ? 'bg-amber-100/80 text-amber-900 border-amber-200/50' :
+                                                                                            role === SPECIAL_ROLES.ASSIST ? 'bg-emerald-100/80 text-emerald-900 border-emerald-200/50' :
+                                                                                                role === SPECIAL_ROLES.SCHEDULER ? 'bg-red-100/80 text-red-900 border-red-200/50' :
+                                                                                                    'bg-purple-100 text-purple-700 border-purple-200'
+                                                                                        }`}>
+                                                                                        {role}
+                                                                                    </span>
+                                                                                ))}
+                                                                            </div>
+                                                                        )
+                                                                    )}
+                                                                </div>
+                                                            )}
+                                                        </td>
+                                                    );
+                                                })}
+                                            </tr>
+                                        )
+                                    })
+                                ) : (
+                                    // --- Station View (Unified & Reorderable) ---
+                                    <>
+                                        {rowConfigs.map((row, idx) => {
+                                            const isFirst = idx === 0;
+                                            const isLast = idx === rowConfigs.length - 1;
+                                            return (
+                                                <tr key={row.id} className="group hover:bg-slate-50/50 transition-colors relative">
+                                                    <td className="sticky left-0 z-10 bg-white group-hover:bg-slate-50 border-r border-slate-200 p-2 shadow-[4px_0_8px_rgba(0,0,0,0.02)]">
+                                                        <div className="flex items-center justify-between">
+                                                            <div className={`flex items-center gap-1.5 font-bold text-xs px-2 py-1.5 rounded-md border ${row.colorClass} flex-1 mr-1`}>
+                                                                <div className="truncate">{row.label}</div>
                                                             </div>
                                                             {isEditMode && (
-                                                                <div className="mt-1 w-full flex justify-center opacity-0 group-hover/cell:opacity-100 transition-opacity">
-                                                                    <div className="relative w-full max-w-[40px]">
-                                                                        <button className="w-full flex justify-center bg-slate-100 hover:bg-slate-200 rounded text-slate-400 text-[10px] border border-slate-200"><Plus size={10} /></button>
-                                                                        <select className="absolute inset-0 opacity-0 cursor-pointer" value="" onChange={(e) => { if (e.target.value) { if (row.type === 'STATION') { handleAddUserToStation(e.target.value, date, row.label); } else { handleAddUserToRole(e.target.value, date, row.label); } } }}>
-                                                                            <option value="">選擇人員</option>
-                                                                            {row.type === 'STATION'
-                                                                                ? getAssignableCandidates(row.label, date).map(u => (<option key={u.id} value={u.id}>{u.name} ({u.alias || u.name[0]})</option>))
-                                                                                : getCandidatesForRole(row.label, date).map(u => (<option key={u.id} value={u.id}>{u.name} ({u.alias || u.name[0]})</option>))
-                                                                            }
-                                                                        </select>
-                                                                    </div>
+                                                                <div className="flex flex-col gap-0.5">
+                                                                    <button
+                                                                        disabled={isFirst}
+                                                                        onClick={() => handleMoveRow(idx, 'up')}
+                                                                        className={`p-0.5 rounded ${isFirst ? 'text-gray-200' : 'text-gray-400 hover:text-teal-600 hover:bg-gray-100'}`}
+                                                                    >
+                                                                        <ChevronUp size={12} />
+                                                                    </button>
+                                                                    <button
+                                                                        disabled={isLast}
+                                                                        onClick={() => handleMoveRow(idx, 'down')}
+                                                                        className={`p-0.5 rounded ${isLast ? 'text-gray-200' : 'text-gray-400 hover:text-teal-600 hover:bg-gray-100'}`}
+                                                                    >
+                                                                        <ChevronDown size={12} />
+                                                                    </button>
                                                                 </div>
                                                             )}
                                                         </div>
                                                     </td>
-                                                );
-                                            })}
-                                        </tr>
-                                    );
-                                })}
-                            </>
-                        )}
-                    </tbody>
-                </table>
-                {/* ... (Footer legend) ... */}
-                <div className="p-4 border-t border-slate-200 bg-white sticky bottom-0 z-20 flex gap-6 text-xs text-slate-500 font-medium">
-                    {viewMode === 'user' ? (
-                        <>
-                            <div className="flex items-center gap-2"><span className="w-3 h-3 bg-slate-200 rounded-sm"></span> <span>休假 / 非工作日</span></div>
-                            <div className="flex items-center gap-2"><span className="w-3 h-3 bg-orange-100 border border-orange-200 rounded-sm"></span> <span>MR</span></div>
-                            <div className="flex items-center gap-2"><span className="w-3 h-3 bg-emerald-100 border border-emerald-200 rounded-sm"></span> <span>US</span></div>
-                            <div className="flex items-center gap-2"><span className="w-3 h-3 bg-sky-100 border border-sky-200 rounded-sm"></span> <span>CT</span></div>
-                            <div className="flex items-center gap-2"><span className="w-3 h-3 bg-teal-100 border border-teal-200 rounded-sm flex items-center justify-center text-[8px] text-teal-800">學</span> <span>學習崗位</span></div>
-                        </>
-                    ) : (
-                        <>
-                            <div className="flex items-center gap-2"><LayoutList size={14} /><span>崗位視角說明：</span></div>
-                            <div className="flex items-center gap-2"><span className="w-3 h-3 bg-teal-100 border border-teal-200 rounded-sm"></span> <span>正式人員</span></div>
-                            <div className="flex items-center gap-2"><span className="w-3 h-3 bg-white border border-slate-200 border-dashed rounded-sm flex items-center justify-center text-[8px] text-slate-500">學</span> <span>學習人員 (排序於後)</span></div>
-                            {isEditMode && <div className="flex items-center gap-2 text-teal-600 font-bold ml-auto">可使用左側箭頭調整顯示順序</div>}
-                        </>
-                    )}
-                </div>
+                                                    {dateRange.map(date => {
+                                                        const staff = row.getData(date);
+                                                        // Sort staff: Certified First, Learners Last
+                                                        const sortedStaff = [...staff].sort((a, b) => {
+                                                            if (!a.user || !b.user) return 0;
+                                                            const isALearner = a.user.learningCapabilities?.includes(row.label);
+                                                            const isBLearner = b.user.learningCapabilities?.includes(row.label);
+
+                                                            if (isALearner && !isBLearner) return 1; // A is learner, goes after
+                                                            if (!isALearner && isBLearner) return -1; // B is learner, goes after
+                                                            return 0;
+                                                        });
+
+                                                        const isToday = new Date().toISOString().split('T')[0] === date;
+                                                        // Unified Cell Content Logic for both Roles and Stations (Chips)
+                                                        return (
+                                                            <td key={date} className={`p-0.5 border-r border-slate-100 align-top h-16 ${isToday ? 'bg-teal-50/10' : ''}`}>
+                                                                <div className="h-full flex flex-col items-center justify-start pt-1 relative group/cell">
+                                                                    <div className="flex flex-wrap gap-1 justify-center w-full px-0.5">
+                                                                        {sortedStaff.map((item, i) => {
+                                                                            const isOpening = item.shift.specialRoles.includes(SPECIAL_ROLES.OPENING);
+                                                                            const isLate = item.shift.specialRoles.includes(SPECIAL_ROLES.LATE);
+                                                                            const isAssist = item.shift.specialRoles.includes(SPECIAL_ROLES.ASSIST);
+                                                                            const isScheduler = item.shift.specialRoles.includes(SPECIAL_ROLES.SCHEDULER);
+
+                                                                            // Only show suffix if the row itself isn't that role
+                                                                            const showSuffix = row.type === 'STATION';
+
+                                                                            // Use Station Theme Color instead of User Color
+                                                                            let chipClass = getStationChipStyle(row.label);
+
+                                                                            // Check if this user is a Learner for this specific station
+                                                                            const isLearner = item.user?.learningCapabilities?.includes(row.label);
+                                                                            // Revert: White override logic for learners in Station View
+                                                                            if (isLearner) {
+                                                                                chipClass = 'bg-white text-slate-500 border-slate-200 border-dashed';
+                                                                            }
+
+                                                                            return (
+                                                                                <div
+                                                                                    key={i}
+                                                                                    className={`px-1 py-1 rounded text-sm font-bold shadow-sm flex flex-col items-center w-full max-w-[60px] relative group/chip border ${chipClass}`}
+                                                                                >
+                                                                                    <span className="truncate text-xs leading-tight mb-0.5">
+                                                                                        {item.user?.name ? formatName(item.user.name) : ''}
+                                                                                        {isLearner && <span className="text-[9px] ml-0.5">(學)</span>}
+                                                                                    </span>
+
+                                                                                    {showSuffix && (isOpening || isLate || isAssist || isScheduler) && (
+                                                                                        <div className="flex flex-col gap-0.5 mt-0.5 w-full items-center">
+                                                                                            {isOpening && <span className="w-full text-center bg-blue-100/80 px-0.5 rounded-[2px] text-[10px] leading-tight text-blue-900 font-extrabold border border-blue-200/50">開機</span>}
+                                                                                            {isLate && <span className="w-full text-center bg-amber-100/80 px-0.5 rounded-[2px] text-[10px] leading-tight text-amber-900 font-extrabold border border-amber-200/50">晚班</span>}
+                                                                                            {isAssist && <span className="w-full text-center bg-emerald-100/80 px-0.5 rounded-[2px] text-[10px] leading-tight text-emerald-900 font-extrabold border border-emerald-200/50">輔班</span>}
+                                                                                            {isScheduler && <span className="w-full text-center bg-red-100/80 px-0.5 rounded-[2px] text-[10px] leading-tight text-red-900 font-extrabold border border-red-200/50">排班</span>}
+                                                                                        </div>
+                                                                                    )}
+
+                                                                                    {isEditMode && (
+                                                                                        <button
+                                                                                            onClick={(e) => {
+                                                                                                e.stopPropagation();
+                                                                                                if (row.type === 'STATION') handleRemoveUserFromStation(item.user!.id, date);
+                                                                                                else handleRemoveUserFromRole(item.user!.id, date, row.label);
+                                                                                            }}
+                                                                                            className={`absolute -top-1 -right-1 bg-white text-red-500 rounded-full p-0.5 transition-opacity shadow-sm border border-red-100 z-10 ${(isMobile && isEditMode) ? 'opacity-100' : 'opacity-0 group-hover/chip:opacity-100'}`}
+                                                                                        >
+                                                                                            <X size={8} />
+                                                                                        </button>
+                                                                                    )}
+                                                                                </div>
+                                                                            );
+                                                                        })}
+                                                                    </div>
+                                                                    {isEditMode && (
+                                                                        <div className={`mt-1 w-full flex justify-center transition-opacity ${(isMobile && isEditMode) ? 'opacity-100' : 'opacity-0 group-hover/cell:opacity-100'}`}>
+                                                                            <div className="relative w-full max-w-[40px]">
+                                                                                <button className="w-full flex justify-center bg-slate-100 hover:bg-slate-200 rounded text-slate-400 text-[10px] border border-slate-200"><Plus size={10} /></button>
+                                                                                <select className="absolute inset-0 opacity-0 cursor-pointer" value="" onChange={(e) => { if (e.target.value) { if (row.type === 'STATION') { handleAddUserToStation(e.target.value, date, row.label); } else { handleAddUserToRole(e.target.value, date, row.label); } } }}>
+                                                                                    <option value="">選擇人員</option>
+                                                                                    {row.type === 'STATION'
+                                                                                        ? getAssignableCandidates(row.label, date).map(u => (<option key={u.id} value={u.id}>{u.name} ({u.alias || u.name[0]})</option>))
+                                                                                        : getCandidatesForRole(row.label, date).map(u => (<option key={u.id} value={u.id}>{u.name} ({u.alias || u.name[0]})</option>))
+                                                                                    }
+                                                                                </select>
+                                                                            </div>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            </td>
+                                                        );
+                                                    })}
+                                                </tr>
+                                            );
+                                        })}
+                                    </>
+                                )}
+                            </tbody>
+                        </table>
+                        {/* ... (Footer legend) ... */}
+                        <div className="p-4 border-t border-slate-200 bg-white sticky bottom-0 z-20 flex gap-6 text-xs text-slate-500 font-medium">
+                            {viewMode === 'user' ? (
+                                <>
+                                    <div className="flex items-center gap-2"><span className="w-3 h-3 bg-slate-200 rounded-sm"></span> <span>休假 / 非工作日</span></div>
+                                    <div className="flex items-center gap-2"><span className="w-3 h-3 bg-orange-100 border border-orange-200 rounded-sm"></span> <span>MR</span></div>
+                                    <div className="flex items-center gap-2"><span className="w-3 h-3 bg-emerald-100 border border-emerald-200 rounded-sm"></span> <span>US</span></div>
+                                    <div className="flex items-center gap-2"><span className="w-3 h-3 bg-sky-100 border border-sky-200 rounded-sm"></span> <span>CT</span></div>
+                                    <div className="flex items-center gap-2"><span className="w-3 h-3 bg-teal-100 border border-teal-200 rounded-sm flex items-center justify-center text-[8px] text-teal-800">學</span> <span>學習崗位</span></div>
+                                </>
+                            ) : (
+                                <>
+                                    <div className="flex items-center gap-2"><LayoutList size={14} /><span>崗位視角說明：</span></div>
+                                    <div className="flex items-center gap-2"><span className="w-3 h-3 bg-teal-100 border border-teal-200 rounded-sm"></span> <span>正式人員</span></div>
+                                    <div className="flex items-center gap-2"><span className="w-3 h-3 bg-white border border-slate-200 border-dashed rounded-sm flex items-center justify-center text-[8px] text-slate-500">學</span> <span>學習人員 (排序於後)</span></div>
+                                    {isEditMode && <div className="flex items-center gap-2 text-teal-600 font-bold ml-auto">可使用左側箭頭調整顯示順序</div>}
+                                </>
+                            )}
+                        </div>
+
+                    </div>
+                )}
             </div>
-        </div >
+        </div>
     );
 };
 
