@@ -109,6 +109,16 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
         // or just local state is enough since we hide modal.
     };
 
+    // Subscribe to Store updates to ensure UI reflects data changes
+    useEffect(() => {
+        const unsubscribe = db.subscribe(() => {
+            setUsers([...db.getUsers()]);
+            setShifts([...db.getShifts('', '')]);
+            setDisplayOrder([...db.getStationDisplayOrder()]);
+        });
+        return () => unsubscribe();
+    }, []);
+
     useEffect(() => {
         const handleResize = () => setIsMobile(window.innerWidth < 768);
         window.addEventListener('resize', handleResize);
@@ -1405,14 +1415,20 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
 
                         <div className="flex bg-slate-100 p-0.5 rounded-lg border border-slate-200">
                             <button
-                                onClick={() => setViewMode('user')}
+                                onClick={() => {
+                                    setViewMode('user');
+                                    db.initializeData(true);
+                                }}
                                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${viewMode === 'user' ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
                                     }`}
                             >
                                 {!isMobile && <Users size={14} />} <span>人員視角</span>
                             </button>
                             <button
-                                onClick={() => setViewMode('station')}
+                                onClick={() => {
+                                    setViewMode('station');
+                                    db.initializeData(true);
+                                }}
                                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${viewMode === 'station' ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
                                     }`}
                             >
