@@ -731,12 +731,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
 
     const onAutoScheduleClick = () => setIsAutoScheduleOpen(true);
     // Special Roles Selection State
-    const [specialRolesToSchedule, setSpecialRolesToSchedule] = useState<string[]>([
-        SPECIAL_ROLES.OPENING,
-        SPECIAL_ROLES.LATE,
-        SPECIAL_ROLES.ASSIST,
-        SPECIAL_ROLES.SCHEDULER
-    ]);
+    const [specialRolesToSchedule, setSpecialRolesToSchedule] = useState<string[]>([]);
 
     const onSpecialRoleClick = () => setIsSpecialRoleModalOpen(true);
 
@@ -782,15 +777,29 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
 
     const handleSpecialRoleToggle = (userId: string, dateStr: string, role: string, currentStation: string, currentRoles: string[]) => {
         let newRoles = [...currentRoles];
+        
+        // 1. Toggle Selection
         if (newRoles.includes(role)) {
             newRoles = newRoles.filter(r => r !== role);
         } else {
             newRoles.push(role);
         }
+
+        // 2. Enforce Conflicts
         if (newRoles.includes(role)) {
-            if (role === SPECIAL_ROLES.LATE) newRoles = newRoles.filter(r => r !== SPECIAL_ROLES.ASSIST && r !== SPECIAL_ROLES.OPENING);
-            if (role === SPECIAL_ROLES.ASSIST) newRoles = newRoles.filter(r => r !== SPECIAL_ROLES.LATE);
-            if (role === SPECIAL_ROLES.OPENING) newRoles = newRoles.filter(r => r !== SPECIAL_ROLES.LATE);
+            // New Rule: Opening (開機) and Assist (輔班) CAN Coexist.
+            // All other roles are strictly mutually exclusive.
+            
+            if (role === SPECIAL_ROLES.OPENING) {
+                 // Opening allows Assist
+                 newRoles = newRoles.filter(r => r === SPECIAL_ROLES.OPENING || r === SPECIAL_ROLES.ASSIST);
+            } else if (role === SPECIAL_ROLES.ASSIST) {
+                 // Assist allows Opening
+                 newRoles = newRoles.filter(r => r === SPECIAL_ROLES.ASSIST || r === SPECIAL_ROLES.OPENING);
+            } else {
+                 // Any other role (Late, Scheduler, etc) -> Clears ALL others
+                 newRoles = [role];
+            }
         }
         handleUpdateShift(userId, dateStr, currentStation || StationDefault.UNASSIGNED, newRoles);
     };
