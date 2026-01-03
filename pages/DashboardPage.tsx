@@ -1422,6 +1422,10 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                 onClick={() => {
                                     setViewMode('daily');
                                     setDailyDate(new Date()); // Reset to today when clicking tab
+                                    if (isMobile) {
+                                        console.log("Mobile Daily View Selected: Forcing refresh...");
+                                        db.initializeData(true);
+                                    }
                                 }}
                                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${viewMode === 'daily' ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
                                     }`}
