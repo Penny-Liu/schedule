@@ -876,8 +876,28 @@ class Store {
                     const shift = this.getShifts(dateStr, dateStr).find(s => s.userId === u.id);
 
                     if (shift) {
-                        // STRICT RULE: No Special Role Overlaps (One person can ONLY have ONE special role)
-                        if (shift.specialRoles.length > 0) return false;
+                        // STRICT RULE: No Special Role Overlaps GENERALLY, BUT...
+                        // EXCEPTION: 'Opening' (開機) and 'Assist' (輔班) CAN coexist.
+                        if (shift.specialRoles.length > 0) {
+                            const existing = shift.specialRoles;
+                            const isOpening = existing.includes(SPECIAL_ROLES.OPENING);
+                            const isAssist = existing.includes(SPECIAL_ROLES.ASSIST);
+                            const targetIsOpening = role === SPECIAL_ROLES.OPENING;
+                            const targetIsAssist = role === SPECIAL_ROLES.ASSIST;
+
+                            // If existing is exactly [Opening] and target is Assist -> Allow for now
+                            // If existing is exactly [Assist] and target is Opening -> Allow for now
+                            // Note: We need to check if existing has OTHER roles interfering.
+                            // Simplified: If existing has anything other than Opening/Assist, reject.
+                            const hasOtherRoles = existing.some(r => r !== SPECIAL_ROLES.OPENING && r !== SPECIAL_ROLES.ASSIST);
+                            if (hasOtherRoles) return false;
+
+                            // Now check compatible pair
+                            const isCompatible = (isOpening && targetIsAssist) || (isAssist && targetIsOpening);
+                            if (!isCompatible) return false;
+
+                            // If compatible, we allow it (and will append later)
+                        }
 
                         // STRICT RULE: Conflict with specific Stations
                         // If manually assigned to '場控', '遠距', '大直', '遠班', CANNOT have special roles
@@ -908,7 +928,8 @@ class Store {
                 // Assign
                 const winnerShift = this.getShifts(dateStr, dateStr).find(s => s.userId === winner.id);
                 if (winnerShift) {
-                    const newRoles = [role]; // STRICT replace (though previous check ensures empty)
+                    const uniqueRoles = new Set([...(winnerShift.specialRoles || []), role]);
+                    const newRoles = Array.from(uniqueRoles);
 
                     await this.upsertShift({
                         ...winnerShift,
