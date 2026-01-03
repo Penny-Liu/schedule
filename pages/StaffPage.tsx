@@ -50,6 +50,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
     color: string;
     capabilities: string[];
     learningCapabilities: string[];
+    excludedCapabilities: string[]; // New
   }>({
     name: '',
     alias: '',
@@ -58,7 +59,8 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
     groupId: StaffGroup.GROUP_A,
     color: COLOR_PALETTE[5], // Default Blue
     capabilities: [],
-    learningCapabilities: []
+    learningCapabilities: [],
+    excludedCapabilities: [] // New
   });
 
   const resetForm = () => {
@@ -70,7 +72,8 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
       groupId: StaffGroup.GROUP_A,
       color: COLOR_PALETTE[5],
       capabilities: [],
-      learningCapabilities: []
+      learningCapabilities: [],
+      excludedCapabilities: []
     });
     setEditingId(null);
   };
@@ -91,7 +94,8 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
         groupId: formData.groupId,
         color: formData.color,
         capabilities: formData.capabilities,
-        learningCapabilities: formData.learningCapabilities
+        learningCapabilities: formData.learningCapabilities,
+        excludedCapabilities: formData.excludedCapabilities
       });
     } else {
       // Create new user
@@ -104,7 +108,8 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
         groupId: formData.groupId,
         color: formData.color,
         capabilities: formData.capabilities,
-        learningCapabilities: formData.learningCapabilities
+        learningCapabilities: formData.learningCapabilities,
+        excludedCapabilities: formData.excludedCapabilities
       };
       db.addUser(u);
     }
@@ -124,7 +129,8 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
       groupId: user.groupId,
       color: user.color || COLOR_PALETTE[5],
       capabilities: user.capabilities || [],
-      learningCapabilities: user.learningCapabilities || []
+      learningCapabilities: user.learningCapabilities || [],
+      excludedCapabilities: user.excludedCapabilities || []
     });
   };
 
@@ -148,11 +154,12 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
     }
   };
 
-  // 3-State Toggle: None -> Certified -> Learning -> None
+  // 4-State Toggle: None -> Certified -> Learning -> Excluded (不排) -> None
   const toggleCapability = (cap: string) => {
     setFormData(prev => {
       const isCertified = prev.capabilities.includes(cap);
       const isLearning = prev.learningCapabilities.includes(cap);
+      const isExcluded = prev.excludedCapabilities.includes(cap);
 
       if (isCertified) {
         // Certified -> Learning
@@ -162,13 +169,20 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
           learningCapabilities: [...prev.learningCapabilities, cap]
         };
       } else if (isLearning) {
-        // Learning -> None
+        // Learning -> Excluded (Independent but No Auto-Schedule)
         return {
           ...prev,
-          learningCapabilities: prev.learningCapabilities.filter(c => c !== cap)
+          learningCapabilities: prev.learningCapabilities.filter(c => c !== cap),
+          excludedCapabilities: [...prev.excludedCapabilities, cap]
+        };
+      } else if (isExcluded) {
+        // Excluded -> None
+        return {
+          ...prev,
+          excludedCapabilities: prev.excludedCapabilities.filter(c => c !== cap)
         };
       } else {
-        // None -> Certified
+        // None -> Certified (Independent)
         return {
           ...prev,
           capabilities: [...prev.capabilities, cap]
@@ -350,12 +364,13 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
               <div>
                 <div className="flex justify-between items-center mb-2">
                   <label className="text-xs font-semibold text-gray-500 block">技能與特殊任務資格</label>
-                  <span className="text-[10px] text-gray-400 bg-gray-50 px-2 py-0.5 rounded">點擊切換：無 → 獨立 → 學習</span>
+                  <span className="text-[10px] text-gray-400 bg-gray-50 px-2 py-0.5 rounded">點擊切換：無 → 獨立 → 學習 → 不排</span>
                 </div>
                 <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto p-1 custom-scrollbar">
                   {allCapabilities.map(cap => {
                     const isCertified = formData.capabilities.includes(cap);
                     const isLearning = formData.learningCapabilities.includes(cap);
+                    const isExcluded = formData.excludedCapabilities.includes(cap);
                     const isSpecial = isSpecialRole(cap);
 
                     let btnClass = 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100 opacity-80 hover:opacity-100';
@@ -369,6 +384,9 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                     } else if (isLearning) {
                       btnClass = 'bg-yellow-50 border-yellow-200 text-yellow-700 font-bold';
                       icon = <BookOpen size={14} className="text-yellow-600" />;
+                    } else if (isExcluded) {
+                      btnClass = 'bg-gray-200 border-gray-300 text-gray-700 font-bold';
+                      icon = <Shield size={14} className="text-gray-600" />;
                     }
 
                     return (
@@ -380,7 +398,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                       >
                         {icon}
                         {isSpecial && <Star size={10} className={isCertified ? "text-yellow-500 fill-yellow-500" : "text-gray-400"} />}
-                        <span className="truncate">{cap} {isLearning && '(學習中)'}</span>
+                        <span className="truncate">{cap} {isLearning ? '(學習)' : (isExcluded ? '(不排)' : '')}</span>
                       </button>
                     );
                   })}
@@ -519,7 +537,17 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                       ))
                     )}
 
-                    {(!user.capabilities?.length && !user.learningCapabilities?.length) && (
+                    {/* Excluded Skills - New */}
+                    {user.excludedCapabilities && user.excludedCapabilities.length > 0 && (
+                      user.excludedCapabilities.map(cap => (
+                        <span key={cap} className="px-2 py-0.5 rounded text-[10px] font-bold border flex items-center gap-1 bg-gray-200 text-gray-700 border-gray-300">
+                          <Shield size={8} className="text-gray-600" />
+                          {cap}(不排)
+                        </span>
+                      ))
+                    )}
+
+                    {(!user.capabilities?.length && !user.learningCapabilities?.length && !user.excludedCapabilities?.length) && (
                       <span className="text-[10px] text-gray-300 italic px-1">未設定技能</span>
                     )}
                   </div>
