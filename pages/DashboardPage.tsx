@@ -445,7 +445,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                 '大直': { fillColor: [245, 243, 255], textColor: [91, 33, 182] },       // bg-violet-50 text-violet-800
                 '技術支援': { fillColor: [255, 237, 151], textColor: [132, 66, 0] },    // bg-[#FFED97] text-[#844200]
                 '行政': { fillColor: [226, 232, 240], textColor: [30, 41, 59] },        // bg-slate-200 text-slate-800
-                'SystemOff': { fillColor: [240, 240, 240], textColor: [150, 150, 150] } // Light Gray
+                'SystemOff': { fillColor: [255, 255, 255], textColor: [150, 150, 150] } // White (User Requested)
             };
 
             // Helper to match station name to style
@@ -522,13 +522,13 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
 
                         // Handle Off/Closed explicitly (pushed as string '休')
                         if (raw === '休') {
-                            data.cell.styles.fillColor = [240, 240, 240]; // Light Gray
+                            data.cell.styles.fillColor = [255, 255, 255]; // White (User Requested)
                         }
                         else if (raw && typeof raw === 'object' && 'station' in raw) {
                             const station = raw.station;
                             if (station) {
                                 if (station === SYSTEM_OFF) {
-                                    data.cell.styles.fillColor = [240, 240, 240]; // Light Gray
+                                    data.cell.styles.fillColor = [255, 255, 255]; // White (User Requested)
                                 } else {
                                     const style = getPDFStyle(station);
                                     if (style) {
