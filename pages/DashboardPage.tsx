@@ -507,7 +507,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
             } else {
                 // Station View: Compact, Centered
                 tableStyles.cellPadding = 0.1;
-                tableStyles.minCellHeight = 7;
+                tableStyles.minCellHeight = 8;
                 tableStyles.halign = 'center'; // User requested: "每個欄位文字都置中"
             }
 
