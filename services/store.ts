@@ -1,7 +1,17 @@
 
-import { User, Shift, LeaveRequest, SystemSettings, StationDefault, SYSTEM_OFF, RosterCycle, DateEventType, Holiday, LeaveStatus, LeaveType, StaffGroup, SPECIAL_ROLES } from '../types';
+import { User, Shift, LeaveRequest, SystemSettings, StationDefault, SYSTEM_OFF, RosterCycle, DateEventType, Holiday, LeaveStatus, LeaveType, StaffGroup, SPECIAL_ROLES, CycleAnchor } from '../types';
 import { MOCK_USERS, MOCK_LEAVES } from './mockData';
 import { supabase } from './supabaseClient';
+
+const SCHEDULE_STORAGE_KEY = 'radiology_schedule_data';
+
+// Helper: Get Local ISO String YYYY-MM-DD
+const toLocalISOString = (date: Date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+};
 
 class Store {
     users: User[] = [];
@@ -13,6 +23,7 @@ class Store {
         holidays: [],
         stationRequirements: {},
         cycleStartDate: '2025-11-06',
+        cycleAnchors: [],
         stationDisplayOrder: []
     };
     currentUser: User | null = null;
@@ -117,6 +128,8 @@ class Store {
         if (!this.settings.stationRequirements) this.settings.stationRequirements = {};
         if (!this.settings.cycleStartDate) this.settings.cycleStartDate = '2024-01-01';
         if (!this.settings.stationDisplayOrder) this.settings.stationDisplayOrder = [];
+        if (!this.settings.stationDisplayOrder) this.settings.stationDisplayOrder = [];
+        if (!this.settings.cycleAnchors) this.settings.cycleAnchors = [];
         if (!this.settings.holidays) {
             this.settings.holidays = [];
         } else {
@@ -305,7 +318,7 @@ class Store {
         const endDate = new Date(leave.endDate);
 
         for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
-            const dateStr = d.toISOString().split('T')[0];
+            const dateStr = toLocalISOString(d);
 
             if (leave.type === LeaveType.PRE_SCHEDULED || leave.type === LeaveType.LONG_LEAVE) {
                 await this.upsertShift({
@@ -450,6 +463,27 @@ class Store {
         await this.saveSettings();
     }
 
+    // Settings: Cycle Anchors (Reset Points)
+    getCycleAnchors() {
+        return this.settings.cycleAnchors || [];
+    }
+
+    async addCycleAnchor(effectiveDate: string, anchorDate: string) {
+        if (!this.settings.cycleAnchors) this.settings.cycleAnchors = [];
+        // Remove existing anchor for same effectiveDate if exists
+        this.settings.cycleAnchors = this.settings.cycleAnchors.filter(a => a.effectiveDate !== effectiveDate);
+        this.settings.cycleAnchors.push({ effectiveDate, anchorDate });
+        // Sort by effective date descending (newest first)
+        this.settings.cycleAnchors.sort((a, b) => b.effectiveDate.localeCompare(a.effectiveDate));
+        await this.saveSettings();
+    }
+
+    async removeCycleAnchor(effectiveDate: string) {
+        if (!this.settings.cycleAnchors) return;
+        this.settings.cycleAnchors = this.settings.cycleAnchors.filter(a => a.effectiveDate !== effectiveDate);
+        await this.saveSettings();
+    }
+
     // Settings: Holidays / Events
     getHolidays() { return this.settings.holidays || []; }
 
@@ -488,7 +522,7 @@ class Store {
             { date: '2026-10-10', name: '國慶日' },
         ];
 
-        const today = new Date().toISOString().split('T')[0];
+        const today = toLocalISOString(new Date());
         const futureHolidays = rawHolidays.filter(h => h.date >= today);
 
         let addedCount = 0;
@@ -510,9 +544,28 @@ class Store {
         return addedCount;
     }
 
-    calculateBaseStatus(dateStr: string, groupId: StaffGroup): string | null {
-        // Keep exact logic, this is pure calculation
-        const referenceDate = new Date(this.settings.cycleStartDate || '2024-01-01');
+    // Base Status Logic (Modified to include today check)
+    calculateBaseStatus(dateStr: string, groupId: string): string | null {
+
+
+
+
+        // 1. Find the applicable anchor
+        // We want the LATEST anchor where effectiveDate <= dateStr
+        // Since anchors are sorted descending by effectiveDate, we find the first one that matches.
+        const anchors = this.settings.cycleAnchors || [];
+        const applicableAnchor = anchors.find(a => dateStr >= a.effectiveDate);
+
+        let refDateStr = this.settings.cycleStartDate || '2024-01-01';
+
+        // If an anchor is found, use it. The anchor's 'anchorDate' acts as the NEW 'cycleStartDate'.
+        // BUT, we must ensure the calculation treats 'anchorDate' as Day 0 (or Day 1) relative to itself.
+        // Actually, if we just swap 'referenceDate', the math `target - ref` works perfectly.
+        if (applicableAnchor) {
+            refDateStr = applicableAnchor.anchorDate;
+        }
+
+        const referenceDate = new Date(refDateStr);
         const targetDate = new Date(dateStr);
         const ref = new Date(referenceDate.getFullYear(), referenceDate.getMonth(), referenceDate.getDate());
         const target = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate());
@@ -604,7 +657,7 @@ class Store {
         // 1. Clear ALL auto-generated shifts in the range first
         const shiftsToClear: Shift[] = [];
         for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-            const dateStr = d.toISOString().split('T')[0];
+            const dateStr = toLocalISOString(d);
             const shiftsOfDay = this.shifts.filter(s => s.date === dateStr && s.isAutoGenerated);
             shiftsOfDay.forEach(s => {
                 s.station = StationDefault.UNASSIGNED;
@@ -653,7 +706,7 @@ class Store {
 
         // Iterate Day by Day
         for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-            const dateStr = d.toISOString().split('T')[0];
+            const dateStr = toLocalISOString(d);
             const dayOfWeek = d.getDay();
 
             const event = this.getEvent(dateStr);
@@ -693,14 +746,13 @@ class Store {
             // Run 50 simulations (CPU bound, fast)
             for (let attempt = 0; attempt < 50; attempt++) {
                 const currentAllocation: { userId: string, station: string }[] = [];
-                const pool = [...allWorkingUsers].sort(() => Math.random() - 0.5);
-                const slots = [...slotsNeeded];
+                // const pool = [...allWorkingUsers].sort(() => Math.random() - 0.5); // already defined above if needed, but we use shuffledPool below
                 const unfilledSlots: string[] = [];
 
                 // Fisher-Yates Shuffle for true randomness
                 const shuffledPool = this.shuffleArray([...allWorkingUsers]);
 
-                for (const slot of slots) {
+                for (const slot of slotsNeeded) {
                     // Apply Fairness Logic to ALL slots (previously only '場控')
                     // Sort by: Least assignments first, then Random order (preserved from shuffledPool)
                     const sortedPool = [...shuffledPool].sort((a, b) => {
@@ -819,7 +871,7 @@ class Store {
         const end = new Date(endDate);
         const dateRange = [];
         for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-            dateRange.push(d.toISOString().split('T')[0]);
+            dateRange.push(toLocalISOString(d));
         }
 
         // 0. Pre-Clear Auto-Generated Special Roles in Range

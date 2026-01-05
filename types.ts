@@ -117,13 +117,19 @@ export interface Holiday {
   type: DateEventType;
 }
 
+export interface CycleAnchor {
+  effectiveDate: string; // The date from which this logic applies (>=)
+  anchorDate: string;    // The reference "Day 1" for calculation
+}
+
 export interface SystemSettings {
   stations: string[];
   cycles: RosterCycle[];
   holidays: Holiday[]; // Renamed internally as special dates/holidays
   // Map of Station Name -> Array of 7 numbers [Sun, Mon, Tue, Wed, Thu, Fri, Sat]
   stationRequirements: Record<string, number[]>;
-  cycleStartDate?: string; // New: The reference date for 4-on-2-off calculation
+  cycleStartDate?: string; // Legacy: Global fallback
+  cycleAnchors?: CycleAnchor[]; // New: Multiple reset points
   stationDisplayOrder?: string[]; // New: Order of stations/roles in dashboard
   userDisplayOrder?: string[]; // New: Order of user IDs in dashboard
 }
