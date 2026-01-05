@@ -254,6 +254,15 @@ class Store {
         this.notifyListeners();
     }
 
+    async deleteLeave(id: string) {
+        this.leaves = this.leaves.filter(l => l.id !== id);
+        const { error } = await supabase.from('leaves').delete().eq('id', id);
+        if (error) {
+            console.error('Failed to delete leave:', error);
+        }
+        this.notifyListeners();
+    }
+
     async updateLeaveTargetApproval(id: string, approvalStatus: 'AGREED' | 'REJECTED') {
         const leaveIndex = this.leaves.findIndex(l => l.id === id);
         if (leaveIndex === -1) return;
