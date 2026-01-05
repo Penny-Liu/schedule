@@ -544,6 +544,18 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                         const rawRow = data.row.raw as any[];
                         const rowLabel = rawRow[0]?.content; // First column is label
 
+                        // Apply Row Background Color
+                        if (rowLabel) {
+                            if (rowLabel === SYSTEM_OFF) {
+                                data.cell.styles.fillColor = [255, 255, 255];
+                            } else {
+                                const style = getPDFStyle(rowLabel);
+                                if (style) {
+                                    data.cell.styles.fillColor = style.fillColor;
+                                }
+                            }
+                        }
+
                         // Check for specific rows to shrink
                         const isCompactRow = rowLabel === SPECIAL_ROLES.ASSIST ||
                             rowLabel === SPECIAL_ROLES.SCHEDULER ||
@@ -564,9 +576,9 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                 const staff = cellRaw.staff;
                                 if (staff && staff.length > 0) {
                                     // Calculate required height based on staff count
-                                    // Stack safely. 3.5mm per person block.
+                                    // Stack safely. 5.5mm per person block (Increased from 3.5mm to fix overlap).
                                     // Base spacing is minCellHeight 9.
-                                    const requiredHeight = (staff.length * 3.5) + 4; // 4mm padding buffer
+                                    const requiredHeight = (staff.length * 5.5) + 4; // 4mm padding buffer
                                     if (requiredHeight > data.cell.styles.minCellHeight) {
                                         data.cell.styles.minCellHeight = requiredHeight;
                                     }
@@ -642,12 +654,9 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                 // Standard Rows: Stacked Content logic
 
                                 // Calculate center start based on count
-                                // Height per person block ~ 3.5mm
-                                // autoTable has already centered the invisible filler text block.
-                                // We can map our custom draw to the same positions?
-                                // No, easier to just calculate absolute position relative to cell.
+                                // Height per person block ~ 5.5mm (Increased to fix overlap)
 
-                                const lineHeight = 3.5;
+                                const lineHeight = 5.5;
                                 const totalBlockHeight = staff.length * lineHeight;
                                 let startY = (data.cell.y + data.cell.height / 2) - (totalBlockHeight / 2) + 1.2; // +1.2 adjustment for visual centering
 
