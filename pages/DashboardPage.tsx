@@ -167,7 +167,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
             // Desktop: Show -2 days + 21 days (3 weeks)
             // Align view to start 2 days before current
             const viewStart = new Date(start);
-            viewStart.setDate(viewStart.getDate() - 2);
+            viewStart.setDate(viewStart.getDate()-2);
 
             for (let i = 0; i < 21; i++) {
                 const d = new Date(viewStart);
@@ -185,7 +185,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
         } else {
             // If rolling, default to visible range
             if (dateRange.length > 0) {
-                setScheduleRange({ start: dateRange[0], end: dateRange[dateRange.length - 1] });
+                setScheduleRange({ start: dateRange[0], end: dateRange[dateRange.length-1] });
             }
         }
     }, [selectedCycleId, currentCycle, dateRange]);
@@ -203,7 +203,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
     const getExportHeader = () => {
         const title = getCycleTitle();
         const start = dateRange[0];
-        const end = dateRange[dateRange.length - 1];
+        const end = dateRange[dateRange.length-1];
         const days = dateRange.length;
         return title + ' (' + start + ' ~' + end + ' / 共' + days + '天)';
     };
@@ -218,15 +218,15 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
         const year = date.getFullYear();
         const month = String(date.getMonth() + 1).padStart(2, '0');
         const day = String(date.getDate()).padStart(2, '0');
-        return `${year} -${month} -${day} `;
+        return `${year}-${month}-${day}`;
     };
 
     const handleMoveUser = (index: number, direction: 'up' | 'down') => {
         if (direction === 'up' && index === 0) return;
-        if (direction === 'down' && index === users.length - 1) return;
+        if (direction === 'down' && index === users.length-1) return;
 
         const newUsers = [...users];
-        const targetIndex = direction === 'up' ? index - 1 : index + 1;
+        const targetIndex = direction === 'up' ? index-1 : index + 1;
 
         // Swap
         [newUsers[index], newUsers[targetIndex]] = [newUsers[targetIndex], newUsers[index]];
@@ -312,7 +312,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                 alert('字體載入失敗，將使用預設字體（中文可能會顯示為亂碼）。請確認網路連線或聯繫管理員。');
             }
 
-            const title = `影像醫學部 - ${viewMode === 'user' ? '人員排班表' : '崗位分配表'} `;
+            const title = `影像醫學部-${viewMode === 'user' ? '人員排班表' : '崗位分配表'} `;
             const subtitle = getExportHeader();
             const fullTitle = `${title}   ${subtitle} `;
             const exportDate = `匯出日期: ${new Date().toLocaleDateString('zh-TW')} `;
@@ -322,7 +322,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
 
             doc.setFontSize(9);
             const pageWidth = doc.internal.pageSize.width;
-            doc.text(exportDate, pageWidth - 14, 15, { align: 'right' });
+            doc.text(exportDate, pageWidth-14, 15, { align: 'right' });
 
             const weekDays = ['日', '一', '二', '三', '四', '五', '六'];
 
@@ -429,7 +429,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
             // pageWidth is already defined in scope (line 226)
             const margins = 2; // 1mm left + 1mm right
             const nameColWidth = 20;
-            const availableWidth = pageWidth - margins - nameColWidth;
+            const availableWidth = pageWidth-margins-nameColWidth;
             const dateColWidth = availableWidth / dateRange.length;
 
             const dynamicColumnStyles: Record<string, any> = {
@@ -472,7 +472,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                 didParseCell: function (data: any) {
                     // Header Logic (Weekends & Holidays)
                     if (data.section === 'head' && data.column.index > 0) {
-                        const dayIndex = (data.column.index - 1);
+                        const dayIndex = (data.column.index-1);
                         const dateStr = dateRange[dayIndex];
                         const d = new Date(dateStr);
                         const dayOfWeek = d.getDay();
@@ -568,7 +568,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
 
                                 const cellWidth = data.cell.width;
                                 const padding = 1;
-                                const availableWidth = cellWidth - padding;
+                                const availableWidth = cellWidth-padding;
                                 let textWidth = doc.getTextWidth(station);
 
                                 while (textWidth > availableWidth && fontSize > 4) {
@@ -577,7 +577,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                     textWidth = doc.getTextWidth(station);
                                 }
 
-                                doc.text(station, data.cell.x + data.cell.width / 2, data.cell.y + data.cell.height / 2 - 1.5, { align: 'center', baseline: 'middle' });
+                                doc.text(station, data.cell.x + data.cell.width / 2, data.cell.y + data.cell.height / 2-1.5, { align: 'center', baseline: 'middle' });
                             }
 
                             // 2. Draw Roles
@@ -619,7 +619,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
 
                                 const lineHeight = 3.5;
                                 const totalBlockHeight = staff.length * lineHeight;
-                                let startY = (data.cell.y + data.cell.height / 2) - (totalBlockHeight / 2) + 1.2; // +1.2 adjustment for visual centering
+                                let startY = (data.cell.y + data.cell.height / 2)-(totalBlockHeight / 2) + 1.2; // +1.2 adjustment for visual centering
 
                                 staff.forEach((s, idx) => {
                                     const blockY = startY + (idx * lineHeight);
@@ -634,7 +634,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                         doc.setTextColor(0, 0, 0);
                                     }
 
-                                    doc.text(s.name, data.cell.x + data.cell.width / 2, blockY - 1, { align: 'center', baseline: 'middle' });
+                                    doc.text(s.name, data.cell.x + data.cell.width / 2, blockY-1, { align: 'center', baseline: 'middle' });
 
                                     // 2. Role (Colored)
                                     if (s.roles.length > 0) {
@@ -934,9 +934,9 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
         const newOrder = [...displayOrder];
         if (direction === 'up') {
             if (index === 0) return;
-            [newOrder[index], newOrder[index - 1]] = [newOrder[index - 1], newOrder[index]];
+            [newOrder[index], newOrder[index-1]] = [newOrder[index-1], newOrder[index]];
         } else {
-            if (index === newOrder.length - 1) return;
+            if (index === newOrder.length-1) return;
             [newOrder[index], newOrder[index + 1]] = [newOrder[index + 1], newOrder[index]];
         }
         setDisplayOrder(newOrder);
@@ -996,7 +996,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
             case LeaveType.LONG_LEAVE: color = 'bg-orange-500'; label = '長'; break;
         }
         return (
-            <div className={`absolute top - 0 right - 0 w - 3 h - 3 ${color} rounded - bl text - [8px] flex items - center justify - center text - white font - bold z - 10 leading - none`} title={`${type} 申請中`}>
+            <div className={`absolute top-0 right-0 w-3 h-3 ${color} rounded-bl text-[8px] flex items-center justify-center text-white font-bold z-10 leading-none`} title={`${type} 申請中`}>
                 {label}
             </div>
         );
@@ -1023,7 +1023,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
             const idxB = priorities.findIndex(p => b.includes(p));
             const valA = idxA === -1 ? 999 : idxA;
             const valB = idxB === -1 ? 999 : idxB;
-            if (valA !== valB) return valA - valB;
+            if (valA !== valB) return valA-valB;
             return a.localeCompare(b);
         });
     }, []);
@@ -1183,7 +1183,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                     { id: SPECIAL_ROLES.ASSIST, label: '輔班', color: 'text-emerald-700 bg-emerald-50 border-emerald-200' },
                                     { id: SPECIAL_ROLES.SCHEDULER, label: '排班', color: 'text-red-700 bg-red-50 border-red-200' },
                                 ].map(role => (
-                                    <label key={role.id} className={`flex items - center gap - 2 p - 2 rounded border cursor - pointer hover: opacity - 80 transition - all ${specialRolesToSchedule.includes(role.id) ? role.color + ' ring-1 ring-offset-1' : 'bg-white border-gray-200 text-gray-500'} `}>
+                                    <label key={role.id} className={`flex items-center gap-2 p-2 rounded border cursor-pointer hover: opacity-80 transition-all ${specialRolesToSchedule.includes(role.id) ? role.color + ' ring-1 ring-offset-1' : 'bg-white border-gray-200 text-gray-500'} `}>
                                         <input
                                             type="checkbox"
                                             checked={specialRolesToSchedule.includes(role.id)}
@@ -1245,9 +1245,9 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                 const isPrintToday = date === todayStr;
 
                                 return (
-                                    <th key={date} className={`border - [0.5px] border - gray - 400 p - 1 min - w - [40px] ${isWeekend ? 'bg-red-50 text-gray-900' : 'text-gray-800'} ${isPrintToday ? 'bg-yellow-200 border-b-2 border-red-500' : ''} `}>
+                                    <th key={date} className={`border-[0.5px] border-gray-400 p-1 min-w-[40px] ${isWeekend ? 'bg-red-50 text-gray-900' : 'text-gray-800'} ${isPrintToday ? 'bg-yellow-200 border-b-2 border-red-500' : ''} `}>
                                         <div className="text-[10px] font-medium">{weekDays[d.getDay()]}</div>
-                                        <div className={`text - base ${isPrintToday ? 'font-bold text-red-600' : 'font-medium'} `}>{d.getDate()}</div>
+                                        <div className={`text-base ${isPrintToday ? 'font-bold text-red-600' : 'font-medium'} `}>{d.getDate()}</div>
                                     </th>
                                 );
                             })}
@@ -1283,7 +1283,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                     <div className="flex-1 w-full flex items-center justify-center">
                                                         {station && station !== StationDefault.UNASSIGNED ? (
                                                             // Removed rounded, added w-full h-full to fill
-                                                            <div className={`w - full h - full flex items - center justify - center ${getStationStyle(station).replace('border-teal-200', 'border-gray-300').replace('shadow-sm', '').replace('rounded-md', '')} `}>
+                                                            <div className={`w-full h-full flex items-center justify-center ${getStationStyle(station).replace('border-teal-200', 'border-gray-300').replace('shadow-sm', '').replace('rounded-md', '')} `}>
                                                                 <span className="font-bold text-sm leading-none text-center">{station}</span>
                                                             </div>
                                                         ) : (
@@ -1304,7 +1304,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                         }
 
                                         return (
-                                            <td key={date} className={`border - [0.5px] border - gray - 400 p - 0 text - center align - top h - 16 ${cellClass} `}>
+                                            <td key={date} className={`border-[0.5px] border-gray-400 p-0 text-center align-top h-16 ${cellClass} `}>
                                                 {content}
                                             </td>
                                         );
@@ -1315,8 +1315,8 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                             <>
                                 {rowConfigs.map((row, idx) => (
                                     <tr key={row.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
-                                        <td className={`border - [0.5px] border - gray - 400 p - 1 font - bold text - gray - 800`}>
-                                            <div className={`px - 1 py - 1 rounded border ${row.colorClass} text - center text - xs whitespace - nowrap`}>
+                                        <td className={`border-[0.5px] border-gray-400 p-1 font-bold text-gray-800`}>
+                                            <div className={`px-1 py-1 rounded border ${row.colorClass} text-center text-xs whitespace-nowrap`}>
                                                 {row.label}
                                             </div>
                                         </td>
@@ -1324,7 +1324,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                             const staff = row.getData(date);
 
                                             return (
-                                                <td key={date} className={`border - [0.5px] border - gray - 400 p - 0 align - middle h - 16`}>
+                                                <td key={date} className={`border-[0.5px] border-gray-400 p-0 align-middle h-16`}>
                                                     <div className="flex flex-col justify-center h-full w-full">
                                                         {staff.map((s, i) => {
                                                             let name = formatName(s.user?.name || '');
@@ -1338,7 +1338,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
 
                                                             // Use minimal styling for export list
                                                             return (
-                                                                <div key={i} className={`text - sm text - center leading - tight font - bold text - gray - 800`}>
+                                                                <div key={i} className={`text-sm text-center leading-tight font-bold text-gray-800`}>
                                                                     {name}
                                                                     <span className="text-[10px] font-normal ml-0.5">{roleSuffix}</span>
                                                                 </div>
@@ -1381,7 +1381,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                     setViewMode('user');
                                     db.initializeData(true);
                                 }}
-                                className={`flex items - center gap - 1.5 px - 3 py - 1.5 rounded - md text - xs font - bold transition - all ${viewMode === 'user' ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${viewMode === 'user' ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
                                     } `}
                             >
                                 {!isMobile && <Users size={14} />} <span>人員視角</span>
@@ -1391,7 +1391,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                     setViewMode('station');
                                     db.initializeData(true);
                                 }}
-                                className={`flex items - center gap - 1.5 px - 3 py - 1.5 rounded - md text - xs font - bold transition - all ${viewMode === 'station' ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${viewMode === 'station' ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
                                     } `}
                             >
                                 {!isMobile && <LayoutList size={14} />} <span>崗位視角</span>
@@ -1405,7 +1405,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                         db.initializeData(true);
                                     }
                                 }}
-                                className={`flex items - center gap - 1.5 px - 3 py - 1.5 rounded - md text - xs font - bold transition - all ${viewMode === 'daily' ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${viewMode === 'daily' ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
                                     } `}
                             >
                                 {!isMobile && <Activity size={14} />} <span>今日崗位</span>
@@ -1419,13 +1419,13 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                             // Mobile Header: Simple Nav + Date Range Only
                             <div className="flex items-center gap-2 bg-slate-100 rounded-lg p-1">
                                 <button
-                                    onClick={() => setMobileOffset(prev => prev - 1)}
+                                    onClick={() => setMobileOffset(prev => prev-1)}
                                     className="p-2 bg-white rounded shadow-sm text-slate-600 active:scale-95 transition-transform"
                                 >
                                     <ChevronLeft size={16} />
                                 </button>
                                 <span className="text-xs font-bold text-slate-700 min-w-[80px] text-center">
-                                    {dateRange[0].substring(5)} ~ {dateRange[dateRange.length - 1].substring(5)}
+                                    {dateRange[0].substring(5)} ~ {dateRange[dateRange.length-1].substring(5)}
                                 </span>
                                 <button
                                     onClick={() => setMobileOffset(prev => prev + 1)}
@@ -1490,9 +1490,9 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                             <button
                                 onClick={() => setIsConfirmCycleOpen(true)}
                                 disabled={isCycleConfirmed && currentUser.role !== UserRole.SYSTEM_ADMIN}
-                                className={`px - 3 py - 1.5 rounded - lg text - sm font - medium border flex items - center gap - 1.5 shadow - sm transition - all ${isCycleConfirmed
-                                        ? (currentUser.role === UserRole.SYSTEM_ADMIN ? 'bg-gray-100 text-gray-600 border-gray-200 hover:bg-gray-200' : 'bg-gray-50 text-gray-400 border-gray-100 cursor-not-allowed')
-                                        : 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                                className={`px-3 py-1.5 rounded-lg text-sm font-medium border flex items-center gap-1.5 shadow-sm transition-all ${isCycleConfirmed
+                                    ? (currentUser.role === UserRole.SYSTEM_ADMIN ? 'bg-gray-100 text-gray-600 border-gray-200 hover:bg-gray-200' : 'bg-gray-50 text-gray-400 border-gray-100 cursor-not-allowed')
+                                    : 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
                                     } `}
                                 title={isCycleConfirmed
                                     ? (currentUser.role === UserRole.SYSTEM_ADMIN ? "解鎖排班" : "排班已鎖定 (僅系統管理員可解鎖)")
@@ -1527,9 +1527,9 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                         <button
                                             onClick={onAutoScheduleClick}
                                             disabled={isProcessing || isCycleConfirmed}
-                                            className={`px - 3 py - 1.5 rounded - lg text - sm font - medium transition - all flex items - center gap - 1.5 shadow - sm ${(isProcessing || isCycleConfirmed)
-                                                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200'
-                                                    : 'bg-gradient-to-r from-purple-600 to-purple-500 text-white hover:from-purple-700 hover:to-purple-600 shadow-purple-200'
+                                            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-1.5 shadow-sm ${(isProcessing || isCycleConfirmed)
+                                                ? 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200'
+                                                : 'bg-gradient-to-r from-purple-600 to-purple-500 text-white hover:from-purple-700 hover:to-purple-600 shadow-purple-200'
                                                 } `}
                                             title={isCycleConfirmed ? "排班已鎖定，無法自動排程" : "自動分配一般工作崗位 (CT/MR/US...)"}
                                         >
@@ -1541,9 +1541,9 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                         <button
                                             onClick={onSpecialRoleClick}
                                             disabled={isProcessing || isCycleConfirmed}
-                                            className={`px - 3 py - 1.5 rounded - lg text - sm font - medium border transition - all flex items - center gap - 1.5 shadow - sm ${(isProcessing || isCycleConfirmed)
-                                                    ? 'bg-gray-50 text-gray-400 border-gray-200 cursor-not-allowed'
-                                                    : 'bg-white text-indigo-600 border-indigo-200 hover:bg-indigo-50 hover:border-indigo-300'
+                                            className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-all flex items-center gap-1.5 shadow-sm ${(isProcessing || isCycleConfirmed)
+                                                ? 'bg-gray-50 text-gray-400 border-gray-200 cursor-not-allowed'
+                                                : 'bg-white text-indigo-600 border-indigo-200 hover:bg-indigo-50 hover:border-indigo-300'
                                                 } `}
                                             title={isCycleConfirmed ? "排班已鎖定，無法自動分配" : "自動分配 開機/晚班 任務"}
                                         >
@@ -1555,9 +1555,9 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
 
                                 <button
                                     onClick={() => setIsEditMode(!isEditMode)}
-                                    className={`px - 3 py - 1.5 rounded - lg text - sm font - medium border transition - all ${isEditMode
-                                            ? 'bg-teal-600 text-white border-teal-600 shadow-sm shadow-teal-200'
-                                            : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                                    className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-all ${isEditMode
+                                        ? 'bg-teal-600 text-white border-teal-600 shadow-sm shadow-teal-200'
+                                        : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
                                         } `}
                                 >
                                     {isEditMode ? '完成' : '編輯'}
@@ -1579,7 +1579,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                 <button
                                     onClick={() => {
                                         const d = new Date(dailyDate);
-                                        d.setDate(d.getDate() - 1);
+                                        d.setDate(d.getDate()-1);
                                         setDailyDate(d);
                                     }}
                                     className="p-2 hover:bg-slate-100 rounded-full text-slate-500 transition-colors"
@@ -1712,7 +1712,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                         if (assignedUsers.length > 0) {
                                             cards.push(
                                                 <div key={st} className="bg-slate-50 border border-slate-200 rounded-lg p-3">
-                                                    <div className={`text - sm font - bold mb - 2 flex items - center justify - between ${getStationChipStyle(st)} px - 2 py - 1 rounded`}>
+                                                    <div className={`text-sm font-bold mb-2 flex items-center justify-between ${getStationChipStyle(st)} px-2 py-1 rounded`}>
                                                         {st}
                                                         <span className="text-xs opacity-70 bg-white/30 px-1.5 rounded-full">{assignedUsers.length}</span>
                                                     </div>
@@ -1721,8 +1721,8 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                             const s = getDayShift(u.id, dateStr);
                                                             const isSelf = u.id === currentUser.id;
                                                             return (
-                                                                <div key={u.id} className={`flex items - center gap - 2 bg - white px - 2 py - 1.5 rounded border shadow - sm ${isSelf ? 'border-teal-200 bg-teal-50' : 'border-slate-100'} `}>
-                                                                    <div className={`w - 6 h - 6 rounded - full flex items - center justify - center text - [10px] font - bold text - white ${u.color || 'bg-slate-400'} `}>
+                                                                <div key={u.id} className={`flex items-center gap-2 bg-white px-2 py-1.5 rounded border shadow-sm ${isSelf ? 'border-teal-200 bg-teal-50' : 'border-slate-100'} `}>
+                                                                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white ${u.color || 'bg-slate-400'} `}>
                                                                         {u.alias || u.name[0]}
                                                                     </div>
                                                                     <div className="text-base font-medium text-slate-700">
@@ -1764,14 +1764,14 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                             <thead className="sticky top-0 z-20 shadow-sm">
                                 <tr>
                                     {/* Left Sticky Header */}
-                                    <th className={`sticky left - 0 z - 30 bg - slate - 50 / 95 backdrop - blur border - b border - r border - slate - 200 shadow - [4px_0_8px_rgba(0, 0, 0, 0.02)] ${isMobile ? (viewMode === 'user' ? 'p-1 w-[50px] min-w-[50px]' : 'p-1 w-[85px] min-w-[85px]') : 'p-2 w-[120px] text-left'} `}>
-                                        <div className={`flex items - center font - bold text - xs text - slate - 600 ${isMobile ? 'justify-center' : 'gap-2'} `}>
+                                    <th className={`sticky left-0 z-30 bg-slate-50 / 95 backdrop-blur border-b border-r border-slate-200 shadow-[4px_0_8px_rgba(0, 0, 0, 0.02)] ${isMobile ? (viewMode === 'user' ? 'p-1 w-[50px] min-w-[50px]' : 'p-1 w-[85px] min-w-[85px]') : 'p-2 w-[120px] text-left'} `}>
+                                        <div className={`flex items-center font-bold text-xs text-slate-600 ${isMobile ? 'justify-center' : 'gap-2'} `}>
                                             <UserIcon size={14} className="text-teal-600" />
                                             {!isMobile && (viewMode === 'user' ? '放射師' : '工作崗位')}
                                         </div>
                                     </th>
                                     {viewMode === 'user' && (
-                                        <th className={`sticky z - 30 bg - slate - 50 / 95 backdrop - blur border - b border - r border - slate - 200 p - 0 w - [50px] shadow - [4px_0_8px_rgba(0, 0, 0, 0.02)] ${isMobile ? 'left-[50px]' : 'left-[120px]'} `}>
+                                        <th className={`sticky z-30 bg-slate-50 / 95 backdrop-blur border-b border-r border-slate-200 p-0 w-[50px] shadow-[4px_0_8px_rgba(0, 0, 0, 0.02)] ${isMobile ? 'left-[50px]' : 'left-[120px]'} `}>
                                             <div className="p-2 text-center text-[10px] font-bold text-slate-500 uppercase tracking-wider flex flex-col items-center">
                                                 <BarChart2 size={12} className="mb-0.5 text-teal-600" />
                                                 {!isMobile && '統計'}
@@ -1786,12 +1786,12 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                         const holiday = holidays.find(h => h.date === date);
                                         const isClosed = holiday?.type === DateEventType.CLOSED;
                                         return (
-                                            <th key={date} className={`border - b border - slate - 200 py - 1.5 min - w - [52px] text - center ${isToday ? 'bg-teal-50/50' : (isClosed ? 'bg-slate-100' : 'bg-white')} `}>
+                                            <th key={date} className={`border-b border-slate-200 py-1.5 min-w-[52px] text-center ${isToday ? 'bg-teal-50/50' : (isClosed ? 'bg-slate-100' : 'bg-white')} `}>
                                                 <div className="flex flex-col items-center gap-0.5">
-                                                    <span className={`text - [10px] font - bold ${isToday ? 'text-teal-700' : (isWeekend ? 'text-red-500' : 'text-slate-400')} `}>
+                                                    <span className={`text-[10px] font-bold ${isToday ? 'text-teal-700' : (isWeekend ? 'text-red-500' : 'text-slate-400')} `}>
                                                         {weekDays[d.getDay()]}
                                                     </span>
-                                                    <span className={`text - sm font - bold leading - none ${holiday ? 'text-red-600' : (isToday ? 'text-teal-800' : 'text-slate-800')} `}>
+                                                    <span className={`text-sm font-bold leading-none ${holiday ? 'text-red-600' : (isToday ? 'text-teal-800' : 'text-slate-800')} `}>
                                                         {d.getDate()}
                                                     </span>
                                                     {holiday && (
@@ -1810,7 +1810,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                     // --- User View ---
                                     users.map((user, idx) => {
                                         const isFirst = idx === 0;
-                                        const isLast = idx === users.length - 1;
+                                        const isLast = idx === users.length-1;
                                         const workDaysCount = dateRange.filter(date => {
                                             const status = getDayShift(user.id, date);
                                             return !status.isOff;
@@ -1825,22 +1825,22 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                         );
                                         return (
                                             <tr key={user.id} className="group hover:bg-slate-50/50 transition-colors">
-                                                <td className={`sticky left - 0 z - 10 bg - white group - hover: bg - slate - 50 border - r border - slate - 200 shadow - [4px_0_8px_rgba(0, 0, 0, 0.02)] ${isMobile ? 'p-1 w-[50px] min-w-[50px]' : 'p-2'} `}>
-                                                    <div className={`flex items - center ${isMobile ? 'justify-center' : 'gap-2'} `}>
+                                                <td className={`sticky left-0 z-10 bg-white group-hover: bg-slate-50 border-r border-slate-200 shadow-[4px_0_8px_rgba(0, 0, 0, 0.02)] ${isMobile ? 'p-1 w-[50px] min-w-[50px]' : 'p-2'} `}>
+                                                    <div className={`flex items-center ${isMobile ? 'justify-center' : 'gap-2'} `}>
                                                         {/* Edit Buttons (Up/Down) */}
                                                         {isEditMode && !isMobile && (
                                                             <div className="flex flex-col gap-0.5">
                                                                 <button
                                                                     disabled={isFirst}
                                                                     onClick={() => handleMoveUser(idx, 'up')}
-                                                                    className={`p - 0.5 rounded ${isFirst ? 'text-gray-200' : 'text-gray-400 hover:text-teal-600 hover:bg-gray-100'} `}
+                                                                    className={`p-0.5 rounded ${isFirst ? 'text-gray-200' : 'text-gray-400 hover:text-teal-600 hover:bg-gray-100'} `}
                                                                 >
                                                                     <ChevronUp size={12} />
                                                                 </button>
                                                                 <button
                                                                     disabled={isLast}
                                                                     onClick={() => handleMoveUser(idx, 'down')}
-                                                                    className={`p - 0.5 rounded ${isLast ? 'text-gray-200' : 'text-gray-400 hover:text-teal-600 hover:bg-gray-100'} `}
+                                                                    className={`p-0.5 rounded ${isLast ? 'text-gray-200' : 'text-gray-400 hover:text-teal-600 hover:bg-gray-100'} `}
                                                                 >
                                                                     <ChevronDown size={12} />
                                                                 </button>
@@ -1857,7 +1857,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                         {/* Name / Alias Display */}
                                                         <div className="min-w-0">
                                                             <div
-                                                                className={`font - bold truncate leading - tight ${isMobile ? 'text-center text-sm' : 'text-xs text-slate-800'} `}
+                                                                className={`font-bold truncate leading-tight ${isMobile ? 'text-center text-sm' : 'text-xs text-slate-800'} `}
                                                                 style={isMobile && user.color ? { color: user.color } : {}}
                                                             >
                                                                 {isMobile ? (user.alias || user.name.charAt(0)) : user.name}
@@ -1866,7 +1866,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                     </div>
                                                 </td>
                                                 {/* Sticky Count Column-Adjust Offset for Mobile */}
-                                                <td className={`sticky z - 10 bg - white group - hover: bg - slate - 50 border - r border - slate - 200 p - 0 text - center shadow - [4px_0_8px_rgba(0, 0, 0, 0.02)] ${isMobile ? 'left-[50px]' : 'left-[120px]'} `}>
+                                                <td className={`sticky z-10 bg-white group-hover: bg-slate-50 border-r border-slate-200 p-0 text-center shadow-[4px_0_8px_rgba(0, 0, 0, 0.02)] ${isMobile ? 'left-[50px]' : 'left-[120px]'} `}>
                                                     <div className="text-[10px] font-bold text-slate-600 bg-slate-100 mx-1.5 py-0.5 rounded border border-slate-200">
                                                         {workDaysCount}
                                                     </div>
@@ -1880,7 +1880,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                     const isLearning = station && user.learningCapabilities?.includes(station);
 
                                                     return (
-                                                        <td key={date} className={`p - 0.5 border - r border - slate - 100 align - top h - 16 ${isToday ? 'bg-teal-50/10' : ''} ${isOff ? 'bg-slate-100/60' : (isClosed ? 'bg-slate-100/30' : '')} relative`}>
+                                                        <td key={date} className={`p-0.5 border-r border-slate-100 align-top h-16 ${isToday ? 'bg-teal-50/10' : ''} ${isOff ? 'bg-slate-100/60' : (isClosed ? 'bg-slate-100/30' : '')} relative`}>
                                                             {pendingReq && getLeaveBadge(pendingReq.type)}
                                                             {isOff ? (
                                                                 <div className="h-full w-full flex flex-col items-center justify-center gap-1">
@@ -1899,7 +1899,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                                         </select>
                                                                     ) : (
                                                                         station ? (
-                                                                            <div className={`flex items - center justify - center px - 1 py - 1 rounded - md shadow - sm border w - full max - w - [50px] ${getStationStyle(station)} `}>
+                                                                            <div className={`flex items-center justify-center px-1 py-1 rounded-md shadow-sm border w-full max-w-[50px] ${getStationStyle(station)} `}>
                                                                                 <span className="text-[10px] font-bold truncate tracking-tight">{station}</span>
                                                                                 {isLearning && (
                                                                                     <span className="text-[9px] bg-white/50 text-slate-900 font-extrabold px-0.5 rounded ml-0.5 leading-none">學</span>
@@ -1916,7 +1916,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                                             {specialRolesList.map(role => {
                                                                                 const isSelected = specialRoles.includes(role);
                                                                                 return (
-                                                                                    <button key={role} onClick={() => handleSpecialRoleToggle(user.id, date, role, station || StationDefault.UNASSIGNED, specialRoles)} className={`px - 1 py - 0.5 text - [9px] rounded border transition - all font - bold ${isSelected ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-slate-400 border-slate-200 hover:border-purple-300 hover:text-purple-500'} `}>{role[0]}</button>
+                                                                                    <button key={role} onClick={() => handleSpecialRoleToggle(user.id, date, role, station || StationDefault.UNASSIGNED, specialRoles)} className={`px-1 py-0.5 text-[9px] rounded border transition-all font-bold ${isSelected ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-slate-400 border-slate-200 hover:border-purple-300 hover:text-purple-500'} `}>{role[0]}</button>
                                                                                 );
                                                                             })}
                                                                         </div>
@@ -1924,11 +1924,11 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                                         specialRoles.length > 0 && (
                                                                             <div className="flex flex-wrap gap-0.5 justify-center w-full">
                                                                                 {specialRoles.map(role => (
-                                                                                    <span key={role} className={`w - full text - center px - 0.5 rounded - [2px] text - [10px] leading - tight font - extrabold border mb - 0.5 ${role === SPECIAL_ROLES.OPENING ? 'bg-blue-100/80 text-blue-900 border-blue-200/50' :
-                                                                                            role === SPECIAL_ROLES.LATE ? 'bg-amber-100/80 text-amber-900 border-amber-200/50' :
-                                                                                                role === SPECIAL_ROLES.ASSIST ? 'bg-emerald-100/80 text-emerald-900 border-emerald-200/50' :
-                                                                                                    role === SPECIAL_ROLES.SCHEDULER ? 'bg-red-100/80 text-red-900 border-red-200/50' :
-                                                                                                        'bg-purple-100 text-purple-700 border-purple-200'
+                                                                                    <span key={role} className={`w-full text-center px-0.5 rounded-[2px] text-[10px] leading-tight font-extrabold border mb-0.5 ${role === SPECIAL_ROLES.OPENING ? 'bg-blue-100/80 text-blue-900 border-blue-200/50' :
+                                                                                        role === SPECIAL_ROLES.LATE ? 'bg-amber-100/80 text-amber-900 border-amber-200/50' :
+                                                                                            role === SPECIAL_ROLES.ASSIST ? 'bg-emerald-100/80 text-emerald-900 border-emerald-200/50' :
+                                                                                                role === SPECIAL_ROLES.SCHEDULER ? 'bg-red-100/80 text-red-900 border-red-200/50' :
+                                                                                                    'bg-purple-100 text-purple-700 border-purple-200'
                                                                                         } `}>
                                                                                         {role}
                                                                                     </span>
@@ -1949,12 +1949,12 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                     <>
                                         {rowConfigs.map((row, idx) => {
                                             const isFirst = idx === 0;
-                                            const isLast = idx === rowConfigs.length - 1;
+                                            const isLast = idx === rowConfigs.length-1;
                                             return (
                                                 <tr key={row.id} className="group hover:bg-slate-50/50 transition-colors relative">
-                                                    <td className={`sticky left - 0 z - 10 bg - white group - hover: bg - slate - 50 border - r border - slate - 200 shadow - [4px_0_8px_rgba(0, 0, 0, 0.02)] ${isMobile ? 'p-1 w-[85px] min-w-[85px]' : 'p-2'} `}>
+                                                    <td className={`sticky left-0 z-10 bg-white group-hover: bg-slate-50 border-r border-slate-200 shadow-[4px_0_8px_rgba(0, 0, 0, 0.02)] ${isMobile ? 'p-1 w-[85px] min-w-[85px]' : 'p-2'} `}>
                                                         <div className="flex items-center justify-between">
-                                                            <div className={`flex items - center gap - 1.5 font - bold ${isMobile ? 'text-sm' : 'text-xs'} px - 2 py - 1.5 rounded - md border ${row.colorClass} flex - 1 mr - 1`}>
+                                                            <div className={`flex items-center gap-1.5 font-bold ${isMobile ? 'text-sm' : 'text-xs'} px-2 py-1.5 rounded-md border ${row.colorClass} flex-1 mr-1`}>
                                                                 <div className="truncate">{row.label}</div>
                                                             </div>
                                                             {isEditMode && (
@@ -1962,14 +1962,14 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                                     <button
                                                                         disabled={isFirst}
                                                                         onClick={() => handleMoveRow(idx, 'up')}
-                                                                        className={`p - 0.5 rounded ${isFirst ? 'text-gray-200' : 'text-gray-400 hover:text-teal-600 hover:bg-gray-100'} `}
+                                                                        className={`p-0.5 rounded ${isFirst ? 'text-gray-200' : 'text-gray-400 hover:text-teal-600 hover:bg-gray-100'} `}
                                                                     >
                                                                         <ChevronUp size={12} />
                                                                     </button>
                                                                     <button
                                                                         disabled={isLast}
                                                                         onClick={() => handleMoveRow(idx, 'down')}
-                                                                        className={`p - 0.5 rounded ${isLast ? 'text-gray-200' : 'text-gray-400 hover:text-teal-600 hover:bg-gray-100'} `}
+                                                                        className={`p-0.5 rounded ${isLast ? 'text-gray-200' : 'text-gray-400 hover:text-teal-600 hover:bg-gray-100'} `}
                                                                     >
                                                                         <ChevronDown size={12} />
                                                                     </button>
@@ -1993,7 +1993,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                         const isToday = new Date().toISOString().split('T')[0] === date;
                                                         // Unified Cell Content Logic for both Roles and Stations (Chips)
                                                         return (
-                                                            <td key={date} className={`p - 0.5 border - r border - slate - 100 align - top h - 16 ${isToday ? 'bg-teal-50/10' : ''} `}>
+                                                            <td key={date} className={`p-0.5 border-r border-slate-100 align-top h-16 ${isToday ? 'bg-teal-50/10' : ''} `}>
                                                                 <div className="h-full flex flex-col items-center justify-start pt-1 relative group/cell">
                                                                     <div className="flex flex-wrap gap-1 justify-center w-full px-0.5">
                                                                         {sortedStaff.map((item, i) => {
@@ -2018,7 +2018,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                                             return (
                                                                                 <div
                                                                                     key={i}
-                                                                                    className={`px - 1 py - 1 rounded text - sm font - bold shadow - sm flex flex - col items - center w - full max - w - [60px] relative group / chip border ${chipClass} `}
+                                                                                    className={`px-1 py-1 rounded text-sm font-bold shadow-sm flex flex-col items-center w-full max-w-[60px] relative group / chip border ${chipClass} `}
                                                                                 >
                                                                                     <span className="truncate text-xs leading-tight mb-0.5">
                                                                                         {item.user?.name ? formatName(item.user.name) : ''}
@@ -2041,7 +2041,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                                                                 if (row.type === 'STATION') handleRemoveUserFromStation(item.user!.id, date);
                                                                                                 else handleRemoveUserFromRole(item.user!.id, date, row.label);
                                                                                             }}
-                                                                                            className={`absolute - top - 1 - right - 1 bg - white text - red - 500 rounded - full p - 0.5 transition - opacity shadow - sm border border - red - 100 z - 10 ${(isMobile && isEditMode) ? 'opacity-100' : 'opacity-0 group-hover/chip:opacity-100'} `}
+                                                                                            className={`absolute-top-1-right-1 bg-white text-red-500 rounded-full p-0.5 transition-opacity shadow-sm border border-red-100 z-10 ${(isMobile && isEditMode) ? 'opacity-100' : 'opacity-0 group-hover/chip:opacity-100'} `}
                                                                                         >
                                                                                             <X size={8} />
                                                                                         </button>
@@ -2051,7 +2051,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                                         })}
                                                                     </div>
                                                                     {isEditMode && (
-                                                                        <div className={`mt - 1 w - full flex justify - center transition - opacity ${(isMobile && isEditMode) ? 'opacity-100' : 'opacity-0 group-hover/cell:opacity-100'} `}>
+                                                                        <div className={`mt-1 w-full flex justify-center transition-opacity ${(isMobile && isEditMode) ? 'opacity-100' : 'opacity-0 group-hover/cell:opacity-100'} `}>
                                                                             <div className="relative w-full max-w-[40px]">
                                                                                 <button className="w-full flex justify-center bg-slate-100 hover:bg-slate-200 rounded text-slate-400 text-[10px] border border-slate-200"><Plus size={10} /></button>
                                                                                 <select className="absolute inset-0 opacity-0 cursor-pointer" value="" onChange={(e) => { if (e.target.value) { if (row.type === 'STATION') { handleAddUserToStation(e.target.value, date, row.label); } else { handleAddUserToRole(e.target.value, date, row.label); } } }}>
