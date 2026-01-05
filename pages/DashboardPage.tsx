@@ -332,7 +332,11 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                 return `${d.getDate()} \n${weekDays[d.getDay()]} `;
             });
 
+            // Add '上班天數' to header for User View
             const headRow = [[viewMode === 'user' ? '姓名' : '崗位', ...dateHeaders]];
+            if (viewMode === 'user') {
+                headRow[0].push('上班天數');
+            }
 
             // Prepare Body
             let bodyRows: any[] = [];
@@ -348,6 +352,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                 bodyRows = users.map(user => {
                     // Column 0: Name (Size 11 handled by columnStyles)
                     const rowData: any[] = [{ content: user.name, styles: { fontStyle: 'bold' } }];
+                    let workDaysCount = 0;
 
                     dateRange.forEach(date => {
                         const { station, specialRoles, isOff } = getDayShift(user.id, date);
@@ -365,8 +370,17 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                 station: stationText,
                                 roles: specialRoles,
                             });
+
+                            // Calculate Work Days (Not Off, Not Closed, Has Station, Station != SystemOff/Unassigned/Leave)
+                            if (station && station !== StationDefault.UNASSIGNED && station !== SYSTEM_OFF && !station.includes('休假')) {
+                                workDaysCount++;
+                            }
                         }
                     });
+
+                    // Add Work Days Count Column
+                    rowData.push({ content: workDaysCount.toString(), styles: { halign: 'center' } });
+
                     return rowData;
                 });
             } else {
@@ -429,7 +443,14 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
             // pageWidth is already defined in scope (line 226)
             const margins = 2; // 1mm left + 1mm right
             const nameColWidth = 20;
-            const availableWidth = pageWidth - margins - nameColWidth;
+            const workDaysColWidth = 12; // Width for "上班天數"
+
+            // Adjust available width depending on view mode
+            let availableWidth = pageWidth - margins - nameColWidth;
+            if (viewMode === 'user') {
+                availableWidth -= workDaysColWidth;
+            }
+
             const dateColWidth = availableWidth / dateRange.length;
 
             // Color Mapping (RGB Tuples)
@@ -463,6 +484,11 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                 dynamicColumnStyles[i + 1] = { cellWidth: dateColWidth };
             }
 
+            // Apply width for Work Days column (Index: dateRange.length + 1) if in user view
+            if (viewMode === 'user') {
+                dynamicColumnStyles[dateRange.length + 1] = { cellWidth: workDaysColWidth, fontSize: 9, fontStyle: 'bold' };
+            }
+
             autoTable(doc, {
                 startY: 18,
                 head: headRow,
@@ -473,7 +499,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                     cellPadding: 0.1,
                     halign: 'center',
                     valign: 'middle',
-                    minCellHeight: 9, // Standard height
+                    minCellHeight: 7, // Optimized: Reduced from 9 to 7 to fit on one page
                     font: fontName,
                     lineColor: [0, 0, 0],
                     lineWidth: 0.1,
@@ -576,9 +602,11 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                 const staff = cellRaw.staff;
                                 if (staff && staff.length > 0) {
                                     // Calculate required height based on staff count
-                                    // Stack safely. 5.5mm per person block (Increased from 3.5mm to fix overlap).
-                                    // Base spacing is minCellHeight 9.
-                                    const requiredHeight = (staff.length * 5.5) + 4; // 4mm padding buffer
+                                    // Stack safely. 5.5mm per person block.
+                                    // Base spacing is minCellHeight 7 (Optimized).
+                                    // 1 person: 5.5 + 1.5 = 7mm. Fits in Base.
+                                    // 2 people: 11 + 1.5 = 12.5mm. Automatically expands.
+                                    const requiredHeight = (staff.length * 5.5) + 1.5;
                                     if (requiredHeight > data.cell.styles.minCellHeight) {
                                         data.cell.styles.minCellHeight = requiredHeight;
                                     }
