@@ -167,7 +167,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
             // Desktop: Show -2 days + 21 days (3 weeks)
             // Align view to start 2 days before current
             const viewStart = new Date(start);
-            viewStart.setDate(viewStart.getDate()-2);
+            viewStart.setDate(viewStart.getDate() - 2);
 
             for (let i = 0; i < 21; i++) {
                 const d = new Date(viewStart);
@@ -185,7 +185,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
         } else {
             // If rolling, default to visible range
             if (dateRange.length > 0) {
-                setScheduleRange({ start: dateRange[0], end: dateRange[dateRange.length-1] });
+                setScheduleRange({ start: dateRange[0], end: dateRange[dateRange.length - 1] });
             }
         }
     }, [selectedCycleId, currentCycle, dateRange]);
@@ -203,7 +203,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
     const getExportHeader = () => {
         const title = getCycleTitle();
         const start = dateRange[0];
-        const end = dateRange[dateRange.length-1];
+        const end = dateRange[dateRange.length - 1];
         const days = dateRange.length;
         return title + ' (' + start + ' ~' + end + ' / 共' + days + '天)';
     };
@@ -223,10 +223,10 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
 
     const handleMoveUser = (index: number, direction: 'up' | 'down') => {
         if (direction === 'up' && index === 0) return;
-        if (direction === 'down' && index === users.length-1) return;
+        if (direction === 'down' && index === users.length - 1) return;
 
         const newUsers = [...users];
-        const targetIndex = direction === 'up' ? index-1 : index + 1;
+        const targetIndex = direction === 'up' ? index - 1 : index + 1;
 
         // Swap
         [newUsers[index], newUsers[targetIndex]] = [newUsers[targetIndex], newUsers[index]];
@@ -322,7 +322,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
 
             doc.setFontSize(9);
             const pageWidth = doc.internal.pageSize.width;
-            doc.text(exportDate, pageWidth-14, 15, { align: 'right' });
+            doc.text(exportDate, pageWidth - 14, 15, { align: 'right' });
 
             const weekDays = ['日', '一', '二', '三', '四', '五', '六'];
 
@@ -429,8 +429,30 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
             // pageWidth is already defined in scope (line 226)
             const margins = 2; // 1mm left + 1mm right
             const nameColWidth = 20;
-            const availableWidth = pageWidth-margins-nameColWidth;
+            const availableWidth = pageWidth - margins - nameColWidth;
             const dateColWidth = availableWidth / dateRange.length;
+
+            // Color Mapping (RGB Tuples)
+            const stationPDFStyles: Record<string, { fillColor: [number, number, number], textColor: [number, number, number] }> = {
+                'MR': { fillColor: [255, 237, 213], textColor: [124, 45, 18] },         // bg-orange-100 text-orange-900
+                'US': { fillColor: [206, 255, 206], textColor: [0, 0, 0] },             // bg-[#CEFFCE] text-black
+                'CT': { fillColor: [240, 249, 255], textColor: [7, 89, 133] },         // bg-sky-50 text-sky-800
+                '場控': { fillColor: [255, 255, 170], textColor: [127, 29, 29] },      // bg-[#FFFFAA] text-red-900
+                '遠班': { fillColor: [250, 232, 255], textColor: [112, 26, 117] },      // bg-fuchsia-100 text-fuchsia-900
+                '遠距': { fillColor: [250, 232, 255], textColor: [112, 26, 117] },      // Same as 遠班
+                'BMD': { fillColor: [239, 246, 255], textColor: [30, 64, 175] },       // bg-blue-50 text-blue-800
+                'DX': { fillColor: [239, 246, 255], textColor: [30, 64, 175] },        // Same as BMD
+                '大直': { fillColor: [245, 243, 255], textColor: [91, 33, 182] },       // bg-violet-50 text-violet-800
+                '技術支援': { fillColor: [255, 237, 151], textColor: [132, 66, 0] },    // bg-[#FFED97] text-[#844200]
+                '行政': { fillColor: [226, 232, 240], textColor: [30, 41, 59] },        // bg-slate-200 text-slate-800
+                'SystemOff': { fillColor: [240, 240, 240], textColor: [150, 150, 150] } // Light Gray
+            };
+
+            // Helper to match station name to style
+            const getPDFStyle = (stationName: string) => {
+                const key = Object.keys(stationPDFStyles).find(k => stationName.includes(k));
+                return key ? stationPDFStyles[key] : null;
+            };
 
             const dynamicColumnStyles: Record<string, any> = {
                 0: { cellWidth: nameColWidth, fontSize: 11, fontStyle: 'bold' }
@@ -472,7 +494,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                 didParseCell: function (data: any) {
                     // Header Logic (Weekends & Holidays)
                     if (data.section === 'head' && data.column.index > 0) {
-                        const dayIndex = (data.column.index-1);
+                        const dayIndex = (data.column.index - 1);
                         const dateStr = dateRange[dayIndex];
                         const d = new Date(dateStr);
                         const dayOfWeek = d.getDay();
@@ -505,12 +527,13 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                         else if (raw && typeof raw === 'object' && 'station' in raw) {
                             const station = raw.station;
                             if (station) {
-                                if (station.includes('場控')) {
-                                    data.cell.styles.fillColor = [252, 252, 190]; // #fcfcbe
-                                } else if (station.includes('遠')) {
-                                    data.cell.styles.fillColor = [255, 225, 225]; // #ffe1e1
-                                } else if (station === SYSTEM_OFF) {
+                                if (station === SYSTEM_OFF) {
                                     data.cell.styles.fillColor = [240, 240, 240]; // Light Gray
+                                } else {
+                                    const style = getPDFStyle(station);
+                                    if (style) {
+                                        data.cell.styles.fillColor = style.fillColor;
+                                    }
                                 }
                             }
                         }
@@ -564,11 +587,18 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                             if (station) {
                                 let fontSize = 8;
                                 doc.setFontSize(fontSize);
-                                doc.setTextColor(0, 0, 0);
+
+                                // Set specific Text Color
+                                let textColor: [number, number, number] = [0, 0, 0];
+                                const style = getPDFStyle(station);
+                                if (style) {
+                                    textColor = style.textColor;
+                                }
+                                doc.setTextColor(textColor[0], textColor[1], textColor[2]);
 
                                 const cellWidth = data.cell.width;
                                 const padding = 1;
-                                const availableWidth = cellWidth-padding;
+                                const availableWidth = cellWidth - padding;
                                 let textWidth = doc.getTextWidth(station);
 
                                 while (textWidth > availableWidth && fontSize > 4) {
@@ -577,7 +607,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                     textWidth = doc.getTextWidth(station);
                                 }
 
-                                doc.text(station, data.cell.x + data.cell.width / 2, data.cell.y + data.cell.height / 2-1.5, { align: 'center', baseline: 'middle' });
+                                doc.text(station, data.cell.x + data.cell.width / 2, data.cell.y + data.cell.height / 2 - 1.5, { align: 'center', baseline: 'middle' });
                             }
 
                             // 2. Draw Roles
@@ -619,7 +649,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
 
                                 const lineHeight = 3.5;
                                 const totalBlockHeight = staff.length * lineHeight;
-                                let startY = (data.cell.y + data.cell.height / 2)-(totalBlockHeight / 2) + 1.2; // +1.2 adjustment for visual centering
+                                let startY = (data.cell.y + data.cell.height / 2) - (totalBlockHeight / 2) + 1.2; // +1.2 adjustment for visual centering
 
                                 staff.forEach((s, idx) => {
                                     const blockY = startY + (idx * lineHeight);
@@ -634,7 +664,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                         doc.setTextColor(0, 0, 0);
                                     }
 
-                                    doc.text(s.name, data.cell.x + data.cell.width / 2, blockY-1, { align: 'center', baseline: 'middle' });
+                                    doc.text(s.name, data.cell.x + data.cell.width / 2, blockY - 1, { align: 'center', baseline: 'middle' });
 
                                     // 2. Role (Colored)
                                     if (s.roles.length > 0) {
@@ -934,9 +964,9 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
         const newOrder = [...displayOrder];
         if (direction === 'up') {
             if (index === 0) return;
-            [newOrder[index], newOrder[index-1]] = [newOrder[index-1], newOrder[index]];
+            [newOrder[index], newOrder[index - 1]] = [newOrder[index - 1], newOrder[index]];
         } else {
-            if (index === newOrder.length-1) return;
+            if (index === newOrder.length - 1) return;
             [newOrder[index], newOrder[index + 1]] = [newOrder[index + 1], newOrder[index]];
         }
         setDisplayOrder(newOrder);
@@ -946,13 +976,13 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
     // --- Styles ---
     const getStationStyle = (station: string) => {
         if (station.includes('MR')) return 'bg-orange-50 text-orange-800 border-orange-300';
-        if (station.includes('US')) return 'bg-emerald-50 text-emerald-800 border-emerald-300';
+        if (station.includes('US')) return 'bg-[#CEFFCE] text-black border-[#62e062]';
         if (station.includes('CT')) return 'bg-sky-50 text-sky-800 border-sky-300';
-        if (station.includes('場控')) return 'bg-red-50 text-red-700 border-red-300';
+        if (station.includes('場控')) return 'bg-[#FFFFAA] text-red-700 border-red-300';
         if (station.includes('遠班') || station.includes('遠距')) return 'bg-fuchsia-50 text-fuchsia-800 border-fuchsia-300';
-        if (station.includes('BMD') || station.includes('DX')) return 'bg-violet-50 text-violet-800 border-violet-300';
-        if (station.includes('大直')) return 'bg-blue-50 text-blue-800 border-blue-300';
-        if (station.includes('技術支援')) return 'bg-lime-50 text-lime-800 border-lime-300';
+        if (station.includes('BMD') || station.includes('DX')) return 'bg-blue-50 text-blue-800 border-blue-300';
+        if (station.includes('大直')) return 'bg-violet-50 text-violet-800 border-violet-300';
+        if (station.includes('技術支援')) return 'bg-[#FFED97] text-[#844200] border-[#EAC100]	';
         if (station.includes('行政')) return 'bg-slate-100 text-slate-700 border-slate-300';
         if (station.includes('未分配')) return 'bg-white text-gray-400 border-dashed border-gray-300';
         if (station.includes('休假')) return 'bg-slate-100 text-slate-400 border-slate-200';
@@ -973,13 +1003,13 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
         if (name === StationDefault.UNASSIGNED) return 'bg-white text-gray-400 border-dashed border-gray-300';
 
         if (name.includes('MR')) return 'bg-orange-100 text-orange-900 border-orange-200';
-        if (name.includes('US')) return 'bg-emerald-100 text-emerald-900 border-emerald-200';
-        if (name.includes('CT')) return 'bg-sky-100 text-sky-900 border-sky-200';
-        if (name.includes('場控')) return 'bg-red-100 text-red-900 border-red-200';
+        if (name.includes('US')) return 'bg-[#CEFFCE] text-black border-[#62e062]';
+        if (name.includes('CT')) return 'bg-sky-50 text-sky-800 border-sky-300';
+        if (name.includes('場控')) return 'bg-[#FFFFAA] text-red-900 border-red-200';
         if (name.includes('遠')) return 'bg-fuchsia-100 text-fuchsia-900 border-fuchsia-200';
-        if (name.includes('BMD')) return 'bg-violet-100 text-violet-900 border-violet-200';
-        if (name.includes('大直')) return 'bg-blue-100 text-blue-900 border-blue-200';
-        if (name.includes('技術支援')) return 'bg-lime-100 text-lime-900 border-lime-200';
+        if (name.includes('BMD')) return 'bg-blue-50 text-blue-800 border-blue-300';
+        if (name.includes('大直')) return 'bg-violet-50 text-violet-800 border-violet-300';
+        if (name.includes('技術支援')) return 'bg-[#FFED97] text-[#844200] border-[#EAC100]';
         if (name.includes('行政')) return 'bg-slate-200 text-slate-800 border-slate-300';
 
         return 'bg-teal-100 text-teal-900 border-teal-200'; // Default
@@ -1023,7 +1053,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
             const idxB = priorities.findIndex(p => b.includes(p));
             const valA = idxA === -1 ? 999 : idxA;
             const valB = idxB === -1 ? 999 : idxB;
-            if (valA !== valB) return valA-valB;
+            if (valA !== valB) return valA - valB;
             return a.localeCompare(b);
         });
     }, []);
@@ -1419,13 +1449,13 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                             // Mobile Header: Simple Nav + Date Range Only
                             <div className="flex items-center gap-2 bg-slate-100 rounded-lg p-1">
                                 <button
-                                    onClick={() => setMobileOffset(prev => prev-1)}
+                                    onClick={() => setMobileOffset(prev => prev - 1)}
                                     className="p-2 bg-white rounded shadow-sm text-slate-600 active:scale-95 transition-transform"
                                 >
                                     <ChevronLeft size={16} />
                                 </button>
                                 <span className="text-xs font-bold text-slate-700 min-w-[80px] text-center">
-                                    {dateRange[0].substring(5)} ~ {dateRange[dateRange.length-1].substring(5)}
+                                    {dateRange[0].substring(5)} ~ {dateRange[dateRange.length - 1].substring(5)}
                                 </span>
                                 <button
                                     onClick={() => setMobileOffset(prev => prev + 1)}
@@ -1579,7 +1609,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                 <button
                                     onClick={() => {
                                         const d = new Date(dailyDate);
-                                        d.setDate(d.getDate()-1);
+                                        d.setDate(d.getDate() - 1);
                                         setDailyDate(d);
                                     }}
                                     className="p-2 hover:bg-slate-100 rounded-full text-slate-500 transition-colors"
@@ -1810,7 +1840,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                     // --- User View ---
                                     users.map((user, idx) => {
                                         const isFirst = idx === 0;
-                                        const isLast = idx === users.length-1;
+                                        const isLast = idx === users.length - 1;
                                         const workDaysCount = dateRange.filter(date => {
                                             const status = getDayShift(user.id, date);
                                             return !status.isOff;
@@ -1949,7 +1979,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                     <>
                                         {rowConfigs.map((row, idx) => {
                                             const isFirst = idx === 0;
-                                            const isLast = idx === rowConfigs.length-1;
+                                            const isLast = idx === rowConfigs.length - 1;
                                             return (
                                                 <tr key={row.id} className="group hover:bg-slate-50/50 transition-colors relative">
                                                     <td className={`sticky left-0 z-10 bg-white group-hover: bg-slate-50 border-r border-slate-200 shadow-[4px_0_8px_rgba(0, 0, 0, 0.02)] ${isMobile ? 'p-1 w-[85px] min-w-[85px]' : 'p-2'} `}>
