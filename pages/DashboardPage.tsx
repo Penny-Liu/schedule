@@ -489,22 +489,34 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                 dynamicColumnStyles[dateRange.length + 1] = { cellWidth: workDaysColWidth, fontSize: 9, fontStyle: 'bold' };
             }
 
+            // Conditional Styles based on View Mode
+            const tableStyles: any = {
+                fontSize: 8,
+                font: fontName,
+                lineColor: [0, 0, 0],
+                lineWidth: 0.1,
+                textColor: [0, 0, 0],
+                valign: 'middle',
+            };
+
+            if (viewMode === 'user') {
+                // User View: Spacing 1 (Requested)
+                tableStyles.cellPadding = 1;
+                tableStyles.minCellHeight = 9;
+                tableStyles.halign = 'center';
+            } else {
+                // Station View: Compact, Centered
+                tableStyles.cellPadding = 0.1;
+                tableStyles.minCellHeight = 7;
+                tableStyles.halign = 'center'; // User requested: "每個欄位文字都置中"
+            }
+
             autoTable(doc, {
                 startY: 18,
                 head: headRow,
                 body: bodyRows,
                 theme: 'grid',
-                styles: {
-                    fontSize: 8, // Base font size
-                    cellPadding: 0.1,
-                    halign: 'center',
-                    valign: 'middle',
-                    minCellHeight: 7, // Optimized: Reduced from 9 to 7 to fit on one page
-                    font: fontName,
-                    lineColor: [0, 0, 0],
-                    lineWidth: 0.1,
-                    textColor: [0, 0, 0],
-                },
+                styles: tableStyles,
                 headStyles: {
                     fillColor: [240, 240, 240],
                     textColor: [0, 0, 0],
