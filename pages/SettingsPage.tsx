@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { User, UserRole, RosterCycle, SYSTEM_OFF, StationDefault, Holiday, DateEventType } from '../types';
+import { User, UserRole, RosterCycle, SYSTEM_OFF, StationDefault, Holiday, DateEventType, CycleAnchor } from '../types';
 import { db } from '../services/store';
 import { Plus, Trash2, Save, Settings, Calendar, AlertCircle, Users, Clock, Globe, X, RefreshCw, Key, UserCircle } from 'lucide-react';
 import ConfirmModal from '../components/ConfirmModal';
@@ -20,6 +20,9 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
     const [newCycle, setNewCycle] = useState<Partial<RosterCycle>>({ name: '', startDate: '', endDate: '' });
     const [newHoliday, setNewHoliday] = useState<Partial<Holiday>>({ date: '', name: '', type: DateEventType.NATIONAL });
     const [cycleStartDate, setCycleStartDate] = useState(db.getCycleStartDate());
+    const [anchors, setAnchors] = useState<CycleAnchor[]>(db.getCycleAnchors());
+
+    const [newAnchor, setNewAnchor] = useState({ effective: '', anchor: '' });
 
     // Password Change State
     const [passwordData, setPasswordData] = useState({ old: '', new: '', confirm: '' });
@@ -69,6 +72,24 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
         if (count < 0) return;
         db.updateStationRequirement(station, dayIndex, count);
         setRequirements({ ...db.getStationRequirements() });
+    };
+
+    // Cycle Anchor Handlers
+    const handleAddAnchor = async () => {
+        if (newAnchor.effective && newAnchor.anchor) {
+            await db.addCycleAnchor(newAnchor.effective, newAnchor.anchor);
+            setAnchors(db.getCycleAnchors()); // Refresh list
+            setNewAnchor({ effective: '', anchor: '' });
+        } else {
+            alert('請輸入完整的生效日期與基準日');
+        }
+    };
+
+    const handleRemoveAnchor = async (effectiveDate: string) => {
+        if (confirm('確定要刪除此重置點嗎？')) {
+            await db.removeCycleAnchor(effectiveDate);
+            setAnchors(db.getCycleAnchors());
+        }
     };
 
     // Cycle Handlers
@@ -294,24 +315,104 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
                                     </h3>
                                 </div>
                                 <div className="p-6">
-                                    <label className="text-xs font-semibold text-gray-500 mb-2 block">四休二循環基準日</label>
-                                    <div className="flex gap-2 items-center">
-                                        <input
-                                            type="date"
-                                            value={cycleStartDate}
-                                            onChange={(e) => setCycleStartDate(e.target.value)}
-                                            className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 outline-none shadow-sm"
-                                        />
-                                        <button
-                                            onClick={handleUpdateCycleStartDate}
-                                            className="bg-gray-800 hover:bg-gray-900 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm"
-                                        >
-                                            更新設定
-                                        </button>
+                                    <div className="space-y-4">
+                                        {/* Global Default (Legacy/Base) */}
+                                        <div className="p-3 bg-gray-50 rounded-lg border border-gray-100">
+                                            <label className="text-xs font-bold text-gray-500 mb-2 block">全域預設循環基準日 (最初始設定)</label>
+                                            <div className="flex gap-2 items-center">
+                                                <input
+                                                    type="date"
+                                                    value={cycleStartDate}
+                                                    onChange={(e) => setCycleStartDate(e.target.value)}
+                                                    className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 outline-none shadow-sm"
+                                                />
+                                                <button
+                                                    onClick={handleUpdateCycleStartDate}
+                                                    className="bg-gray-800 hover:bg-gray-900 text-white px-3 py-2 rounded-lg text-xs font-bold shadow-sm whitespace-nowrap"
+                                                >
+                                                    更新預設
+                                                </button>
+                                            </div>
+                                            <p className="text-[10px] text-gray-400 mt-1">
+                                                這是系統最底層的預設值 (通常設為 2024/1/1 或 2025/11/6)。若沒有任何「重置點」覆蓋，將使用此日期計算。
+                                            </p>
+                                        </div>
+
+                                        <div className="border-t border-gray-100 my-2"></div>
+
+                                        {/* Dynamic Anchors */}
+                                        <div>
+                                            <div className="mb-3">
+                                                <h4 className="font-bold text-gray-700 text-sm mb-1">排班重置點 (Cycle Anchors)</h4>
+                                                <p className="text-xs text-gray-500">
+                                                    設定新的「生效日期」，系統將從該日起，改以新的「循環基準日」重新計算四休二邏輯，不影響生效日之前的歷史排班。
+                                                </p>
+                                            </div>
+
+                                            <div className="grid grid-cols-2 gap-2 bg-slate-50 p-3 rounded border border-slate-200 mb-3">
+                                                <div>
+                                                    <label className="text-xs font-bold text-slate-500 mb-1 block">生效日期 (從這天起)</label>
+                                                    <input
+                                                        type="date"
+                                                        className="w-full text-sm border border-slate-300 rounded px-2 py-1"
+                                                        value={newAnchor.effective}
+                                                        onChange={e => setNewAnchor({ ...newAnchor, effective: e.target.value })}
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="text-xs font-bold text-slate-500 mb-1 block">新的循環基準日 (Day 1)</label>
+                                                    <input
+                                                        type="date"
+                                                        className="w-full text-sm border border-slate-300 rounded px-2 py-1"
+                                                        value={newAnchor.anchor}
+                                                        onChange={e => setNewAnchor({ ...newAnchor, anchor: e.target.value })}
+                                                    />
+                                                </div>
+                                                <button
+                                                    onClick={handleAddAnchor}
+                                                    className="col-span-2 mt-1 bg-teal-600 text-white text-xs font-bold py-1.5 rounded hover:bg-teal-700 transition-colors flex items-center justify-center gap-1"
+                                                >
+                                                    <Plus size={14} /> 新增重置點
+                                                </button>
+                                            </div>
+
+                                            <div className="border rounded-lg overflow-hidden">
+                                                <table className="w-full text-sm text-left">
+                                                    <thead className="bg-slate-100 text-slate-500 font-bold text-xs">
+                                                        <tr>
+                                                            <th className="px-3 py-2">生效日期</th>
+                                                            <th className="px-3 py-2">新基準日</th>
+                                                            <th className="px-3 py-2 text-right">操作</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody className="divide-y divide-slate-100">
+                                                        {anchors.map((anchor, idx) => (
+                                                            <tr key={idx} className="hover:bg-slate-50">
+                                                                <td className="px-3 py-2 font-mono text-slate-700">{anchor.effectiveDate}</td>
+                                                                <td className="px-3 py-2 font-mono text-slate-700">{anchor.anchorDate}</td>
+                                                                <td className="px-3 py-2 text-right">
+                                                                    <button
+                                                                        onClick={() => handleRemoveAnchor(anchor.effectiveDate)}
+                                                                        className="text-red-400 hover:text-red-600 p-1"
+                                                                        title="刪除"
+                                                                    >
+                                                                        <Trash2 size={14} />
+                                                                    </button>
+                                                                </td>
+                                                            </tr>
+                                                        ))}
+                                                        {anchors.length === 0 && (
+                                                            <tr>
+                                                                <td colSpan={3} className="px-3 py-4 text-center text-slate-400 text-xs italic">
+                                                                    目前沒有重置點，全期使用預設基準。
+                                                                </td>
+                                                            </tr>
+                                                        )}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
                                     </div>
-                                    <p className="text-xs text-gray-400 mt-2">
-                                        設定此日期後，系統將以此日作為「四休二」循環的第一天 (Day 1) 開始計算所有人員的排班狀態。若您希望在 2026/1/1 重新開始計算，請在此調整。
-                                    </p>
                                 </div>
                             </div>
                         )}

@@ -202,6 +202,15 @@ class Store {
         }
     }
 
+    async updateUserPassword(userId: string, newPass: string) {
+        const u = this.users.find(u => u.id === userId);
+        if (u) {
+            u.password = newPass;
+            u.mustChangePassword = false;
+            await supabase.from('users').update({ password: newPass, mustChangePassword: false }).eq('id', userId);
+        }
+    }
+
     // Users
     getUsers() {
         if (!this.settings.userDisplayOrder || this.settings.userDisplayOrder.length === 0) {

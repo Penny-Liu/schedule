@@ -50,8 +50,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
 
     // Confirmation Modal State
     const [isConfirmCycleOpen, setIsConfirmCycleOpen] = useState(false);
-    // Settings Modal State
-    const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+
 
     // Unified Range State for schedulers
     const [scheduleRange, setScheduleRange] = useState({ start: '', end: '' });
@@ -59,7 +58,6 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
     // Include all users including SYSTEM_ADMIN as requested
     const [users, setUsers] = useState<User[]>(() => db.getUsers());
     const holidays = db.getHolidays();
-    const cycleAnchors = db.getCycleAnchors();
 
     const pendingLeaves = db.getLeaves().filter(l => l.status === LeaveStatus.PENDING);
     const [shifts, setShifts] = useState<Shift[]>(db.getShifts('', ''));
@@ -114,7 +112,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                 alert('密碼長度至少需 4 碼');
                 return;
             }
-            await db.updateUserPassword(currentUser!.id, forcePwdData.new);
+            await db.changePassword(currentUser!.id, forcePwdData.new);
             setShowForcePwdModal(false);
             setForcePwdData({ new: '', confirm: '' });
             alert('密碼修改成功！請繼續使用。');
@@ -1319,88 +1317,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                 confirmColor="purple"
             />
 
-            {/* Admin Settings Modal */}
-            <ConfirmModal
-                isOpen={isSettingsOpen}
-                onClose={() => setIsSettingsOpen(false)}
-                onConfirm={() => setIsSettingsOpen(false)} // Just close
-                title="系統設定 - 週期重置"
-                message={
-                    <div className="space-y-4 text-left min-w-[400px]">
-                        <div className="bg-blue-50 p-3 rounded text-sm text-blue-800 space-y-1">
-                            <p className="font-bold flex items-center gap-1"><Monitor size={14} /> 上四休二邏輯重置</p>
-                            <p className="text-xs text-blue-600">設定新的「起始基準日」來重置某個日期之後的排班邏輯，不影響舊的歷史排班。</p>
-                        </div>
 
-                        <div className="space-y-3">
-                            <div className="grid grid-cols-2 gap-2 bg-slate-50 p-3 rounded border border-slate-200">
-                                <div>
-                                    <label className="text-xs font-bold text-slate-500 mb-1 block">生效日期 (從這天開始)</label>
-                                    <input
-                                        type="date"
-                                        className="w-full text-sm border border-slate-300 rounded px-2 py-1"
-                                        value={newAnchor.effective}
-                                        onChange={e => setNewAnchor({ ...newAnchor, effective: e.target.value })}
-                                    />
-                                </div>
-                                <div>
-                                    <label className="text-xs font-bold text-slate-500 mb-1 block">新的循環基準日 (Day 1)</label>
-                                    <input
-                                        type="date"
-                                        className="w-full text-sm border border-slate-300 rounded px-2 py-1"
-                                        value={newAnchor.anchor}
-                                        onChange={e => setNewAnchor({ ...newAnchor, anchor: e.target.value })}
-                                    />
-                                </div>
-                                <button
-                                    onClick={handleAddAnchor}
-                                    className="col-span-2 mt-1 bg-teal-600 text-white text-xs font-bold py-1.5 rounded hover:bg-teal-700 transition-colors flex items-center justify-center gap-1"
-                                >
-                                    <Plus size={14} /> 新增重置點
-                                </button>
-                            </div>
-
-                            <div className="border rounded-lg overflow-hidden">
-                                <table className="w-full text-sm text-left">
-                                    <thead className="bg-slate-100 text-slate-500 font-bold">
-                                        <tr>
-                                            <th className="px-3 py-2">生效日期</th>
-                                            <th className="px-3 py-2">基準日</th>
-                                            <th className="px-3 py-2 text-right">操作</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-slate-100">
-                                        {db.getCycleAnchors().map((anchor, idx) => (
-                                            <tr key={idx} className="hover:bg-slate-50">
-                                                <td className="px-3 py-2 font-mono text-slate-700">{anchor.effectiveDate}</td>
-                                                <td className="px-3 py-2 font-mono text-slate-700">{anchor.anchorDate}</td>
-                                                <td className="px-3 py-2 text-right">
-                                                    <button
-                                                        onClick={() => handleRemoveAnchor(anchor.effectiveDate)}
-                                                        className="text-red-400 hover:text-red-600 p-1"
-                                                        title="刪除"
-                                                    >
-                                                        <Trash2 size={14} />
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                        ))}
-                                        {db.getCycleAnchors().length === 0 && (
-                                            <tr>
-                                                <td colSpan={3} className="px-3 py-4 text-center text-slate-400 text-xs italic">
-                                                    目前沒有設定任何重置點 (使用預設全域基準)
-                                                </td>
-                                            </tr>
-                                        )}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-                }
-                confirmText="關閉"
-                confirmColor="gray"
-            />
 
             {/* --- Optimized A4 Landscape Print Container --- */}
             {/* Width set to 1600px to allow larger text size relative to A4 page when scaled down */}
@@ -1685,16 +1602,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                             </button>
                         )}
 
-                        {/* Admin Settings Button */}
-                        {!isMobile && currentUser.role === UserRole.SYSTEM_ADMIN && (
-                            <button
-                                onClick={() => setIsSettingsOpen(true)}
-                                className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
-                                title="系統設定"
-                            >
-                                <Settings size={18} />
-                            </button>
-                        )}
+
 
                         <div className="h-6 w-px bg-slate-200 mx-1"></div>
 
@@ -1870,7 +1778,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 p-4">
                                 {(() => {
                                     // Station-based grouping logic
-                                    const dateStr = toLocalDateString(dailyDate);
+                                    const dateStr = toLocalISOString(dailyDate);
 
                                     // Define requested order
                                     const stationOrder = [
@@ -1942,7 +1850,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                             {/* Off Staff Summary */}
                             <div className="px-6 py-3 bg-slate-50 border-t border-slate-200 text-xs text-slate-500 flex flex-wrap gap-2 items-center">
                                 <span className="font-bold">今日休假:</span>
-                                {users.filter(u => getDayShift(u.id, toLocalDateString(dailyDate)).isOff).map(u => (
+                                {users.filter(u => getDayShift(u.id, toLocalISOString(dailyDate)).isOff).map(u => (
                                     <span key={u.id} className="bg-white border border-slate-200 px-1.5 py-0.5 rounded text-slate-400">
                                         {u.name}
                                     </span>
