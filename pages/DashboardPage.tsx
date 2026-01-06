@@ -518,8 +518,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                 // Station View: Compact, Centered
                 tableStyles.minCellHeight = 8;
                 tableStyles.halign = 'center'; // User requested: "每個欄位文字都置中"
-                tableStyles.valign = 'top';    // Fix: Top align to allow empty space at bottom
-                tableStyles.cellPadding = { top: 2, bottom: 1, left: 1, right: 1 }; // Fix: Ensure top space
+                tableStyles.cellPadding = 1;
             }
 
             autoTable(doc, {
@@ -625,12 +624,13 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                 const staff = cellRaw.staff;
                                 if (staff && staff.length > 0) {
                                     // Calculate required height based on staff count
-                                    // Default: 5.5mm (Name + Role)
-                                    // Optimization for '大直': No Role, so reduced height ~3.5mm
-                                    const isDazhi = rowLabel === '大直';
-                                    const perPersonHeight = isDazhi ? 3.5 : 5.5;
+                                    // Dynamic: 5.5mm (Name + Role) vs 3.5mm (Name only)
+                                    let totalH = 0;
+                                    staff.forEach(s => {
+                                        totalH += (s.roles.length > 0) ? 5.5 : 3.5;
+                                    });
 
-                                    const requiredHeight = (staff.length * perPersonHeight) + 3; // +3 for padding
+                                    const requiredHeight = totalH + 2; // +2 for padding
                                     if (requiredHeight > data.cell.styles.minCellHeight) {
                                         data.cell.styles.minCellHeight = requiredHeight;
                                     }
@@ -709,17 +709,23 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
 
                                 // Standard Rows: Stacked Content logic
 
-                                // Calculate center start based on count
-                                // Height per person block ~ 5.5mm (Increased to fix overlap)
-                                // For '大直', reduce to 3.5mm as there are no roles
-                                const lineHeight = isDazhi ? 3.5 : 5.5;
+                                // Standard Rows: Stacked Content logic
 
-                                // Fix: START FROM TOP instead of Center
-                                // Use data.cell.y + padding (e.g., 2mm)
-                                const startY = data.cell.y + 2.5;
+                                // 1. Calculate Total Height Dynamically
+                                let totalBlockHeight = 0;
+                                const staffHeights = staff.map(s => {
+                                    // If '大直' or no roles, use compact height
+                                    const h = (s.roles.length === 0) ? 3.5 : 5.5;
+                                    totalBlockHeight += h;
+                                    return h;
+                                });
+
+                                // 2. Center the Block Vertically
+                                let currentY = (data.cell.y + data.cell.height / 2) - (totalBlockHeight / 2);
 
                                 staff.forEach((s, idx) => {
-                                    const blockY = startY + (idx * lineHeight);
+                                    const itemHeight = staffHeights[idx];
+                                    const contentCenterY = currentY + (itemHeight / 2);
 
                                     // 1. Name 
                                     doc.setFontSize(baseFontSize);
@@ -731,12 +737,12 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                         doc.setTextColor(0, 0, 0);
                                     }
 
-                                    // If '大直', center name in block. Else, name is shifted up slightly to make room for role.
-                                    const nameOffset = isDazhi ? 0 : -1;
-                                    doc.text(s.name, data.cell.x + data.cell.width / 2, blockY + nameOffset, { align: 'center', baseline: 'middle' });
+                                    // If no roles (height 3.5), center name. Else (height 5.5), shift up.
+                                    const nameOffset = (s.roles.length === 0) ? 0 : -1;
+                                    doc.text(s.name, data.cell.x + data.cell.width / 2, contentCenterY + nameOffset, { align: 'center', baseline: 'middle' });
 
-                                    // 2. Role (Colored) - Skip for '大直'
-                                    if (!isDazhi && s.roles.length > 0) {
+                                    // 2. Role (Colored)
+                                    if (s.roles.length > 0) {
                                         doc.setFontSize(roleFontSize);
                                         // Priority Coloring
                                         let color: [number, number, number] = [0, 0, 0];
@@ -755,8 +761,11 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
 
                                         if (!roleLabel) roleLabel = s.roles[0]; // Fallback
 
-                                        doc.text(roleLabel, data.cell.x + data.cell.width / 2, blockY + 1.5, { align: 'center', baseline: 'middle' });
+                                        doc.text(roleLabel, data.cell.x + data.cell.width / 2, contentCenterY + 1.5, { align: 'center', baseline: 'middle' });
                                     }
+
+                                    // Advance Y
+                                    currentY += itemHeight;
                                 });
                             }
                         }
