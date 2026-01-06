@@ -362,9 +362,21 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
   };
 
   // Filter leaves: Supervisor & Admin see ALL. Employee sees own (as requestor or target).
-  const displayedLeaves = (currentUser.role === UserRole.SUPERVISOR || currentUser.role === UserRole.SYSTEM_ADMIN)
+  // Filter leaves: Supervisor & Admin see ALL. Employee sees own (as requestor or target).
+  const roleFilteredLeaves = (currentUser.role === UserRole.SUPERVISOR || currentUser.role === UserRole.SYSTEM_ADMIN)
     ? leaves
     : leaves.filter(l => l.userId === currentUser.id || l.targetUserId === currentUser.id);
+
+  // Date Filter: Show only Past 3 Months + Future
+  const cutoffDate = new Date();
+  cutoffDate.setMonth(cutoffDate.getMonth() - 3);
+  cutoffDate.setHours(0, 0, 0, 0);
+
+  const displayedLeaves = roleFilteredLeaves.filter(l => {
+    // Robust date parsing
+    const end = new Date(l.endDate);
+    return end >= cutoffDate;
+  }).sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime()); // Optional: Sort Newest First logic if not already present (Array order might be random)
 
   return (
     <div className="p-6 max-w-7xl mx-auto h-screen overflow-y-auto">
@@ -645,8 +657,8 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
                   type="submit"
                   disabled={!!validationMsg || !formData.startDate || ((formData.type === LeaveType.SWAP_SHIFT || formData.type === LeaveType.DUTY_SWAP) && !formData.targetUserId)}
                   className={`w-full font-bold py-3 rounded-lg transition-colors shadow-sm ${(!!validationMsg || !formData.startDate)
-                      ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                      : 'bg-teal-600 hover:bg-teal-700 text-white shadow-teal-200'
+                    ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                    : 'bg-teal-600 hover:bg-teal-700 text-white shadow-teal-200'
                     }`}
                 >
                   送出申請

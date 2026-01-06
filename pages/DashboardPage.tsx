@@ -473,7 +473,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                 '遠距': { fillColor: [250, 232, 255], textColor: [112, 26, 117] },      // Same as 遠班
                 'BMD': { fillColor: [239, 246, 255], textColor: [30, 64, 175] },       // bg-blue-50 text-blue-800
                 'DX': { fillColor: [239, 246, 255], textColor: [30, 64, 175] },        // Same as BMD
-                '大直': { fillColor: [245, 243, 255], textColor: [91, 33, 182] },       // bg-violet-50 text-violet-800
+                '大直': { fillColor: [221, 214, 255], textColor: [91, 33, 182] },       // bg-violet-50 text-violet-800
                 '技術支援': { fillColor: [255, 237, 151], textColor: [132, 66, 0] },    // bg-[#FFED97] text-[#844200]
                 '行政': { fillColor: [226, 232, 240], textColor: [30, 41, 59] },        // bg-slate-200 text-slate-800
                 'SystemOff': { fillColor: [255, 255, 255], textColor: [150, 150, 150] } // White (User Requested)
@@ -1175,7 +1175,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                 else if (item.includes('CT')) colorClass = 'bg-sky-50 text-sky-800 border-sky-800';
                 else if (item.includes('場控')) colorClass = 'bg-red-50 text-red-700 border-red-300';
                 else if (item.includes('遠')) colorClass = 'bg-fuchsia-50 text-fuchsia-800 border-fuchsia-300';
-                else if (item.includes('大直')) colorClass = 'bg-blue-50 text-blue-800 border-blue-300';
+                else if (item.includes('大直')) colorClass = 'bg-violet-50 text-violet-800 border-violet-300';
 
                 return {
                     id: item,
@@ -1480,7 +1480,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                             {!isMobile && getCycleTitle()}
                             {isCycleConfirmed && (
                                 <span className="bg-red-50 text-red-600 text-xs px-2 py-0.5 rounded border border-red-100 flex items-center gap-1">
-                                    <Lock size={10} /> 已鎖定
+                                    <Lock size={10} /> {!isMobile && '已鎖定'}
                                 </span>
                             )}
                         </h2>
