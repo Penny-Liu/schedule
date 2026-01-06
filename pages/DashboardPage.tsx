@@ -516,9 +516,10 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                 tableStyles.halign = 'center';
             } else {
                 // Station View: Compact, Centered
-                tableStyles.cellPadding = 1;
                 tableStyles.minCellHeight = 8;
                 tableStyles.halign = 'center'; // User requested: "每個欄位文字都置中"
+                tableStyles.valign = 'top';    // Fix: Top align to allow empty space at bottom
+                tableStyles.cellPadding = { top: 2, bottom: 1, left: 1, right: 1 }; // Fix: Ensure top space
             }
 
             autoTable(doc, {
@@ -629,7 +630,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                     const isDazhi = rowLabel === '大直';
                                     const perPersonHeight = isDazhi ? 3.5 : 5.5;
 
-                                    const requiredHeight = (staff.length * perPersonHeight) + 1.5;
+                                    const requiredHeight = (staff.length * perPersonHeight) + 3; // +3 for padding
                                     if (requiredHeight > data.cell.styles.minCellHeight) {
                                         data.cell.styles.minCellHeight = requiredHeight;
                                     }
@@ -713,8 +714,9 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                 // For '大直', reduce to 3.5mm as there are no roles
                                 const lineHeight = isDazhi ? 3.5 : 5.5;
 
-                                const totalBlockHeight = staff.length * lineHeight;
-                                let startY = (data.cell.y + data.cell.height / 2) - (totalBlockHeight / 2) + (isDazhi ? 0.5 : 1.2);
+                                // Fix: START FROM TOP instead of Center
+                                // Use data.cell.y + padding (e.g., 2mm)
+                                const startY = data.cell.y + 2.5;
 
                                 staff.forEach((s, idx) => {
                                     const blockY = startY + (idx * lineHeight);
