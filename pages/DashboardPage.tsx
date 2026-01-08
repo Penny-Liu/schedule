@@ -2098,9 +2098,12 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                             const isALearner = a.user.learningCapabilities?.includes(row.label);
                                                             const isBLearner = b.user.learningCapabilities?.includes(row.label);
 
-                                                            if (isALearner && !isBLearner) return 1; // A is learner, goes after
-                                                            if (!isALearner && isBLearner) return -1; // B is learner, goes after
-                                                            return 0; // Sorting only
+                                                            // Primary Sort: Learners go to bottom
+                                                            if (isALearner && !isBLearner) return 1;
+                                                            if (!isALearner && isBLearner) return -1;
+
+                                                            // Secondary Sort: Alphabetical Name
+                                                            return (a.user.name || '').localeCompare(b.user.name || '');
                                                         });
 
                                                         const isToday = toLocalISOString(new Date()) === date;
