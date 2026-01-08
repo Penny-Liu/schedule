@@ -831,7 +831,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
 
     const handleUpdateShift = (userId: string, dateStr: string, station: string, specialRoles: string[]) => {
         const newShift: Shift = {
-            id: `${userId} -${dateStr} `,
+            id: `${userId}-${dateStr}`,
             userId,
             date: dateStr,
             station,

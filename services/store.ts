@@ -70,7 +70,15 @@ class Store {
                 if (error) console.error('Failed to seed users:', error);
             }
 
-            if (shiftsRes.data) this.shifts = shiftsRes.data;
+            if (shiftsRes.data) {
+                // Deduplicate shifts: keep the last one found for each user-date key
+                const uniqueShiftsMap = new Map();
+                shiftsRes.data.forEach(s => {
+                    // Normalize ID if needed, but keying by userId-date is safest
+                    uniqueShiftsMap.set(`${s.userId}-${s.date}`, s);
+                });
+                this.shifts = Array.from(uniqueShiftsMap.values());
+            }
             if (leavesRes.data && leavesRes.data.length > 0) {
                 this.leaves = leavesRes.data;
             } else {
