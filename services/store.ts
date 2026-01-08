@@ -299,8 +299,9 @@ class Store {
             .neq('id', shift.id);
 
         // Sync DB
-        await supabase.from('shifts').upsert(shift);
+        const { error } = await supabase.from('shifts').upsert(shift);
         this.notifyListeners();
+        return { error };
     }
 
     // Leaves
