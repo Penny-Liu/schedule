@@ -71,11 +71,33 @@ class Store {
             }
 
             if (shiftsRes.data) {
-                // Deduplicate shifts: keep the last one found for each user-date key
+                // Deduplicate shifts: Prioritize valid IDs and content
                 const uniqueShiftsMap = new Map();
                 shiftsRes.data.forEach(s => {
-                    // Normalize ID if needed, but keying by userId-date is safest
-                    uniqueShiftsMap.set(`${s.userId}-${s.date}`, s);
+                    const key = `${s.userId}-${s.date}`;
+                    const existing = uniqueShiftsMap.get(key);
+
+                    if (!existing) {
+                        uniqueShiftsMap.set(key, s);
+                    } else {
+                        // Conflict Resolution Strategy:
+                        // 1. Prefer Good IDs (no spaces) over Bad IDs
+                        const isExistingIdBad = existing.id.includes(' ');
+                        const isNewIdBad = s.id.includes(' ');
+
+                        // If existing is bad and new is good => Replace
+                        if (isExistingIdBad && !isNewIdBad) {
+                            uniqueShiftsMap.set(key, s);
+                            return;
+                        }
+
+                        // If both are good (or both bad), Prefer Content over Empty/Unassigned
+                        if (existing.station === 'Unassigned' || existing.station === '未分配' || !existing.station) {
+                            if (s.station && s.station !== 'Unassigned' && s.station !== '未分配') {
+                                uniqueShiftsMap.set(key, s);
+                            }
+                        }
+                    }
                 });
                 this.shifts = Array.from(uniqueShiftsMap.values());
             }
