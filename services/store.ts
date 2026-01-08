@@ -29,6 +29,7 @@ class Store {
     currentUser: User | null = null;
     isLoaded: boolean = false;
     private listeners: (() => void)[] = [];
+    private settingsRowId: string | number = 1; // Default to 1, but dynamic
 
     constructor() {
         // We do not load in constructor anymore because it needs to be async
@@ -56,7 +57,7 @@ class Store {
                 supabase.from('users').select('*'),
                 supabase.from('shifts').select('*'),
                 supabase.from('leaves').select('*'),
-                supabase.from('settings').select('data').eq('id', 1).single()
+                supabase.from('settings').select('id, data').eq('id', 1).single()
             ]);
 
             if (usersRes.data && usersRes.data.length > 0) {
@@ -85,12 +86,14 @@ class Store {
 
             if (settingsRes.data && settingsRes.data.data) {
                 finalSettingsData = settingsRes.data.data;
+                this.settingsRowId = settingsRes.data.id; // Capture ID
             } else if (settingsRes.error && settingsRes.error.code === 'PGRST116') {
                 // ID=1 not found. Try fetching ANY settings row (fallback)
-                const fallbackRes = await supabase.from('settings').select('data').limit(1).single();
+                const fallbackRes = await supabase.from('settings').select('id, data').limit(1).single();
                 if (fallbackRes.data && fallbackRes.data.data) {
                     console.log('[DEBUG] Found settings with non-standard ID. Using it.');
                     finalSettingsData = fallbackRes.data.data;
+                    this.settingsRowId = fallbackRes.data.id; // Capture ID
                 }
             }
 
@@ -157,15 +160,15 @@ class Store {
         // 2. Remote update
         const { error } = await supabase
             .from('settings')
-            .upsert({ id: 1, data: this.settings });
+            .upsert({ id: this.settingsRowId, data: this.settings }); // Use captured ID
 
         if (error) {
+            console.error('Error saving settings:', error);
             if (error.code === '42501') {
                 console.warn('Settings auto-save skipped (Supabase RLS policy). Using defaults.');
-            } else {
-                console.error('Error saving settings:', error);
             }
         }
+        return { error };
     }
 
     // Auth
@@ -426,7 +429,7 @@ class Store {
 
     // Settings: Display Order
     getStationDisplayOrder(): string[] {
-        const currentStations = this.settings.stations.filter(s => s !== SYSTEM_OFF && s !== StationDefault.UNASSIGNED);
+        const currentStations = this.settings.stations.filter(s => s !== StationDefault.UNASSIGNED);
         const specialRoles = [SPECIAL_ROLES.OPENING, SPECIAL_ROLES.LATE, SPECIAL_ROLES.ASSIST, SPECIAL_ROLES.SCHEDULER];
         const systemRows = [StationDefault.UNASSIGNED, SYSTEM_OFF];
         const allItems = [...new Set([...currentStations, ...specialRoles, ...systemRows])];
@@ -484,13 +487,17 @@ class Store {
         this.settings.cycleAnchors.push({ effectiveDate, anchorDate });
         // Sort by effective date descending (newest first)
         this.settings.cycleAnchors.sort((a, b) => b.effectiveDate.localeCompare(a.effectiveDate));
-        await this.saveSettings();
+
+        const { error } = await this.saveSettings();
+        if (error) throw error;
     }
 
     async removeCycleAnchor(effectiveDate: string) {
         if (!this.settings.cycleAnchors) return;
         this.settings.cycleAnchors = this.settings.cycleAnchors.filter(a => a.effectiveDate !== effectiveDate);
-        await this.saveSettings();
+
+        const { error } = await this.saveSettings();
+        if (error) throw error;
     }
 
     // Settings: Holidays / Events

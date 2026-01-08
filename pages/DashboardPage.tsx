@@ -972,7 +972,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
             const isCertified = user.capabilities?.includes(station);
             const isLearning = user.learningCapabilities?.includes(station);
             const isExcluded = user.excludedCapabilities?.includes(station);
-            if (!isCertified && !isLearning && !isExcluded) return false;
+            if (station !== SYSTEM_OFF && !isCertified && !isLearning && !isExcluded) return false;
             const status = db.getUserStatusOnDate(user.id, dateStr);
             if (status === 'OFF') return false;
             const shift = shifts.find(s => s.userId === user.id && s.date === dateStr);

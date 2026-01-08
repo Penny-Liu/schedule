@@ -77,9 +77,14 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
     // Cycle Anchor Handlers
     const handleAddAnchor = async () => {
         if (newAnchor.effective && newAnchor.anchor) {
-            await db.addCycleAnchor(newAnchor.effective, newAnchor.anchor);
-            setAnchors(db.getCycleAnchors()); // Refresh list
-            setNewAnchor({ effective: '', anchor: '' });
+            try {
+                await db.addCycleAnchor(newAnchor.effective, newAnchor.anchor);
+                setAnchors(db.getCycleAnchors()); // Refresh list
+                setNewAnchor({ effective: '', anchor: '' });
+            } catch (error: any) {
+                alert('儲存重置點失敗: ' + (error.message || '未知錯誤'));
+                console.error('Save failed', error);
+            }
         } else {
             alert('請輸入完整的生效日期與基準日');
         }
@@ -87,8 +92,12 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
 
     const handleRemoveAnchor = async (effectiveDate: string) => {
         if (confirm('確定要刪除此重置點嗎？')) {
-            await db.removeCycleAnchor(effectiveDate);
-            setAnchors(db.getCycleAnchors());
+            try {
+                await db.removeCycleAnchor(effectiveDate);
+                setAnchors(db.getCycleAnchors());
+            } catch (error: any) {
+                alert('刪除失敗: ' + (error.message || '未知錯誤'));
+            }
         }
     };
 

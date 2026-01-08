@@ -109,7 +109,9 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
         color: formData.color,
         capabilities: formData.capabilities,
         learningCapabilities: formData.learningCapabilities,
-        excludedCapabilities: formData.excludedCapabilities
+        excludedCapabilities: formData.excludedCapabilities,
+        password: '1234',
+        mustChangePassword: true
       };
       db.addUser(u);
     }

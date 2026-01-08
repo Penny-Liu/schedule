@@ -11,6 +11,8 @@ import StatisticsPage from './pages/StatisticsPage';
 import { db } from './services/store';
 import { Loader2 } from 'lucide-react';
 
+import ChangePasswordPage from './pages/ChangePasswordPage';
+
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [currentPage, setCurrentPage] = useState('dashboard');
@@ -81,6 +83,17 @@ const App: React.FC = () => {
 
   if (!currentUser) {
     return <LoginPage onLogin={handleLogin} />;
+  }
+
+  // FORCE PASSWORD CHANGE CHECK
+  if (currentUser.mustChangePassword || currentUser.password === '1234') {
+    return (
+      <ChangePasswordPage
+        currentUser={currentUser}
+        onPasswordChanged={(updatedUser) => setCurrentUser(updatedUser)}
+        onLogout={handleLogout}
+      />
+    );
   }
 
   const renderPage = () => {
