@@ -312,44 +312,38 @@ class Store {
             this.shifts.push(shift);
         }
 
-        // 2. Remote Sync
-        // Step A: Check DB for existing records to ensure we use the correct ID (Avoid Duplicates if constraint missing)
-        const { data: existingRecords, error: fetchError } = await supabase
+        // 2. Remote Sync: NUCLEAR OPTION
+        // To guarantee "One Person One Station" and solve all duplicate/ghost record issues:
+        // We DELETE ALL records for this user+date first.
+        // Then we INSERT the new record.
+        // This is safer than upsert when constraints are missing or IDs are mismatched.
+
+        // Step A: Delete ALL records for this specific slot
+        const { error: deleteError } = await supabase
             .from('shifts')
-            .select('id')
+            .delete()
             .eq('userId', shift.userId)
             .eq('date', shift.date);
 
-        if (fetchError) {
-            console.error('Failed to fetch existing shifts for verification:', fetchError);
-            return { error: fetchError };
+        if (deleteError) {
+            console.error('Failed to clear previous shifts:', deleteError);
+            return { error: deleteError };
         }
 
-        let targetId = shift.id;
+        // Step B: Insert the new shift
+        // We use 'upsert' here just in case the DELETE didn't commit fast enough (race condition) or to handle ID collisions gracefully if they exist.
+        // effectively acting as an INSERT since we cleared the slot.
+        const { error } = await supabase.from('shifts').insert(shift);
 
-        // If records exist in DB
-        if (existingRecords && existingRecords.length > 0) {
-            // Find if our current targetId is among them
-            const exactMatch = existingRecords.find(r => r.id === shift.id);
-            if (exactMatch) {
-                targetId = exactMatch.id;
-            } else {
-                // If not, hijack the first one found to be our target ID (Update it instead of creating new)
-                targetId = existingRecords[0].id;
-                shift.id = targetId; // Important: Start using this ID
-            }
-
-            // Step B: Delete duplicates (Records that are NOT the targetId)
-            const idsToDelete = existingRecords.filter(r => r.id !== targetId).map(r => r.id);
-            if (idsToDelete.length > 0) {
-                await supabase.from('shifts').delete().in('id', idsToDelete);
-            }
+        if (error) {
+            console.error('Failed to insert new shift:', error);
+            // If INSERT fails (e.g. duplicate key because DELETE missed one?), try UPSERT as fallback
+            const { error: retryError } = await supabase.from('shifts').upsert(shift);
+            if (retryError) return { error: retryError };
         }
 
-        // Sync DB
-        const { error } = await supabase.from('shifts').upsert(shift);
         this.notifyListeners();
-        return { error };
+        return { error: null };
     }
 
     // Leaves
