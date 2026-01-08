@@ -307,22 +307,44 @@ class Store {
 
         // Update or Push
         if (foundIndex >= 0) {
-            // Adjust index if splicing shifted it (unlikely if we iterate appropriately but safer to re-find or just use object ref if strictly same array)
-            // Actually, we splice indices > foundIndex, so foundIndex is constant.
-            // If duplicates were *before* foundIndex... wait, findIndex logic:
-            // We kept the *first* encountered as foundIndex. Duplicates found later are > foundIndex.
-            // Splicing them is safe.
             this.shifts[foundIndex] = shift;
         } else {
             this.shifts.push(shift);
         }
 
         // 2. Remote Sync
-        // Safety Clean DB: Delete any other records for this user/date to enforce "One Person One Station"
-        await supabase.from('shifts').delete()
+        // Step A: Check DB for existing records to ensure we use the correct ID (Avoid Duplicates if constraint missing)
+        const { data: existingRecords, error: fetchError } = await supabase
+            .from('shifts')
+            .select('id')
             .eq('userId', shift.userId)
-            .eq('date', shift.date)
-            .neq('id', shift.id);
+            .eq('date', shift.date);
+
+        if (fetchError) {
+            console.error('Failed to fetch existing shifts for verification:', fetchError);
+            return { error: fetchError };
+        }
+
+        let targetId = shift.id;
+
+        // If records exist in DB
+        if (existingRecords && existingRecords.length > 0) {
+            // Find if our current targetId is among them
+            const exactMatch = existingRecords.find(r => r.id === shift.id);
+            if (exactMatch) {
+                targetId = exactMatch.id;
+            } else {
+                // If not, hijack the first one found to be our target ID (Update it instead of creating new)
+                targetId = existingRecords[0].id;
+                shift.id = targetId; // Important: Start using this ID
+            }
+
+            // Step B: Delete duplicates (Records that are NOT the targetId)
+            const idsToDelete = existingRecords.filter(r => r.id !== targetId).map(r => r.id);
+            if (idsToDelete.length > 0) {
+                await supabase.from('shifts').delete().in('id', idsToDelete);
+            }
+        }
 
         // Sync DB
         const { error } = await supabase.from('shifts').upsert(shift);
