@@ -663,21 +663,31 @@ class Store {
     }
 
     getUserStatusOnDate(userId: string, dateStr: string): 'WORK' | 'OFF' {
-        // Keep exact logic
         const user = this.users.find(u => u.id === userId);
         if (!user) return 'OFF';
+
         const shift = this.shifts.find(s => s.userId === userId && s.date === dateStr);
-        if (shift) {
-            return shift.station === SYSTEM_OFF ? 'OFF' : 'WORK';
+        // Explicit override: If assigned to OFF, it's OFF.
+        if (shift && shift.station === SYSTEM_OFF) {
+            return 'OFF';
         }
+
+        // Explicit override: If assigned to a real station (not Unassigned), it's WORK.
+        if (shift && shift.station && shift.station !== StationDefault.UNASSIGNED && shift.station !== '未分配') {
+            return 'WORK';
+        }
+
+        // If no shift record OR shift is Unassigned/Neutral: Check underlying status
         const event = this.getEvent(dateStr);
         if (event && event.type === DateEventType.CLOSED) {
             return 'OFF';
         }
+
         const baseStatus = this.calculateBaseStatus(dateStr, user.groupId);
         if (baseStatus === SYSTEM_OFF) {
             return 'OFF';
         }
+
         const approvedLeave = this.leaves.find(l =>
             l.userId === userId &&
             l.status === LeaveStatus.APPROVED &&
@@ -685,6 +695,7 @@ class Store {
             dateStr <= l.endDate
         );
         if (approvedLeave) return 'OFF';
+
         return 'WORK';
     }
 
