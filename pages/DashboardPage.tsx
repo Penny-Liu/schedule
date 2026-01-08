@@ -811,19 +811,51 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
     // --- Data Access Helpers ---
     const getDayShift = (userId: string, dateStr: string) => {
         const override = shifts.find(s => s.userId === userId && s.date === dateStr);
+
+        // Check for underlying off status first (e.g. holidays, roster cycle)
+        const autoStation = db.calculateBaseStatus(dateStr, users.find(u => u.id === userId)?.groupId || '');
+        const event = holidays.find(h => h.date === dateStr);
+        const isClosed = event?.type === DateEventType.CLOSED;
+
+        // If there is an override shift record
         if (override) {
+            // Case 1: Explicitly marked as OFF in DB -> OFF
+            if (override.station === SYSTEM_OFF) {
+                return { station: null, specialRoles: override.specialRoles || [], isOff: true };
+            }
+
+            // Case 2: Assigned to a valid station -> WORK (overrides any auto-off)
+            if (override.station && override.station !== StationDefault.UNASSIGNED && override.station !== '未分配') {
+                return {
+                    station: override.station,
+                    specialRoles: override.specialRoles || [],
+                    isOff: false
+                };
+            }
+
+            // Case 3: It is UNASSIGNED shift record.
+            // If the user *should* be OFF by default (e.g. holiday or weekend), treat as OFF.
+            // Unless the user explicitly wants to work (needs a way to flag "Extra Work", but currently assigning a station is that flag).
+            // So if UNASSIGNED and naturally OFF, show as OFF.
+            if (isClosed || autoStation === SYSTEM_OFF) {
+                return { station: null, specialRoles: override.specialRoles || [], isOff: true };
+            }
+
+            // Case 4: UNASSIGNED and naturally WORK -> UNASSIGNED
             return {
-                station: override.station === SYSTEM_OFF ? null : override.station,
+                station: null,
                 specialRoles: override.specialRoles || [],
-                isOff: override.station === SYSTEM_OFF
+                isOff: false
             };
         }
-        const event = holidays.find(h => h.date === dateStr);
-        if (event && event.type === DateEventType.CLOSED) return { station: null, specialRoles: [], isOff: true };
+
+        // No override record: Fallback to calculated status
+        if (isClosed) return { station: null, specialRoles: [], isOff: true };
         const user = users.find(u => u.id === userId);
         if (!user) return { station: null, specialRoles: [], isOff: false };
-        const autoStation = db.calculateBaseStatus(dateStr, user.groupId);
         if (autoStation === SYSTEM_OFF) return { station: null, specialRoles: [], isOff: true };
+
+        // Default: Unassigned work day
         return { station: null, specialRoles: [], isOff: false };
     };
 
