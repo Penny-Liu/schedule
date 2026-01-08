@@ -269,6 +269,13 @@ class Store {
         } else {
             this.shifts.push(shift);
         }
+        // Safety Clean: Delete any other records for this user/date to enforce "One Person One Station"
+        // This removes "ghost" records created by the previous ID bug
+        await supabase.from('shifts').delete()
+            .eq('userId', shift.userId)
+            .eq('date', shift.date)
+            .neq('id', shift.id);
+
         // Sync DB
         await supabase.from('shifts').upsert(shift);
         this.notifyListeners();
