@@ -558,7 +558,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
                                             className="flex-1 px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 outline-none cursor-pointer bg-white"
                                         >
                                             <option value={DateEventType.NATIONAL}>國定假日 (紅字)</option>
-                                            <option value={DateEventType.MEETING}>科會 (藍字)</option>
+                                            <option value={DateEventType.MEETING}>備忘 (藍字)</option>
                                             <option value={DateEventType.CLOSED}>休診 (全員預設休假)</option>
                                         </select>
                                         <button type="submit" className="bg-gray-800 text-white px-6 rounded-lg hover:bg-gray-700 flex items-center justify-center">
