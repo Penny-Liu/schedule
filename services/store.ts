@@ -285,14 +285,40 @@ class Store {
     }
 
     async upsertShift(shift: Shift) {
-        const index = this.shifts.findIndex(s => s.userId === shift.userId && s.date === shift.date);
-        if (index >= 0) {
-            this.shifts[index] = shift;
+        // 1. Update Local State: Remove conflicting duplicates immediately
+        const otherIndices: number[] = [];
+        let foundIndex = -1;
+
+        for (let i = 0; i < this.shifts.length; i++) {
+            const s = this.shifts[i];
+            if (s.userId === shift.userId && s.date === shift.date) {
+                if (foundIndex === -1) {
+                    foundIndex = i;
+                } else {
+                    otherIndices.push(i);
+                }
+            }
+        }
+
+        // Remove duplicates (reverse order to preserve indices)
+        for (let i = otherIndices.length - 1; i >= 0; i--) {
+            this.shifts.splice(otherIndices[i], 1);
+        }
+
+        // Update or Push
+        if (foundIndex >= 0) {
+            // Adjust index if splicing shifted it (unlikely if we iterate appropriately but safer to re-find or just use object ref if strictly same array)
+            // Actually, we splice indices > foundIndex, so foundIndex is constant.
+            // If duplicates were *before* foundIndex... wait, findIndex logic:
+            // We kept the *first* encountered as foundIndex. Duplicates found later are > foundIndex.
+            // Splicing them is safe.
+            this.shifts[foundIndex] = shift;
         } else {
             this.shifts.push(shift);
         }
-        // Safety Clean: Delete any other records for this user/date to enforce "One Person One Station"
-        // This removes "ghost" records created by the previous ID bug
+
+        // 2. Remote Sync
+        // Safety Clean DB: Delete any other records for this user/date to enforce "One Person One Station"
         await supabase.from('shifts').delete()
             .eq('userId', shift.userId)
             .eq('date', shift.date)
