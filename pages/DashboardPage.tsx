@@ -808,9 +808,19 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
         }
     };
 
+    // --- Performance Optimization: Shift Lookup Map ---
+    const shiftMap = useMemo(() => {
+        const map = new Map<string, Shift>();
+        shifts.forEach(s => {
+            map.set(`${s.userId}-${s.date}`, s);
+        });
+        return map;
+    }, [shifts]);
+
     // --- Data Access Helpers ---
     const getDayShift = (userId: string, dateStr: string) => {
-        const override = shifts.find(s => s.userId === userId && s.date === dateStr);
+        // Optimized Lookup O(1)
+        const override = shiftMap.get(`${userId}-${dateStr}`);
 
         // If there is an override shift record, TRUST IT.
         // Even if it is Unassigned, it means the user was explicitly set to be here (e.g. Leave Cancelled).
