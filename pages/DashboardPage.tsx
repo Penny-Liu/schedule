@@ -269,7 +269,8 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
             const end = scheduleRange.end;
 
             // Call the nuclear sync
-            const { error } = await db.commitShiftsForRange(start, end);
+            // Pass current 'shifts' state to ensure we save exactly what is visible
+            const { error } = await db.commitShiftsForRange(start, end, shifts);
 
             if (error) {
                 showToast('儲存失敗，請重試', 'error');

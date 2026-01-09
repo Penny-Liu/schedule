@@ -30,6 +30,7 @@ class Store {
     isLoaded: boolean = false;
     private listeners: (() => void)[] = [];
     private settingsRowId: string | number = 1; // Default to 1, but dynamic
+    private subscription: any = null; // Realtime subscription
 
     constructor() {
         // We do not load in constructor anymore because it needs to be async
@@ -49,6 +50,9 @@ class Store {
     // New method to fetch all data from Supabase
     async initializeData(force: boolean = false) {
         if (this.isLoaded && !force) return;
+
+        // Setup Realtime Subscription
+        this.setupRealtimeSubscription();
 
         try {
             console.log('Fetching data from Supabase...');
@@ -146,6 +150,51 @@ class Store {
             console.error("Failed to fetch data from Supabase", e);
             // Fallback to local storage or mock if critical failure
             this.loadFromLocalStorage();
+        }
+    }
+
+    // Realtime Listener Setup
+    private setupRealtimeSubscription() {
+        if (this.subscription) return;
+
+        this.subscription = supabase
+            .channel('public:shifts')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'shifts' }, (payload) => {
+                this.handleRealtimeShiftUpdate(payload);
+            })
+            .subscribe((status) => {
+                if (status === 'SUBSCRIBED') {
+                    console.log('[Realtime] Connected to shifts table');
+                }
+            });
+    }
+
+    private handleRealtimeShiftUpdate(payload: any) {
+        const { eventType, new: newRecord, old: oldRecord } = payload;
+
+        if (eventType === 'INSERT') {
+            const exists = this.shifts.some(s => s.id === newRecord.id);
+            if (!exists) {
+                // Check if we have a "pending" shift for this slot (optimistic update with different ID)
+                const slotIndex = this.shifts.findIndex(s => s.userId === newRecord.userId && s.date === newRecord.date);
+                if (slotIndex >= 0) {
+                    // Update the existing slot with the authoritative record from DB
+                    this.shifts[slotIndex] = newRecord as Shift;
+                } else {
+                    this.shifts.push(newRecord as Shift);
+                }
+                this.notifyListeners();
+            }
+        } else if (eventType === 'UPDATE') {
+            const index = this.shifts.findIndex(s => s.id === newRecord.id);
+            if (index !== -1) {
+                this.shifts[index] = newRecord as Shift;
+                this.notifyListeners();
+            }
+        } else if (eventType === 'DELETE') {
+            const idToDelete = oldRecord.id;
+            this.shifts = this.shifts.filter(s => s.id !== idToDelete);
+            this.notifyListeners();
         }
     }
 
@@ -771,12 +820,14 @@ class Store {
 
     // New: Nuclear Option for "Complete" button
     // Deletes everything in range and re-inserts local state to ensure 1:1 match
-    async commitShiftsForRange(startDate: string, endDate: string) {
+    async commitShiftsForRange(startDate: string, endDate: string, latestShifts?: Shift[]) {
         console.log(`[Sync] Committing shifts for range ${startDate} to ${endDate}...`);
-        
+
         // 1. Get all local shifts in this range
-        const shiftsToCommit = this.shifts.filter(s => s.date >= startDate && s.date <= endDate);
-        
+        // Use provided 'latestShifts' if available (WYSIWYG), otherwise fallback to store state
+        const sourceShifts = latestShifts || this.shifts;
+        const shiftsToCommit = sourceShifts.filter(s => s.date >= startDate && s.date <= endDate);
+
         try {
             // 2. Delete ALL remote shifts in this range
             // We use a range filter on 'date'
@@ -796,7 +847,7 @@ class Store {
                 const { error: insertError } = await supabase
                     .from('shifts')
                     .insert(shiftsToCommit);
-                
+
                 if (insertError) throw insertError;
             }
 
