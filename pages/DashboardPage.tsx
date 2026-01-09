@@ -1553,7 +1553,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                             <button
                                 onClick={() => {
                                     setViewMode('user');
-                                    db.initializeData(true);
+                                    // db.initializeData(true); // Removed to prevent data loss on switch
                                 }}
                                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${viewMode === 'user' ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
                                     } `}
@@ -1563,7 +1563,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                             <button
                                 onClick={() => {
                                     setViewMode('station');
-                                    db.initializeData(true);
+                                    // db.initializeData(true); // Removed to prevent data loss on switch
                                 }}
                                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${viewMode === 'station' ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
                                     } `}
