@@ -404,7 +404,10 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                         const event = holidays.find(h => h.date === date);
                         const isClosed = event?.type === DateEventType.CLOSED;
 
-                        if (isOff || isClosed) {
+                        // Fix: Check if specific station is assigned. If so, prioritize showing it even if it's a Closed day.
+                        const hasAssignedStation = station && station !== StationDefault.UNASSIGNED && station !== SYSTEM_OFF && !station.includes('休假');
+
+                        if ((isOff || isClosed) && !hasAssignedStation) {
                             // Fix: Use simple string content for 'Off' so custom drawer doesn't duplicate it
                             rowData.push('休');
                         } else {
