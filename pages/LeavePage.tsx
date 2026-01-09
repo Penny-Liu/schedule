@@ -384,10 +384,19 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
     // Robust date parsing
     const end = new Date(l.endDate);
     return end >= cutoffDate;
-  }).sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime()); // Optional: Sort Newest First logic if not already present (Array order might be random)
+  }).sort((a, b) => {
+    // 1. Primary Sort: Pending Status First
+    const isAPending = a.status === LeaveStatus.PENDING;
+    const isBPending = b.status === LeaveStatus.PENDING;
+    if (isAPending && !isBPending) return -1;
+    if (!isAPending && isBPending) return 1;
+
+    // 2. Secondary Sort: Date (Newest First)
+    return new Date(b.startDate).getTime() - new Date(a.startDate).getTime();
+  });
 
   return (
-    <div className="p-6 max-w-7xl mx-auto h-screen overflow-y-auto">
+    <div className="p-6 max-w-7xl mx-auto h-screen overflow-y-auto pb-24">
       <div className="flex justify-between items-center mb-6">
         <div>
           <h2 className="text-xl font-bold text-gray-800">請假管理</h2>
@@ -414,56 +423,71 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
           const needsTargetAction = isSwap && leave.status === LeaveStatus.PENDING && leave.targetApproval === 'PENDING';
           const waitingForSupervisor = !isSwap || (isSwap && leave.targetApproval === 'AGREED');
 
+          const isProcessed = leave.status !== LeaveStatus.PENDING;
+
           return (
-            <div key={leave.id} className="bg-white rounded-xl shadow-[0_2px_12px_rgba(0,0,0,0.03)] border border-gray-100 p-5 flex flex-col hover:border-teal-100 transition-colors">
-              <div className="flex justify-between items-start mb-4">
+            <div key={leave.id} className={`bg-white rounded-xl shadow-[0_2px_12px_rgba(0,0,0,0.03)] border transition-colors flex flex-col ${isProcessed ? 'p-3 border-slate-100 opacity-75 hover:opacity-100' : 'p-5 border-gray-100 hover:border-teal-100'} `}>
+              <div className={`flex justify-between items-start ${isProcessed ? 'mb-2' : 'mb-4'} `}>
                 <div className="flex items-center gap-3">
                   <div
-                    className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm shadow-sm"
+                    className={`${isProcessed ? 'w-8 h-8 text-xs grayscale opacity-50' : 'w-10 h-10 text-sm shadow-sm'} rounded-full flex items-center justify-center text-white font-bold transition-all`}
                     style={{ backgroundColor: requestor?.color || '#9CA3AF' }}
                   >
                     {requestor?.alias || requestor?.name.charAt(0)}
                   </div>
                   <div>
-                    <div className="font-bold text-gray-800 flex items-center gap-1">
+                    <div className={`font-bold flex items-center gap-1 ${isProcessed ? 'text-gray-500 text-sm' : 'text-gray-800'} `}>
                       {requestor?.name}
                       {isSwap && <ArrowRightLeft size={12} className="text-gray-400" />}
                       {targetUser && <span className="text-blue-600">{targetUser.name}</span>}
                     </div>
-                    <div className="text-xs text-gray-500 font-medium flex items-center gap-1 mt-0.5">
+                    <div className="text-xs text-gray-400 font-medium flex items-center gap-1 mt-0.5">
                       {getTypeIcon(leave.type)} {leave.type}
                       {leave.roleToSwap && <span className="text-indigo-600">({leave.roleToSwap})</span>}
                     </div>
                   </div>
                 </div>
-                <div className={`px-2.5 py-1 rounded text-[10px] font-bold border tracking-wide ${getStatusColor(leave.status)}`}>
+                <div className={`px-2 py-0.5 rounded text-[10px] font-bold border tracking-wide ${getStatusColor(leave.status)} ${isProcessed ? 'scale-90 origin-right' : ''} `}>
                   {leave.status}
                 </div>
               </div>
 
-              <div className="space-y-3 mb-6">
-                <div className="flex items-center gap-2 text-sm text-gray-600 bg-gray-50 p-2.5 rounded-lg border border-gray-100">
-                  <div className="flex flex-col text-xs font-semibold w-full">
-                    <div className="flex justify-between items-center">
-                      <div className="flex items-center gap-1">
-                        <span>{leave.startDate} <span className="text-xs text-gray-400">{getWeekday(leave.startDate)}</span></span>
-                        {leave.startDate !== leave.endDate && (
-                          <>
-                            <span className="text-gray-400">→</span>
-                            <span>{leave.endDate} <span className="text-xs text-gray-400">{getWeekday(leave.endDate)}</span></span>
-                          </>
-                        )}
+              {!isProcessed && (
+                <div className="space-y-3 mb-6">
+                  <div className="flex items-center gap-2 text-sm text-gray-600 bg-gray-50 p-2.5 rounded-lg border border-gray-100">
+                    <div className="flex flex-col text-xs font-semibold w-full">
+                      <div className="flex justify-between items-center">
+                        <div className="flex items-center gap-1">
+                          <span>{leave.startDate} <span className="text-xs text-gray-400">{getWeekday(leave.startDate)}</span></span>
+                          {leave.startDate !== leave.endDate && (
+                            <>
+                              <span className="text-gray-400">→</span>
+                              <span>{leave.endDate} <span className="text-xs text-gray-400">{getWeekday(leave.endDate)}</span></span>
+                            </>
+                          )}
+                        </div>
+                        <span className="text-teal-600 bg-white px-1.5 py-0.5 rounded border border-teal-100 shadow-sm">{days} 天</span>
                       </div>
-                      <span className="text-teal-600 bg-white px-1.5 py-0.5 rounded border border-teal-100 shadow-sm">{days} 天</span>
                     </div>
                   </div>
+                  {leave.reason && (
+                    <p className="text-sm text-gray-600 italic bg-white px-1">"{leave.reason}"</p>
+                  )}
                 </div>
-                {leave.reason && (
-                  <p className="text-sm text-gray-600 italic bg-white px-1">"{leave.reason}"</p>
-                )}
-              </div>
+              )}
 
-              <div className="mt-auto pt-4 border-t border-gray-50 flex flex-col gap-2">
+              {/* Compact Date Info for Processed Cards */}
+              {isProcessed && (
+                <div className="mb-2 pl-11 -mt-1">
+                  <div className="flex items-center gap-2 text-xs text-gray-400">
+                    <span>{leave.startDate}</span>
+                    {leave.startDate !== leave.endDate && <span>~ {leave.endDate}</span>}
+                    <span className="bg-slate-100 px-1 rounded text-slate-500">{days}天</span>
+                  </div>
+                </div>
+              )}
+
+              <div className={`mt-auto border-t border-gray-50 flex flex-col gap-2 ${isProcessed ? 'pt-2' : 'pt-4'} `}>
 
                 {/* 1. Target User Approval Step */}
                 {needsTargetAction && currentUser.id === leave.targetUserId && (
@@ -511,14 +535,20 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
                         : (waitingForSupervisor ? '等待主管審核' : '處理中')}
                     </div>
                   ) : (
-                    <div className="text-[10px] text-gray-400 flex items-center gap-1">
-                      <UserCheck size={12} />
-                      {approver ? `${approver.name} 已審核` : '已處理'}
+                    <div className="text-[10px] text-gray-500 font-medium flex items-center gap-1">
+                      <UserCheck size={12} className="text-teal-600" />
+                      {approver ? (
+                        <span>
+                          <span className="font-bold text-gray-700">{approver.name}</span>
+                          <span className="text-gray-400 ml-1">於 {leave.processedAt ? new Date(leave.processedAt).toLocaleString('zh-TW', { month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric' }) : '未記錄時間'} 審核</span>
+                        </span>
+                      ) : '已處理'}
                     </div>
                   )}
                   <div className="flex items-center gap-2">
                     <div className="text-[10px] text-gray-300">
-                      {leave.processedAt ? new Date(leave.processedAt).toLocaleDateString() : new Date(leave.createdAt).toLocaleDateString()}
+                      {/* Only show created date if still pending, processed showed above */}
+                      {leave.status === LeaveStatus.PENDING && new Date(leave.createdAt).toLocaleDateString()}
                     </div>
                     {currentUser.id === leave.userId && leave.status === LeaveStatus.PENDING && (
                       <button
