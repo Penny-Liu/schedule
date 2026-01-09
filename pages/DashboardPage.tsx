@@ -1014,22 +1014,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
         });
     };
 
-    const handleAddUserToRole = (userId: string, dateStr: string, role: string) => {
-        const existingShift = shifts.find(s => s.userId === userId && s.date === dateStr);
-        const station = existingShift ? existingShift.station : StationDefault.UNASSIGNED;
-        const currentRoles = existingShift ? existingShift.specialRoles : [];
-        if (!currentRoles.includes(role)) {
-            handleUpdateShift(userId, dateStr, station, [...currentRoles, role]);
-        }
-    };
 
-    const handleRemoveUserFromRole = (userId: string, dateStr: string, role: string) => {
-        const existingShift = shifts.find(s => s.userId === userId && s.date === dateStr);
-        if (existingShift) {
-            const newRoles = existingShift.specialRoles.filter(r => r !== role);
-            handleUpdateShift(userId, dateStr, existingShift.station, newRoles);
-        }
-    };
 
     const getCandidatesForRole = (role: string, dateStr: string) => {
         return users.filter(user => {
@@ -1046,13 +1031,14 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
     };
 
     const handleAddUserToStation = (userId: string, dateStr: string, station: string) => {
-        const existingShift = shifts.find(s => s.userId === userId && s.date === dateStr);
+        // Use db.shifts (Sync State) instead of React state to avoid staleness
+        const existingShift = db.shifts.find(s => s.userId === userId && s.date === dateStr);
         const roles = existingShift ? existingShift.specialRoles : [];
         handleUpdateShift(userId, dateStr, station, roles);
     };
 
     const handleRemoveUserFromStation = (userId: string, dateStr: string) => {
-        const existingShift = shifts.find(s => s.userId === userId && s.date === dateStr);
+        const existingShift = db.shifts.find(s => s.userId === userId && s.date === dateStr);
         const roles = existingShift ? existingShift.specialRoles : [];
         handleUpdateShift(userId, dateStr, StationDefault.UNASSIGNED, roles);
     };
@@ -1220,6 +1206,25 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
         });
     }, [displayOrder, shifts]);
 
+    // Optimize role updates as well
+    const handleAddUserToRole = (userId: string, dateStr: string, role: string) => {
+        // Use db.shifts (Sync)
+        const existingShift = db.shifts.find(s => s.userId === userId && s.date === dateStr);
+        const station = existingShift ? existingShift.station : StationDefault.UNASSIGNED;
+        const currentRoles = existingShift ? existingShift.specialRoles : [];
+        if (!currentRoles.includes(role)) {
+            handleUpdateShift(userId, dateStr, station, [...currentRoles, role]);
+        }
+    };
+
+    const handleRemoveUserFromRole = (userId: string, dateStr: string, role: string) => {
+        // Use db.shifts (Sync)
+        const existingShift = db.shifts.find(s => s.userId === userId && s.date === dateStr);
+        if (existingShift) {
+            const newRoles = existingShift.specialRoles.filter(r => r !== role);
+            handleUpdateShift(userId, dateStr, existingShift.station, newRoles);
+        }
+    };
     return (
         <div className="h-full flex flex-col bg-slate-50 relative">
             <ConfirmModal
