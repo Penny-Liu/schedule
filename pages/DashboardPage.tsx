@@ -2140,6 +2140,26 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                                             const isAssist = item.shift.specialRoles.includes(SPECIAL_ROLES.ASSIST);
                                                                             const isScheduler = item.shift.specialRoles.includes(SPECIAL_ROLES.SCHEDULER);
 
+                                                                            // LEAVE STATUS CHECK
+                                                                            const approvedLeave = db.getLeaves().find(l =>
+                                                                                l.userId === item.user!.id &&
+                                                                                l.status === LeaveStatus.APPROVED &&
+                                                                                date >= l.startDate &&
+                                                                                date <= l.endDate
+                                                                            );
+
+                                                                            const isPreLeave = approvedLeave?.type === LeaveType.PRE_SCHEDULED;
+                                                                            const isLongLeave = approvedLeave?.type === LeaveType.LONG_LEAVE;
+                                                                            const isCancelLeave = approvedLeave?.type === LeaveType.CANCEL_LEAVE; // Usually this means they ARE working, but maybe show a badge?
+                                                                            const isSwapShift = approvedLeave?.type === LeaveType.SWAP_SHIFT; // They swapped out? If they are here, maybe they swapped IN?
+                                                                            // Wait, if they are in Station View, they are WORKING.
+                                                                            // Why would they have a leave record?
+                                                                            // 1. Cancel Leave -> We show they are working. User wants to see "Cancel Leave" badge.
+                                                                            // 2. Swap Shift -> If they are the one working (Target), we might track that via a DIFFERENT record? 
+                                                                            //    Or if the Requestor is working? No, Requestor is OFF.
+                                                                            //    So if item.user is here, they are working.
+                                                                            //    Visual Request: "Show if this person has Pre/Cancel/Long/Swap".
+
                                                                             // Only show suffix if the row itself isn't that role
                                                                             const showSuffix = row.type === 'STATION';
 
@@ -2158,10 +2178,20 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                                                     key={i}
                                                                                     className={`px-1 py-1 rounded text-sm font-bold shadow-sm flex flex-col items-center w-full max-w-[60px] relative group / chip border ${chipClass} `}
                                                                                 >
-                                                                                    <span className="truncate text-xs leading-tight mb-0.5">
+                                                                                    <span className="truncate text-xs leading-tight mb-0.5 whitespace-nowrap flex items-center gap-0.5">
                                                                                         {item.user?.name ? formatName(item.user.name) : ''}
-                                                                                        {isLearner && <span className="text-[9px] ml-0.5">(學)</span>}
+                                                                                        {isLearner && <span className="text-[9px]">(學)</span>}
                                                                                     </span>
+
+                                                                                    {/* Leave / Status Indicators */}
+                                                                                    {approvedLeave && (
+                                                                                        <div className="flex gap-0.5 mb-0.5">
+                                                                                            {isPreLeave && <span className="text-[8px] bg-blue-500 text-white px-0.5 rounded leading-none scale-90">預</span>}
+                                                                                            {isCancelLeave && <span className="text-[8px] bg-emerald-500 text-white px-0.5 rounded leading-none scale-90">銷</span>}
+                                                                                            {isLongLeave && <span className="text-[8px] bg-purple-500 text-white px-0.5 rounded leading-none scale-90">長</span>}
+                                                                                            {isSwapShift && <span className="text-[8px] bg-amber-500 text-white px-0.5 rounded leading-none scale-90">換</span>}
+                                                                                        </div>
+                                                                                    )}
 
                                                                                     {showSuffix && (isOpening || isLate || isAssist || isScheduler) && (
                                                                                         <div className="flex flex-col gap-0.5 mt-0.5 w-full items-center">

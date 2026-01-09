@@ -285,10 +285,11 @@ class Store {
     }
 
     async upsertShift(shift: Shift) {
-        // 1. Update Local State: Remove conflicting duplicates immediately
+        // 1. Update Local State: Optimistic Update
         const otherIndices: number[] = [];
         let foundIndex = -1;
 
+        // Clean local state first
         for (let i = 0; i < this.shifts.length; i++) {
             const s = this.shifts[i];
             if (s.userId === shift.userId && s.date === shift.date) {
@@ -299,50 +300,74 @@ class Store {
                 }
             }
         }
-
-        // Remove duplicates (reverse order to preserve indices)
         for (let i = otherIndices.length - 1; i >= 0; i--) {
             this.shifts.splice(otherIndices[i], 1);
         }
 
-        // Update or Push
+        // Generate a new ID for the local state to match what we will send to DB (approximately)
+        // or just keep the one passed if it's new.
+        // Actually, to avoid PK conflicts, we should generate a new UUID if we are doing the "Delete All" strategy.
+        // But for local state, we just need it to work.
         if (foundIndex >= 0) {
             this.shifts[foundIndex] = shift;
         } else {
             this.shifts.push(shift);
         }
 
-        // 2. Remote Sync: NUCLEAR OPTION
-        // To guarantee "One Person One Station" and solve all duplicate/ghost record issues:
-        // We DELETE ALL records for this user+date first.
-        // Then we INSERT the new record.
-        // This is safer than upsert when constraints are missing or IDs are mismatched.
+        this.notifyListeners(); // Notify immediately for UI responsiveness
 
-        // Step A: Delete ALL records for this specific slot
-        const { error: deleteError } = await supabase
-            .from('shifts')
-            .delete()
-            .eq('userId', shift.userId)
-            .eq('date', shift.date);
+        // 2. Remote Sync: Robust 'Select-Delete-Insert'
+        try {
+            // A. Fetch ANY existing records for this slot
+            const { data: existing, error: fetchError } = await supabase
+                .from('shifts')
+                .select('id')
+                .eq('userId', shift.userId)
+                .eq('date', shift.date);
 
-        if (deleteError) {
-            console.error('Failed to clear previous shifts:', deleteError);
-            return { error: deleteError };
+            if (fetchError) throw fetchError;
+
+            // B. Delete them explicitly by ID (Verification step)
+            if (existing && existing.length > 0) {
+                const ids = existing.map(e => e.id);
+                // Log what we are destroying to be sure
+                // console.log('Cleaning up duplicates:', ids);
+                const { error: delError } = await supabase
+                    .from('shifts')
+                    .delete()
+                    .in('id', ids);
+
+                if (delError) throw delError;
+            }
+
+            // C. Insert as NEW record (Avoid ID conflict)
+            // We use a clean object without 'id' if we want DB to gen it, OR we generate a fresh one.
+            // Using a fresh random UUID is safest to avoid any cached PK issues.
+            const newId = crypto.randomUUID();
+            const payload = { ...shift, id: newId };
+
+            const { error: insertError } = await supabase
+                .from('shifts')
+                .insert(payload);
+
+            if (insertError) {
+                // Determine if we should retry or alert
+                throw insertError;
+            }
+
+            // Update local ID to match the persisted one (important for future deletes)
+            const finalIndex = this.shifts.findIndex(s => s.userId === shift.userId && s.date === shift.date);
+            if (finalIndex >= 0) {
+                this.shifts[finalIndex].id = newId;
+            }
+
+        } catch (err: any) {
+            console.error('Persistence failed:', err);
+            // Revert local state? Or just warn?
+            // Since we are optimistic, a silent fail is bad. We return error for the UI to Toast.
+            return { error: err };
         }
 
-        // Step B: Insert the new shift
-        // We use 'upsert' here just in case the DELETE didn't commit fast enough (race condition) or to handle ID collisions gracefully if they exist.
-        // effectively acting as an INSERT since we cleared the slot.
-        const { error } = await supabase.from('shifts').insert(shift);
-
-        if (error) {
-            console.error('Failed to insert new shift:', error);
-            // If INSERT fails (e.g. duplicate key because DELETE missed one?), try UPSERT as fallback
-            const { error: retryError } = await supabase.from('shifts').upsert(shift);
-            if (retryError) return { error: retryError };
-        }
-
-        this.notifyListeners();
         return { error: null };
     }
 
