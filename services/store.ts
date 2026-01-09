@@ -688,12 +688,14 @@ class Store {
             return 'OFF';
         }
 
-        // Explicit override: If assigned to a real station (not Unassigned), it's WORK.
-        if (shift && shift.station && shift.station !== StationDefault.UNASSIGNED && shift.station !== '未分配') {
+        // Explicit override: If record exists and NOT OFF, it is WORK.
+        // Since we now use "Nuclear Persistence" (Delete-then-Insert), any record here is intentional.
+        // So even "Unassigned" means the user was explicitly set to be available/working.
+        if (shift) {
             return 'WORK';
         }
 
-        // If no shift record OR shift is Unassigned/Neutral: Check underlying status
+        // If no shift record at all: Check underlying status
         const event = this.getEvent(dateStr);
         if (event && event.type === DateEventType.CLOSED) {
             return 'OFF';
