@@ -260,6 +260,32 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
         });
     };
 
+    const handleComplete = async () => {
+        if (!isEditMode) return;
+
+        try {
+            setIsProcessing(true);
+            const start = scheduleRange.start;
+            const end = scheduleRange.end;
+
+            // Call the nuclear sync
+            const { error } = await db.commitShiftsForRange(start, end);
+
+            if (error) {
+                showToast('儲存失敗，請重試', 'error');
+                console.error(error);
+            } else {
+                showToast('排班已成功儲存！', 'success');
+                setIsEditMode(false);
+            }
+        } catch (e) {
+            console.error(e);
+            showToast('儲存發生錯誤', 'error');
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+
     const handleExportPDF = async (e?: React.MouseEvent) => {
         if (e) e.preventDefault();
         setIsExporting(true);
@@ -1703,13 +1729,21 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                 )}
 
                                 <button
-                                    onClick={() => setIsEditMode(!isEditMode)}
+                                    onClick={isEditMode ? handleComplete : () => setIsEditMode(true)}
+                                    disabled={isProcessing}
                                     className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-all ${isEditMode
-                                        ? 'bg-teal-600 text-white border-teal-600 shadow-sm shadow-teal-200'
+                                        ? 'bg-teal-600 text-white border-teal-600 shadow-sm shadow-teal-200 hover:bg-teal-700'
                                         : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
-                                        } `}
+                                        } ${(isProcessing) ? 'opacity-50 cursor-not-allowed' : ''}`}
                                 >
-                                    {isEditMode ? '完成' : '編輯'}
+                                    {isProcessing ? (
+                                        <>
+                                            <Loader2 size={14} className="animate-spin inline mr-1" />
+                                            儲存中
+                                        </>
+                                    ) : (
+                                        isEditMode ? '完成' : '編輯'
+                                    )}
                                 </button>
                             </>
                         )}
