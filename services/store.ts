@@ -353,10 +353,6 @@ class Store {
             this.shifts.splice(otherIndices[i], 1);
         }
 
-        // Generate a new ID for the local state to match what we will send to DB (approximately)
-        // or just keep the one passed if it's new.
-        // Actually, to avoid PK conflicts, we should generate a new UUID if we are doing the "Delete All" strategy.
-        // But for local state, we just need it to work.
         if (foundIndex >= 0) {
             this.shifts[foundIndex] = shift;
         } else {
@@ -365,9 +361,9 @@ class Store {
 
         this.notifyListeners(); // Notify immediately for UI responsiveness
 
-        // 2. Remote Sync: Robust 'Select-Delete-Insert'
+        // 2. Remote Sync: Safer 'Update or Insert' Strategy
         try {
-            // A. Fetch ANY existing records for this slot
+            // A. Check for existing record(s)
             const { data: existing, error: fetchError } = await supabase
                 .from('shifts')
                 .select('id')
@@ -376,44 +372,52 @@ class Store {
 
             if (fetchError) throw fetchError;
 
-            // B. Delete them explicitly by ID (Verification step)
+            let targetId: string | null = null;
+
             if (existing && existing.length > 0) {
-                const ids = existing.map(e => e.id);
-                // Log what we are destroying to be sure
-                // console.log('Cleaning up duplicates:', ids);
-                const { error: delError } = await supabase
+                // Case: Exists -> Update
+                // Use the first ID found
+                targetId = existing[0].id;
+
+                // Cleanup: If multiple records exist (duplicates), delete the extras
+                if (existing.length > 1) {
+                    // console.warn('Cleaning up duplicate shifts on save:', existing.length);
+                    const idsToDelete = existing.slice(1).map(e => e.id);
+                    await supabase.from('shifts').delete().in('id', idsToDelete);
+                }
+
+                // Perform Update
+                // Important: Ensure we don't accidentally change the ID
+                const { error: updateError } = await supabase
                     .from('shifts')
-                    .delete()
-                    .in('id', ids);
+                    .update({ ...shift, id: targetId })
+                    .eq('id', targetId);
 
-                if (delError) throw delError;
+                if (updateError) throw updateError;
+
+            } else {
+                // Case: New -> Insert
+                // Generate a proper UUID for the DB
+                const newId = crypto.randomUUID();
+                targetId = newId;
+
+                const { error: insertError } = await supabase
+                    .from('shifts')
+                    .insert({ ...shift, id: newId });
+
+                if (insertError) throw insertError;
             }
 
-            // C. Insert as NEW record (Avoid ID conflict)
-            // We use a clean object without 'id' if we want DB to gen it, OR we generate a fresh one.
-            // Using a fresh random UUID is safest to avoid any cached PK issues.
-            const newId = crypto.randomUUID();
-            const payload = { ...shift, id: newId };
-
-            const { error: insertError } = await supabase
-                .from('shifts')
-                .insert(payload);
-
-            if (insertError) {
-                // Determine if we should retry or alert
-                throw insertError;
-            }
-
-            // Update local ID to match the persisted one (important for future deletes)
+            // 3. Sync Local ID to match DB ID
+            // This is crucial so future updates target the correct DB record
             const finalIndex = this.shifts.findIndex(s => s.userId === shift.userId && s.date === shift.date);
-            if (finalIndex >= 0) {
-                this.shifts[finalIndex].id = newId;
+            if (finalIndex >= 0 && targetId) {
+                this.shifts[finalIndex].id = targetId;
             }
 
         } catch (err: any) {
             console.error('Persistence failed:', err);
-            // Revert local state? Or just warn?
-            // Since we are optimistic, a silent fail is bad. We return error for the UI to Toast.
+            // Ideally we should rollback local state or show an error
             return { error: err };
         }
 
