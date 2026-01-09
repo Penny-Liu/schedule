@@ -2151,21 +2151,22 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                                             const isScheduler = item.shift.specialRoles.includes(SPECIAL_ROLES.SCHEDULER);
 
                                                                             // LEAVE STATUS CHECK
-                                                                            const approvedLeave = db.getLeaves().find(l =>
+                                                                            const activeLeave = db.getLeaves().find(l =>
                                                                                 l.userId === item.user!.id &&
-                                                                                l.status === LeaveStatus.APPROVED &&
+                                                                                (l.status === LeaveStatus.APPROVED || l.status === LeaveStatus.PENDING) &&
                                                                                 date >= l.startDate &&
                                                                                 date <= l.endDate
                                                                             );
 
-                                                                            const isPreLeave = approvedLeave?.type === LeaveType.PRE_SCHEDULED;
-                                                                            const isLongLeave = approvedLeave?.type === LeaveType.LONG_LEAVE;
-                                                                            const isCancelLeave = approvedLeave?.type === LeaveType.CANCEL_LEAVE; // Usually this means they ARE working, but maybe show a badge?
-                                                                            const isSwapShift = approvedLeave?.type === LeaveType.SWAP_SHIFT; // They swapped out? If they are here, maybe they swapped IN?
+                                                                            const isPreLeave = activeLeave?.type === LeaveType.PRE_SCHEDULED;
+                                                                            const isLongLeave = activeLeave?.type === LeaveType.LONG_LEAVE;
+                                                                            const isCancelLeave = activeLeave?.type === LeaveType.CANCEL_LEAVE;
+                                                                            const isSwapShift = activeLeave?.type === LeaveType.SWAP_SHIFT;
+                                                                            const isPending = activeLeave?.status === LeaveStatus.PENDING;
                                                                             // Wait, if they are in Station View, they are WORKING.
                                                                             // Why would they have a leave record?
                                                                             // 1. Cancel Leave -> We show they are working. User wants to see "Cancel Leave" badge.
-                                                                            // 2. Swap Shift -> If they are the one working (Target), we might track that via a DIFFERENT record? 
+                                                                            // 2. Swap Shift -> If they are the one working (Target), we might track that via a DIFFERENT record?
                                                                             //    Or if the Requestor is working? No, Requestor is OFF.
                                                                             //    So if item.user is here, they are working.
                                                                             //    Visual Request: "Show if this person has Pre/Cancel/Long/Swap".
@@ -2194,12 +2195,12 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                                                     </span>
 
                                                                                     {/* Leave / Status Indicators */}
-                                                                                    {approvedLeave && (
+                                                                                    {activeLeave && (
                                                                                         <div className="flex gap-0.5 mb-0.5">
-                                                                                            {isPreLeave && <span className="text-[8px] bg-blue-500 text-white px-0.5 rounded leading-none scale-90">預</span>}
-                                                                                            {isCancelLeave && <span className="text-[8px] bg-emerald-500 text-white px-0.5 rounded leading-none scale-90">銷</span>}
-                                                                                            {isLongLeave && <span className="text-[8px] bg-purple-500 text-white px-0.5 rounded leading-none scale-90">長</span>}
-                                                                                            {isSwapShift && <span className="text-[8px] bg-amber-500 text-white px-0.5 rounded leading-none scale-90">換</span>}
+                                                                                            {isPreLeave && <span className={`text-[8px] ${isPending ? 'bg-blue-300' : 'bg-blue-500'} text-white px-0.5 rounded leading-none scale-90`}>預</span>}
+                                                                                            {isCancelLeave && <span className={`text-[8px] ${isPending ? 'bg-emerald-300' : 'bg-emerald-500'} text-white px-0.5 rounded leading-none scale-90`}>銷</span>}
+                                                                                            {isLongLeave && <span className={`text-[8px] ${isPending ? 'bg-purple-300' : 'bg-purple-500'} text-white px-0.5 rounded leading-none scale-90`}>長</span>}
+                                                                                            {isSwapShift && <span className={`text-[8px] ${isPending ? 'bg-amber-300' : 'bg-amber-500'} text-white px-0.5 rounded leading-none scale-90`}>換</span>}
                                                                                         </div>
                                                                                     )}
 
