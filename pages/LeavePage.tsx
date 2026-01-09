@@ -8,6 +8,14 @@ interface LeavePageProps {
   currentUser: User;
 }
 
+// Helper to get weekday
+const getWeekday = (dateStr: string) => {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  const weekDays = ['日', '一', '二', '三', '四', '五', '六'];
+  return `(${weekDays[d.getDay()]})`;
+};
+
 // --- Helper Component: Calendar Picker ---
 interface CalendarPickerProps {
   label: string;
@@ -79,7 +87,7 @@ const CalendarPicker: React.FC<CalendarPickerProps> = ({ label, value, onChange,
         className="w-full px-3 py-2 border border-gray-200 rounded-lg flex items-center justify-between cursor-pointer bg-white hover:border-teal-400 transition-colors group"
       >
         <span className={`text-sm ${value ? 'text-gray-900 font-medium' : 'text-gray-400'}`}>
-          {value || '點擊選擇日期'}
+          {value ? `${value} ${getWeekday(value)}` : '點擊選擇日期'}
         </span>
         <Calendar size={16} className="text-gray-400 group-hover:text-teal-500" />
       </div>
@@ -438,11 +446,11 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
                   <div className="flex flex-col text-xs font-semibold w-full">
                     <div className="flex justify-between items-center">
                       <div className="flex items-center gap-1">
-                        <span>{leave.startDate}</span>
+                        <span>{leave.startDate} <span className="text-xs text-gray-400">{getWeekday(leave.startDate)}</span></span>
                         {leave.startDate !== leave.endDate && (
                           <>
                             <span className="text-gray-400">→</span>
-                            <span>{leave.endDate}</span>
+                            <span>{leave.endDate} <span className="text-xs text-gray-400">{getWeekday(leave.endDate)}</span></span>
                           </>
                         )}
                       </div>
