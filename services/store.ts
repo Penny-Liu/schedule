@@ -865,40 +865,30 @@ class Store {
         if (error) console.error('Batch upsert error:', error);
     }
 
-    // New: Nuclear Option for "Complete" button
-    // Deletes everything in range and re-inserts local state to ensure 1:1 match
+    // New: Safer "Complete" button logic - Batch Upsert
+    // Does NOT delete data. Only overwrites/adds.
     async commitShiftsForRange(startDate: string, endDate: string, latestShifts?: Shift[]) {
         console.log(`[Sync] Committing shifts for range ${startDate} to ${endDate}...`);
 
-        // 1. Get all local shifts in this range
-        // Use provided 'latestShifts' if available (WYSIWYG), otherwise fallback to store state
+        // 1. Get local shifts to save
         const sourceShifts = latestShifts || this.shifts;
         const shiftsToCommit = sourceShifts.filter(s => s.date >= startDate && s.date <= endDate);
 
+        if (shiftsToCommit.length === 0) {
+            console.log('[Sync] No shifts to save in this range.');
+            return { error: null };
+        }
+
         try {
-            // 2. Delete ALL remote shifts in this range
-            // We use a range filter on 'date'
-            const { error: deleteError } = await supabase
+            // 2. Perform Batch Upsert
+            // Supabase upsert automatically handles "Insert if new, Update if exists" based on Primary Key (id)
+            const { error: upsertError } = await supabase
                 .from('shifts')
-                .delete()
-                .gte('date', startDate)
-                .lte('date', endDate);
+                .upsert(shiftsToCommit);
 
-            if (deleteError) throw deleteError;
+            if (upsertError) throw upsertError;
 
-            // 3. Insert local shifts (if any)
-            if (shiftsToCommit.length > 0) {
-                // Ensure unique IDs for new insertions to avoid any weird PK collisions if deletes were slow (unlikely but safe)
-                // Actually, if we keep the same IDs, it's fine because we just deleted them.
-                // But let's stick to the objects we have.
-                const { error: insertError } = await supabase
-                    .from('shifts')
-                    .insert(shiftsToCommit);
-
-                if (insertError) throw insertError;
-            }
-
-            console.log('[Sync] Commit successful.');
+            console.log('[Sync] Commit successful (Safe Upsert).');
             return { error: null };
 
         } catch (error) {
