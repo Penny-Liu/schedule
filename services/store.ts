@@ -153,6 +153,73 @@ class Store {
         }
     }
 
+    // [New] Cleanup Tool for Duplicates
+    async cleanupDuplicateShifts() {
+        console.log('Starting DB Cleanup...');
+        try {
+            // 1. Fetch ALL raw shifts
+            const { data: allShifts, error } = await supabase.from('shifts').select('*');
+            if (error || !allShifts) throw new Error('Fetch failed');
+
+            // 2. Identify Duplicates
+            const uniqueMap = new Map<string, Shift>();
+            const idsToDelete: string[] = [];
+
+            allShifts.forEach((s: Shift) => {
+                const key = `${s.userId}-${s.date}`;
+                const existing = uniqueMap.get(key);
+
+                if (!existing) {
+                    uniqueMap.set(key, s);
+                } else {
+                    // Conflict: Keep the "Better" one
+                    // Prioritize: 1. Valid UUID > 'userId-date'
+                    //            2. Content (Station) > Unassigned
+                    //            3. Newer (if timestamps existed, but we don't have them reliably here)
+                    const isExistingUUID = existing.id.length > 25;
+                    const isNewUUID = s.id.length > 25;
+                    const isExistingContent = existing.station && existing.station !== 'Unassigned' && existing.station !== '未分配' && existing.station !== 'SystemOff';
+                    const isNewContent = s.station && s.station !== 'Unassigned' && s.station !== '未分配' && s.station !== 'SystemOff';
+
+                    let keepNew = false;
+
+                    if (isNewUUID && !isExistingUUID) keepNew = true;
+                    else if (isNewUUID === isExistingUUID) {
+                        if (isNewContent && !isExistingContent) keepNew = true;
+                    }
+
+                    if (keepNew) {
+                        idsToDelete.push(existing.id);
+                        uniqueMap.set(key, s);
+                    } else {
+                        idsToDelete.push(s.id);
+                    }
+                }
+            });
+
+            console.log(`Found ${idsToDelete.length} duplicates to delete.`);
+
+            // 3. Delete Bad IDs
+            if (idsToDelete.length > 0) {
+                // Batch delete in chunks of 100 to avoid URL limits
+                const chunkSize = 100;
+                for (let i = 0; i < idsToDelete.length; i += chunkSize) {
+                    const chunk = idsToDelete.slice(i, i + chunkSize);
+                    const { error: delError } = await supabase.from('shifts').delete().in('id', chunk);
+                    if (delError) console.error('Delete chunk failed:', delError);
+                }
+            }
+
+            // 4. Refresh Data
+            await this.initializeData(true);
+            return idsToDelete.length;
+
+        } catch (e) {
+            console.error('Cleanup failed:', e);
+            throw e;
+        }
+    }
+
     // Realtime Listener Setup
     private setupRealtimeSubscription() {
         if (this.subscription) return;
