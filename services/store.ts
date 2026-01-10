@@ -220,6 +220,40 @@ class Store {
         }
     }
 
+    // [New] Force Clear Data for Specific Month (Nuclear Option)
+    async forceClearMonth(yearMonth: string) {
+        // yearMonth format: "YYYY-MM"
+        console.log(`Force Clearing Month: ${yearMonth}`);
+        try {
+            const [year, month] = yearMonth.split('-').map(Number);
+            const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
+            // Calculate end date (last day of month)
+            const lastDay = new Date(year, month, 0).getDate();
+            const endDate = `${year}-${String(month).padStart(2, '0')}-${lastDay}`;
+
+            console.log(`Deleting shifts from ${startDate} to ${endDate}...`);
+
+            // Delete ALL shifts in this range
+            const { error: delError } = await supabase
+                .from('shifts')
+                .delete()
+                .gte('date', startDate)
+                .lte('date', endDate);
+
+            if (delError) {
+                console.error('Force clear failed:', delError);
+                throw delError;
+            }
+
+            // Refresh Data
+            await this.initializeData(true);
+            return true;
+        } catch (e) {
+            console.error('Force clear exception:', e);
+            throw e;
+        }
+    }
+
     // Realtime Listener Setup
     private setupRealtimeSubscription() {
         if (this.subscription) return;

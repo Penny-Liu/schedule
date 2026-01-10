@@ -455,6 +455,49 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
                                 >
                                     <RefreshCw size={16} /> 掃描並修復重複資料
                                 </button>
+
+                                <div className="mt-6 pt-6 border-t border-gray-100">
+                                    <h4 className="font-bold text-red-600 text-sm mb-2 flex items-center gap-1">
+                                        <Trash2 size={14} /> 強制清除特定月份資料 (核彈選項)
+                                    </h4>
+                                    <p className="text-xs text-gray-500 mb-3">
+                                        如果上述掃描無效 (顯示 0 筆)，且該月份仍然無法寫入/一直跳回未指派，請使用此功能。
+                                        <br />
+                                        <span className="font-bold text-red-500">警告：這將刪除該月份「所有」排班紀錄，請謹慎使用。</span>
+                                    </p>
+                                    <div className="flex gap-2">
+                                        <input
+                                            type="month"
+                                            id="forceCleanMonth"
+                                            className="border border-gray-300 rounded px-2 text-sm"
+                                        />
+                                        <button
+                                            onClick={async () => {
+                                                const monthInput = document.getElementById('forceCleanMonth') as HTMLInputElement;
+                                                const yearMonth = monthInput.value;
+                                                if (!yearMonth) {
+                                                    alert('請先選擇要清除的月份');
+                                                    return;
+                                                }
+
+                                                const confirmMsg = `【嚴重警告】\n\n您即將刪除 ${yearMonth} 的「所有」排班資料。\n\n這將無法復原！\n\n確定要繼續嗎？`;
+                                                if (confirm(confirmMsg)) {
+                                                    if (confirm('再次確認：這真的會刪光該月資料，您確定嗎？')) {
+                                                        try {
+                                                            await db.forceClearMonth(yearMonth);
+                                                            alert(`${yearMonth} 資料已強制清空。請重新進行排班。`);
+                                                        } catch (e) {
+                                                            alert('清除失敗，請查看 Console');
+                                                        }
+                                                    }
+                                                }
+                                            }}
+                                            className="bg-red-100 hover:bg-red-200 text-red-700 font-bold px-4 py-2 rounded-lg text-sm transition-colors border border-red-200"
+                                        >
+                                            強制重置該月
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
