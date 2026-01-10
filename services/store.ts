@@ -47,6 +47,40 @@ class Store {
         this.listeners.forEach(l => l());
     }
 
+    // Helper: Fetch all shifts with pagination to bypass 1000-row limit
+    private async fetchAllShifts() {
+        let allShifts: any[] = [];
+        let page = 0;
+        const pageSize = 1000;
+        let hasMore = true;
+        let lastError = null;
+
+        while (hasMore) {
+            const { data, error } = await supabase
+                .from('shifts')
+                .select('*')
+                .range(page * pageSize, (page + 1) * pageSize - 1);
+
+            if (error) {
+                console.error('Error fetching shifts page:', page, error);
+                lastError = error;
+                hasMore = false; // Stop on error
+            } else if (data) {
+                allShifts = [...allShifts, ...data];
+                if (data.length < pageSize) {
+                    hasMore = false;
+                } else {
+                    page++;
+                }
+            } else {
+                hasMore = false;
+            }
+        }
+
+        console.log(`[Pagination] Total shifts fetched: ${allShifts.length}`);
+        return { data: allShifts, error: lastError };
+    }
+
     // New method to fetch all data from Supabase
     async initializeData(force: boolean = false) {
         if (this.isLoaded && !force) return;
@@ -59,7 +93,7 @@ class Store {
 
             const [usersRes, shiftsRes, leavesRes, settingsRes] = await Promise.all([
                 supabase.from('users').select('*'),
-                supabase.from('shifts').select('*'),
+                this.fetchAllShifts(),
                 supabase.from('leaves').select('*'),
                 supabase.from('settings').select('id, data').eq('id', 1).single()
             ]);
