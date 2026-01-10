@@ -887,8 +887,14 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
     };
 
     const handleUpdateShift = async (userId: string, dateStr: string, station: string, specialRoles: string[]) => {
+        // [FIX] Try to find existing shift to preserve ID (UUID)
+        // This prevents creating duplicate rows with 'userId-date' IDs if a record already exists
+        const key = `${userId}-${dateStr}`;
+        const existingShift = shiftMap.get(key);
+        const realId = existingShift ? existingShift.id : key;
+
         const newShift: Shift = {
-            id: `${userId}-${dateStr}`,
+            id: realId,
             userId,
             date: dateStr,
             station,

@@ -334,6 +334,39 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
   };
 
   const handleStatusChange = (id: string, status: LeaveStatus) => {
+    // Validation for Approval: Check if user has tasks/roles
+    if (status === LeaveStatus.APPROVED) {
+      const leave = leaves.find(l => l.id === id);
+      if (leave) {
+        // Check everyday in range
+        const start = new Date(leave.startDate);
+        const end = new Date(leave.endDate);
+        const shiftMap = new Map(db.getShifts(leave.startDate, leave.endDate).map(s => [`${s.userId}-${s.date}`, s]));
+
+        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+          const dateStr = d.toLocaleDateString('en-CA'); // YYYY-MM-DD
+          const shift = shiftMap.get(`${leave.userId}-${dateStr}`);
+
+          if (shift) {
+            // 1. Check Special Roles
+            if (shift.specialRoles && shift.specialRoles.length > 0) {
+              window.alert(`無法核准：該員在 ${dateStr} 仍有特殊任務 (${shift.specialRoles.join(', ')})。請先要求該員完成換班/交接任務，確認無任務後再行核准。`);
+              return;
+            }
+
+            // 2. Check Task Stations (As defined in store logic: 場控, 遠班, 大直 etc usually imply fixed duty)
+            // User mentioned "任務職". Usually refers to Roles, but sometimes Stations.
+            // Conservatively check for known "Fixed/Task" stations if necessary.
+            // Based on user prompt "換完任務", usually implies Special Roles.
+            // But let's check strict "Station" if it's not Unassigned/SystemOff
+            // Actually, regular stations (MR, CT) are fine (they just become vacancies).
+            // But "Task" stations might be critical.
+            // Let's stick to Special Roles first as that is the explicit "Task" (任務).
+          }
+        }
+      }
+    }
+
     // Alert logic handled by window.alert
     db.updateLeaveStatus(id, status, currentUser.id);
     setLeaves([...db.getLeaves()]); // Fix: Force new array for re-render
