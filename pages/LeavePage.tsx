@@ -511,7 +511,6 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
 
     if (status === LeaveStatus.APPROVED) {
       window.alert('已成功核准該申請，並自動更新排班表。');
-    } else {
       window.alert('已駁回該申請。');
     }
   };
@@ -526,21 +525,44 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
     }
   };
 
-  const getStatusColor = (status: LeaveStatus) => {
-    switch (status) {
-      case LeaveStatus.APPROVED: return 'bg-green-50 text-green-700 border-green-200';
-      case LeaveStatus.REJECTED: return 'bg-red-50 text-red-700 border-red-200';
-      default: return 'bg-yellow-50 text-yellow-700 border-yellow-200';
+  const getTypeIcon = (type: LeaveType) => {
+    switch (type) {
+      case LeaveType.PRE_SCHEDULED: return <Calendar size={14} />;
+      case LeaveType.SWAP_SHIFT: return <ArrowRightLeft size={14} />;
+      case LeaveType.DUTY_SWAP: return <UserCheck size={14} />;
+      case LeaveType.CANCEL_LEAVE: return <Briefcase size={14} />; // Distinct icon for Cancel
+      case LeaveType.LONG_LEAVE: return <CalendarDays size={14} />;
+      default: return <Clock size={14} />;
     }
   };
 
-  const getTypeIcon = (type: LeaveType) => {
-    if (type === LeaveType.SWAP_SHIFT) return <ArrowRightLeft size={14} className="text-blue-500" />;
-    if (type === LeaveType.DUTY_SWAP) return <Briefcase size={14} className="text-indigo-500" />;
-    return <CalendarDays size={14} className="text-teal-500" />;
+  // New Helper for Distinct Badge Styles
+  const getTypeStyles = (type: LeaveType) => {
+    switch (type) {
+      case LeaveType.PRE_SCHEDULED:
+        return "bg-blue-50 text-blue-700 border-blue-200";
+      case LeaveType.CANCEL_LEAVE:
+        return "bg-orange-50 text-orange-700 border-orange-200"; // Orange to alert "Change of Plan"
+      case LeaveType.SWAP_SHIFT:
+        return "bg-indigo-50 text-indigo-700 border-indigo-200";
+      case LeaveType.DUTY_SWAP:
+        return "bg-purple-50 text-purple-700 border-purple-200";
+      case LeaveType.LONG_LEAVE:
+        return "bg-rose-50 text-rose-700 border-rose-200";
+      default:
+        return "bg-gray-50 text-gray-700 border-gray-200";
+    }
   };
 
-  // Filter leaves: Supervisor & Admin see ALL. Employee sees own (as requestor or target).
+  const getStatusColor = (status: LeaveStatus) => {
+    switch (status) {
+      case LeaveStatus.APPROVED: return 'bg-emerald-100 text-emerald-800 border-emerald-200';
+      case LeaveStatus.REJECTED: return 'bg-rose-100 text-rose-800 border-rose-200';
+      case LeaveStatus.PENDING: return 'bg-amber-100 text-amber-800 border-amber-200';
+      default: return 'bg-slate-100 text-slate-800 border-slate-200';
+    }
+  };
+
   // Filter leaves: Supervisor & Admin see ALL. Employee sees own (as requestor or target).
   const roleFilteredLeaves = (currentUser.role === UserRole.SUPERVISOR || currentUser.role === UserRole.SYSTEM_ADMIN)
     ? leaves
@@ -633,9 +655,10 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
                       {isSwap && <ArrowRightLeft size={12} className="text-gray-400" />}
                       {targetUser && <span className="text-blue-600">{targetUser.name}</span>}
                     </div>
-                    <div className="text-xs text-gray-400 font-medium flex items-center gap-1 mt-0.5">
-                      {getTypeIcon(leave.type)} {leave.type}
-                      {leave.roleToSwap && <span className="text-indigo-600">({leave.roleToSwap})</span>}
+                    <div className={`text-xs font-medium flex items-center gap-1 mt-0.5 px-2 py-0.5 rounded border w-fit ${getTypeStyles(leave.type)}`}>
+                      {getTypeIcon(leave.type)}
+                      <span>{leave.type}</span>
+                      {leave.roleToSwap && <span className="text-gray-600 font-normal">({leave.roleToSwap})</span>}
                     </div>
                   </div>
                 </div>
