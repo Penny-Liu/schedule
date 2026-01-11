@@ -2,7 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { User, UserRole, RosterCycle, SYSTEM_OFF, StationDefault, Holiday, DateEventType, CycleAnchor } from '../types';
 import { db } from '../services/store';
-import { Plus, Trash2, Save, Settings, Calendar, AlertCircle, Users, Clock, Globe, X, RefreshCw, Key, UserCircle, ChevronDown } from 'lucide-react';
+import { Plus, Trash2, Save, Settings, Calendar, AlertCircle, Users, Clock, Globe, X, RefreshCw, Key, UserCircle, ChevronDown, CalendarPlus } from 'lucide-react';
 import ConfirmModal from '../components/ConfirmModal';
 
 interface SettingsPageProps {
