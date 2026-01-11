@@ -212,6 +212,17 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
       const status = db.getUserStatusOnDate(currentUser.id, formData.startDate);
       if (status === 'OFF') {
         setValidationMsg('該日期您原本就是「休假」，無需申請預假。');
+      } else {
+        // Check if user has a TASK (Station assigned or Special Role)
+        const shifts = db.getShifts(formData.startDate, formData.startDate);
+        const myShift = shifts.find(s => s.userId === currentUser.id);
+        if (myShift) {
+          const hasStation = myShift.station && myShift.station !== '未分配' && myShift.station !== '休假';
+          const hasRoles = myShift.specialRoles && myShift.specialRoles.length > 0;
+          if (hasStation || hasRoles) {
+            setValidationMsg('您在該日期已有排定任務（站點或特殊職務），無法申請預假。若需請假請先協調換班。');
+          }
+        }
       }
     } else if (formData.type === LeaveType.CANCEL_LEAVE) {
       const status = db.getUserStatusOnDate(currentUser.id, formData.startDate);
@@ -223,8 +234,24 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
       if (status === 'OFF') {
         setValidationMsg('您該日期為「休假」，不能申請與他人換假。');
       } else {
-        const candidates = db.getUsersOffOnDate(formData.startDate).filter(u => u.id !== currentUser.id);
-        setSwapCandidates(candidates);
+        // Check if user has a TASK (Station assigned or Special Role) - Preventing regular Swap if they have specific duty?
+        // User said: "有任務不能預假、換假"
+        const shifts = db.getShifts(formData.startDate, formData.startDate);
+        const myShift = shifts.find(s => s.userId === currentUser.id);
+        if (myShift) {
+          const hasStation = myShift.station && myShift.station !== '未分配' && myShift.station !== '休假';
+          const hasRoles = myShift.specialRoles && myShift.specialRoles.length > 0;
+          if (hasStation || hasRoles) {
+            setValidationMsg('您在該日期已有排定任務，無法申請一般換假 (請使用「任務換班」或先協調)。');
+          } else {
+            const candidates = db.getUsersOffOnDate(formData.startDate).filter(u => u.id !== currentUser.id);
+            setSwapCandidates(candidates);
+          }
+        } else {
+          // Should not happen if status is WORK, but safe fallback
+          const candidates = db.getUsersOffOnDate(formData.startDate).filter(u => u.id !== currentUser.id);
+          setSwapCandidates(candidates);
+        }
       }
     } else if (formData.type === LeaveType.DUTY_SWAP) {
       // Special Logic for Duty Swap (Opening/Late/Assist/Scheduler)
