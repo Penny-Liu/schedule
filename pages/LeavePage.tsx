@@ -2,7 +2,23 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { User, UserRole, LeaveRequest, LeaveType, LeaveStatus, SPECIAL_ROLES } from '../types';
 import { db } from '../services/store';
-import { Plus, Check, X, Clock, CalendarDays, ArrowRightLeft, AlertTriangle, ChevronLeft, ChevronRight, Calendar, UserCheck, Briefcase, ThumbsUp, ThumbsDown, Trash2 } from 'lucide-react';
+import {
+  Calendar,
+  Clock,
+  User,
+  FileText,
+  Check,
+  X,
+  ChevronLeft,
+  ChevronRight,
+  Plus,
+  Trash2,
+  AlertCircle,
+  AlertTriangle,
+  ArrowRightLeft,
+  CheckCircle,
+  XCircle
+} from 'lucide-react';
 
 interface LeavePageProps {
   currentUser: User;
