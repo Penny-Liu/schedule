@@ -212,7 +212,8 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
     const getEventTypeLabel = (type: DateEventType) => {
         switch (type) {
             case DateEventType.NATIONAL: return '國定假日';
-            case DateEventType.MEETING: return '科會';
+            case DateEventType.MEETING: return '科會 (舊)';
+            case DateEventType.NOTE: return '備忘';
             case DateEventType.CLOSED: return '休診';
             default: return type;
         }
@@ -221,7 +222,8 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
     const getEventTypeColor = (type: DateEventType) => {
         switch (type) {
             case DateEventType.NATIONAL: return 'text-red-600 bg-red-100';
-            case DateEventType.MEETING: return 'text-blue-600 bg-blue-100';
+            case DateEventType.MEETING: return 'text-gray-500 bg-gray-100'; // Deprioritize legacy meeting
+            case DateEventType.NOTE: return 'text-blue-600 bg-blue-100';
             case DateEventType.CLOSED: return 'text-gray-600 bg-gray-200 border-gray-300';
             default: return 'text-gray-600 bg-gray-100';
         }
@@ -758,7 +760,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
                     <h4 className="font-bold mb-1 text-blue-900">設定小提示</h4>
                     <ul className="list-disc pl-4 space-y-1 text-blue-700/80 text-xs">
                         <li>「休診」日期：系統會自動將當日所有人員預設為「休假」，除非有手動排班覆蓋。</li>
-                        <li>「科會」日期：僅作為行事曆標記，不影響排班邏輯。</li>
+                        <li>「備忘」日期：僅作為行事曆標記，不影響排班邏輯。</li>
                         <li>更新「循環基準日」會改變所有人四休二的計算起點。</li>
                     </ul>
                 </div>
