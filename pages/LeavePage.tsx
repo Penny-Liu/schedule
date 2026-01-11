@@ -397,13 +397,26 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
 
     for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
       const dateStr = d.toLocaleDateString('en-CA');
-      const statusA = db.getUserStatusOnDate(userAId, dateStr);
-      const statusB = db.getUserStatusOnDate(userBId, dateStr);
+      const currentD = new Date(d); // Copy for comparison
 
-      // If EITHER person is NOT 'OFF' (meaning they are working/unassigned), it's resolved.
-      // Logic: 'OFF' usually comes from Leave or Station=休假. 
-      // If they cancelled leave, status becomes 'WORK' (or specific station).
-      if (statusA !== 'OFF' || statusB !== 'OFF') {
+      // STRICT Check: Is there a CANCEL_LEAVE request for this date?
+      // We look for any CANCEL_LEAVE from either user that covers this date
+      // and is NOT rejected.
+      const isResolvedA = leaves.some(l =>
+        l.userId === userAId &&
+        l.type === LeaveType.CANCEL_LEAVE &&
+        l.status !== LeaveStatus.REJECTED &&
+        new Date(l.startDate) <= currentD && new Date(l.endDate) >= currentD
+      );
+
+      const isResolvedB = leaves.some(l =>
+        l.userId === userBId &&
+        l.type === LeaveType.CANCEL_LEAVE &&
+        l.status !== LeaveStatus.REJECTED &&
+        new Date(l.startDate) <= currentD && new Date(l.endDate) >= currentD
+      );
+
+      if (isResolvedA || isResolvedB) {
         resolved.push(dateStr);
       } else {
         unresolved.push(dateStr);
