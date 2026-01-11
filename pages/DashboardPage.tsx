@@ -1985,11 +1985,11 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                     <span className={`text-[10px] font-bold ${isToday ? 'text-teal-700' : (isWeekend ? 'text-red-500' : 'text-slate-400')} `}>
                                                         {weekDays[d.getDay()]}
                                                     </span>
-                                                    <span className={`text-sm font-bold leading-none ${holiday ? 'text-red-600' : (isToday ? 'text-teal-800' : 'text-slate-800')} `}>
+                                                    <span className={`text-sm font-bold leading-none ${holiday ? (holiday.type === DateEventType.NOTE ? 'text-blue-600' : 'text-red-600') : (isToday ? 'text-teal-800' : 'text-slate-800')} `}>
                                                         {d.getDate()}
                                                     </span>
                                                     {holiday && (
-                                                        <span className="text-[9px] px-1 rounded-sm leading-tight mt-0.5 bg-red-100 text-red-700 border border-red-200">
+                                                        <span className={`text-[9px] px-1 rounded-sm leading-tight mt-0.5 ${holiday.type === DateEventType.NOTE ? 'bg-blue-100 text-blue-700 border border-blue-200' : 'bg-red-100 text-red-700 border border-red-200'}`}>
                                                             {holiday.name}
                                                         </span>
                                                     )}

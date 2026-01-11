@@ -108,7 +108,8 @@ export interface RosterCycle {
 export enum DateEventType {
   NATIONAL = 'NATIONAL', // 國定假日
   MEETING = 'MEETING',   // 科會
-  CLOSED = 'CLOSED'      // 休診 (全員預設休假)
+  CLOSED = 'CLOSED',     // 休診 (全員預設休假)
+  NOTE = 'NOTE'          // 備忘
 }
 
 export interface Holiday {
