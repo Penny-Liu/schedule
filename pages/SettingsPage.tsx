@@ -2,7 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { User, UserRole, RosterCycle, SYSTEM_OFF, StationDefault, Holiday, DateEventType, CycleAnchor } from '../types';
 import { db } from '../services/store';
-import { Plus, Trash2, Save, Settings, Calendar, AlertCircle, Users, Clock, Globe, X, RefreshCw, Key, UserCircle } from 'lucide-react';
+import { Plus, Trash2, Save, Settings, Calendar, AlertCircle, Users, Clock, Globe, X, RefreshCw, Key, UserCircle, ChevronDown } from 'lucide-react';
 import ConfirmModal from '../components/ConfirmModal';
 
 interface SettingsPageProps {
@@ -26,6 +26,16 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
 
     // Password Change State
     const [passwordData, setPasswordData] = useState({ old: '', new: '', confirm: '' });
+
+    // Batch Generate State
+    const [batchConfig, setBatchConfig] = useState({
+        nth: '3', // 1, 2, 3, 4, last
+        weekday: '5', // 0=Sun, 1=Mon, ..., 5=Fri, 6=Sat
+        startMonth: new Date().toISOString().slice(0, 7),
+        endMonth: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().slice(0, 7),
+        name: '科會',
+        type: DateEventType.NOTE
+    });
 
     // Confirm Modal State
     const [confirmState, setConfirmState] = useState<{
@@ -161,6 +171,84 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
             title: '移除特殊日期',
             message: `確定要移除 ${date} 的設定嗎？`
         });
+    };
+
+    const handleBatchGenerate = (e: React.FormEvent) => {
+        e.preventDefault();
+        const start = new Date(batchConfig.startMonth + '-01');
+        const end = new Date(batchConfig.endMonth + '-01');
+
+        if (start > end) {
+            alert('結束月份不能早於開始月份');
+            return;
+        }
+
+        const generatedDates: Holiday[] = [];
+        let current = new Date(start);
+
+        // Iterate through months
+        while (current <= end) {
+            const year = current.getFullYear();
+            const month = current.getMonth(); // 0-11
+
+            const targetWeekday = parseInt(batchConfig.weekday); // 0-6
+
+            let dateFound = 0;
+
+            if (batchConfig.nth === 'last') {
+                // Find Last Weekday
+                // Go to next month day 0 (last day of this month)
+                const lastDay = new Date(year, month + 1, 0);
+                // Backtrack until we find the weekday
+                for (let d = lastDay.getDate(); d >= 1; d--) {
+                    const checkDate = new Date(year, month, d);
+                    if (checkDate.getDay() === targetWeekday) {
+                        dateFound = d;
+                        break;
+                    }
+                }
+            } else {
+                // Find Nth Weekday
+                const nth = parseInt(batchConfig.nth);
+                let count = 0;
+                // Loop from day 1
+                for (let d = 1; d <= 31; d++) {
+                    const checkDate = new Date(year, month, d);
+                    if (checkDate.getMonth() !== month) break; // Overflow check
+
+                    if (checkDate.getDay() === targetWeekday) {
+                        count++;
+                        if (count === nth) {
+                            dateFound = d;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (dateFound > 0) {
+                // Construct YYYY-MM-DD
+                const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(dateFound).padStart(2, '0')}`;
+                generatedDates.push({
+                    date: dateStr,
+                    name: batchConfig.name,
+                    type: batchConfig.type
+                });
+            }
+
+            // Next month
+            current.setMonth(current.getMonth() + 1);
+        }
+
+        if (generatedDates.length > 0) {
+            if (confirm(`即將產生 ${generatedDates.length} 筆資料:\n${generatedDates.map(d => d.date).join(', ')}\n\n確定新增嗎？`)) {
+                generatedDates.forEach(h => db.addHoliday(h));
+                setHolidays(db.getHolidays());
+                alert('批次新增完成！');
+            }
+        } else {
+            alert('此區間內找不到符合規則的日期。');
+        }
     };
 
     // Unified Confirm Handler
@@ -610,7 +698,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
                             </div>
 
                             <div className="p-4 border-b border-gray-100">
-                                <form onSubmit={handleAddHoliday} className="flex flex-col gap-2">
+                                <form onSubmit={handleAddHoliday} className="flex flex-col gap-2 mb-4">
                                     <div className="flex gap-2">
                                         <input
                                             type="date"
@@ -635,13 +723,158 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
                                             className="flex-1 px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 outline-none cursor-pointer bg-white"
                                         >
                                             <option value={DateEventType.NATIONAL}>國定假日 (紅字)</option>
-                                            <option value={DateEventType.MEETING}>備忘 (藍字)</option>
+                                            <option value={DateEventType.NOTE}>備忘 (藍字)</option>
                                             <option value={DateEventType.CLOSED}>休診 (全員預設休假)</option>
                                         </select>
                                         <button type="submit" className="bg-gray-800 text-white px-6 rounded-lg hover:bg-gray-700 flex items-center justify-center">
                                             <Plus size={16} />
                                         </button>
                                     </div>
+                                </form>
+
+                                {/* Batch Generator */}
+                                <details className="group border border-blue-100 rounded-lg bg-blue-50/30 open:bg-blue-50/50 transition-all">
+                                    <summary className="cursor-pointer p-3 text-xs font-bold text-blue-700 flex items-center gap-2 select-none">
+                                        <RefreshCw size={14} /> 批量生成 (例: 每月第三個週五)
+                                        <span className="ml-auto text-blue-400 group-open:rotate-180 transition-transform"><ChevronDown size={14} /></span>
+                                    </summary>
+                                    <div className="p-3 pt-0 border-t border-blue-100/50 mt-1">
+                                        <form onSubmit={handleBatchGenerate} className="space-y-3 mt-2">
+                                            <div className="flex items-center gap-2 text-sm text-gray-700 font-medium flex-wrap">
+                                                <span>每個月的 第</span>
+                                                <select
+                                                    value={batchConfig.nth}
+                                                    onChange={e => setBatchConfig({ ...batchConfig, nth: e.target.value })}
+                                                    className="bg-white border border-gray-300 rounded px-2 py-1 text-sm outline-none focus:border-blue-500"
+                                                >
+                                                    <option value="1">1</option>
+                                                    <option value="2">2</option>
+                                                    <option value="3">3</option>
+                                                    <option value="4">4</option>
+                                                    <option value="last">最後一個</option>
+                                                </select>
+                                                <span>個 星期</span>
+                                                <select
+                                                    value={batchConfig.weekday}
+                                                    onChange={e => setBatchConfig({ ...batchConfig, weekday: e.target.value })}
+                                                    className="bg-white border border-gray-300 rounded px-2 py-1 text-sm outline-none focus:border-blue-500"
+                                                >
+                                                    <option value="1">一</option>
+                                                    <option value="2">二</option>
+                                                    <option value="3">三</option>
+                                                    <option value="4">四</option>
+                                                    <option value="5">五</option>
+                                                    <option value="6">六</option>
+                                                    <option value="0">日</option>
+                                                </select>
+                                            </div>
+
+                                            <div className="flex gap-2 items-center">
+                                                <input
+                                                    type="month"
+                                                    value={batchConfig.startMonth}
+                                                    onChange={e => setBatchConfig({ ...batchConfig, startMonth: e.target.value })}
+                                                    className="w-1/2 border border-gray-300 rounded px-2 py-1 text-sm"
+                                                    required
+                                                />
+                                                <span className="text-gray-400">~</span>
+                                                <input
+                                                    type="month"
+                                                    value={batchConfig.endMonth}
+                                                    onChange={e => setBatchConfig({ ...batchConfig, endMonth: e.target.value })}
+                                                    className="w-1/2 border border-gray-300 rounded px-2 py-1 text-sm"
+                                                    required
+                                                />
+                                            </div>
+
+                                            <div className="flex gap-2">
+                                                <input
+                                                    type="text"
+                                                    value={batchConfig.name}
+                                                    onChange={e => setBatchConfig({ ...batchConfig, name: e.target.value })}
+                                                    placeholder="事件名稱"
+                                                    className="flex-1 border border-gray-300 rounded px-2 py-1 text-sm"
+                                                    required
+                                                />
+                                                <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1 rounded text-sm font-bold shadow-sm transition-colors whitespace-nowrap">
+                                                    生成
+                                                </button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </details>
+                            </div>
+
+                            <div className="p-4 border-b border-gray-100">
+                                <h4 className="font-bold text-gray-700 text-sm mb-3 flex items-center gap-1">
+                                    <CalendarPlus size={14} /> 批次新增特殊日期
+                                </h4>
+                                <form onSubmit={handleBatchGenerate} className="flex flex-col gap-2">
+                                    <div className="flex gap-2 items-center">
+                                        <label className="text-xs text-gray-500 w-1/4">每個月的</label>
+                                        <select
+                                            value={batchConfig.nth}
+                                            onChange={(e) => setBatchConfig({ ...batchConfig, nth: e.target.value })}
+                                            className="flex-1 px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 outline-none cursor-pointer bg-white"
+                                        >
+                                            <option value="1">第一個</option>
+                                            <option value="2">第二個</option>
+                                            <option value="3">第三個</option>
+                                            <option value="4">第四個</option>
+                                            <option value="last">最後一個</option>
+                                        </select>
+                                        <select
+                                            value={batchConfig.weekday}
+                                            onChange={(e) => setBatchConfig({ ...batchConfig, weekday: e.target.value })}
+                                            className="flex-1 px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 outline-none cursor-pointer bg-white"
+                                        >
+                                            <option value="0">週日</option>
+                                            <option value="1">週一</option>
+                                            <option value="2">週二</option>
+                                            <option value="3">週三</option>
+                                            <option value="4">週四</option>
+                                            <option value="5">週五</option>
+                                            <option value="6">週六</option>
+                                        </select>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <input
+                                            type="month"
+                                            value={batchConfig.startMonth}
+                                            onChange={(e) => setBatchConfig({ ...batchConfig, startMonth: e.target.value })}
+                                            className="w-1/2 px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 outline-none"
+                                            required
+                                        />
+                                        <input
+                                            type="month"
+                                            value={batchConfig.endMonth}
+                                            onChange={(e) => setBatchConfig({ ...batchConfig, endMonth: e.target.value })}
+                                            className="w-1/2 px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 outline-none"
+                                            required
+                                        />
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <input
+                                            type="text"
+                                            value={batchConfig.name}
+                                            onChange={(e) => setBatchConfig({ ...batchConfig, name: e.target.value })}
+                                            placeholder="名稱 (例: 科會)"
+                                            className="flex-1 px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 outline-none"
+                                            required
+                                        />
+                                        <select
+                                            value={batchConfig.type}
+                                            onChange={(e) => setBatchConfig({ ...batchConfig, type: e.target.value as DateEventType })}
+                                            className="flex-1 px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 outline-none cursor-pointer bg-white"
+                                        >
+                                            <option value={DateEventType.NATIONAL}>國定假日 (紅字)</option>
+                                            <option value={DateEventType.MEETING}>備忘 (藍字)</option>
+                                            <option value={DateEventType.CLOSED}>休診 (全員預設休假)</option>
+                                        </select>
+                                    </div>
+                                    <button type="submit" className="bg-blue-500 text-white px-6 py-2 rounded-lg hover:bg-blue-600 flex items-center justify-center text-sm">
+                                        <Plus size={16} className="mr-1" /> 批次新增
+                                    </button>
                                 </form>
                             </div>
 
