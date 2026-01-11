@@ -561,6 +561,54 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
                 </div>
               </div>
 
+              {/* Conflict Alert Section (New) */}
+              {(() => {
+                if (leave.type !== LeaveType.LONG_LEAVE || leave.status === LeaveStatus.REJECTED) return null;
+
+                const start = new Date(leave.startDate);
+                const end = new Date(leave.endDate);
+
+                // Find conflicts from ALL leaves (not just visible ones)
+                const conflicts = leaves.filter(other =>
+                  other.id !== leave.id &&
+                  other.type === LeaveType.LONG_LEAVE &&
+                  other.status !== LeaveStatus.REJECTED &&
+                  ((new Date(other.startDate) <= end && new Date(other.endDate) >= start))
+                );
+
+                if (conflicts.length === 0) return null;
+
+                return (
+                  <div className="mb-4 bg-red-50 border border-red-100 rounded-lg p-3 text-xs animate-in fade-in slide-in-from-top-1">
+                    <div className="flex items-center gap-1.5 font-bold text-red-700 mb-1.5">
+                      <AlertTriangle size={14} />
+                      <span>長假時段衝突警示</span>
+                    </div>
+                    <div className="space-y-1 text-red-600">
+                      <p className="opacity-90">此時段與 {conflicts.length} 位同仁重疊，建議先行協調。</p>
+                      <ul className="list-disc pl-4 space-y-0.5 opacity-80">
+                        {conflicts.map(c => {
+                          const u = users.find(user => user.id === c.userId);
+                          const c_start = new Date(c.startDate);
+                          const c_end = new Date(c.endDate);
+                          const overlapStart = c_start > start ? c_start : start;
+                          const overlapEnd = c_end < end ? c_end : end;
+                          const diffDays = Math.ceil((overlapEnd.getTime() - overlapStart.getTime()) / (1000 * 3600 * 24)) + 1;
+                          return (
+                            <li key={c.id}>
+                              <span className="font-bold">{u?.name || '未知同仁'}</span>
+                              <span className="mx-1">:</span>
+                              {overlapStart.toLocaleDateString('en-CA').slice(5)}~{overlapEnd.toLocaleDateString('en-CA').slice(5)}
+                              <span className="ml-1">({diffDays}天)</span>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </div>
+                  </div>
+                );
+              })()}
+
               {!isProcessed && (
                 <div className="space-y-3 mb-6">
                   {/* Future Long Leave Notice */}
