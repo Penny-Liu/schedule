@@ -291,6 +291,16 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
           setSwapCandidates(validCandidates);
         }
       }
+    } else if (formData.type === LeaveType.LONG_LEAVE) {
+      // Enforce 60-Day Advance Rule
+      const start = new Date(formData.startDate);
+      const today = new Date();
+      const diffTime = start.getTime() - today.getTime();
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+      if (diffDays < 60) {
+        setValidationMsg(`長假依照規定必需於 60 天前提出申請 (目前距今僅 ${diffDays} 天)。`);
+      }
     }
   }, [formData.startDate, formData.type, formData.roleToSwap, currentUser.id]);
 
