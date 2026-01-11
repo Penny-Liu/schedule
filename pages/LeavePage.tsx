@@ -217,10 +217,9 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
         const shifts = db.getShifts(formData.startDate, formData.startDate);
         const myShift = shifts.find(s => s.userId === currentUser.id);
         if (myShift) {
-          const hasStation = myShift.station && myShift.station !== '未分配' && myShift.station !== '休假';
           const hasRoles = myShift.specialRoles && myShift.specialRoles.length > 0;
-          if (hasStation || hasRoles) {
-            setValidationMsg('您在該日期已有排定任務（站點或特殊職務），無法申請預假。若需請假請先協調換班。');
+          if (hasRoles) {
+            setValidationMsg('您在該日期已有排定特殊任務（如開機、晚班），無法申請預假。若需請假請先使用「任務換班」。');
           }
         }
       }
@@ -239,10 +238,9 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
         const shifts = db.getShifts(formData.startDate, formData.startDate);
         const myShift = shifts.find(s => s.userId === currentUser.id);
         if (myShift) {
-          const hasStation = myShift.station && myShift.station !== '未分配' && myShift.station !== '休假';
           const hasRoles = myShift.specialRoles && myShift.specialRoles.length > 0;
-          if (hasStation || hasRoles) {
-            setValidationMsg('您在該日期已有排定任務，無法申請一般換假 (請使用「任務換班」或先協調)。');
+          if (hasRoles) {
+            setValidationMsg('您在該日期已有排定特殊任務，無法申請一般換假 (請使用「任務換班」)。');
           } else {
             const candidates = db.getUsersOffOnDate(formData.startDate).filter(u => u.id !== currentUser.id);
             setSwapCandidates(candidates);
