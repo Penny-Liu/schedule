@@ -363,6 +363,39 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
     if (status === LeaveStatus.APPROVED) {
       const leave = leaves.find(l => l.id === id);
       if (leave) {
+        // --- Conflict Detection for Long Leaves ---
+        if (leave.type === LeaveType.LONG_LEAVE) {
+          const start = new Date(leave.startDate);
+          const end = new Date(leave.endDate);
+
+          // Find other Long Leaves (Approved or Pending) that overlap
+          const conflicts = leaves.filter(other =>
+            other.id !== leave.id &&
+            other.type === LeaveType.LONG_LEAVE &&
+            other.status !== LeaveStatus.REJECTED && // Check Approved & Pending
+            ((new Date(other.startDate) <= end && new Date(other.endDate) >= start))
+          );
+
+          if (conflicts.length > 0) {
+            const conflictDetails = conflicts.map(c => {
+              const c_start = new Date(c.startDate);
+              const c_end = new Date(c.endDate);
+              // Calculate overlap range
+              const overlapStart = c_start > start ? c_start : start;
+              const overlapEnd = c_end < end ? c_end : end;
+              const diffDays = Math.ceil((overlapEnd.getTime() - overlapStart.getTime()) / (1000 * 3600 * 24)) + 1;
+              const user = users.find(u => u.id === c.userId);
+              return `\n- ${user?.name || '未知'}: ${overlapStart.toLocaleDateString('en-CA')} ~ ${overlapEnd.toLocaleDateString('en-CA')} (重疊 ${diffDays} 天)`;
+            }).join('');
+
+            const confirmMsg = `⚠️ 警告：檢測到長假時段衝突！\n\n此申請與以下同仁的長假重疊，可能導致人力不足：${conflictDetails}\n\n若要同時核准，重疊期間需協調其中一人銷假。\n是否仍要繼續核准？`;
+
+            if (!window.confirm(confirmMsg)) {
+              return; // Abort approval
+            }
+          }
+        }
+
         // Check everyday in range
         const start = new Date(leave.startDate);
         const end = new Date(leave.endDate);
