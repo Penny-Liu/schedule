@@ -441,6 +441,13 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
   cutoffDate.setMonth(cutoffDate.getMonth() - 3);
   cutoffDate.setHours(0, 0, 0, 0);
 
+  // Helper to determine if a leave is a "Future Long Leave" (Policy: Review 2 months prior)
+  const isFutureLongLeave = (leave: LeaveRequest) => {
+    if (leave.type !== LeaveType.LONG_LEAVE) return false;
+    const daysUntilStart = Math.ceil((new Date(leave.startDate).getTime() - new Date().getTime()) / (1000 * 3600 * 24));
+    return daysUntilStart > 60;
+  };
+
   const displayedLeaves = roleFilteredLeaves.filter(l => {
     // Robust date parsing
     const end = new Date(l.endDate);
@@ -452,7 +459,15 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
     if (isAPending && !isBPending) return -1;
     if (!isAPending && isBPending) return 1;
 
-    // 2. Secondary Sort: Date (Newest First)
+    // 2. Secondary Sort (For Pending Only): Actionable vs Future Hold
+    if (isAPending) {
+      const aIsFuture = isFutureLongLeave(a);
+      const bIsFuture = isFutureLongLeave(b);
+      if (!aIsFuture && bIsFuture) return -1; // a is actionable, b is future -> a first
+      if (aIsFuture && !bIsFuture) return 1;
+    }
+
+    // 3. Tertiary Sort: Date (Newest First)
     return new Date(b.startDate).getTime() - new Date(a.startDate).getTime();
   });
 
@@ -515,6 +530,14 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
 
               {!isProcessed && (
                 <div className="space-y-3 mb-6">
+                  {/* Future Long Leave Notice */}
+                  {isFutureLongLeave(leave) && (
+                    <div className="bg-orange-50 text-orange-700 px-3 py-2 rounded-lg text-xs flex items-center gap-2 border border-orange-100">
+                      <AlertTriangle size={14} className="shrink-0" />
+                      <span>此為遠期長假 (距今 {Math.ceil((new Date(leave.startDate).getTime() - new Date().getTime()) / (1000 * 3600 * 24))} 天)，建議於兩個月前再行核准。</span>
+                    </div>
+                  )}
+
                   <div className="flex items-center gap-2 text-sm text-gray-600 bg-gray-50 p-2.5 rounded-lg border border-gray-100">
                     <div className="flex flex-col text-xs font-semibold w-full">
                       <div className="flex justify-between items-center">
