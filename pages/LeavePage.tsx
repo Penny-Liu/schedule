@@ -368,6 +368,29 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
     setIsModalOpen(false);
   };
 
+
+  // Helper: Analyze Conflict Resolution (Day-by-Day)
+  const analyzeConflictResolution = (startDate: Date, endDate: Date, userAId: string, userBId: string) => {
+    const resolved: string[] = [];
+    const unresolved: string[] = [];
+
+    for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+      const dateStr = d.toLocaleDateString('en-CA');
+      const statusA = db.getUserStatusOnDate(userAId, dateStr);
+      const statusB = db.getUserStatusOnDate(userBId, dateStr);
+
+      // If EITHER person is NOT 'OFF' (meaning they are working/unassigned), it's resolved.
+      // Logic: 'OFF' usually comes from Leave or Station=休假. 
+      // If they cancelled leave, status becomes 'WORK' (or specific station).
+      if (statusA !== 'OFF' || statusB !== 'OFF') {
+        resolved.push(dateStr);
+      } else {
+        unresolved.push(dateStr);
+      }
+    }
+    return { resolved, unresolved };
+  };
+
   const handleStatusChange = (id: string, status: LeaveStatus) => {
     // Validation for Approval: Check if user has tasks/roles
     if (status === LeaveStatus.APPROVED) {
@@ -387,24 +410,34 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
           );
 
           if (conflicts.length > 0) {
-            const conflictDetails = conflicts.map(c => {
+            const conflictMessages: string[] = [];
+            let hasUnresolved = false;
+
+            conflicts.forEach(c => {
               const c_start = new Date(c.startDate);
               const c_end = new Date(c.endDate);
-              // Calculate overlap range
               const overlapStart = c_start > start ? c_start : start;
               const overlapEnd = c_end < end ? c_end : end;
-              const diffDays = Math.ceil((overlapEnd.getTime() - overlapStart.getTime()) / (1000 * 3600 * 24)) + 1;
-              const user = users.find(u => u.id === c.userId);
-              return `\n- ${user?.name || '未知'}: ${overlapStart.toLocaleDateString('en-CA')} ~ ${overlapEnd.toLocaleDateString('en-CA')} (重疊 ${diffDays} 天)`;
-            }).join('');
 
-            const confirmMsg = `⚠️ 警告：檢測到長假時段衝突！\n\n此申請與以下同仁的長假重疊，可能導致人力不足：${conflictDetails}\n\n若要同時核准，重疊期間需協調其中一人銷假。\n是否仍要繼續核准？`;
+              const { resolved, unresolved } = analyzeConflictResolution(overlapStart, overlapEnd, leave.userId, c.userId);
+              const user = users.find(u => u.id === c.userId);
+
+              if (unresolved.length > 0) {
+                hasUnresolved = true;
+                conflictMessages.push(`\n- ${user?.name || '未知'}: 尚有 ${unresolved.length} 天需協調 (未解決日期: ${unresolved.slice(0, 3).join(', ')}${unresolved.length > 3 ? '...' : ''})`);
+              } else {
+                conflictMessages.push(`\n- ${user?.name || '未知'}: ${resolved.length} 天重疊但已協調完成 (皆有人力)`);
+              }
+            });
+
+            const confirmMsg = `⚠️ 警告：檢測到長假時段衝突！\n\n${conflictMessages.join('')}\n\n若顯示「需協調」，代表該做日雙方皆休假。\n是否仍要繼續核准？`;
 
             if (!window.confirm(confirmMsg)) {
               return; // Abort approval
             }
           }
         }
+
 
         // Check everyday in range
         const start = new Date(leave.startDate);
@@ -592,24 +625,50 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
                   <div className="mb-4 bg-red-50 border border-red-100 rounded-lg p-3 text-xs animate-in fade-in slide-in-from-top-1">
                     <div className="flex items-center gap-1.5 font-bold text-red-700 mb-1.5">
                       <AlertTriangle size={14} />
-                      <span>長假時段衝突警示</span>
+                      <span>長假時段衝突與協調狀態</span>
                     </div>
-                    <div className="space-y-1 text-red-600">
-                      <p className="opacity-90">此時段與 {conflicts.length} 位同仁重疊，建議先行協調。</p>
-                      <ul className="list-disc pl-4 space-y-0.5 opacity-80">
+                    <div className="space-y-2 text-red-600">
+                      <p className="opacity-90">此時段與 {conflicts.length} 位同仁重疊，系統已自動分析每日人力：</p>
+                      <ul className="list-none space-y-2">
                         {conflicts.map(c => {
                           const u = users.find(user => user.id === c.userId);
                           const c_start = new Date(c.startDate);
                           const c_end = new Date(c.endDate);
                           const overlapStart = c_start > start ? c_start : start;
                           const overlapEnd = c_end < end ? c_end : end;
-                          const diffDays = Math.ceil((overlapEnd.getTime() - overlapStart.getTime()) / (1000 * 3600 * 24)) + 1;
+
+                          const { resolved, unresolved } = analyzeConflictResolution(overlapStart, overlapEnd, leave.userId, c.userId);
+
                           return (
-                            <li key={c.id}>
-                              <span className="font-bold">{u?.name || '未知同仁'}</span>
-                              <span className="mx-1">:</span>
-                              {overlapStart.toLocaleDateString('en-CA').slice(5)}~{overlapEnd.toLocaleDateString('en-CA').slice(5)}
-                              <span className="ml-1">({diffDays}天)</span>
+                            <li key={c.id} className="bg-white p-2 rounded border border-red-100 shadow-sm">
+                              <div className="font-bold text-gray-700 mb-1">
+                                {u?.name || '未知同仁'}
+                                <span className="text-gray-400 font-normal ml-1">
+                                  ({overlapStart.toLocaleDateString('en-CA').slice(5)}~{overlapEnd.toLocaleDateString('en-CA').slice(5)})
+                                </span>
+                              </div>
+
+                              {/* Resolved Dates */}
+                              {resolved.length > 0 && (
+                                <div className="flex items-start gap-1 text-green-600 mb-1">
+                                  <CheckCircle size={12} className="mt-0.5 shrink-0" />
+                                  <span>
+                                    <span className="font-bold">已協調 {resolved.length} 天</span>: {resolved.map(d => d.slice(5)).join(', ')}
+                                  </span>
+                                </div>
+                              )}
+
+                              {/* Unresolved Dates */}
+                              {unresolved.length > 0 ? (
+                                <div className="flex items-start gap-1 text-red-600">
+                                  <XCircle size={12} className="mt-0.5 shrink-0" />
+                                  <span>
+                                    <span className="font-bold">需協調 {unresolved.length} 天</span>: {unresolved.map(d => d.slice(5)).join(', ')}
+                                  </span>
+                                </div>
+                              ) : (
+                                <div className="text-green-600 text-[10px] pl-4">✔️ 全數協調完成</div>
+                              )}
                             </li>
                           );
                         })}
