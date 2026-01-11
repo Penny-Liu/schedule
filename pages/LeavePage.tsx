@@ -577,8 +577,14 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
       if (aIsFuture && !bIsFuture) return 1;
     }
 
-    // 3. Tertiary Sort: Date (Newest First)
-    return new Date(b.startDate).getTime() - new Date(a.startDate).getTime();
+    // 3. Tertiary Sort: Date
+    // - Pending: Actionable (Ascending) -> Sooner dates first ("近期需處理")
+    // - Processed: History (Descending) -> Newest records first
+    if (isAPending) {
+      return new Date(a.startDate).getTime() - new Date(b.startDate).getTime();
+    } else {
+      return new Date(b.startDate).getTime() - new Date(a.startDate).getTime();
+    }
   });
 
   return (
