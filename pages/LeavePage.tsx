@@ -377,8 +377,11 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
           if (shift) {
             // 1. Check Special Roles
             if (shift.specialRoles && shift.specialRoles.length > 0) {
-              window.alert(`無法核准：該員在 ${dateStr} 仍有特殊任務 (${shift.specialRoles.join(', ')})。請先要求該員完成換班/交接任務，確認無任務後再行核准。`);
-              return;
+              // Exception: Duty Swap is meant to swap these roles, so don't block.
+              if (leave.type !== LeaveType.DUTY_SWAP) {
+                window.alert(`無法核准：該員在 ${dateStr} 仍有特殊任務 (${shift.specialRoles.join(', ')})。請先要求該員完成換班/交接任務，確認無任務後再行核准。`);
+                return;
+              }
             }
 
             // 2. Check Task Stations (As defined in store logic: 場控, 遠班, 大直 etc usually imply fixed duty)
