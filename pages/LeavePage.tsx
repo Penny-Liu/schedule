@@ -5,7 +5,7 @@ import { db } from '../services/store';
 import {
   Calendar,
   Clock,
-  User,
+  User as UserIcon,
   FileText,
   Check,
   X,
@@ -17,7 +17,12 @@ import {
   AlertTriangle,
   ArrowRightLeft,
   CheckCircle,
-  XCircle
+  XCircle,
+  CalendarDays,
+  Briefcase,
+  ThumbsUp,
+  ThumbsDown,
+  UserCheck
 } from 'lucide-react';
 
 interface LeavePageProps {
