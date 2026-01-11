@@ -212,7 +212,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
     const getEventTypeLabel = (type: DateEventType) => {
         switch (type) {
             case DateEventType.NATIONAL: return '國定假日';
-            case DateEventType.MEETING: return '科會 (舊)';
+            case DateEventType.MEETING: return '備忘'; // Unify Legacy Meeting as Memo
             case DateEventType.NOTE: return '備忘';
             case DateEventType.CLOSED: return '休診';
             default: return type;
@@ -222,7 +222,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
     const getEventTypeColor = (type: DateEventType) => {
         switch (type) {
             case DateEventType.NATIONAL: return 'text-red-600 bg-red-100';
-            case DateEventType.MEETING: return 'text-gray-500 bg-gray-100'; // Deprioritize legacy meeting
+            case DateEventType.MEETING: return 'text-blue-600 bg-blue-100'; // Unify Legacy Meeting as Blue
             case DateEventType.NOTE: return 'text-blue-600 bg-blue-100';
             case DateEventType.CLOSED: return 'text-gray-600 bg-gray-200 border-gray-300';
             default: return 'text-gray-600 bg-gray-100';
