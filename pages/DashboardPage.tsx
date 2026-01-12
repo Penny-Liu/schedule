@@ -12,7 +12,7 @@ interface DashboardPageProps {
     currentUser: User;
 }
 
-type ViewMode = 'user' | 'station' | 'daily';
+type ViewMode = 'user' | 'station' | 'daily' | 'personal';
 
 
 // Helper: Get Local ISO String YYYY-MM-DD
@@ -148,8 +148,8 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
 
     // Determine the Date Range
     const dateRange = useMemo(() => {
-        // Mobile: Always force 7-day Rolling View starting from Today + Offset
-        if (isMobile) {
+        // Mobile: Force 7-day Rolling View for USER and STATION views, OR if explicitly in rolling mode
+        if (isMobile && (selectedCycleId === 'rolling' || viewMode === 'user' || viewMode === 'station')) {
             const dates = [];
             const start = new Date(currentDate);
             // Apply offset: 7 days * offset
@@ -160,7 +160,6 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                 d.setDate(start.getDate() + i);
                 dates.push(toLocalISOString(d));
             }
-            return dates;
             return dates;
         }
 
@@ -1562,22 +1561,20 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                             <button
                                 onClick={() => {
                                     setViewMode('user');
-                                    // db.initializeData(true); // Removed to prevent data loss on switch
                                 }}
                                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${viewMode === 'user' ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
                                     } `}
                             >
-                                {!isMobile && <Users size={14} />} <span>人員視角</span>
+                                {!isMobile && <Users size={14} />} <span>{isMobile ? '人員' : '人員視角'}</span>
                             </button>
                             <button
                                 onClick={() => {
                                     setViewMode('station');
-                                    // db.initializeData(true); // Removed to prevent data loss on switch
                                 }}
                                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${viewMode === 'station' ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
                                     } `}
                             >
-                                {!isMobile && <LayoutList size={14} />} <span>崗位視角</span>
+                                {!isMobile && <LayoutList size={14} />} <span>{isMobile ? '崗位' : '崗位視角'}</span>
                             </button>
                             <button
                                 onClick={() => {
@@ -1591,50 +1588,70 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${viewMode === 'daily' ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
                                     } `}
                             >
-                                {!isMobile && <Activity size={14} />} <span>今日崗位</span>
+                                {!isMobile && <Activity size={14} />} <span>{isMobile ? '今日' : '今日崗位'}</span>
                             </button>
+                            {isMobile && (
+                                <button
+                                    onClick={() => setViewMode('personal')}
+                                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${viewMode === 'personal' ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+                                        } `}
+                                >
+                                    <span>個人</span>
+                                </button>
+                            )}
                         </div>
                     </div>
 
                     <div className="flex items-center gap-3">
 
-                        {isMobile ? (
-                            // Mobile Header: Simple Nav + Date Range Only
-                            <div className="flex items-center gap-2 bg-slate-100 rounded-lg p-1">
+                        {/* Cycle Selector & Nav - Unified for Mobile/Desktop */}
+                        <div className="flex items-center gap-2">
+                            {/* Mobile Left Nav (Only for Rolling) */}
+                            {isMobile && selectedCycleId === 'rolling' && (
                                 <button
                                     onClick={() => setMobileOffset(prev => prev - 1)}
-                                    className="p-2 bg-white rounded shadow-sm text-slate-600 active:scale-95 transition-transform"
+                                    className="p-1.5 bg-white rounded shadow-sm text-slate-600 border border-slate-200 active:scale-95 transition-transform"
                                 >
                                     <ChevronLeft size={16} />
                                 </button>
+                            )}
+
+                            {/* Cycle Dropdown - Only show on Mobile if in Personal View (or if not mobile) */}
+                            {(!isMobile || viewMode === 'personal') && (
+                                <div className={`flex items-center bg-slate-50 hover:bg-slate-100 rounded-lg px-2 py-1.5 transition-colors border border-slate-200 ${isMobile ? 'max-w-[140px]' : ''}`}>
+                                    {!isMobile && <Filter size={14} className="text-slate-500 mr-2" />}
+                                    <select
+                                        value={selectedCycleId}
+                                        onChange={(e) => setSelectedCycleId(e.target.value)}
+                                        className={`text-sm bg-transparent border-none focus:ring-0 text-slate-700 font-medium cursor-pointer py-0 pl-0 ${isMobile ? 'pr-6 w-full text-xs' : 'pr-8'}`}
+                                    >
+                                        <option value="rolling">連續排班</option>
+                                        {cycles.map(c => (
+                                            <option key={c.id} value={c.id}>
+                                                {c.name} {c.isConfirmed ? '(🔒)' : ''}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
+
+                            {/* Mobile Header: Show simple date range text if Selector is hidden (User/Station View) */}
+                            {isMobile && (viewMode === 'user' || viewMode === 'station') && (
                                 <span className="text-xs font-bold text-slate-700 min-w-[80px] text-center">
                                     {dateRange[0].substring(5)} ~ {dateRange[dateRange.length - 1].substring(5)}
                                 </span>
+                            )}
+
+                            {/* Mobile Right Nav (Only for Rolling) */}
+                            {isMobile && selectedCycleId === 'rolling' && (
                                 <button
                                     onClick={() => setMobileOffset(prev => prev + 1)}
-                                    className="p-2 bg-white rounded shadow-sm text-slate-600 active:scale-95 transition-transform"
+                                    className="p-1.5 bg-white rounded shadow-sm text-slate-600 border border-slate-200 active:scale-95 transition-transform"
                                 >
                                     <ChevronRight size={16} />
                                 </button>
-                            </div>
-                        ) : (
-                            // Desktop: Full Controls
-                            <div className="flex items-center bg-slate-50 hover:bg-slate-100 rounded-lg px-2 py-1.5 transition-colors border border-slate-200">
-                                <Filter size={14} className="text-slate-500 mr-2" />
-                                <select
-                                    value={selectedCycleId}
-                                    onChange={(e) => setSelectedCycleId(e.target.value)}
-                                    className="text-sm bg-transparent border-none focus:ring-0 text-slate-700 font-medium cursor-pointer py-0 pl-0 pr-8"
-                                >
-                                    <option value="rolling">連續排班視圖</option>
-                                    {cycles.map(c => (
-                                        <option key={c.id} value={c.id}>
-                                            {c.name} {c.isConfirmed ? '(🔒)' : ''}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-                        )}
+                            )}
+                        </div>
 
                         {!isMobile && selectedCycleId === 'rolling' && (
                             <div className="flex items-center bg-white rounded-lg border border-slate-200 p-0.5 shadow-sm gap-1">
@@ -1948,6 +1965,98 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                     </span>
                                 ))}
                             </div>
+                        </div>
+                    </div>
+                ) : viewMode === 'personal' ? (
+                    <div className="max-w-md mx-auto space-y-3 pb-8">
+                        {/* Summary Card */}
+                        <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm flex items-center justify-between mb-2">
+                            <div>
+                                <div className="text-xs text-slate-500 font-bold mb-1">本週期工作天數</div>
+                                <div className="text-2xl font-bold text-slate-800">
+                                    {dateRange.filter(date => !getDayShift(currentUser.id, date).isOff).length}
+                                    <span className="text-sm font-normal text-slate-400 ml-1">天</span>
+                                </div>
+                            </div>
+                            <div className="text-right">
+                                <div className="text-[10px] text-slate-400 font-medium bg-slate-50 px-2 py-1 rounded border border-slate-100">
+                                    {dateRange.length > 7 ? '完整週期' : '連續週檢視'}
+                                </div>
+                            </div>
+                        </div>
+
+                        {dateRange.map(date => {
+                            const d = new Date(date);
+                            const isToday = toLocalISOString(new Date()) === date;
+                            const weekDays = ['日', '一', '二', '三', '四', '五', '六'];
+                            const weekDay = weekDays[d.getDay()];
+                            const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+                            const event = holidays.find(h => h.date === date);
+
+                            const { station, specialRoles, isOff } = getDayShift(currentUser.id, date);
+                            const pendingReq = getPendingRequest(currentUser.id, date);
+
+                            return (
+                                <div key={date} className={`bg-white rounded-lg shadow-sm border p-3 flex items-center gap-4 ${isToday ? 'border-teal-500 ring-1 ring-teal-500' : 'border-slate-200'} ${isOff ? 'bg-slate-50' : ''}`}>
+                                    {/* Date Column */}
+                                    <div className="flex flex-col items-center min-w-[3.5rem] border-r border-slate-100 pr-4">
+                                        <span className={`text-xs font-bold ${isWeekend || event ? 'text-red-500' : 'text-slate-500'}`}>
+                                            {weekDay}
+                                        </span>
+                                        <span className={`text-2xl font-bold leading-none ${isToday ? 'text-teal-600' : 'text-slate-800'}`}>
+                                            {d.getDate()}
+                                        </span>
+                                        {event && (
+                                            <span className="text-[9px] mt-1 bg-red-50 text-red-600 px-1 rounded border border-red-100 whitespace-nowrap overflow-hidden max-w-[3rem] text-ellipsis">
+                                                {event.name}
+                                            </span>
+                                        )}
+                                    </div>
+
+                                    {/* Content Column */}
+                                    <div className="flex-1 flex flex-col justify-center">
+                                        {pendingReq && <div className="mb-2">{getLeaveBadge(pendingReq.type)}</div>}
+
+                                        {isOff ? (
+                                            <div className="text-slate-400 font-bold text-lg flex items-center gap-2">
+                                                <div className="w-2.5 h-2.5 rounded-full bg-slate-300"></div> 休假
+                                            </div>
+                                        ) : (
+                                            <div className="flex flex-col gap-1.5">
+                                                {station && station !== StationDefault.UNASSIGNED ? (
+                                                    <div className={`text-lg font-bold text-slate-800 flex items-center gap-2`}>
+                                                        <div className={`w-2.5 h-2.5 rounded-full ${station === '行政' ? 'bg-slate-400' : 'bg-teal-500'}`}></div>
+                                                        {station}
+                                                        {station && currentUser.learningCapabilities?.includes(station) && (
+                                                            <span className="text-[10px] bg-sky-100 text-sky-700 font-bold px-1 rounded">學</span>
+                                                        )}
+                                                    </div>
+                                                ) : (
+                                                    <div className="text-slate-400 italic text-sm">未分配崗位</div>
+                                                )}
+
+                                                {specialRoles.length > 0 && (
+                                                    <div className="flex flex-wrap gap-1.5">
+                                                        {specialRoles.map(role => (
+                                                            <span key={role} className={`px-2 py-0.5 rounded text-xs font-bold border flex items-center gap-1 ${role === SPECIAL_ROLES.OPENING ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                                                                role === SPECIAL_ROLES.LATE ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                                                                    role === SPECIAL_ROLES.ASSIST ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                                                                        'bg-purple-50 text-purple-700 border-purple-200'
+                                                                }`}>
+                                                                {role}
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })}
+
+                        <div className="text-center pt-4 text-xs text-slate-400 pb-12">
+                            - 僅顯示當前範圍 -
                         </div>
                     </div>
                 ) : (

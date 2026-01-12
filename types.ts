@@ -69,7 +69,8 @@ export enum LeaveType {
   PRE_SCHEDULED = '預假',
   CANCEL_LEAVE = '銷假',
   LONG_LEAVE = '長假',
-  SWAP_SHIFT = '換假', // 一般換休
+  SWAP_SHIFT = '換假', // 雙向換假 (User A Work D1/Off D2 <-> User B Off D1/Work D2)
+  ASK_LEAVE = '要假',  // 單向要假 (User A Work D1 -> User B Off D1)
   DUTY_SWAP = '任務換班' // 特殊任務換班 (開機/晚班)
 }
 
@@ -85,6 +86,7 @@ export interface LeaveRequest {
   targetUserId?: string; // For Swap Shift
   startDate: string;
   endDate: string;
+  returnDate?: string; // For Two-Way Swap Shift
   type: LeaveType;
   status: LeaveStatus;
   reason: string;

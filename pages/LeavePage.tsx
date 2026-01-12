@@ -193,6 +193,7 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
   const [formData, setFormData] = useState({
     startDate: '',
     endDate: '',
+    returnDate: '', // For Two-Way Swap
     type: LeaveType.PRE_SCHEDULED,
     reason: '',
     targetUserId: '',
@@ -209,6 +210,7 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
       setFormData({
         startDate: '',
         endDate: '',
+        returnDate: '',
         type: LeaveType.PRE_SCHEDULED,
         reason: '',
         targetUserId: '',
@@ -234,13 +236,12 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
       if (status === 'OFF') {
         setValidationMsg('該日期您原本就是「休假」，無需申請預假。');
       } else {
-        // Check if user has a TASK (Station assigned or Special Role)
         const shifts = db.getShifts(formData.startDate, formData.startDate);
         const myShift = shifts.find(s => s.userId === currentUser.id);
         if (myShift) {
           const hasRoles = myShift.specialRoles && myShift.specialRoles.length > 0;
           if (hasRoles) {
-            setValidationMsg('您在該日期已有排定特殊任務（如開機、晚班），無法申請預假。若需請假請先使用「任務換班」。');
+            setValidationMsg('您在該日期已有排定特殊任務（如開機、晚班），無法申請預假。');
           }
         }
       }
@@ -249,29 +250,82 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
       if (status === 'WORK') {
         setValidationMsg('該日期您目前為「上班」狀態，無需申請銷假。');
       }
-    } else if (formData.type === LeaveType.SWAP_SHIFT) {
+    } else if (formData.type === LeaveType.ASK_LEAVE) {
+      // One-Way Substitution (Classic "Swap" logic)
+      // I am working -> want to be OFF.
+      // Candidate must be OFF -> to work.
       const status = db.getUserStatusOnDate(currentUser.id, formData.startDate);
       if (status === 'OFF') {
-        setValidationMsg('您該日期為「休假」，不能申請與他人換假。');
+        setValidationMsg('您該日期為「休假」，無需請人代班 (請使用銷假)。');
       } else {
-        // Check if user has a TASK (Station assigned or Special Role) - Preventing regular Swap if they have specific duty?
-        // User said: "有任務不能預假、換假"
         const shifts = db.getShifts(formData.startDate, formData.startDate);
         const myShift = shifts.find(s => s.userId === currentUser.id);
-        if (myShift) {
-          const hasRoles = myShift.specialRoles && myShift.specialRoles.length > 0;
-          if (hasRoles) {
-            setValidationMsg('您在該日期已有排定特殊任務，無法申請一般換假 (請使用「任務換班」)。');
-          } else {
-            const candidates = db.getUsersOffOnDate(formData.startDate).filter(u => u.id !== currentUser.id);
-            setSwapCandidates(candidates);
-          }
+        if (myShift && myShift.specialRoles.length > 0) {
+          setValidationMsg('您在該日期已有排定特殊任務，無法申請一般代班 (請使用「任務換班」)。');
         } else {
-          // Should not happen if status is WORK, but safe fallback
+          // Find candidates OFF
           const candidates = db.getUsersOffOnDate(formData.startDate).filter(u => u.id !== currentUser.id);
           setSwapCandidates(candidates);
+          if (candidates.length === 0) setValidationMsg('該日期無人休假可供代班。');
         }
       }
+
+    } else if (formData.type === LeaveType.SWAP_SHIFT) {
+      // Two-Way Swap Logic
+      // Date 1: I am WORK (want OFF)
+      // Date 2: I am OFF (want WORK)
+
+      // 1. Check Date 1 Status
+      const status1 = db.getUserStatusOnDate(currentUser.id, formData.startDate);
+      if (status1 === 'OFF') {
+        setValidationMsg('您在換假日期(1)為「休假」，不需要換休。');
+        return;
+      }
+
+      const shifts = db.getShifts(formData.startDate, formData.startDate);
+      const myShift = shifts.find(s => s.userId === currentUser.id);
+      if (myShift && myShift.specialRoles.length > 0) {
+        setValidationMsg('您在換假日期(1)已有特殊任務，請使用「任務換班」。');
+        return;
+      }
+
+      // 2. Identify Candidates for Date 1 (Must be OFF)
+      const candidatesD1 = db.getUsersOffOnDate(formData.startDate).filter(u => u.id !== currentUser.id);
+
+      // 3. If Date 2 is selected, filter candidates further
+      if (formData.returnDate) {
+        if (formData.returnDate === formData.startDate) {
+          setValidationMsg('換假日期不能相同。');
+          return;
+        }
+        const status2 = db.getUserStatusOnDate(currentUser.id, formData.returnDate);
+        if (status2 === 'WORK') {
+          setValidationMsg('您在還假日期(2)為「上班」，無法換假來上班。');
+          return;
+        }
+
+        // Candidates for D2 MUST be WORK (to go OFF)
+        // Actually, if I want to work on D2, the person swapping with me must currently be working D2?
+        // Yes, A exchanges with B.
+        // D1: A(Work) -> Off, B(Off) -> Work
+        // D2: A(Off) -> Work, B(Work) -> Off
+
+        // Filter candidates who are working on D2
+        const candidatesD2 = db.getUsersWorkingOnDate(formData.returnDate).filter(u => u.id !== currentUser.id);
+
+        // Intersection: Users present in BOTH lists
+        const validCandidates = candidatesD1.filter(c1 => candidatesD2.some(c2 => c2.id === c1.id));
+
+        if (validCandidates.length === 0) {
+          setValidationMsg('找不到符合條件的對象：該員需在日期(1)休假且在日期(2)上班。');
+        }
+        setSwapCandidates(validCandidates);
+      } else {
+        // If D2 not picked yet, just show D1 candidates (or maybe force pick D2 first?)
+        // Let's allow picking candidate from likely pool (D1 OFF) but warn they need to match D2
+        setSwapCandidates(candidatesD1);
+      }
+
     } else if (formData.type === LeaveType.DUTY_SWAP) {
       // Special Logic for Duty Swap (Opening/Late/Assist/Scheduler)
       const shifts = db.getShifts(formData.startDate, formData.startDate);
@@ -323,7 +377,7 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
         setValidationMsg(`長假依照規定必需於 60 天前提出申請 (目前距今僅 ${diffDays} 天)。`);
       }
     }
-  }, [formData.startDate, formData.type, formData.roleToSwap, currentUser.id]);
+  }, [formData.startDate, formData.returnDate, formData.type, formData.roleToSwap, currentUser.id]);
 
 
   const handleCreateLeave = (e: React.FormEvent) => {
@@ -359,13 +413,17 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
     }
 
     // Swap Validation
-    if ((formData.type === LeaveType.SWAP_SHIFT || formData.type === LeaveType.DUTY_SWAP)) {
+    if ((formData.type === LeaveType.SWAP_SHIFT || formData.type === LeaveType.DUTY_SWAP || formData.type === LeaveType.ASK_LEAVE)) {
       if (!formData.targetUserId) {
-        setValidationMsg('請選擇欲換假的對象。');
+        setValidationMsg('請選擇對象。');
         return;
       }
       if (formData.type === LeaveType.DUTY_SWAP && !formData.roleToSwap) {
         setValidationMsg('請選擇要交換的任務類型。');
+        return;
+      }
+      if (formData.type === LeaveType.SWAP_SHIFT && !formData.returnDate) {
+        setValidationMsg('雙向換假必須選擇「換假日期」。');
         return;
       }
     }
@@ -375,14 +433,16 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
       userId: currentUser.id,
       startDate: formData.startDate,
       endDate: finalEndDate,
+      returnDate: (formData.type === LeaveType.SWAP_SHIFT) ? formData.returnDate : undefined,
       type: formData.type,
       status: LeaveStatus.PENDING,
       reason: formData.reason,
       targetUserId: formData.targetUserId || undefined,
       roleToSwap: formData.roleToSwap || undefined,
-      targetApproval: (formData.type === LeaveType.SWAP_SHIFT || formData.type === LeaveType.DUTY_SWAP) ? 'PENDING' : undefined,
+      targetApproval: (formData.type === LeaveType.SWAP_SHIFT || formData.type === LeaveType.DUTY_SWAP || formData.type === LeaveType.ASK_LEAVE) ? 'PENDING' : undefined,
       createdAt: new Date().toISOString()
     };
+
 
     db.addLeave(newLeave);
     setLeaves([...db.getLeaves()]); // Fix: Force new array for re-render
@@ -511,6 +571,7 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
 
     if (status === LeaveStatus.APPROVED) {
       window.alert('已成功核准該申請，並自動更新排班表。');
+    } else if (status === LeaveStatus.REJECTED) {
       window.alert('已駁回該申請。');
     }
   };
@@ -765,6 +826,17 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
                         </div>
                         <span className="text-teal-600 bg-white px-1.5 py-0.5 rounded border border-teal-100 shadow-sm">{days} 天</span>
                       </div>
+
+                      {/* Show Return Date for Swap Shift */}
+                      {leave.type === LeaveType.SWAP_SHIFT && leave.returnDate && (
+                        <div className="mt-2 pt-2 border-t border-gray-200 flex items-center justify-between text-indigo-600">
+                          <div className="flex items-center gap-1">
+                            <ArrowRightLeft size={10} />
+                            <span>換假: {leave.returnDate} <span className="text-xs opacity-75">{getWeekday(leave.returnDate)}</span></span>
+                          </div>
+                          <span className="text-[10px] bg-white px-1 py-0.5 rounded border border-indigo-100">互換</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                   {leave.reason && (
@@ -776,10 +848,18 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
               {/* Compact Date Info for Processed Cards */}
               {isProcessed && (
                 <div className="mb-2 pl-11 -mt-1">
-                  <div className="flex items-center gap-2 text-xs text-gray-400">
-                    <span>{leave.startDate}</span>
-                    {leave.startDate !== leave.endDate && <span>~ {leave.endDate}</span>}
-                    <span className="bg-slate-100 px-1 rounded text-slate-500">{days}天</span>
+                  <div className="flex flex-col gap-1 text-xs text-gray-400">
+                    <div className="flex items-center gap-2">
+                      <span>{leave.startDate}</span>
+                      {leave.startDate !== leave.endDate && <span>~ {leave.endDate}</span>}
+                      <span className="bg-slate-100 px-1 rounded text-slate-500">{days}天</span>
+                    </div>
+                    {leave.returnDate && (
+                      <div className="flex items-center gap-1 text-indigo-400">
+                        <span className="text-[10px]">換:</span>
+                        <span>{leave.returnDate}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -901,7 +981,7 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
               <div className="space-y-4">
                 {/* Start Date */}
                 <CalendarPicker
-                  label="日期 (開始日期)"
+                  label="想休日期"
                   value={formData.startDate}
                   onChange={(d) => setFormData({ ...formData, startDate: d })}
                   userId={currentUser.id}
@@ -919,6 +999,18 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
                     value={formData.endDate}
                     onChange={(d) => setFormData({ ...formData, endDate: d })}
                     userId={currentUser.id}
+                    minDate={formData.startDate}
+                  />
+                )}
+
+                {/* Return Date (Two-Way Swap Only) */}
+                {formData.type === LeaveType.SWAP_SHIFT && (
+                  <CalendarPicker
+                    label="對換日期"
+                    value={formData.returnDate}
+                    onChange={(d) => setFormData({ ...formData, returnDate: d })}
+                    userId={currentUser.id}
+                    validStatus="OFF" // I must be OFF on return date
                     minDate={formData.startDate}
                   />
                 )}
@@ -943,10 +1035,12 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
                 </div>
               )}
 
-              {/* Swap Shift Target Selection */}
-              {(formData.type === LeaveType.SWAP_SHIFT || formData.type === LeaveType.DUTY_SWAP) && (
+              {/* Swap Shift / Ask Leave Target Selection */}
+              {(formData.type === LeaveType.SWAP_SHIFT || formData.type === LeaveType.DUTY_SWAP || formData.type === LeaveType.ASK_LEAVE) && (
                 <div className="animate-in fade-in duration-300">
-                  <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">選擇換班對象</label>
+                  <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">
+                    {formData.type === LeaveType.ASK_LEAVE ? '選擇要假對象' : '選擇換假對象'}
+                  </label>
                   <select
                     value={formData.targetUserId}
                     onChange={e => setFormData({ ...formData, targetUserId: e.target.value })}
@@ -959,11 +1053,13 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
                     ))}
                   </select>
                   {formData.startDate && (
-                    swapCandidates.length > 0 ? (
-                      <p className="text-[10px] text-teal-600 mt-1 font-medium">✨ 已列出 {swapCandidates.length} 位可換班人員</p>
-                    ) : (
-                      <p className="text-[10px] text-red-400 mt-1">⚠️ 該日期無符合資格人員</p>
-                    )
+                    <div className="mt-1">
+                      {swapCandidates.length > 0 ? (
+                        <p className="text-[10px] text-teal-600 font-medium">✨ 已列出 {swapCandidates.length} 位可選人員</p>
+                      ) : (
+                        <p className="text-[10px] text-red-400">⚠️ 無符合資格人員 (需符合所有日期條件)</p>
+                      )}
+                    </div>
                   )}
                 </div>
               )}
@@ -990,7 +1086,7 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
               <div className="pt-2">
                 <button
                   type="submit"
-                  disabled={!!validationMsg || !formData.startDate || ((formData.type === LeaveType.SWAP_SHIFT || formData.type === LeaveType.DUTY_SWAP) && !formData.targetUserId)}
+                  disabled={!!validationMsg || !formData.startDate || ((formData.type === LeaveType.SWAP_SHIFT || formData.type === LeaveType.DUTY_SWAP || formData.type === LeaveType.ASK_LEAVE) && !formData.targetUserId)}
                   className={`w-full font-bold py-3 rounded-lg transition-colors shadow-sm ${(!!validationMsg || !formData.startDate)
                     ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
                     : 'bg-teal-600 hover:bg-teal-700 text-white shadow-teal-200'
@@ -1001,9 +1097,9 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
               </div>
             </form>
           </div>
-        </div>
+        </div >
       )}
-    </div>
+    </div >
   );
 };
 
