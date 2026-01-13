@@ -139,6 +139,19 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
         return () => unsubscribe();
     }, []);
 
+    // --- Effects ---
+    // Auto-scroll to today in Personal View
+    useEffect(() => {
+        if (isMobile && viewMode === 'personal') {
+            setTimeout(() => {
+                const todayEl = document.getElementById('personal-view-today');
+                if (todayEl) {
+                    todayEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            }, 300); // Slight delay for rendering
+        }
+    }, [viewMode, isMobile, selectedCycleId]);
+
     useEffect(() => {
         const handleResize = () => setIsMobile(window.innerWidth < 768);
         window.addEventListener('resize', handleResize);
@@ -148,6 +161,31 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
 
     // Determine the Date Range
     const dateRange = useMemo(() => {
+        // Mobile Personal View: Show Full Cycle of "Today"
+        if (isMobile && viewMode === 'personal') {
+            const todayStr = toLocalISOString(new Date());
+            // Find cycle covering today if in rolling mode, or use selected
+            // But requirement says "Today's cycle", implies the cycle containing Today.
+            // If user selected a specific cycle, we should arguably show THAT cycle.
+            // But if 'rolling', show today's cycle.
+            let targetCycle = currentCycle;
+            if (!targetCycle || selectedCycleId === 'rolling') {
+                targetCycle = cycles.find(c => todayStr >= c.startDate && todayStr <= c.endDate);
+            }
+
+            if (targetCycle) {
+                const dates = [];
+                const start = new Date(targetCycle.startDate);
+                const end = new Date(targetCycle.endDate);
+                if (start <= end) {
+                    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+                        dates.push(toLocalISOString(d));
+                    }
+                    return dates;
+                }
+            }
+        }
+
         // Mobile: Force 7-day Rolling View for USER and STATION views, OR if explicitly in rolling mode
         if (isMobile && (selectedCycleId === 'rolling' || viewMode === 'user' || viewMode === 'station')) {
             const dates = [];
@@ -1606,8 +1644,8 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
 
                         {/* Cycle Selector & Nav - Unified for Mobile/Desktop */}
                         <div className="flex items-center gap-2">
-                            {/* Mobile Left Nav (Only for Rolling) */}
-                            {isMobile && selectedCycleId === 'rolling' && (
+                            {/* Mobile Left Nav (For Rolling OR User/Station Views) */}
+                            {isMobile && (selectedCycleId === 'rolling' || viewMode === 'user' || viewMode === 'station') && (
                                 <button
                                     onClick={() => setMobileOffset(prev => prev - 1)}
                                     className="p-1.5 bg-white rounded shadow-sm text-slate-600 border border-slate-200 active:scale-95 transition-transform"
@@ -1642,8 +1680,8 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                 </span>
                             )}
 
-                            {/* Mobile Right Nav (Only for Rolling) */}
-                            {isMobile && selectedCycleId === 'rolling' && (
+                            {/* Mobile Right Nav (For Rolling OR User/Station Views) */}
+                            {isMobile && (selectedCycleId === 'rolling' || viewMode === 'user' || viewMode === 'station') && (
                                 <button
                                     onClick={() => setMobileOffset(prev => prev + 1)}
                                     className="p-1.5 bg-white rounded shadow-sm text-slate-600 border border-slate-200 active:scale-95 transition-transform"
@@ -1996,8 +2034,14 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                             const { station, specialRoles, isOff } = getDayShift(currentUser.id, date);
                             const pendingReq = getPendingRequest(currentUser.id, date);
 
+                            const isPast = date < toLocalISOString(new Date());
+
                             return (
-                                <div key={date} className={`bg-white rounded-lg shadow-sm border p-3 flex items-center gap-4 ${isToday ? 'border-teal-500 ring-1 ring-teal-500' : 'border-slate-200'} ${isOff ? 'bg-slate-50' : ''}`}>
+                                <div 
+                                    key={date} 
+                                    id={isToday ? 'personal-view-today' : undefined}
+                                    className={`bg-white rounded-lg shadow-sm border p-3 flex items-center gap-4 ${isToday ? 'border-teal-500 ring-1 ring-teal-500' : 'border-slate-200'} ${isOff ? 'bg-slate-50' : ''} ${isPast && !isToday ? 'opacity-50 grayscale-[0.5]' : ''}`}
+                                >
                                     {/* Date Column */}
                                     <div className="flex flex-col items-center min-w-[3.5rem] border-r border-slate-100 pr-4">
                                         <span className={`text-xs font-bold ${isWeekend || event ? 'text-red-500' : 'text-slate-500'}`}>
