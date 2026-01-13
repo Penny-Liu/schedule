@@ -468,6 +468,10 @@ class Store {
         return this.shifts.filter(s => s.date >= startDate && s.date <= endDate);
     }
 
+    getShift(userId: string, date: string): Shift | undefined {
+        return this.shifts.find(s => s.userId === userId && s.date === date);
+    }
+
     async upsertShift(shift: Shift) {
         // 1. Update Local State: Optimistic Update
         const otherIndices: number[] = [];

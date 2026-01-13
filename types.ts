@@ -25,6 +25,7 @@ export interface User {
   excludedCapabilities?: string[]; // New: List of station names user is CERTIFIED but EXCLUDED from auto-schedule
   password?: string; // User defined password
   mustChangePassword?: boolean; // New: Force password change on next login
+  primaryStation?: string; // New: Identifies the user's "Home" station (e.g., '遠距')
 }
 
 // Updated Station Defaults: MR moved before US
@@ -52,7 +53,8 @@ export const SPECIAL_ROLES = {
   OPENING: '開機',
   LATE: '晚班',
   ASSIST: '輔班', // User called it "輔控", mapping to Assist/Support
-  SCHEDULER: '排班'
+  SCHEDULER: '排班',
+  DAZHI_SUPPORT: '大直支援' // New: Remote staff supporting Dazhi
 };
 
 export interface Shift {

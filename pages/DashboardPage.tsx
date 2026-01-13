@@ -996,6 +996,20 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
     const handleSpecialRoleToggle = (userId: string, dateStr: string, role: string, currentStation: string, currentRoles: string[]) => {
         let newRoles = [...currentRoles];
 
+        // 0. Validation Constraints
+        // Constraint A: Dazhi Support only for Remote
+        if (role === SPECIAL_ROLES.DAZHI_SUPPORT) {
+            if (!currentStation.includes('遠距') && !currentStation.includes('遠班')) {
+                alert('只有遠距班才能選擇「大直支援」');
+                return;
+            }
+        }
+        // Constraint B: Dazhi / Floor Control cannot take roles
+        if ((currentStation.includes('大直') || currentStation.includes('場控')) && !currentRoles.includes(role)) {
+            alert('此崗位(大直/場控)不需選擇特殊任務');
+            return;
+        }
+
         // 1. Toggle Selection
         if (newRoles.includes(role)) {
             newRoles = newRoles.filter(r => r !== role);
@@ -1106,7 +1120,13 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
     const handleAddUserToStation = (userId: string, dateStr: string, station: string) => {
         // Use db.shifts (Sync State) instead of React state to avoid staleness
         const existingShift = db.shifts.find(s => s.userId === userId && s.date === dateStr);
-        const roles = existingShift ? existingShift.specialRoles : [];
+        let roles = existingShift ? existingShift.specialRoles : [];
+
+        // Clear roles if moving to Dazhi or Floor Control (Strict exclusion)
+        if (station.includes('大直') || station.includes('場控')) {
+            roles = [];
+        }
+
         handleUpdateShift(userId, dateStr, station, roles);
     };
 
@@ -1205,7 +1225,8 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
         SPECIAL_ROLES.OPENING,
         SPECIAL_ROLES.LATE,
         SPECIAL_ROLES.ASSIST,
-        SPECIAL_ROLES.SCHEDULER
+        SPECIAL_ROLES.SCHEDULER,
+        SPECIAL_ROLES.DAZHI_SUPPORT
     ];
 
     const allStationsSorted = useMemo(() => {
@@ -1259,6 +1280,14 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                     colorClass: 'bg-white border-dashed border-gray-300 text-gray-400',
                     getData: (date: string) => getUnassignedStaff(date)
                 };
+            } else if (item.includes('遠距') || item.includes('遠班')) {
+                return {
+                    id: item,
+                    type: 'STATION',
+                    label: item,
+                    colorClass: 'bg-fuchsia-50 text-fuchsia-800 border-fuchsia-300',
+                    getData: (date: string) => getStationStaff(item, date)
+                };
             } else {
                 let colorClass = 'bg-teal-50 text-teal-800 border-teal-200';
                 if (item.includes('MR')) colorClass = 'bg-orange-50 text-orange-800 border-orange-300';
@@ -1273,7 +1302,27 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                     type: 'STATION',
                     label: item,
                     colorClass: colorClass,
-                    getData: (date: string) => getStationStaff(item, date)
+                    getData: (date: string) => {
+                        // Standard Station Staff
+                        const staff = getStationStaff(item, date);
+                        // If Station is Dazhi, ALSO get Dazhi Support Role staff
+                        if (item.includes('大直')) {
+                            // Find shifts that have DAZHI_SUPPORT role
+                            const supports = shifts
+                                .filter(s => s.date === date && s.specialRoles && s.specialRoles.includes(SPECIAL_ROLES.DAZHI_SUPPORT))
+                                .map(s => ({ user: users.find(u => u.id === s.userId), shift: s }))
+                                .filter(i => i.user !== undefined);
+
+                            // Merge
+                            const existingIds = staff.map(s => s.user!.id);
+                            supports.forEach(sup => {
+                                if (!existingIds.includes(sup.user!.id)) {
+                                    staff.push(sup);
+                                }
+                            });
+                        }
+                        return staff;
+                    }
                 };
             }
         });
@@ -1285,6 +1334,17 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
         const existingShift = db.shifts.find(s => s.userId === userId && s.date === dateStr);
         const station = existingShift ? existingShift.station : StationDefault.UNASSIGNED;
         const currentRoles = existingShift ? existingShift.specialRoles : [];
+
+        // Validation
+        if (role === SPECIAL_ROLES.DAZHI_SUPPORT && (!station.includes('遠距') && !station.includes('遠班'))) {
+            alert('只有遠距班才能選擇「大直支援」');
+            return;
+        }
+        if ((station.includes('大直') || station.includes('場控'))) {
+            alert('此崗位(大直/場控)不需選擇特殊任務');
+            return;
+        }
+
         if (!currentRoles.includes(role)) {
             handleUpdateShift(userId, dateStr, station, [...currentRoles, role]);
         }
@@ -1400,6 +1460,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                     { id: SPECIAL_ROLES.LATE, label: '晚班', color: 'text-amber-700 bg-amber-50 border-amber-200' },
                                     { id: SPECIAL_ROLES.ASSIST, label: '輔班', color: 'text-emerald-700 bg-emerald-50 border-emerald-200' },
                                     { id: SPECIAL_ROLES.SCHEDULER, label: '排班', color: 'text-red-700 bg-red-50 border-red-200' },
+                                    { id: SPECIAL_ROLES.DAZHI_SUPPORT, label: '大直支援', color: 'text-violet-700 bg-violet-50 border-violet-200' },
                                 ].map(role => (
                                     <label key={role.id} className={`flex items-center gap-2 p-2 rounded border cursor-pointer hover: opacity-80 transition-all ${specialRolesToSchedule.includes(role.id) ? role.color + ' ring-1 ring-offset-1' : 'bg-white border-gray-200 text-gray-500'} `}>
                                         <input
@@ -1550,17 +1611,20 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                             let name = formatName(s.user?.name || '');
                                                             const isOpening = s.shift.specialRoles.includes(SPECIAL_ROLES.OPENING);
                                                             const isLate = s.shift.specialRoles.includes(SPECIAL_ROLES.LATE);
+                                                            // Check for Remote Assistance at Dazhi
+                                                            const isRemoteAtDazhi = row.label.includes('遠') && s.shift.station === '大直';
 
                                                             // Determine highlight for special roles inside station view: Text suffix
                                                             let roleSuffix = '';
                                                             if (isOpening) roleSuffix = '(開)';
                                                             if (isLate) roleSuffix = '(晚)';
+                                                            if (isRemoteAtDazhi) roleSuffix = '(支援)'; // or (大直)
 
                                                             // Use minimal styling for export list
                                                             return (
-                                                                <div key={i} className={`text-sm text-center leading-tight font-bold text-gray-800`}>
+                                                                <div key={i} className={`text-sm text-center leading-tight font-bold text-gray-800 ${isRemoteAtDazhi ? 'text-violet-700' : ''}`}>
                                                                     {name}
-                                                                    <span className="text-[10px] font-normal ml-0.5">{roleSuffix}</span>
+                                                                    <span className={`text-[10px] font-normal ml-0.5 ${isRemoteAtDazhi ? 'text-violet-600' : ''}`}>{roleSuffix}</span>
                                                                 </div>
                                                             );
                                                         })}
@@ -2037,8 +2101,8 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                             const isPast = date < toLocalISOString(new Date());
 
                             return (
-                                <div 
-                                    key={date} 
+                                <div
+                                    key={date}
                                     id={isToday ? 'personal-view-today' : undefined}
                                     className={`bg-white rounded-lg shadow-sm border p-3 flex items-center gap-4 ${isToday ? 'border-teal-500 ring-1 ring-teal-500' : 'border-slate-200'} ${isOff ? 'bg-slate-50' : ''} ${isPast && !isToday ? 'opacity-50 grayscale-[0.5]' : ''}`}
                                 >

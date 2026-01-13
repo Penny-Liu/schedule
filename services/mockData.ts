@@ -23,6 +23,7 @@ export const MOCK_USERS: User[] = [
     alias: '萍',
     color: '#EC4899', // Pink
     capabilities: ALL_SKILLS, // Supervisor usually can do most things
+    primaryStation: '遠距', // Test: This user belongs to Remote team
     password: '1234',
     mustChangePassword: true
   },
