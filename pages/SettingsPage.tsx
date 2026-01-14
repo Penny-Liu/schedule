@@ -34,8 +34,11 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
         startMonth: new Date().toISOString().slice(0, 7),
         endMonth: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().slice(0, 7),
         name: '科會',
-        type: DateEventType.NOTE
+        type: DateEventType.NOTE,
+        frequency: '1' // Default every 1 month
     });
+
+
 
     // Confirm Modal State
     const [confirmState, setConfirmState] = useState<{
@@ -173,6 +176,10 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
         });
     };
 
+
+
+
+
     const handleBatchGenerate = (e: React.FormEvent) => {
         e.preventDefault();
         const start = new Date(batchConfig.startMonth + '-01');
@@ -236,8 +243,8 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
                 });
             }
 
-            // Next month
-            current.setMonth(current.getMonth() + 1);
+            // Next month logic with frequency
+            current.setMonth(current.getMonth() + parseInt(batchConfig.frequency));
         }
 
         if (generatedDates.length > 0) {
@@ -732,16 +739,29 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
                                     </div>
                                 </form>
 
-                                {/* Batch Generator */}
-                                <details className="group border border-blue-100 rounded-lg bg-blue-50/30 open:bg-blue-50/50 transition-all">
+                                {/* Batch Generator - Collapsible UI */}
+                                <details className="group border border-blue-100 rounded-lg bg-blue-50/30 open:bg-blue-50/50 transition-all mb-4">
                                     <summary className="cursor-pointer p-3 text-xs font-bold text-blue-700 flex items-center gap-2 select-none">
-                                        <RefreshCw size={14} /> 批量生成 (例: 每月第三個週五)
+                                        <RefreshCw size={14} /> 批量生成特殊日期 (進階)
                                         <span className="ml-auto text-blue-400 group-open:rotate-180 transition-transform"><ChevronDown size={14} /></span>
                                     </summary>
                                     <div className="p-3 pt-0 border-t border-blue-100/50 mt-1">
                                         <form onSubmit={handleBatchGenerate} className="space-y-3 mt-2">
                                             <div className="flex items-center gap-2 text-sm text-gray-700 font-medium flex-wrap">
-                                                <span>每個月的 第</span>
+                                                <span>每</span>
+                                                <select
+                                                    value={batchConfig.frequency}
+                                                    onChange={e => setBatchConfig({ ...batchConfig, frequency: e.target.value })}
+                                                    className="bg-white border border-gray-300 rounded px-2 py-1 text-sm outline-none focus:border-blue-500"
+                                                >
+                                                    <option value="1">1</option>
+                                                    <option value="2">2</option>
+                                                    <option value="3">3</option>
+                                                    <option value="4">4</option>
+                                                    <option value="6">6</option>
+                                                    <option value="12">12</option>
+                                                </select>
+                                                <span>個月的 第</span>
                                                 <select
                                                     value={batchConfig.nth}
                                                     onChange={e => setBatchConfig({ ...batchConfig, nth: e.target.value })}
@@ -803,80 +823,12 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
                                         </form>
                                     </div>
                                 </details>
+
+
+
                             </div>
 
-                            <div className="p-4 border-b border-gray-100">
-                                <h4 className="font-bold text-gray-700 text-sm mb-3 flex items-center gap-1">
-                                    <CalendarPlus size={14} /> 批次新增特殊日期
-                                </h4>
-                                <form onSubmit={handleBatchGenerate} className="flex flex-col gap-2">
-                                    <div className="flex gap-2 items-center">
-                                        <label className="text-xs text-gray-500 w-1/4">每個月的</label>
-                                        <select
-                                            value={batchConfig.nth}
-                                            onChange={(e) => setBatchConfig({ ...batchConfig, nth: e.target.value })}
-                                            className="flex-1 px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 outline-none cursor-pointer bg-white"
-                                        >
-                                            <option value="1">第一個</option>
-                                            <option value="2">第二個</option>
-                                            <option value="3">第三個</option>
-                                            <option value="4">第四個</option>
-                                            <option value="last">最後一個</option>
-                                        </select>
-                                        <select
-                                            value={batchConfig.weekday}
-                                            onChange={(e) => setBatchConfig({ ...batchConfig, weekday: e.target.value })}
-                                            className="flex-1 px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 outline-none cursor-pointer bg-white"
-                                        >
-                                            <option value="0">週日</option>
-                                            <option value="1">週一</option>
-                                            <option value="2">週二</option>
-                                            <option value="3">週三</option>
-                                            <option value="4">週四</option>
-                                            <option value="5">週五</option>
-                                            <option value="6">週六</option>
-                                        </select>
-                                    </div>
-                                    <div className="flex gap-2">
-                                        <input
-                                            type="month"
-                                            value={batchConfig.startMonth}
-                                            onChange={(e) => setBatchConfig({ ...batchConfig, startMonth: e.target.value })}
-                                            className="w-1/2 px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 outline-none"
-                                            required
-                                        />
-                                        <input
-                                            type="month"
-                                            value={batchConfig.endMonth}
-                                            onChange={(e) => setBatchConfig({ ...batchConfig, endMonth: e.target.value })}
-                                            className="w-1/2 px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 outline-none"
-                                            required
-                                        />
-                                    </div>
-                                    <div className="flex gap-2">
-                                        <input
-                                            type="text"
-                                            value={batchConfig.name}
-                                            onChange={(e) => setBatchConfig({ ...batchConfig, name: e.target.value })}
-                                            placeholder="名稱 (例: 科會)"
-                                            className="flex-1 px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 outline-none"
-                                            required
-                                        />
-                                        <select
-                                            value={batchConfig.type}
-                                            onChange={(e) => setBatchConfig({ ...batchConfig, type: e.target.value as DateEventType })}
-                                            className="flex-1 px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 outline-none cursor-pointer bg-white"
-                                        >
-                                            <option value={DateEventType.NATIONAL}>國定假日 (紅字)</option>
-                                            <option value={DateEventType.MEETING}>備忘 (藍字)</option>
-                                            <option value={DateEventType.CLOSED}>休診 (全員預設休假)</option>
-                                        </select>
-                                    </div>
-                                    <button type="submit" className="bg-blue-500 text-white px-6 py-2 rounded-lg hover:bg-blue-600 flex items-center justify-center text-sm">
-                                        <Plus size={16} className="mr-1" /> 批次新增
-                                    </button>
-                                </form>
-                            </div>
+
 
                             <div className="p-2 overflow-y-auto max-h-[250px]">
                                 {holidays.length > 0 ? (
