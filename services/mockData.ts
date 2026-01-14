@@ -31,7 +31,7 @@ export const MOCK_USERS: User[] = [
     id: 'user-admin',
     name: '系統管理員',
     email: 'admin@example.com',
-    role: UserRole.SUPERVISOR,
+    role: UserRole.SYSTEM_ADMIN,
     groupId: StaffGroup.GROUP_A,
     alias: '管',
     color: '#000000', // Black
