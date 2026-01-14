@@ -750,18 +750,13 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
                                         <form onSubmit={handleBatchGenerate} className="space-y-3 mt-2">
                                             <div className="flex items-center gap-2 text-sm text-gray-700 font-medium flex-wrap">
                                                 <span>每</span>
-                                                <select
+                                                <input
+                                                    type="number"
+                                                    min="1"
                                                     value={batchConfig.frequency}
                                                     onChange={e => setBatchConfig({ ...batchConfig, frequency: e.target.value })}
-                                                    className="bg-white border border-gray-300 rounded px-2 py-1 text-sm outline-none focus:border-blue-500"
-                                                >
-                                                    <option value="1">1</option>
-                                                    <option value="2">2</option>
-                                                    <option value="3">3</option>
-                                                    <option value="4">4</option>
-                                                    <option value="6">6</option>
-                                                    <option value="12">12</option>
-                                                </select>
+                                                    className="w-16 bg-white border border-gray-300 rounded px-2 py-1 text-sm outline-none focus:border-blue-500 text-center"
+                                                />
                                                 <span>個月的 第</span>
                                                 <select
                                                     value={batchConfig.nth}
