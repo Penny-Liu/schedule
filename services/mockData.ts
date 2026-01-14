@@ -16,7 +16,7 @@ const ALL_SKILLS = [
 export const MOCK_USERS: User[] = [
   {
     id: 'user-001',
-    name: '系統管理員',
+    name: '劉雅萍',
     email: 'penny@example.com',
     role: UserRole.SUPERVISOR,
     groupId: StaffGroup.GROUP_A,
@@ -25,6 +25,19 @@ export const MOCK_USERS: User[] = [
     capabilities: ALL_SKILLS, // Supervisor usually can do most things
     primaryStation: '遠距', // Test: This user belongs to Remote team
     password: '1234',
+    mustChangePassword: true
+  },
+  {
+    id: 'user-admin',
+    name: '系統管理員',
+    email: 'admin@example.com',
+    role: UserRole.SUPERVISOR,
+    groupId: StaffGroup.GROUP_A,
+    alias: '管',
+    color: '#000000', // Black
+    capabilities: ALL_SKILLS,
+    primaryStation: 'REMOTE',
+    password: 'admin',
     mustChangePassword: true
   },
   {
