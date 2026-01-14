@@ -12,6 +12,7 @@ interface SettingsPageProps {
 const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
     const [stations, setStations] = useState<string[]>(db.getStations());
     const [requirements, setRequirements] = useState<Record<string, number[]>>(db.getStationRequirements());
+    // Force Update: 2026-01-14
     const [cycles, setCycles] = useState<RosterCycle[]>(db.getCycles());
     const [holidays, setHolidays] = useState<Holiday[]>(db.getHolidays());
 
