@@ -16,7 +16,7 @@ const ALL_SKILLS = [
 export const MOCK_USERS: User[] = [
   {
     id: 'user-001',
-    name: '劉雅萍',
+    name: '系統管理員',
     email: 'penny@example.com',
     role: UserRole.SUPERVISOR,
     groupId: StaffGroup.GROUP_A,
