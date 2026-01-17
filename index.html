@@ -9,6 +9,29 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <script>
+      // Global Error Handler to catch "White Screen" issues before React loads
+      window.onerror = function(message, source, lineno, colno, error) {
+        document.body.innerHTML += `
+          <div style="position:fixed; top:0; left:0; width:100%; padding:20px; background:red; color:white; z-index:99999; font-family:monospace; white-space:pre-wrap;">
+            <strong>CRITICAL ERROR (OnLoad):</strong><br>
+            ${message}<br>
+            Source: ${source}:${lineno}:${colno}<br>
+            Stack: ${error ? error.stack : 'N/A'}
+          </div>
+        `;
+        return false; 
+      };
+      
+      window.onunhandledrejection = function(event) {
+        document.body.innerHTML += `
+          <div style="position:fixed; bottom:0; left:0; width:100%; padding:20px; background:darkred; color:white; z-index:99999; font-family:monospace; white-space:pre-wrap;">
+             <strong>UNHANDLED PROMISE:</strong><br>
+             ${event.reason}
+          </div>
+        `;
+      };
+    </script>
     <style>
       /* Custom scrollbar for better aesthetics */
       ::-webkit-scrollbar {
