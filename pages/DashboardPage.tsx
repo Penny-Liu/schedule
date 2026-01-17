@@ -2047,6 +2047,13 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                             if (stationName === '輔班' && s.specialRoles.includes(SPECIAL_ROLES.ASSIST)) return true;
                                             if (stationName === '排班' && s.specialRoles.includes(SPECIAL_ROLES.SCHEDULER)) return true;
 
+                                            // [Dual Display] If looking for '大直', include 'Remote + Dazhi Support'
+                                            if (stationName === '大直') {
+                                                const isRemote = s.station?.includes('遠');
+                                                const hasSupport = s.specialRoles.includes(SPECIAL_ROLES.DAZHI_SUPPORT);
+                                                if (isRemote && hasSupport) return true;
+                                            }
+
                                             // Then Check Exact Station Match
                                             return s.station === stationName;
                                         });
