@@ -28,6 +28,7 @@ class Store {
     };
     currentUser: User | null = null;
     isLoaded: boolean = false;
+    connectionStatus: { type: 'Supabase' | 'Mock'; details?: string } = { type: 'Supabase' }; // Default assumption
     private listeners: (() => void)[] = [];
     private settingsRowId: string | number = 1; // Default to 1, but dynamic
     private subscription: any = null; // Realtime subscription
@@ -105,10 +106,13 @@ class Store {
             if (usersRes.data && usersRes.data.length > 0) {
                 console.log(`[Store] Successfully loaded ${usersRes.data.length} users from Supabase.`);
                 this.users = usersRes.data;
+                this.connectionStatus = { type: 'Supabase', details: 'Connected and loaded users' };
             } else {
                 console.warn('[Store] Users table appears empty or fetch failed. Falling back to MOCK data.');
+                const errorMsg = usersRes.error ? `Error: ${usersRes.error.message}` : 'Table empty';
                 console.log('Database empty, seeding init data...');
                 this.users = MOCK_USERS;
+                this.connectionStatus = { type: 'Mock', details: `Fallback triggered. ${errorMsg}` };
                 // Auto-seed Users
                 const { error } = await supabase.from('users').insert(MOCK_USERS);
                 if (error) console.error('Failed to seed users:', error);
@@ -186,8 +190,9 @@ class Store {
 
             this.isLoaded = true;
             console.log('Data initialized successfully');
-        } catch (e) {
+        } catch (e: any) {
             console.error("Failed to fetch data from Supabase", e);
+            this.connectionStatus = { type: 'Mock', details: `Critical Failure: ${e.message || JSON.stringify(e)}` };
             // Fallback to local storage or mock if critical failure
             this.loadFromLocalStorage();
         }
