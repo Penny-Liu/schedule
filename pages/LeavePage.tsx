@@ -914,7 +914,7 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
                       {approver ? (
                         <span>
                           <span className="font-bold text-gray-700">{approver.name}</span>
-                          <span className="text-gray-400 ml-1">於 {leave.processedAt ? new Date(leave.processedAt).toLocaleString('zh-TW', { month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric' }) : '未記錄時間'} 審核</span>
+                          <span className="text-gray-400 ml-1">於 {leave.processedAt ? new Date(leave.processedAt).toLocaleDateString('en-CA', { year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }) : '未記錄時間'} 審核</span>
                         </span>
                       ) : '已處理'}
                     </div>
@@ -922,7 +922,7 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
                   <div className="flex items-center gap-2">
                     <div className="text-[10px] text-gray-300">
                       {/* Only show created date if still pending, processed showed above */}
-                      {leave.status === LeaveStatus.PENDING && new Date(leave.createdAt).toLocaleDateString()}
+                      {leave.status === LeaveStatus.PENDING && new Date(leave.createdAt).toLocaleDateString('en-CA')}
                     </div>
                     {currentUser.id === leave.userId && leave.status === LeaveStatus.PENDING && (
                       <button
