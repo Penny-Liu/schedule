@@ -457,32 +457,29 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
 
     for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
       const dateStr = d.toLocaleDateString('en-CA');
-      const currentD = new Date(d); // Copy for comparison
+      
+      // MODIFIED LOGIC: Check if users are already in 'OFF' status (Coordinated/Approved)
+      // Was: Checked for CANCEL_LEAVE (Meaning valid manpower).
+      // Now: Check for Status = 'OFF' (Meaning leave is finalized/coordinated).
+      
+      const statusA = db.getUserStatusOnDate(userAId, dateStr);
+      const statusB = db.getUserStatusOnDate(userBId, dateStr);
 
-      // STRICT Check: Is there a CANCEL_LEAVE request for this date?
-      // We look for any CANCEL_LEAVE from either user that covers this date
-      // and is NOT rejected.
-      const isResolvedA = leaves.some(l =>
-        l.userId === userAId &&
-        l.type === LeaveType.CANCEL_LEAVE &&
-        l.status !== LeaveStatus.REJECTED &&
-        new Date(l.startDate) <= currentD && new Date(l.endDate) >= currentD
-      );
-
-      const isResolvedB = leaves.some(l =>
-        l.userId === userBId &&
-        l.type === LeaveType.CANCEL_LEAVE &&
-        l.status !== LeaveStatus.REJECTED &&
-        new Date(l.startDate) <= currentD && new Date(l.endDate) >= currentD
-      );
-
-      if (isResolvedA || isResolvedB) {
+      // If either user is already OFF on this day, we consider the conflict "Coordinated/Resolved" for that day.
+      // (As per user request: "如果1/1已呈a、b休假...則此衝突條件就可以修改為已協調")
+      if (statusA === 'OFF' || statusB === 'OFF') {
         resolved.push(dateStr);
       } else {
         unresolved.push(dateStr);
       }
     }
     return { resolved, unresolved };
+  };
+
+// Helper: Simple Date Format (M/D)
+  const formatDateSimple = (dateStr: string) => {
+    const d = new Date(dateStr);
+    return `${d.getMonth() + 1}/${d.getDate()}`;
   };
 
   const handleStatusChange = (id: string, status: LeaveStatus) => {
@@ -506,6 +503,8 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
           if (conflicts.length > 0) {
             const conflictMessages: string[] = [];
             let hasUnresolved = false;
+            
+            const requestorName = users.find(u => u.id === leave.userId)?.name || '申請人';
 
             conflicts.forEach(c => {
               const c_start = new Date(c.startDate);
@@ -514,17 +513,20 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
               const overlapEnd = c_end < end ? c_end : end;
 
               const { resolved, unresolved } = analyzeConflictResolution(overlapStart, overlapEnd, leave.userId, c.userId);
-              const user = users.find(u => u.id === c.userId);
+              const conflictUser = users.find(u => u.id === c.userId);
+              const conflictUserName = conflictUser?.name || '未知同仁';
 
               if (unresolved.length > 0) {
                 hasUnresolved = true;
-                conflictMessages.push(`\n- ${user?.name || '未知'}: 尚有 ${unresolved.length} 天需協調 (未解決日期: ${unresolved.slice(0, 3).join(', ')}${unresolved.length > 3 ? '...' : ''})`);
+                const dateList = unresolved.map(d => formatDateSimple(d)).join(', ');
+                conflictMessages.push(`\n- 🔴 需由 ${requestorName} 與 ${conflictUserName} 協調日期: ${dateList}`);
               } else {
-                conflictMessages.push(`\n- ${user?.name || '未知'}: ${resolved.length} 天重疊但已協調完成 (皆有人力)`);
+                const dateList = resolved.map(d => formatDateSimple(d)).join(', ');
+                 conflictMessages.push(`\n- 🟢 與 ${conflictUserName} 重疊但已協調 (雙方皆休假): ${dateList}`);
               }
             });
 
-            const confirmMsg = `⚠️ 警告：檢測到長假時段衝突！\n\n${conflictMessages.join('')}\n\n若顯示「需協調」，代表該做日雙方皆休假。\n是否仍要繼續核准？`;
+            const confirmMsg = `⚠️ 警告：檢測到長假時段衝突！\n${conflictMessages.join('')}\n\n若顯示「需協調」，代表該日期其中一方仍為上班狀態。\n是否仍要繼續核准？`;
 
             if (!window.confirm(confirmMsg)) {
               return; // Abort approval
@@ -744,6 +746,7 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
                 );
 
                 if (conflicts.length === 0) return null;
+                const requestorName = requestor?.name || '申請人';
 
                 return (
                   <div className="mb-4 bg-red-50 border border-red-100 rounded-lg p-3 text-xs animate-in fade-in slide-in-from-top-1">
@@ -752,7 +755,7 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
                       <span>長假時段衝突與協調狀態</span>
                     </div>
                     <div className="space-y-2 text-red-600">
-                      <p className="opacity-90">此時段與 {conflicts.length} 位同仁重疊，系統已自動分析每日人力：</p>
+                      <p className="opacity-90">此時段與 {conflicts.length} 位同仁重疊，系統已自動分析：</p>
                       <ul className="list-none space-y-2">
                         {conflicts.map(c => {
                           const u = users.find(user => user.id === c.userId);
@@ -762,22 +765,16 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
                           const overlapEnd = c_end < end ? c_end : end;
 
                           const { resolved, unresolved } = analyzeConflictResolution(overlapStart, overlapEnd, leave.userId, c.userId);
+                          const conflictUserName = u?.name || '未知同仁';
 
                           return (
                             <li key={c.id} className="bg-white p-2 rounded border border-red-100 shadow-sm">
-                              <div className="font-bold text-gray-700 mb-1">
-                                {u?.name || '未知同仁'}
-                                <span className="text-gray-400 font-normal ml-1">
-                                  ({overlapStart.toLocaleDateString('en-CA').slice(5)}~{overlapEnd.toLocaleDateString('en-CA').slice(5)})
-                                </span>
-                              </div>
-
                               {/* Resolved Dates */}
                               {resolved.length > 0 && (
                                 <div className="flex items-start gap-1 text-green-600 mb-1">
                                   <CheckCircle size={12} className="mt-0.5 shrink-0" />
                                   <span>
-                                    <span className="font-bold">已協調 {resolved.length} 天</span>: {resolved.map(d => d.slice(5)).join(', ')}
+                                    <span className="font-bold">已協調</span>: {resolved.map(d => formatDateSimple(d)).join(', ')}
                                   </span>
                                 </div>
                               )}
@@ -787,11 +784,11 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
                                 <div className="flex items-start gap-1 text-red-600">
                                   <XCircle size={12} className="mt-0.5 shrink-0" />
                                   <span>
-                                    <span className="font-bold">需協調 {unresolved.length} 天</span>: {unresolved.map(d => d.slice(5)).join(', ')}
+                                    <span className="font-bold text-red-700">🔴 {requestorName} 需與 {conflictUserName} 協調</span>: {unresolved.map(d => formatDateSimple(d)).join(', ')}
                                   </span>
                                 </div>
                               ) : (
-                                <div className="text-green-600 text-[10px] pl-4">✔️ 全數協調完成</div>
+                                <div className="text-green-600 text-[10px] pl-4">✔️ 與 {conflictUserName} 全數協調完成</div>
                               )}
                             </li>
                           );
