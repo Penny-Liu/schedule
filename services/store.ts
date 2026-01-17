@@ -98,9 +98,15 @@ class Store {
                 supabase.from('settings').select('id, data').eq('id', 1).single()
             ]);
 
+            if (usersRes.error) {
+                console.error('[Store] CRITICAL: Error fetching users:', usersRes.error);
+            }
+
             if (usersRes.data && usersRes.data.length > 0) {
+                console.log(`[Store] Successfully loaded ${usersRes.data.length} users from Supabase.`);
                 this.users = usersRes.data;
             } else {
+                console.warn('[Store] Users table appears empty or fetch failed. Falling back to MOCK data.');
                 console.log('Database empty, seeding init data...');
                 this.users = MOCK_USERS;
                 // Auto-seed Users
