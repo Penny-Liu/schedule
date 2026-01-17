@@ -18,13 +18,23 @@ const App: React.FC = () => {
   const [currentPage, setCurrentPage] = useState('dashboard');
   const [isLoading, setIsLoading] = useState(true);
 
-  // Init Data from Supabase
+  // Init Data from Supabase & Auto-Refresh Setup
   useEffect(() => {
     const init = async () => {
       await db.initializeData();
       setIsLoading(false);
     };
     init();
+
+    // Auto-refresh on resume
+    import('@capacitor/app').then(({ App: CapApp }) => {
+       CapApp.addListener('appStateChange', ({ isActive }) => {
+          if (isActive) {
+             console.log('App resumed, refreshing data...');
+             db.initializeData(true);
+          }
+       });
+    });
   }, []);
 
   const handleLogin = (user: User) => {

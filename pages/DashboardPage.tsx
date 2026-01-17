@@ -153,21 +153,26 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
     }, [viewMode, isMobile, selectedCycleId]);
 
     useEffect(() => {
-        const handleResize = () => setIsMobile(window.innerWidth < 768);
+        const handleResize = () => setIsMobile(window.innerWidth < 1024);
         window.addEventListener('resize', handleResize);
-        return () => window.removeEventListener('resize', handleResize);
+        window.addEventListener('orientationchange', () => {
+             // Delay slightly to let browser update innerWidth
+             setTimeout(handleResize, 100);
+        });
+        handleResize(); // Initial check
+        return () => {
+             window.removeEventListener('resize', handleResize);
+             window.removeEventListener('orientationchange', handleResize);
+        };
     }, []);
 
 
     // Determine the Date Range
     const dateRange = useMemo(() => {
-        // Mobile Personal View: Show Full Cycle of "Today"
+        // Mobile Personal View: Force Full Cycle (28 Days)
         if (isMobile && viewMode === 'personal') {
             const todayStr = toLocalISOString(new Date());
             // Find cycle covering today if in rolling mode, or use selected
-            // But requirement says "Today's cycle", implies the cycle containing Today.
-            // If user selected a specific cycle, we should arguably show THAT cycle.
-            // But if 'rolling', show today's cycle.
             let targetCycle = currentCycle;
             if (!targetCycle || selectedCycleId === 'rolling') {
                 targetCycle = cycles.find(c => todayStr >= c.startDate && todayStr <= c.endDate);
@@ -184,10 +189,22 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                     return dates;
                 }
             }
+             // Fallback if no cycle found: show +/- 14 days? Or just 28 days from today?
+             // Let's fallback to Today + 28 days if no cycle
+             const dates = [];
+             const start = new Date(currentDate);
+             for (let i = 0; i < 28; i++) {
+                 const d = new Date(start);
+                 d.setDate(start.getDate() + i);
+                 dates.push(toLocalISOString(d));
+             }
+             return dates;
         }
 
-        // Mobile: Force 7-day Rolling View for USER and STATION views, OR if explicitly in rolling mode
-        if (isMobile && (selectedCycleId === 'rolling' || viewMode === 'user' || viewMode === 'station')) {
+        // Mobile: Force 7-day Rolling View for USER and STATION views
+        // Also apply to small tablets/landscape mobile (e.g. up to 1024px)
+        const isSmallScreen = window.innerWidth < 1024; 
+        if ((isMobile || isSmallScreen) && (viewMode === 'user' || viewMode === 'station' || selectedCycleId === 'rolling')) {
             const dates = [];
             const start = new Date(currentDate);
             // Apply offset: 7 days * offset
@@ -201,6 +218,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
             return dates;
         }
 
+        // Desktop Behavior (unchanged)
         if (selectedCycleId !== 'rolling' && currentCycle) {
             const dates = [];
             const start = new Date(currentCycle.startDate);
@@ -216,27 +234,18 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
         const dates = [];
         const start = new Date(currentDate);
 
-        // Mobile: Show Today + 7 days
-        if (isMobile) {
-            for (let i = 0; i < 7; i++) {
-                const d = new Date(start);
-                d.setDate(start.getDate() + i);
-                dates.push(toLocalISOString(d));
-            }
-        } else {
-            // Desktop: Show -2 days + 21 days (3 weeks)
-            // Align view to start 2 days before current
-            const viewStart = new Date(start);
-            viewStart.setDate(viewStart.getDate() - 2);
+        // Fallback for Desktop Rolling
+        // Align view to start 2 days before current
+        const viewStart = new Date(start);
+        viewStart.setDate(viewStart.getDate() - 2);
 
-            for (let i = 0; i < 21; i++) {
-                const d = new Date(viewStart);
-                d.setDate(viewStart.getDate() + i);
-                dates.push(toLocalISOString(d));
-            }
+        for (let i = 0; i < 21; i++) {
+            const d = new Date(viewStart);
+            d.setDate(viewStart.getDate() + i);
+            dates.push(toLocalISOString(d));
         }
         return dates;
-    }, [currentDate, selectedCycleId, currentCycle, isMobile, mobileOffset]);
+    }, [currentDate, selectedCycleId, currentCycle, isMobile, mobileOffset, viewMode]);
 
     // Update schedule range when cycle changes OR when view changes
     useEffect(() => {
@@ -1373,6 +1382,30 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                 confirmColor={isCycleConfirmed ? "purple" : "teal"}
             />
 
+            {/* Mobile Floating Action Button (FAB) for Edit/Save */}
+            {isMobile && (currentUser.role === UserRole.SUPERVISOR || currentUser.role === UserRole.SYSTEM_ADMIN) && (
+                <button
+                    onClick={isEditMode ? handleComplete : () => setIsEditMode(true)}
+                    disabled={isProcessing}
+                    className={`fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full shadow-lg flex items-center justify-center transition-all active:scale-95 ${
+                        isEditMode 
+                        ? 'bg-teal-600 text-white shadow-teal-300' 
+                        : 'bg-white text-slate-700 border border-slate-200'
+                    } ${isProcessing ? 'opacity-80 cursor-not-allowed' : ''}`}
+                >
+                     {isProcessing ? (
+                        <Loader2 size={24} className="animate-spin" />
+                    ) : isEditMode ? (
+                        <Check size={28} />
+                    ) : (
+                        <div className="relative">
+                           <Wand2 size={24} />
+                           <div className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-teal-500 rounded-full border-2 border-white"></div>
+                        </div>
+                    )}
+                </button>
+            )}
+
             <ConfirmModal
                 isOpen={isAutoScheduleOpen}
                 onClose={() => setIsAutoScheduleOpen(false)}
@@ -1565,7 +1598,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                         {station && station !== StationDefault.UNASSIGNED ? (
                                                             // Removed rounded, added w-full h-full to fill
                                                             <div className={`w-full h-full flex items-center justify-center ${getStationStyle(station).replace('border-teal-200', 'border-gray-300').replace('shadow-sm', '').replace('rounded-md', '')} `}>
-                                                                <span className="font-bold text-sm leading-none text-center">{station}</span>
+                                                            <span className="font-bold text-[10px] sm:text-sm leading-tight text-center whitespace-normal break-words px-0.5">{station}</span>
                                                             </div>
                                                         ) : (
                                                             <span className="text-gray-200 text-xs">-</span>
@@ -1857,24 +1890,28 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                     </>
                                 )}
 
-                                <button
-                                    onClick={isEditMode ? handleComplete : () => setIsEditMode(true)}
-                                    disabled={isProcessing}
-                                    className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-all ${isEditMode
-                                        ? 'bg-teal-600 text-white border-teal-600 shadow-sm shadow-teal-200 hover:bg-teal-700'
-                                        : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
-                                        } ${(isProcessing) ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                >
-                                    {isProcessing ? (
-                                        <>
-                                            <Loader2 size={14} className="animate-spin inline mr-1" />
-                                            儲存中
-                                        </>
-                                    ) : (
-                                        isEditMode ? '完成' : '編輯'
-                                    )}
-                                </button>
                             </>
+                        )}
+
+                        {/* Edit Button: Desktop Only (Mobile uses FAB) */}
+                        {!isMobile && (
+                            <button
+                                onClick={isEditMode ? handleComplete : () => setIsEditMode(true)}
+                                disabled={isProcessing}
+                                className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-all ${isEditMode
+                                    ? 'bg-teal-600 text-white border-teal-600 shadow-sm shadow-teal-200 hover:bg-teal-700'
+                                    : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                                    } ${(isProcessing) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            >
+                                {isProcessing ? (
+                                    <>
+                                        <Loader2 size={14} className="animate-spin inline mr-1" />
+                                        儲存中
+                                    </>
+                                ) : (
+                                    isEditMode ? '完成' : '編輯'
+                                )}
+                            </button>
                         )}
                     </div>
                 </div>
@@ -2521,7 +2558,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                             </tbody>
                         </table>
                         {/* ... (Footer legend) ... */}
-                        <div className="p-4 border-t border-slate-200 bg-white sticky bottom-0 z-20 flex gap-6 text-xs text-slate-500 font-medium">
+                        <div className="hidden lg:flex p-4 border-t border-slate-200 bg-white sticky bottom-0 z-20 gap-6 text-xs text-slate-500 font-medium">
                             {viewMode === 'user' ? (
                                 <>
                                     <div className="flex items-center gap-2"><span className="w-3 h-3 bg-slate-200 rounded-sm"></span> <span>休假 / 非工作日</span></div>

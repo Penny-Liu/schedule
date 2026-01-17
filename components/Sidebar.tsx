@@ -57,13 +57,15 @@ const Sidebar: React.FC<SidebarProps> = ({ currentUser, onNavigate, currentPage,
   };
 
   return (
-    <div className="w-full bg-white border-b border-gray-200 h-16 flex items-center justify-between px-4 sticky top-0 z-50 shadow-sm">
+    <div className="w-full bg-white border-b border-gray-200 min-h-16 flex items-center justify-between px-4 sticky top-0 z-50 shadow-sm pt-[env(safe-area-inset-top)]">
       {/* Left: Logo & Brand */}
       <div className="flex items-center gap-3">
         <div className="w-8 h-8 bg-gradient-to-br from-teal-400 to-teal-600 rounded-lg flex items-center justify-center text-white font-bold text-lg shadow-sm shadow-teal-200">
           影
         </div>
-        <h1 className="text-lg font-bold text-gray-800 tracking-wide hidden md:block">影像醫學部</h1>
+        <h1 className="text-lg font-bold text-gray-800 tracking-wide hidden lg:block">
+            影像醫學部 <span className="text-[10px] text-gray-400 font-normal">v1.2</span>
+        </h1>
       </div>
 
       {/* Center: Navigation Items */}
@@ -81,7 +83,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentUser, onNavigate, currentPage,
                 }`}
             >
               <Icon size={18} className={`transition-colors ${isActive ? 'text-teal-600' : 'text-gray-400'}`} />
-              <span className="hidden sm:inline">{item.label}</span>
+              <span className="hidden lg:inline">{item.label}</span>
               {item.id === 'leave' && hasPendingLeaves && (
                 <span className="w-2 h-2 bg-red-500 rounded-full ml-1 animate-pulse" />
               )}

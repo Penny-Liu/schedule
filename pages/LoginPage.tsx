@@ -8,6 +8,12 @@ interface LoginPageProps {
     onLogin: (user: User) => void;
 }
 
+declare global {
+    interface Window {
+        Capacitor: any;
+    }
+}
+
 const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
     const users = db.getUsers();
     const [selectedUser, setSelectedUser] = useState<User | null>(null);
@@ -54,6 +60,77 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
         }
     };
 
+    // --- Biometric Logic ---
+    const [isBiometricAvailable, setIsBiometricAvailable] = React.useState(false);
+
+    React.useEffect(() => {
+        const checkBiometric = async () => {
+            if (window.Capacitor) {
+                 try {
+                    const { NativeBiometric } = await import('@capgo/capacitor-native-biometric');
+                    const result = await NativeBiometric.isAvailable();
+                    if (result.isAvailable) {
+                        setIsBiometricAvailable(true);
+                    }
+                 } catch (e) {
+                     console.log('Biometric not available:', e);
+                 }
+            }
+        };
+        checkBiometric();
+    }, []);
+
+    const handleBiometricLogin = async () => {
+        const lastUserId = localStorage.getItem('last_user_id');
+        if (!lastUserId) {
+            setError('請先使用密碼登入一次，以啟用快速登入');
+            return;
+        }
+
+        try {
+            const { NativeBiometric } = await import('@capgo/capacitor-native-biometric');
+            const verified = await NativeBiometric.verifyIdentity({
+                reason: '使用 Face ID / Touch ID 登入排班系統',
+                title: '快速登入',
+                subtitle: '驗證您的身份',
+                description: '請使用 Face ID 或 Touch ID'
+            });
+
+            if (verified) {
+                const user = users.find(u => u.id === lastUserId);
+                if (user) {
+                    onLogin(user);
+                } else {
+                    setError('找不到上一次的使用者紀錄');
+                }
+            }
+        } catch (e) {
+            console.error('Biometric failed:', e);
+            setError('驗證失敗');
+        }
+    };
+
+    // Auto-save last user on successful login
+    React.useEffect(() => {
+        if (selectedUser && password && !error) {
+           // This effect triggers too often during typing, moving logic to handleSubmit
+        }
+    }, [password]);
+    
+    // Intercept original submit to save user ID
+    const originalHandleSubmit = handleSubmit;
+    const handleLoginSubmit = (e: React.FormEvent) => {
+        originalHandleSubmit(e);
+        // We can't easily hook into the result of originalHandleSubmit because it's void.
+        // Instead, we trust that if the password matches, the user would have been logged in by the parent/original handler.
+        if (selectedUser) {
+             const targetPassword = selectedUser.password || '1234';
+             if (password === targetPassword) {
+                 localStorage.setItem('last_user_id', selectedUser.id);
+             }
+        }
+    };
+
     return (
         <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-100 to-gray-200 p-4 font-sans">
             <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl flex overflow-hidden border border-white/50 relative">
@@ -87,9 +164,22 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
                     {!selectedUser ? (
                         // Step 1: User Selection Grid
                         <div className="animate-in fade-in slide-in-from-right-4 duration-300">
-                            <div className="mb-6">
-                                <h2 className="text-2xl font-bold text-slate-800">選擇使用者</h2>
-                                <p className="text-slate-500 text-sm">請點擊您的帳號以繼續登入</p>
+                            <div className="mb-6 flex justify-between items-end">
+                                <div>
+                                    <h2 className="text-2xl font-bold text-slate-800">選擇使用者</h2>
+                                    <p className="text-slate-500 text-sm">請點擊您的帳號以繼續登入</p>
+                                </div>
+                                {isBiometricAvailable && (
+                                    <button 
+                                        onClick={handleBiometricLogin}
+                                        className="text-teal-600 text-sm font-medium hover:underline flex items-center gap-1"
+                                    >
+                                        <div className="w-6 h-6 rounded-full bg-teal-100 flex items-center justify-center">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+                                        </div>
+                                        快速登入
+                                    </button>
+                                )}
                             </div>
 
                             <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
@@ -112,6 +202,13 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
                                     </button>
                                 ))}
                             </div>
+                            
+                             {error && !selectedUser && (
+                                <div className="mt-4 bg-red-50 text-red-600 text-xs font-bold p-3 rounded-lg text-center animate-pulse">
+                                    {error}
+                                </div>
+                            )}
+
                         </div>
                     ) : (
                         // Step 2: Password Input
@@ -135,7 +232,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
                                 <p className="text-slate-500 text-sm font-medium mt-1">{getRoleLabel(selectedUser.role)}</p>
                             </div>
 
-                            <form onSubmit={handleSubmit} className="space-y-4">
+                            <form onSubmit={handleLoginSubmit} className="space-y-4">
                                 <div>
                                     <div className="relative">
                                         <Lock size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
