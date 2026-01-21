@@ -2957,7 +2957,7 @@ BMD :{{bmd}}
 
         let remDocStr = '';
         if (remoteDocs.length > 0) {
-            remDocStr = remoteDocs.map(doc => `${doc}  X (X大 X小 X無) +大直 N →N 單位`).join('\n');
+            remDocStr = remoteDocs.map(doc => `${doc}  X (X大 X小 X無) +大直 ${stats.dazhi_clients} →N 單位`).join('\n');
         }
         replacements['{{remote_doctors_detail}}'] = remDocStr;
 
