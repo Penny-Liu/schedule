@@ -183,23 +183,7 @@ const App: React.FC = () => {
           {renderPage()}
         </main>
 
-        {/* Debug Banner - Temporary for diagnosing connection issues */}
-        <div className="fixed bottom-0 left-0 right-0 bg-gray-900 text-white p-1 text-xs flex justify-between items-center z-[100] opacity-90 font-mono">
-          <div className="flex items-center gap-2 px-2">
-             <div className={`w-2 h-2 rounded-full ${db?.connectionStatus?.type === 'Supabase' ? 'bg-green-500' : 'bg-red-500'}`}></div>
-             <span className="font-bold">Database:</span>
-             <span className={`${db?.connectionStatus?.type === 'Supabase' ? 'text-green-400' : 'text-red-400'}`}>
-               {db?.connectionStatus?.type || 'Unknown'}
-             </span>
-             <span className="text-gray-400 mx-1">|</span>
-             <span className="text-gray-300 truncate max-w-[300px]" title={db?.connectionStatus?.details}>
-               {db?.connectionStatus?.details || 'No details'}
-             </span>
-          </div>
-          <div className="px-2 text-gray-500">
-             Debug Mode
-          </div>
-        </div>
+
       </div>
     </ErrorBoundary>
   );
