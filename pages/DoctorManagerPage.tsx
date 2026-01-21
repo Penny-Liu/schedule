@@ -34,14 +34,14 @@ const DoctorManagerPage: React.FC<DoctorManagerPageProps> = ({ currentUser }) =>
             return;
         }
         
-        const success = await db.addDoctor(newDoctorName.trim(), newDoctorAlias.trim());
-        if (success) {
+        const result = await db.addDoctor(newDoctorName.trim(), newDoctorAlias.trim());
+        if (result.success) {
             setNewDoctorName('');
             setNewDoctorAlias('');
-            setErrorMsg(''); // Clear error
+            setErrorMsg(''); 
             alert('醫師已新增');
         } else {
-            setErrorMsg('新增失敗，請檢查下方 Console 錯誤訊息');
+            setErrorMsg(`新增失敗: ${result.error}`);
         }
     };
 

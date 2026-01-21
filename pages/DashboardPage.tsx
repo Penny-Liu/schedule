@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import type { User, Shift } from '../types';
 import { UserRole, SYSTEM_OFF, SPECIAL_ROLES, LeaveRequest, LeaveStatus, LeaveType, StationDefault, DateEventType } from '../types';
 import { db } from '../services/store';
-import { ChevronLeft, ChevronRight, Briefcase, Moon, Sun, Monitor, Activity, Calendar as CalendarIcon, Filter, Wand2, Users, LayoutList, Star, AlertCircle, Plus, X, Download, BarChart2, Sparkles, ChevronDown, ChevronUp, GripVertical, BookOpen, Lock, Unlock, CheckCircle, Loader2, User as UserIcon, Key, Settings, Trash2, Check, AlertTriangle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Briefcase, Moon, Sun, Monitor, Activity, Calendar as CalendarIcon, Filter, Wand2, Users, LayoutList, Star, AlertCircle, Plus, X, Download, BarChart2, Sparkles, ChevronDown, ChevronUp, GripVertical, BookOpen, Lock, Unlock, CheckCircle, Loader2, User as UserIcon, Key, Settings, Trash2, Check, AlertTriangle, Copy } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -2872,8 +2872,8 @@ const DailyManpowerSummary: React.FC<{
         };
     }, [shifts, date, users]);
 
-    const handleCopy = () => {
-        // Format Date: 1/21(三)
+    // Generate Copy Text (Memoized for Live Preview)
+    const copyText = useMemo(() => {
         const d = new Date(date);
         const dayNames = ['日', '一', '二', '三', '四', '五', '六'];
         const dateStr = `${d.getMonth() + 1}/${d.getDate()}(${dayNames[d.getDay()]})`;
@@ -2891,24 +2891,20 @@ const DailyManpowerSummary: React.FC<{
         const supportDocs = docShifts.filter(s => s.station === '支援').map(s => getDocAlias(s.doctorId));
 
         // --- Radiographer Data: "Third Line" Detection ---
-        // Shifts for '技術支援' or '行政' are mapped to "Third Line Support"
         const thirdLineRad: string[] = [];
         shifts.filter(s => s.date === date).forEach(s => {
              const u = users.find(u => u.id === s.userId);
              if (!u) return;
-             // Check if station is '技術支援' or '行政' -> Map to Third Line
              if (s.station === '技術支援' || s.station === '行政') {
                  thirdLineRad.push(u.alias || u.name.slice(-2)); 
              }
         });
 
-        // Combine Third Line Support (Doctors in Support Station + Radiographers in TechSupport/Admin)
         const thirdLineSupportList = [...supportDocs, ...thirdLineRad];
 
         // --- Prepare Template & Variables ---
         let template = db.settings.lineCopyTemplate;
         if (!template) {
-            // Fallback default if not loaded
             template = `{{date}}
 {{imaging_doctors}}
 
@@ -2931,7 +2927,6 @@ BMD :{{bmd}}
 三線支援：{{third_line_support}}`;
         }
 
-        // Variable Replacements
         const replacements: Record<string, string> = {
             '{{date}}': dateStr,
             '{{beitou_count}}': manpower.beitouCount.toString(),
@@ -2939,9 +2934,7 @@ BMD :{{bmd}}
             '{{beitou_cta}}': stats.beitou_cta.toString(),
             '{{dazhi_clients}}': stats.dazhi_clients.toString(),
             '{{dazhi_count}}': manpower.dazhiCount.toString(),
-            
-            // Lists
-            '{{floor_control}}': manpower.floorControl.join('/') || '', // Allow empty to default to nothing? Users might prefer '無' if empty? Example showed empty lists just blank after colon.
+            '{{floor_control}}': manpower.floorControl.join('/') || '',
             '{{mr}}': manpower.mr.join('/'),
             '{{us}}': manpower.us.join('/'),
             '{{ct}}': manpower.ct.join('/'),
@@ -2950,13 +2943,10 @@ BMD :{{bmd}}
             '{{remote_radiographers}}': manpower.remote.join('/') || '無',
             '{{dazhi_radiographers}}': manpower.dazhi.join('/') || '無',
             '{{third_line_support}}': thirdLineSupportList.join('/'),
-
-            // Special Combined
             '{{remote_group}}': [...remoteDocs, ...manpower.remote].join('/'),
         };
 
         // Doctor Lists formatting
-        // Imaging Doctors
         let imgDocStr = '';
         if (imagingDocs.length > 0) {
             imgDocStr = imagingDocs.map(doc => `${doc}  N(N大 N小 N無 ) →N 單位`).join('\n');
@@ -2965,27 +2955,27 @@ BMD :{{bmd}}
         }
         replacements['{{imaging_doctors}}'] = imgDocStr;
 
-        // Remote Doctors Detail
         let remDocStr = '';
         if (remoteDocs.length > 0) {
             remDocStr = remoteDocs.map(doc => `${doc}  X (X大 X小 X無) +大直 N →N 單位`).join('\n');
         }
         replacements['{{remote_doctors_detail}}'] = remDocStr;
 
-        // Apply Replacements
         let finalText = template;
         Object.keys(replacements).forEach(key => {
-            // value might contain special regex chars, so prefer split/join or non-regex replaceAll if available (ES2021)
-            // or simple regex with verify. key is simple {{...}} so regex is safe.
             const val = replacements[key];
             finalText = finalText.split(key).join(val); 
         });
 
-        navigator.clipboard.writeText(finalText).then(() => {
-            alert('已複製到剪貼簿(自訂格式)');
+        return finalText;
+    }, [date, shifts, manpower, users, stats]);
+
+    const handleCopy = () => {
+        navigator.clipboard.writeText(copyText).then(() => {
+            alert('已複製到剪貼簿');
         }).catch(err => {
             console.error('Failed to copy: ', err);
-            prompt('複製失敗，請手動複製:', finalText);
+            prompt('複製失敗，請手動複製:', copyText);
         });
     };
 
@@ -2998,10 +2988,22 @@ BMD :{{bmd}}
                 </h3>
                  <div className="flex gap-2">
                      <button onClick={handleCopy} className="bg-gray-800 text-white px-3 py-1 rounded text-sm hover:bg-gray-900 transition flex items-center gap-1">
-                        <Download className="w-4 h-4" /> 複製文字
-                    </button>
-                </div>
-            </div>
+                        <Copy size={16} />
+                        複製到剪貼簿
+                     </button>
+                 </div>
+             </div>
+
+             {/* Live Preview Box */}
+             <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mb-4">
+                 <div className="text-xs text-gray-500 mb-1 font-medium">預覽內容 (自動生成)</div>
+                 <textarea 
+                    className="w-full h-64 text-sm font-mono text-gray-700 bg-transparent outline-none resize-none"
+                    readOnly
+                    value={copyText}
+                 />
+             </div>
+
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm">
                 {/* Beitou Section */}
