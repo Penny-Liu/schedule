@@ -39,6 +39,8 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
         frequency: '1' // Default every 1 month
     });
 
+    const [lineTemplate, setLineTemplate] = useState(db.settings.lineCopyTemplate || '');
+
 
 
     // Confirm Modal State
@@ -594,6 +596,99 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
                                         >
                                             強制重置該月
                                         </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+
+                        {/* Line Copy Template Settings */}
+                        <div className="bg-white rounded-xl shadow-[0_2px_12px_rgba(0,0,0,0.03)] border border-gray-100 overflow-hidden flex flex-col h-fit">
+                            <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
+                                <h3 className="font-bold text-gray-800 flex items-center gap-2">
+                                    <Clock size={16} className="text-gray-400" />
+                                    Line 複製格式設定 (系統管理員專用)
+                                </h3>
+                            </div>
+                            <div className="p-6">
+                                <p className="text-sm text-gray-500 mb-2">
+                                    您可以自訂「複製文字」的內容格式。請使用下方的變數代碼進行排版，系統會自動帶入當日資料。
+                                </p>
+                                <textarea
+                                    className="w-full h-64 p-3 border border-gray-200 rounded-lg text-sm font-mono focus:ring-2 focus:ring-teal-500 outline-none resize-y mb-2"
+                                    value={lineTemplate}
+                                    onChange={(e) => setLineTemplate(e.target.value)}
+                                    placeholder="請輸入格式範本..."
+                                />
+                                <div className="flex gap-2 mb-4">
+                                    <button
+                                        onClick={() => {
+                                            db.settings.lineCopyTemplate = lineTemplate;
+                                            db.saveSettings();
+                                            alert('格式已儲存！');
+                                        }}
+                                        className="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2"
+                                    >
+                                        <Save size={16} /> 儲存設定
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            if (confirm('確定要回復成系統預設格式嗎？您的修改將會遺失。')) {
+                                                const defaultTemplate = `{{date}}
+{{imaging_doctors}}
+
+放射師人力
+北投 {{beitou_count}}  (客戶：{{beitou_clients}}  CTA  {{beitou_cta}})
+BU領頭 場控：{{floor_control}}
+MR : {{mr}}
+US：{{us}}
+CT: {{ct}}
+BMD :{{bmd}}
+支援  :{{support}}
+
+遠群（{{remote_group}}）
+{{remote_doctors_detail}}
+遠：{{remote_radiographers}}
+
+大直 {{dazhi_count}} （客戶 {{dazhi_clients}} ）
+{{dazhi_radiographers}}
+
+三線支援：{{third_line_support}}`;
+                                                setLineTemplate(defaultTemplate);
+                                                db.settings.lineCopyTemplate = defaultTemplate;
+                                                db.saveSettings();
+                                                alert('已回復預設值');
+                                            }
+                                        }}
+                                        className="bg-gray-100 hover:bg-gray-200 text-gray-600 px-4 py-2 rounded-lg text-sm font-bold"
+                                    >
+                                        回復預設值
+                                    </button>
+                                </div>
+
+                                <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                                    <h4 className="text-xs font-bold text-slate-500 mb-2">可用變數代碼 (點擊複製)</h4>
+                                    <div className="flex flex-wrap gap-2 text-xs font-mono text-slate-700">
+                                        {[
+                                            '{{date}}', '{{imaging_doctors}}',
+                                            '{{beitou_count}}',
+                                            '{{beitou_clients}}', '{{beitou_cta}}',
+                                            '{{floor_control}}', '{{mr}}', '{{us}}', '{{ct}}', '{{bmd}}', '{{support}}',
+                                            '{{remote_group}}', '{{remote_doctors_detail}}', '{{remote_radiographers}}',
+                                            '{{dazhi_count}}', '{{dazhi_clients}}', '{{dazhi_radiographers}}',
+                                            '{{third_line_support}}'
+                                        ].map(v => (
+                                            <button
+                                                key={v}
+                                                onClick={() => {
+                                                    navigator.clipboard.writeText(v);
+                                                    alert(`已複製 ${v}`);
+                                                }}
+                                                className="bg-white border border-slate-300 px-2 py-1 rounded hover:bg-slate-100 transition"
+                                            >
+                                                {v}
+                                            </button>
+                                        ))}
                                     </div>
                                 </div>
                             </div>

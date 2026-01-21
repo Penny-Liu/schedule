@@ -8,10 +8,11 @@ import LeavePage from './pages/LeavePage';
 import StaffPage from './pages/StaffPage';
 import SettingsPage from './pages/SettingsPage';
 import StatisticsPage from './pages/StatisticsPage';
+import DoctorManagerPage from './pages/DoctorManagerPage';
 import { db } from './services/store';
 import { Loader2 } from 'lucide-react';
-
 import ChangePasswordPage from './pages/ChangePasswordPage';
+
 
 
 // Error Boundary Component
@@ -158,6 +159,8 @@ const App: React.FC = () => {
         return <StaffPage currentUser={currentUser} />;
       case 'settings':
         return <SettingsPage currentUser={currentUser} />;
+      case 'doctors':
+        return <DoctorManagerPage currentUser={currentUser} />;
       default:
         return <DashboardPage currentUser={currentUser} />;
     }

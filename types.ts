@@ -127,6 +127,25 @@ export interface CycleAnchor {
   anchorDate: string;    // The reference "Day 1" for calculation
 }
 
+export interface DailyManpowerStats {
+  beitou_clients: number;
+  beitou_cta: number;
+  dazhi_clients: number;
+}
+
+export interface Doctor {
+    id: string;
+    name: string;
+    alias?: string; // Short name for display (e.g., '錢')
+}
+
+export interface DoctorShift {
+    id: string;
+    doctorId: string;
+    date: string; // YYYY-MM-DD
+    station: string;
+}
+
 export interface SystemSettings {
   stations: string[];
   cycles: RosterCycle[];
@@ -137,4 +156,7 @@ export interface SystemSettings {
   cycleAnchors?: CycleAnchor[]; // New: Multiple reset points
   stationDisplayOrder?: string[]; // New: Order of stations/roles in dashboard
   userDisplayOrder?: string[]; // New: Order of user IDs in dashboard
+  dailyStats?: Record<string, DailyManpowerStats>; // New: Date (YYYY-MM-DD) -> Stats
+  doctorStations?: string[]; // New: Configurable doctor stations
+  lineCopyTemplate?: string; // Custom template for 'Copy to Line'
 }

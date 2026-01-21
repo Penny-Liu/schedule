@@ -2102,6 +2102,14 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                 })()}
                             </div>
 
+                            {/* Daily Manpower Summary (Admin/Supervisor Only) */}
+                            <DailyManpowerSummary
+                                date={toLocalISOString(dailyDate)}
+                                users={users}
+                                shifts={shifts}
+                                currentUser={currentUser}
+                            />
+
                             {/* Off Staff Summary */}
                             <div className="px-6 py-3 bg-slate-50 border-t border-slate-200 text-xs text-slate-500 flex flex-wrap gap-2 items-center">
                                 <span className="font-bold">今日休假:</span>
@@ -2560,8 +2568,137 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                 </tr>
                                             );
                                         })}
+
+                                {/* --- Doctor Schedule Rows (Admin/Supervisor Only) or All? User said "崗位視角" --- */}
+                                
+                                <tr className="bg-slate-100 border-t-4 border-slate-300">
+                                    <td colSpan={dateRange.length + 1} className="p-1 px-3 font-bold text-slate-700">
+                                        醫師人力配置
+                                    </td>
+                                </tr>
+                                
+                                {(db.settings.doctorStations || ['影像', '遠', '支援']).map(station => (
+                                    <tr key={`doc-${station}`} className="bg-white border-t border-slate-200">
+                                        <td className={`sticky left-0 z-10 bg-slate-50/95 backdrop-blur border-r border-slate-200 shadow-[4px_0_8px_rgba(0,0,0,0.02)] ${isMobile ? 'p-1 w-[85px] min-w-[85px]' : 'p-2'}`}>
+                                            <div className="text-xs font-bold text-slate-600 flex items-center justify-end pr-2">{station}</div>
+                                        </td>
+                                        {dateRange.map(date => {
+                                            const shiftsHere = db.getDoctorShifts().filter(s => s.date === date && s.station === station);
+                                            
+                                            return (
+                                                <td key={date} className="p-0.5 border-r border-slate-200 text-center align-middle relative group">
+                                                    <div className="flex flex-wrap gap-1 justify-center min-h-[24px]">
+                                                        {shiftsHere.map(s => {
+                                                            const doc = db.getDoctors().find(d => d.id === s.doctorId);
+                                                            return (
+                                                                <span key={s.id} className="bg-teal-100 text-teal-800 text-[10px] px-1 rounded border border-teal-200 cursor-default flex items-center gap-0.5">
+                                                                    {doc?.alias || doc?.name}
+                                                                    {(currentUser.role === UserRole.SYSTEM_ADMIN || currentUser.role === UserRole.SUPERVISOR) && isEditMode && (
+                                                                         <button 
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                db.removeDoctorFromStation(doc?.id || '', date);
+                                                                            }}
+                                                                            className="text-teal-600 hover:text-red-500"
+                                                                         >
+                                                                            &times;
+                                                                         </button>
+                                                                    )}
+                                                                </span>
+                                                            );
+                                                        })}
+                                                        
+                                                        {(currentUser.role === UserRole.SYSTEM_ADMIN || currentUser.role === UserRole.SUPERVISOR) && isEditMode && (
+                                                            <div className="relative w-4 h-4 bg-slate-100 hover:bg-slate-200 rounded text-slate-400 text-[10px] border border-slate-200 flex items-center justify-center">
+                                                                +
+                                                                <select
+                                                                    className="w-full h-full opacity-0 absolute inset-0 cursor-pointer"
+                                                                    onChange={(e) => {
+                                                                        if (e.target.value) {
+                                                                            db.assignDoctor(e.target.value, date, station);
+                                                                            e.target.value = ''; // Reset
+                                                                        }
+                                                                    }}
+                                                                    value=""
+                                                                >
+                                                                    <option value="">+</option>
+                                                                    {db.getDoctors().filter(d => !db.getDoctorShift(d.id, date)).map(d => (
+                                                                        <option key={d.id} value={d.id}>{d.name}</option>
+                                                                    ))}
+                                                                </select>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                            );
+                                        })}
+                                    </tr>
+                                ))}
+                                {/* --- Daily Stats Rows (Admin/Supervisor Only) --- */}
+                                {(currentUser.role === UserRole.SYSTEM_ADMIN || currentUser.role === UserRole.SUPERVISOR) && (
+                                    <>
+                                        <tr className="bg-slate-50 border-t-2 border-slate-200">
+                                            <td className={`sticky left-0 z-10 bg-slate-50/95 backdrop-blur border-r border-slate-200 shadow-[4px_0_8px_rgba(0,0,0,0.02)] ${isMobile ? 'p-1 w-[85px] min-w-[85px]' : 'p-2'}`}>
+                                                <div className="text-xs font-bold text-slate-600 flex items-center justify-end pr-2">北投客戶數</div>
+                                            </td>
+                                            {dateRange.map(date => {
+                                                const stats = db.getDailyStats(date);
+                                                return (
+                                                    <td key={date} className="p-0.5 border-r border-slate-200 text-center align-middle">
+                                                        <input
+                                                            type="number"
+                                                            value={stats?.beitou_clients || 0}
+                                                            onChange={(e) => db.updateDailyStats(date, { beitou_clients: Number(e.target.value) })}
+                                                            className="w-full text-center text-xs bg-transparent outline-none focus:bg-white focus:ring-1 focus:ring-teal-500 rounded py-1"
+                                                            placeholder="0"
+                                                        />
+                                                    </td>
+                                                );
+                                            })}
+                                        </tr>
+                                        <tr className="bg-slate-50">
+                                            <td className={`sticky left-0 z-10 bg-slate-50/95 backdrop-blur border-r border-slate-200 shadow-[4px_0_8px_rgba(0,0,0,0.02)] ${isMobile ? 'p-1 w-[85px] min-w-[85px]' : 'p-2'}`}>
+                                                <div className="text-xs font-bold text-slate-600 flex items-center justify-end pr-2">CTA</div>
+                                            </td>
+                                            {dateRange.map(date => {
+                                                const stats = db.getDailyStats(date);
+                                                return (
+                                                    <td key={date} className="p-0.5 border-r border-slate-200 text-center align-middle">
+                                                        <input
+                                                            type="number"
+                                                            value={stats?.beitou_cta || 0}
+                                                            onChange={(e) => db.updateDailyStats(date, { beitou_cta: Number(e.target.value) })}
+                                                            className="w-full text-center text-xs bg-transparent outline-none focus:bg-white focus:ring-1 focus:ring-teal-500 rounded py-1"
+                                                            placeholder="0"
+                                                        />
+                                                    </td>
+                                                );
+                                            })}
+                                        </tr>
+                                        <tr className="bg-slate-50">
+                                            <td className={`sticky left-0 z-10 bg-slate-50/95 backdrop-blur border-r border-slate-200 shadow-[4px_0_8px_rgba(0,0,0,0.02)] ${isMobile ? 'p-1 w-[85px] min-w-[85px]' : 'p-2'}`}>
+                                                <div className="text-xs font-bold text-slate-600 flex items-center justify-end pr-2">大直客戶數</div>
+                                            </td>
+                                            {dateRange.map(date => {
+                                                const stats = db.getDailyStats(date);
+                                                return (
+                                                    <td key={date} className="p-0.5 border-r border-slate-200 text-center align-middle">
+                                                        <input
+                                                            type="number"
+                                                            value={stats?.dazhi_clients || 0}
+                                                            onChange={(e) => db.updateDailyStats(date, { dazhi_clients: Number(e.target.value) })}
+                                                            className="w-full text-center text-xs bg-transparent outline-none focus:bg-white focus:ring-1 focus:ring-teal-500 rounded py-1"
+                                                            placeholder="0"
+                                                        />
+                                                    </td>
+                                                );
+                                            })}
+                                        </tr>
                                     </>
                                 )}
+                                    </>
+                                )}
+
                             </tbody>
                         </table>
                         {/* ... (Footer legend) ... */}
@@ -2641,6 +2778,296 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                     <span className="font-bold text-sm">{toast.message}</span>
                 </div>
             )}
+        </div>
+    );
+};
+
+// --- New Component: Daily Manpower Summary (Admin Only) ---
+const DailyManpowerSummary: React.FC<{
+    date: string;
+    users: User[];
+    shifts: Shift[];
+    currentUser: User;
+}> = ({ date, users, shifts, currentUser }) => {
+    // Permission Check: Admin or Supervisor only
+    const canAccess = currentUser.role === UserRole.SYSTEM_ADMIN || currentUser.role === UserRole.SUPERVISOR;
+    if (!canAccess) return null;
+
+    // Fetch Stats directly from Store (Read-Only here)
+    const stats = db.getDailyStats(date) || {
+        beitou_clients: 0,
+        beitou_cta: 0,
+        dazhi_clients: 0
+    };
+
+    // Calculate Manpower
+    const manpower = useMemo(() => {
+        const shiftsOnDate = shifts.filter(s => s.date === date);
+
+        // Helper to get formatted name
+        const getName = (userId: string) => {
+            const u = users.find(user => user.id === userId);
+            return u ? (u.alias || u.name.slice(-2)) : ''; // Use Alias or last 2 chars
+        };
+        
+        // Helper to get full name with alias fallback
+         const getFullName = (userId: string) => {
+            const u = users.find(user => user.id === userId);
+            return u ? u.name : '';
+        };
+
+        // Categorize Staff
+        const mr: string[] = [];
+        const us: string[] = [];
+        const ct: string[] = [];
+        const bmd: string[] = [];  // Includes DX
+        const remote: string[] = [];
+        const floorControl: string[] = []; // 場控  
+        
+        const support: string[] = []; // 支援
+        const dazhi: string[] = []; // 大直 assigned
+
+        let remoteCount = 0;
+        let beitouCount = 0;
+        let dazhiCount = 0;
+
+        shiftsOnDate.forEach(s => {
+            if (s.station === SYSTEM_OFF || s.station === StationDefault.UNASSIGNED) return;
+
+            const name = getName(s.userId);
+            if (!name) return;
+
+            // Counts
+            if (s.station.includes('大直')) {
+                dazhiCount++;
+                dazhi.push(name);
+            } else if (s.station.includes('遠距') || s.station.includes('遠班')) {
+                remoteCount++;
+                remote.push(name);
+            } else {
+                beitouCount++; // Default to Beitou for others
+            }
+
+            // Categories
+            if (s.station.includes('MR')) mr.push(name);
+            if (s.station.includes('US')) us.push(name);
+            if (s.station.includes('CT')) ct.push(name);
+            if (s.station.includes('BMD') || s.station.includes('DX')) bmd.push(name);
+            if (s.station.includes('場控')) floorControl.push(name);
+            if (s.station.includes('支援') || s.specialRoles.includes(SPECIAL_ROLES.ASSIST)) support.push(name);
+        });
+
+        return {
+            beitouCount,
+            mr,
+            us,
+            ct,
+            bmd,
+            floorControl,
+            support,
+            remote,
+            remoteCount,
+            dazhi,
+            dazhiCount
+        };
+    }, [shifts, date, users]);
+
+    const handleCopy = () => {
+        // Format Date: 1/21(三)
+        const d = new Date(date);
+        const dayNames = ['日', '一', '二', '三', '四', '五', '六'];
+        const dateStr = `${d.getMonth() + 1}/${d.getDate()}(${dayNames[d.getDay()]})`;
+
+        // --- Fetch Doctor Info ---
+        const docShifts = db.getDoctorShifts().filter(s => s.date === date);
+        const doctors = db.getDoctors();
+        const getDocAlias = (id: string) => {
+            const doc = doctors.find(d => d.id === id);
+            return doc ? (doc.alias || doc.name) : '';
+        };
+
+        const imagingDocs = docShifts.filter(s => s.station === '影像').map(s => getDocAlias(s.doctorId));
+        const remoteDocs = docShifts.filter(s => s.station === '遠').map(s => getDocAlias(s.doctorId));
+        const supportDocs = docShifts.filter(s => s.station === '支援').map(s => getDocAlias(s.doctorId));
+
+        // --- Radiographer Data: "Third Line" Detection ---
+        // Shifts for '技術支援' or '行政' are mapped to "Third Line Support"
+        const thirdLineRad: string[] = [];
+        shifts.filter(s => s.date === date).forEach(s => {
+             const u = users.find(u => u.id === s.userId);
+             if (!u) return;
+             // Check if station is '技術支援' or '行政' -> Map to Third Line
+             if (s.station === '技術支援' || s.station === '行政') {
+                 thirdLineRad.push(u.alias || u.name.slice(-2)); 
+             }
+        });
+
+        // Combine Third Line Support (Doctors in Support Station + Radiographers in TechSupport/Admin)
+        const thirdLineSupportList = [...supportDocs, ...thirdLineRad];
+
+        // --- Prepare Template & Variables ---
+        let template = db.settings.lineCopyTemplate;
+        if (!template) {
+            // Fallback default if not loaded
+            template = `{{date}}
+{{imaging_doctors}}
+
+放射師人力
+北投 {{beitou_count}}  (客戶：{{beitou_clients}}  CTA  {{beitou_cta}})
+BU領頭 場控：{{floor_control}}
+MR : {{mr}}
+US：{{us}}
+CT: {{ct}}
+BMD :{{bmd}}
+支援  :{{support}}
+
+遠群（{{remote_group}}）
+{{remote_doctors_detail}}
+遠：{{remote_radiographers}}
+
+大直 {{dazhi_count}} （客戶 {{dazhi_clients}} ）
+{{dazhi_radiographers}}
+
+三線支援：{{third_line_support}}`;
+        }
+
+        // Variable Replacements
+        const replacements: Record<string, string> = {
+            '{{date}}': dateStr,
+            '{{beitou_count}}': manpower.beitouCount.toString(),
+            '{{beitou_clients}}': stats.beitou_clients.toString(),
+            '{{beitou_cta}}': stats.beitou_cta.toString(),
+            '{{dazhi_clients}}': stats.dazhi_clients.toString(),
+            '{{dazhi_count}}': manpower.dazhiCount.toString(),
+            
+            // Lists
+            '{{floor_control}}': manpower.floorControl.join('/') || '', // Allow empty to default to nothing? Users might prefer '無' if empty? Example showed empty lists just blank after colon.
+            '{{mr}}': manpower.mr.join('/'),
+            '{{us}}': manpower.us.join('/'),
+            '{{ct}}': manpower.ct.join('/'),
+            '{{bmd}}': manpower.bmd.join('/'),
+            '{{support}}': manpower.support.join('/'),
+            '{{remote_radiographers}}': manpower.remote.join('/') || '無',
+            '{{dazhi_radiographers}}': manpower.dazhi.join('/') || '無',
+            '{{third_line_support}}': thirdLineSupportList.join('/'),
+
+            // Special Combined
+            '{{remote_group}}': [...remoteDocs, ...manpower.remote].join('/'),
+        };
+
+        // Doctor Lists formatting
+        // Imaging Doctors
+        let imgDocStr = '';
+        if (imagingDocs.length > 0) {
+            imgDocStr = imagingDocs.map(doc => `${doc}  N(N大 N小 N無 ) →N 單位`).join('\n');
+        } else {
+            imgDocStr = `(無影像醫師)  N(N大 N小 N無 ) →N 單位`;
+        }
+        replacements['{{imaging_doctors}}'] = imgDocStr;
+
+        // Remote Doctors Detail
+        let remDocStr = '';
+        if (remoteDocs.length > 0) {
+            remDocStr = remoteDocs.map(doc => `${doc}  X (X大 X小 X無) +大直 N →N 單位`).join('\n');
+        }
+        replacements['{{remote_doctors_detail}}'] = remDocStr;
+
+        // Apply Replacements
+        let finalText = template;
+        Object.keys(replacements).forEach(key => {
+            // value might contain special regex chars, so prefer split/join or non-regex replaceAll if available (ES2021)
+            // or simple regex with verify. key is simple {{...}} so regex is safe.
+            const val = replacements[key];
+            finalText = finalText.split(key).join(val); 
+        });
+
+        navigator.clipboard.writeText(finalText).then(() => {
+            alert('已複製到剪貼簿(自訂格式)');
+        }).catch(err => {
+            console.error('Failed to copy: ', err);
+            prompt('複製失敗，請手動複製:', finalText);
+        });
+    };
+
+    return (
+        <div className="bg-white p-4 rounded-lg shadow mt-8 border border-gray-200">
+             <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-bold flex items-center gap-2">
+                    <Briefcase className="w-5 h-5 text-blue-600" />
+                    今日崗位總覽 (管理員專用)
+                </h3>
+                 <div className="flex gap-2">
+                     <button onClick={handleCopy} className="bg-gray-800 text-white px-3 py-1 rounded text-sm hover:bg-gray-900 transition flex items-center gap-1">
+                        <Download className="w-4 h-4" /> 複製文字
+                    </button>
+                </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm">
+                {/* Beitou Section */}
+                <div className="space-y-2">
+                    <div className="font-bold text-base text-gray-800 border-b pb-1 mb-2">
+                        北投人力：{manpower.beitouCount}
+                    </div>
+                     <div className="flex items-center gap-4 bg-gray-50 p-2 rounded">
+                        <label className="flex items-center gap-2">
+                            <span className="text-gray-600">客戶數:</span>
+                            <span className="font-mono font-bold text-lg">{stats.beitou_clients}</span>
+                        </label>
+                        <label className="flex items-center gap-2">
+                            <span className="text-gray-600">CTA:</span>
+                            <span className="font-mono font-bold text-lg">{stats.beitou_cta}</span>
+                        </label>
+                    </div>
+
+                    <div className="grid grid-cols-[80px_1fr] gap-y-1">
+                         <span className="text-gray-500">場控:</span>
+                         <span className="font-medium">{manpower.floorControl.join('/') || '-'}</span>
+
+                         <span className="text-gray-500">MR:</span>
+                         <span className="font-medium">{manpower.mr.join('/') || '-'}</span>
+
+                         <span className="text-gray-500">US:</span>
+                         <span className="font-medium">{manpower.us.join('/') || '-'}</span>
+
+                         <span className="text-gray-500">CT:</span>
+                         <span className="font-medium">{manpower.ct.join('/') || '-'}</span>
+
+                         <span className="text-gray-500">BMD:</span>
+                         <span className="font-medium">{manpower.bmd.join('/') || '-'}</span>
+
+                         <span className="text-gray-500">支援:</span>
+                         <span className="font-medium">{manpower.support.join('/') || '-'}</span>
+                    </div>
+                </div>
+
+                {/* Remote & Dazhi Section */}
+                <div className="space-y-4">
+                     <div>
+                        <div className="font-bold text-base text-gray-800 border-b pb-1 mb-2">
+                            遠距：{manpower.remoteCount}
+                        </div>
+                        <div className="pl-4 font-medium text-gray-700">
+                             {manpower.remote.join('/') || '無'}
+                        </div>
+                     </div>
+
+                     <div className="pt-2">
+                        <div className="font-bold text-base text-gray-800 border-b pb-1 mb-2">
+                            大直：{manpower.dazhiCount}
+                        </div>
+                         <div className="flex items-center gap-4 bg-gray-50 p-2 rounded mb-2">
+                            <label className="flex items-center gap-2">
+                                <span className="text-gray-600">客戶數:</span>
+                                <span className="font-mono font-bold text-lg">{stats.dazhi_clients}</span>
+                            </label>
+                        </div>
+                        <div className="pl-4 font-medium text-gray-700">
+                             {manpower.dazhi.join('/') || '無'}
+                        </div>
+                     </div>
+                </div>
+            </div>
         </div>
     );
 };

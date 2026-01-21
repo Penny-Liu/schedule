@@ -41,6 +41,12 @@ const Sidebar: React.FC<SidebarProps> = ({ currentUser, onNavigate, currentPage,
       roles: [UserRole.SUPERVISOR, UserRole.SYSTEM_ADMIN]
     },
     {
+      id: 'doctors',
+      label: '醫師管理',
+      icon: Users, // Using same icon as Staff for now
+      roles: [UserRole.SYSTEM_ADMIN]
+    },
+    {
       id: 'settings',
       label: '系統與個人設定',
       icon: Settings,

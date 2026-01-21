@@ -1,5 +1,5 @@
 
-import { User, Shift, LeaveRequest, SystemSettings, StationDefault, SYSTEM_OFF, RosterCycle, DateEventType, Holiday, LeaveStatus, LeaveType, StaffGroup, SPECIAL_ROLES, CycleAnchor } from '../types';
+import { User, Shift, LeaveRequest, SystemSettings, StationDefault, SYSTEM_OFF, RosterCycle, DateEventType, Holiday, LeaveStatus, LeaveType, StaffGroup, SPECIAL_ROLES, CycleAnchor, DailyManpowerStats, Doctor, DoctorShift } from '../types';
 import { MOCK_USERS, MOCK_LEAVES } from './mockData';
 import { supabase } from './supabaseClient';
 
@@ -24,8 +24,11 @@ class Store {
         stationRequirements: {},
         cycleStartDate: '2025-11-06',
         cycleAnchors: [],
-        stationDisplayOrder: []
+        stationDisplayOrder: [],
+        doctorStations: ['影像', '遠', '支援'] // Default values
     };
+    doctors: Doctor[] = [];
+    doctorShifts: DoctorShift[] = [];
     currentUser: User | null = null;
     isLoaded: boolean = false;
     connectionStatus: { type: 'Supabase' | 'Mock'; details?: string } = { type: 'Supabase' }; // Default assumption
@@ -187,6 +190,42 @@ class Store {
 
             // Migration checks (Same as before)
             this.ensureSettingsIntegrity();
+
+            // Load Doctors and Doctor Shifts
+            const { data: doctorsData } = await supabase.from('doctors').select('*');
+            if (doctorsData) this.doctors = doctorsData;
+
+            const { data: doctorShiftsData } = await supabase.from('doctor_shifts').select('*');
+            if (doctorShiftsData) this.doctorShifts = doctorShiftsData;
+
+            // Initialize default doctorStations if missing
+            if (!this.settings.doctorStations) {
+                this.settings.doctorStations = ['影像', '遠', '支援'];
+            }
+
+            // Initialize default lineCopyTemplate if missing
+            if (!this.settings.lineCopyTemplate) {
+                this.settings.lineCopyTemplate = `{{date}}
+{{imaging_doctors}}
+
+放射師人力
+北投 {{beitou_count}}  (客戶：{{beitou_clients}}  CTA  {{beitou_cta}})
+BU領頭 場控：{{floor_control}}
+MR : {{mr}}
+US：{{us}}
+CT: {{ct}}
+BMD :{{bmd}}
+支援  :{{support}}
+
+遠群（{{remote_group}}）
+{{remote_doctors_detail}}
+遠：{{remote_radiographers}}
+
+大直 {{dazhi_count}} （客戶 {{dazhi_clients}} ）
+{{dazhi_radiographers}}
+
+三線支援：{{third_line_support}}`;
+            }
 
             this.isLoaded = true;
             console.log('Data initialized successfully');
@@ -380,7 +419,7 @@ class Store {
     // --- Data Persistence Methods (Sync Local + Async Remote) ---
 
     // Settings
-    private async saveSettings() {
+    async saveSettings() {
         // 1. Local update (already done by caller usually)
         // 2. Remote update
         const { error } = await supabase
@@ -1071,6 +1110,104 @@ class Store {
         // Remote batch update
         const { error } = await supabase.from('shifts').upsert(shiftsToUpsert);
         if (error) console.error('Batch upsert error:', error);
+    }
+
+    // Daily Stats
+    getDailyStats(date: string) {
+        return this.settings.dailyStats?.[date];
+    }
+
+    async updateDailyStats(date: string, stats: Partial<DailyManpowerStats>) {
+        if (!this.settings.dailyStats) this.settings.dailyStats = {};
+
+        const existing = this.settings.dailyStats[date] || {
+            beitou_clients: 0,
+            beitou_cta: 0,
+            dazhi_clients: 0
+        };
+
+        this.settings.dailyStats[date] = { ...existing, ...stats };
+        await this.saveSettings();
+        this.notifyListeners();
+    }
+
+    // --- Doctor Management ---
+
+    getDoctors() {
+        return this.doctors;
+    }
+
+    async addDoctor(name: string, alias?: string) {
+        const newDoctor = { id: crypto.randomUUID(), name, alias: alias || name[0] }; // Default alias to first char if not provided
+        this.doctors.push(newDoctor);
+        await supabase.from('doctors').insert(newDoctor);
+        this.notifyListeners();
+    }
+
+    async updateDoctor(doctor: Doctor) {
+         this.doctors = this.doctors.map(d => d.id === doctor.id ? doctor : d);
+         await supabase.from('doctors').update(doctor).eq('id', doctor.id);
+         this.notifyListeners();
+    }
+
+    async deleteDoctor(id: string) {
+        // Optimistic update
+        this.doctors = this.doctors.filter(d => d.id !== id);
+        this.doctorShifts = this.doctorShifts.filter(s => s.doctorId !== id); 
+        this.notifyListeners(); // Notify immediately for responsiveness
+
+        // Remote update
+        // Delete shifts first to avoid FK constraint violations
+        const { error: shiftsError } = await supabase.from('doctor_shifts').delete().eq('doctorId', id);
+        if (shiftsError) console.error('Error deleting doctor shifts:', shiftsError);
+
+        const { error: doctorError } = await supabase.from('doctors').delete().eq('id', id);
+        if (doctorError) {
+             console.error('Error deleting doctor:', doctorError);
+             // Optional: Revert local state if needed, but for now we'll just log.
+             // Ideally we would fetchDoctors() to restore state if it failed.
+        }
+        
+        return { error: doctorError || shiftsError };
+    }
+
+    // --- Doctor Schedule ---
+
+    getDoctorShifts() {
+        return this.doctorShifts;
+    }
+    
+    getDoctorShift(doctorId: string, date: string) {
+        return this.doctorShifts.find(s => s.doctorId === doctorId && s.date === date);
+    }
+
+    async assignDoctor(doctorId: string, date: string, station: string) {
+        // Remove existing shift for this doctor on this date if any
+        // Note: Can a doctor have multiple stations? Usually yes or no depending on UI.
+        // Assuming single station per day for simplicity based on "Staff Schedule" logic, 
+        // BUT doctors might overlap.
+        // Let's assume Unique (Doctor + Date).
+        
+        let shift = this.doctorShifts.find(s => s.doctorId === doctorId && s.date === date);
+        
+        if (shift) {
+            shift.station = station;
+            await supabase.from('doctor_shifts').update({ station }).eq('id', shift.id);
+        } else {
+            shift = { id: crypto.randomUUID(), doctorId, date, station };
+            this.doctorShifts.push(shift);
+            await supabase.from('doctor_shifts').insert(shift);
+        }
+        this.notifyListeners();
+    }
+    
+    async removeDoctorFromStation(doctorId: string, date: string) {
+        const shift = this.doctorShifts.find(s => s.doctorId === doctorId && s.date === date);
+        if (shift) {
+            this.doctorShifts = this.doctorShifts.filter(s => s.id !== shift.id);
+            await supabase.from('doctor_shifts').delete().eq('id', shift.id);
+            this.notifyListeners();
+        }
     }
 
     // New: Safer "Complete" button logic - Batch Upsert
