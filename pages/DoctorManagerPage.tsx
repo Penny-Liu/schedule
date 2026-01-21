@@ -28,10 +28,13 @@ const DoctorManagerPage: React.FC<DoctorManagerPageProps> = ({ currentUser }) =>
     const handleAddDoctor = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!newDoctorName.trim()) return;
-        await db.addDoctor(newDoctorName.trim(), newDoctorAlias.trim());
-        setNewDoctorName('');
-        setNewDoctorAlias('');
-        alert('醫師已新增');
+        
+        const success = await db.addDoctor(newDoctorName.trim(), newDoctorAlias.trim());
+        if (success) {
+            setNewDoctorName('');
+            setNewDoctorAlias('');
+            alert('醫師已新增');
+        }
     };
 
     const handleUpdateDoctor = async () => {

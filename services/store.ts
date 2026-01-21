@@ -1137,7 +1137,7 @@ BMD :{{bmd}}
         return this.doctors;
     }
 
-    async addDoctor(name: string, alias?: string) {
+    async addDoctor(name: string, alias?: string): Promise<boolean> {
         const newDoctor = { id: crypto.randomUUID(), name, alias: alias || name[0] }; // Default alias to first char if not provided
         this.doctors.push(newDoctor); // Optimistic update
         this.notifyListeners();
@@ -1145,12 +1145,14 @@ BMD :{{bmd}}
         try {
             const { error } = await supabase.from('doctors').insert(newDoctor);
             if (error) throw error;
+            return true;
         } catch (error: any) {
             console.error('Failed to add doctor:', error);
             alert(`新增醫師失敗: ${error.message || '未知錯誤'}\n請確認資料庫表格是否存在。`);
             // Revert optimistic update
             this.doctors = this.doctors.filter(d => d.id !== newDoctor.id);
             this.notifyListeners();
+            return false;
         }
     }
 
