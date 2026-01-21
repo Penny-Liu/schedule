@@ -644,7 +644,7 @@ MR : {{mr}}
 US：{{us}}
 CT: {{ct}}
 BMD :{{bmd}}
-支援  :{{support}}
+{{support_section}}{{learning_section}}
 
 遠群（{{remote_group}}）
 {{remote_doctors_detail}}
@@ -674,6 +674,7 @@ BMD :{{bmd}}
                                             '{{beitou_count}}',
                                             '{{beitou_clients}}', '{{beitou_cta}}',
                                             '{{floor_control}}', '{{mr}}', '{{us}}', '{{ct}}', '{{bmd}}', '{{support}}',
+                                            '{{support_section}}', '{{learning_section}}',
                                             '{{remote_group}}', '{{remote_doctors_detail}}', '{{remote_radiographers}}',
                                             '{{dazhi_count}}', '{{dazhi_clients}}', '{{dazhi_radiographers}}',
                                             '{{third_line_support}}'

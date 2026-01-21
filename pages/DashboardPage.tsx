@@ -2824,6 +2824,8 @@ const DailyManpowerSummary: React.FC<{
         const remote: string[] = [];
         const floorControl: string[] = []; // 場控  
         
+        const learning: string[] = []; // 學習
+        
         const support: string[] = []; // 支援
         const dazhi: string[] = []; // 大直 assigned
 
@@ -2844,15 +2846,23 @@ const DailyManpowerSummary: React.FC<{
             } else if (s.station.includes('遠距') || s.station.includes('遠班')) {
                 remoteCount++;
                 remote.push(name);
+            } else if (s.station.includes('學習')) {
+                // Learning doesn't count towards Beitou manpower
+                let modality = '';
+                if (s.station.includes('MR')) modality = 'MR';
+                else if (s.station.includes('US')) modality = 'US';
+                else if (s.station.includes('CT')) modality = 'CT';
+                else if (s.station.includes('BMD') || s.station.includes('DX')) modality = 'BMD';
+                learning.push(`${name}(${modality})`);
             } else {
                 beitouCount++; // Default to Beitou for others
             }
 
             // Categories
-            if (s.station.includes('MR')) mr.push(name);
-            if (s.station.includes('US')) us.push(name);
-            if (s.station.includes('CT')) ct.push(name);
-            if (s.station.includes('BMD') || s.station.includes('DX')) bmd.push(name);
+            if (s.station.includes('MR') && !s.station.includes('學習')) mr.push(name);
+            if (s.station.includes('US') && !s.station.includes('學習')) us.push(name);
+            if (s.station.includes('CT') && !s.station.includes('學習')) ct.push(name);
+            if ((s.station.includes('BMD') || s.station.includes('DX')) && !s.station.includes('學習')) bmd.push(name);
             if (s.station.includes('場控')) floorControl.push(name);
             if (s.station.includes('支援') || s.specialRoles.includes(SPECIAL_ROLES.ASSIST)) support.push(name);
         });
@@ -2865,6 +2875,7 @@ const DailyManpowerSummary: React.FC<{
             bmd,
             floorControl,
             support,
+            learning,
             remote,
             remoteCount,
             dazhi,
@@ -2902,6 +2913,10 @@ const DailyManpowerSummary: React.FC<{
 
         const thirdLineSupportList = [...supportDocs, ...thirdLineRad];
 
+        // --- Prepare Sections ---
+        const supportText = manpower.support.length > 0 ? `支援  :${manpower.support.join('/')}` : '';
+        const learningText = manpower.learning.length > 0 ? `\n學習：${manpower.learning.join('/')}` : '';
+
         // --- Prepare Template & Variables ---
         let template = db.settings.lineCopyTemplate;
         if (!template) {
@@ -2915,7 +2930,7 @@ MR : {{mr}}
 US：{{us}}
 CT: {{ct}}
 BMD :{{bmd}}
-支援  :{{support}}
+{{support_section}}{{learning_section}}
 
 遠群（{{remote_group}}）
 {{remote_doctors_detail}}
@@ -2939,7 +2954,9 @@ BMD :{{bmd}}
             '{{us}}': manpower.us.join('/'),
             '{{ct}}': manpower.ct.join('/'),
             '{{bmd}}': manpower.bmd.join('/'),
-            '{{support}}': manpower.support.join('/'),
+            '{{support}}': manpower.support.join('/'), // Backward compatibility
+            '{{support_section}}': supportText,
+            '{{learning_section}}': learningText,
             '{{remote_radiographers}}': manpower.remote.join('/') || '無',
             '{{dazhi_radiographers}}': manpower.dazhi.join('/') || '無',
             '{{third_line_support}}': thirdLineSupportList.join('/'),
@@ -2962,10 +2979,20 @@ BMD :{{bmd}}
         replacements['{{remote_doctors_detail}}'] = remDocStr;
 
         let finalText = template;
+
+        // Custom Logic: If using OLD template with hardcoded "支援 :" and support is empty -> Remove line
+        // We look for patterns like "支援 :{{support}}" or "支援：{{support}}"
+        if (manpower.support.length === 0) {
+             finalText = finalText.replace(/支援\s*[:：]\s*{{support}}\n?/g, '');
+        }
+
         Object.keys(replacements).forEach(key => {
             const val = replacements[key];
             finalText = finalText.split(key).join(val); 
         });
+
+        // Clean up double newlines if any created by removal
+        // finalText = finalText.replace(/\n\n\n/g, '\n\n'); 
 
         return finalText;
     }, [date, shifts, manpower, users, stats]);
