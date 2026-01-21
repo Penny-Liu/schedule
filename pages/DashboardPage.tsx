@@ -2860,6 +2860,17 @@ const DailyManpowerSummary: React.FC<{
             const name = getName(s.userId);
             if (!name) return;
 
+            // Check for Learning status (Station Match or Capability Match)
+            const u = users.find(user => user.id === s.userId);
+            const isLearning = s.station.includes('學習') || (u?.learningCapabilities?.some(cap => s.station.includes(cap)));
+
+            // Modality Detection (regardless of Learning status, useful for tagging)
+            let modality = '';
+            if (s.station.includes('MR')) modality = 'MR';
+            else if (s.station.includes('US')) modality = 'US';
+            else if (s.station.includes('CT')) modality = 'CT';
+            else if (s.station.includes('BMD') || s.station.includes('DX')) modality = 'BMD';
+
             // Counts
             if (s.station.includes('大直')) {
                 dazhiCount++;
@@ -2867,25 +2878,22 @@ const DailyManpowerSummary: React.FC<{
             } else if (s.station.includes('遠距') || s.station.includes('遠班')) {
                 remoteCount++;
                 remote.push(name);
-            } else if (s.station.includes('學習')) {
+            } else if (isLearning) {
                 // Learning doesn't count towards Beitou manpower
-                let modality = '';
-                if (s.station.includes('MR')) modality = 'MR';
-                else if (s.station.includes('US')) modality = 'US';
-                else if (s.station.includes('CT')) modality = 'CT';
-                else if (s.station.includes('BMD') || s.station.includes('DX')) modality = 'BMD';
                 learning.push(`${name}(${modality})`);
+            } else if (s.station === '行政') {
+                // Admin doesn't count towards Beitou manpower
             } else {
                 beitouCount++; // Default to Beitou for others
             }
 
-            // Categories
-            if (s.station.includes('MR') && !s.station.includes('學習')) mr.push(name);
-            if (s.station.includes('US') && !s.station.includes('學習')) us.push(name);
-            if (s.station.includes('CT') && !s.station.includes('學習')) ct.push(name);
-            if ((s.station.includes('BMD') || s.station.includes('DX')) && !s.station.includes('學習')) bmd.push(name);
+            // Categories (Exclude Learning from main lists)
+            if (s.station.includes('MR') && !isLearning) mr.push(name);
+            if (s.station.includes('US') && !isLearning) us.push(name);
+            if (s.station.includes('CT') && !isLearning) ct.push(name);
+            if ((s.station.includes('BMD') || s.station.includes('DX')) && !isLearning) bmd.push(name);
             if (s.station.includes('場控')) floorControl.push(name);
-            if (s.station.includes('支援') || s.specialRoles.includes(SPECIAL_ROLES.ASSIST)) support.push(name);
+            if (s.station.includes('支援')) support.push(name);
         });
 
         return {
@@ -2923,20 +2931,19 @@ const DailyManpowerSummary: React.FC<{
         const supportDocs = docShifts.filter(s => s.station === '支援').map(s => getDocAlias(s.doctorId));
 
         // --- Radiographer Data: "Third Line" Detection ---
-        const thirdLineRad: string[] = [];
-        shifts.filter(s => s.date === date).forEach(s => {
-             const u = users.find(u => u.id === s.userId);
-             if (!u) return;
-             if (s.station === '技術支援' || s.station === '行政') {
-                 thirdLineRad.push(u.alias || u.name.slice(-2)); 
-             }
-        });
+        // Block 3: Only Doctors (supportDocs)
+        const thirdLineSupportList = [...supportDocs]; 
 
-        const thirdLineSupportList = [...supportDocs, ...thirdLineRad];
-
-        // --- Prepare Sections ---
-        const supportText = manpower.support.length > 0 ? `支援  :${manpower.support.join('/')}` : '';
-        const learningText = manpower.learning.length > 0 ? `\n學習：${manpower.learning.join('/')}` : '';
+        // Block 1: Support Section
+        // Technical Support: manpower.support (assigned to '支援')
+        // Admin ('行政') is EXCLUDED per user request.
+        const allSupportRads = [...manpower.support];
+        const uniqueSupportRads = Array.from(new Set(allSupportRads));
+        const supportText = uniqueSupportRads.length > 0 ? `技術支援：${uniqueSupportRads.join('/')}` : '';
+        
+        // Learning Section: Simple list format
+        // Format: 學習：Name(Modality)/Name2(Modality)
+        const learningText = manpower.learning.length > 0 ? `\n\n學習：${manpower.learning.join('/')}` : '';
         
         // Result of filtering for falsy values to avoid "undefined" or empty strings in output
         // Remote Group Header: Combine Remote Docs + Remote Radiographers with spacing
@@ -3013,9 +3020,30 @@ BMD :{{bmd}}
 
         let finalText = template;
 
-        // Custom Logic: If using OLD template with hardcoded "支援 :" and support is empty -> Remove line
-        if (manpower.support.length === 0) {
-             finalText = finalText.replace(/支援\s*[:：]\s*{{support}}\n?/g, '');
+        // Custom Logic: Replace legacy "支援：{{support}}" with new {{support_section}}
+        // This ensures label update ("支援" -> "技術支援") and content merge (Support + Admin/Tech)
+        // works even for users with old saved templates.
+        // Custom Logic: Replace legacy "支援：{{support}}" with new {{support_section}}
+        // This ensures label update ("支援" -> "技術支援") and content merge (Support + Admin/Tech)
+        // works even for users with old saved templates.
+        if (finalText.match(/(支援|技術支援)\s*[:：]\s*{{support}}/)) {
+             finalText = finalText.replace(/(支援|技術支援)\s*[:：]\s*{{support}}\n?/, '{{support_section}}\n');
+             // Trim extra newline if support_section is empty to avoid gaps
+             if (!supportText) {
+                 finalText = finalText.replace('{{support_section}}\n', '');
+             }
+        }
+        
+        // Custom Logic: Auto-Inject {{support_section}} if missing entirely
+        // This handles cases where user deleted string or it's just gone
+        if (!finalText.includes('{{support_section}}') && !finalText.includes('技術支援：')) {
+             // Try to find BMD line to append after
+             if (finalText.includes('{{bmd}}')) {
+                  finalText = finalText.replace(/{{bmd}}(\n?)/, '{{bmd}}\n{{support_section}}$1');
+             } else if (finalText.match(/BMD\s*[:：]/)) {
+                  // Fallback anchor
+                  finalText = finalText.replace(/(BMD\s*[:：].*)(\n?)/, '$1\n{{support_section}}$2');
+             }
         }
 
         // Custom Logic: Check if "北投：" header is missing the count variable (legacy template issue)
