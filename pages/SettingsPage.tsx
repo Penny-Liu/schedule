@@ -676,6 +676,7 @@ BMD :{{bmd}}
                                 <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
                                     <h4 className="text-xs font-bold text-slate-500 mb-2">可用變數代碼 (點擊複製)</h4>
                                     <div className="flex flex-wrap gap-2 text-xs font-mono text-slate-700">
+                                        {[
                                             '{{date}}', '{{imaging_doctors}}',
                                             '{{beitou_count}}', '{{beitou_clients}}', '{{beitou_cta}}',
                                             '{{floor_control}}', '{{mr}}', '{{us}}', '{{ct}}', '{{bmd}}',
