@@ -2932,15 +2932,21 @@ const DailyManpowerSummary: React.FC<{
         // --- Prepare Sections ---
         const supportText = manpower.support.length > 0 ? `支援  :${manpower.support.join('/')}` : '';
         const learningText = manpower.learning.length > 0 ? `\n學習：${manpower.learning.join('/')}` : '';
+        
+        // Remote Group Header: Combine Remote Docs + Remote Radiographers
+        const remoteGroupAll = [...remoteDocs, ...manpower.remote];
+        const remoteGroupHeader = remoteGroupAll.length > 0 ? remoteGroupAll.join('/') : '';
+
 
         // --- Prepare Template & Variables ---
         let template = db.settings.lineCopyTemplate;
+        // Updated Default Template to match new requirements
         if (!template) {
             template = `{{date}}
 {{imaging_doctors}}
 
 放射師人力
-北投 {{beitou_count}}  (客戶：{{beitou_clients}}  CTA  {{beitou_cta}})
+北投： (客戶：{{beitou_clients}}  CTA  {{beitou_cta}})
 BU領頭 場控：{{floor_control}}
 MR : {{mr}}
 US：{{us}}
@@ -2948,7 +2954,7 @@ CT: {{ct}}
 BMD :{{bmd}}
 {{support_section}}{{learning_section}}
 
-遠群（{{remote_group}}）
+遠群（{{remote_group_header}}）
 {{remote_doctors_detail}}
 遠：{{remote_radiographers}}
 
@@ -2970,13 +2976,13 @@ BMD :{{bmd}}
             '{{us}}': manpower.us.join('/'),
             '{{ct}}': manpower.ct.join('/'),
             '{{bmd}}': manpower.bmd.join('/'),
-            '{{support}}': manpower.support.join('/'), // Backward compatibility
+            '{{support}}': manpower.support.join('/'),
             '{{support_section}}': supportText,
             '{{learning_section}}': learningText,
             '{{remote_radiographers}}': manpower.remote.join('/') || '無',
             '{{dazhi_radiographers}}': manpower.dazhi.join('/') || '無',
             '{{third_line_support}}': thirdLineSupportList.join('/'),
-            '{{remote_group}}': [...remoteDocs, ...manpower.remote].join('/'),
+            '{{remote_group_header}}': remoteGroupHeader,
         };
 
         // Doctor Lists formatting
@@ -2990,6 +2996,7 @@ BMD :{{bmd}}
 
         let remDocStr = '';
         if (remoteDocs.length > 0) {
+            // New Format: Name X (...) +大直 {{dazhi_clients}} →N 單位
             remDocStr = remoteDocs.map(doc => `${doc}  X (X大 X小 X無) +大直 ${stats.dazhi_clients} →N 單位`).join('\n');
         }
         replacements['{{remote_doctors_detail}}'] = remDocStr;
@@ -2997,17 +3004,17 @@ BMD :{{bmd}}
         let finalText = template;
 
         // Custom Logic: If using OLD template with hardcoded "支援 :" and support is empty -> Remove line
-        // We look for patterns like "支援 :{{support}}" or "支援：{{support}}"
         if (manpower.support.length === 0) {
              finalText = finalText.replace(/支援\s*[:：]\s*{{support}}\n?/g, '');
         }
 
         Object.keys(replacements).forEach(key => {
             const val = replacements[key];
+            // Safe replace all
             finalText = finalText.split(key).join(val); 
         });
 
-        // Clean up double newlines if any created by removal
+        // Clean up double newlines
         // finalText = finalText.replace(/\n\n\n/g, '\n\n'); 
 
         return finalText;

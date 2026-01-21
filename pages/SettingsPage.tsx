@@ -645,7 +645,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
 {{imaging_doctors}}
 
 放射師人力
-北投 {{beitou_count}}  (客戶：{{beitou_clients}}  CTA  {{beitou_cta}})
+北投： (客戶：{{beitou_clients}}  CTA  {{beitou_cta}})
 BU領頭 場控：{{floor_control}}
 MR : {{mr}}
 US：{{us}}
@@ -653,7 +653,7 @@ CT: {{ct}}
 BMD :{{bmd}}
 {{support_section}}{{learning_section}}
 
-遠群（{{remote_group}}）
+遠群（{{remote_group_header}}）
 {{remote_doctors_detail}}
 遠：{{remote_radiographers}}
 
@@ -676,13 +676,11 @@ BMD :{{bmd}}
                                 <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
                                     <h4 className="text-xs font-bold text-slate-500 mb-2">可用變數代碼 (點擊複製)</h4>
                                     <div className="flex flex-wrap gap-2 text-xs font-mono text-slate-700">
-                                        {[
                                             '{{date}}', '{{imaging_doctors}}',
-                                            '{{beitou_count}}',
-                                            '{{beitou_clients}}', '{{beitou_cta}}',
-                                            '{{floor_control}}', '{{mr}}', '{{us}}', '{{ct}}', '{{bmd}}', '{{support}}',
-                                            '{{support_section}}', '{{learning_section}}',
-                                            '{{remote_group}}', '{{remote_doctors_detail}}', '{{remote_radiographers}}',
+                                            '{{beitou_count}}', '{{beitou_clients}}', '{{beitou_cta}}',
+                                            '{{floor_control}}', '{{mr}}', '{{us}}', '{{ct}}', '{{bmd}}',
+                                            '{{support}}', '{{support_section}}', '{{learning_section}}',
+                                            '{{remote_group_header}}', '{{remote_doctors_detail}}', '{{remote_radiographers}}',
                                             '{{dazhi_count}}', '{{dazhi_clients}}', '{{dazhi_radiographers}}',
                                             '{{third_line_support}}'
                                         ].map(v => (
