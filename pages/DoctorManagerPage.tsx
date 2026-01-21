@@ -25,15 +25,23 @@ const DoctorManagerPage: React.FC<DoctorManagerPageProps> = ({ currentUser }) =>
         return unsubscribe;
     }, []);
 
-    const handleAddDoctor = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!newDoctorName.trim()) return;
+    const [errorMsg, setErrorMsg] = useState('');
+
+    const handleAddDoctor = async () => {
+        setErrorMsg('');
+        if (!newDoctorName.trim()) {
+            setErrorMsg('請輸入醫師姓名');
+            return;
+        }
         
         const success = await db.addDoctor(newDoctorName.trim(), newDoctorAlias.trim());
         if (success) {
             setNewDoctorName('');
             setNewDoctorAlias('');
+            setErrorMsg(''); // Clear error
             alert('醫師已新增');
+        } else {
+            setErrorMsg('新增失敗，請檢查下方 Console 錯誤訊息');
         }
     };
 
@@ -134,7 +142,15 @@ const DoctorManagerPage: React.FC<DoctorManagerPageProps> = ({ currentUser }) =>
                         <Plus size={20} className="text-teal-500" />
                         新增醫師
                     </h2>
-                    <form onSubmit={handleAddDoctor} className="space-y-4">
+                    
+                    {errorMsg && (
+                        <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-600 text-sm rounded-lg flex items-start gap-2">
+                             <span>⚠️</span>
+                             <span>{errorMsg}</span>
+                        </div>
+                    )}
+
+                    <div className="space-y-4">
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">姓名</label>
                             <input
@@ -155,12 +171,14 @@ const DoctorManagerPage: React.FC<DoctorManagerPageProps> = ({ currentUser }) =>
                             />
                         </div>
                         <button
-                            type="submit"
-                            className="w-full bg-teal-600 text-white py-2 rounded-lg hover:bg-teal-700 transition font-medium"
+                            type="button"
+                            onClick={handleAddDoctor}
+                            className="w-full bg-teal-600 text-white py-2 rounded-lg hover:bg-teal-700 transition font-medium flex justify-center items-center gap-2"
                         >
+                            <Plus size={18} />
                             新增
                         </button>
-                    </form>
+                    </div>
                 </div>
 
                 {/* Doctor List */}
