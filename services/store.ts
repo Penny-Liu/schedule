@@ -215,7 +215,7 @@ MR : {{mr}}
 US：{{us}}
 CT: {{ct}}
 BMD :{{bmd}}
-支援  :{{support}}
+{{support_section}}{{learning_section}}
 
 遠群（{{remote_group}}）
 {{remote_doctors_detail}}
