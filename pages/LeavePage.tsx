@@ -680,6 +680,7 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
           <p className="text-sm text-gray-500">預假、銷假、長假與換班申請</p>
         </div>
         <button
+          type="button"
           onClick={() => setIsModalOpen(true)}
           className="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-bold shadow-sm shadow-teal-200 transition-all"
         >
@@ -867,12 +868,14 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
                 {needsTargetAction && currentUser.id === leave.targetUserId && (
                   <div className="flex gap-2 w-full animate-pulse">
                     <button
+                      type="button"
                       onClick={() => handleTargetApproval(leave.id, 'REJECTED')}
                       className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors border border-red-100"
                     >
                       <ThumbsDown size={14} /> 拒絕
                     </button>
                     <button
+                      type="button"
                       onClick={() => handleTargetApproval(leave.id, 'AGREED')}
                       className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-xs font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors border border-blue-100"
                     >
@@ -885,12 +888,14 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
                 {(currentUser.role === UserRole.SUPERVISOR || currentUser.role === UserRole.SYSTEM_ADMIN) && leave.status === LeaveStatus.PENDING && waitingForSupervisor && (
                   <div className="flex gap-2 w-full">
                     <button
+                      type="button"
                       onClick={() => handleStatusChange(leave.id, LeaveStatus.REJECTED)}
                       className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
                     >
                       <X size={14} /> 駁回
                     </button>
                     <button
+                      type="button"
                       onClick={() => handleStatusChange(leave.id, LeaveStatus.APPROVED)}
                       className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-xs font-bold text-green-600 bg-green-50 hover:bg-green-100 rounded-lg transition-colors"
                     >
@@ -926,6 +931,7 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
                     </div>
                     {currentUser.id === leave.userId && leave.status === LeaveStatus.PENDING && (
                       <button
+                        type="button"
                         onClick={(e) => {
                           e.stopPropagation();
                           if (window.confirm('確定要刪除此申請嗎？')) {
@@ -952,7 +958,7 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
           <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 border border-gray-100 animate-fade-in max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-lg font-bold text-gray-800">新增申請</h3>
-              <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600">
+              <button type="button" onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600">
                 <X size={20} />
               </button>
             </div>

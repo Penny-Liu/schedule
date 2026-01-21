@@ -1694,6 +1694,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
 
                         <div className="flex bg-slate-100 p-0.5 rounded-lg border border-slate-200">
                             <button
+                                type="button"
                                 onClick={() => {
                                     setViewMode('user');
                                 }}
@@ -1703,6 +1704,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                 {!isMobile && <Users size={14} />} <span>{isMobile ? '人員' : '人員視角'}</span>
                             </button>
                             <button
+                                type="button"
                                 onClick={() => {
                                     setViewMode('station');
                                 }}
@@ -1712,6 +1714,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                 {!isMobile && <LayoutList size={14} />} <span>{isMobile ? '崗位' : '崗位視角'}</span>
                             </button>
                             <button
+                                type="button"
                                 onClick={() => {
                                     setViewMode('daily');
                                     setDailyDate(new Date()); // Reset to today when clicking tab
@@ -1727,6 +1730,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                             </button>
                             {isMobile && (
                                 <button
+                                    type="button"
                                     onClick={() => setViewMode('personal')}
                                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${viewMode === 'personal' ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
                                         } `}
@@ -1744,6 +1748,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                             {/* Mobile Left Nav (For Rolling OR User/Station Views) */}
                             {isMobile && (selectedCycleId === 'rolling' || viewMode === 'user' || viewMode === 'station') && (
                                 <button
+                                    type="button"
                                     onClick={() => setMobileOffset(prev => prev - 1)}
                                     className="p-1.5 bg-white rounded shadow-sm text-slate-600 border border-slate-200 active:scale-95 transition-transform"
                                 >
@@ -1780,6 +1785,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                             {/* Mobile Right Nav (For Rolling OR User/Station Views) */}
                             {isMobile && (selectedCycleId === 'rolling' || viewMode === 'user' || viewMode === 'station') && (
                                 <button
+                                    type="button"
                                     onClick={() => setMobileOffset(prev => prev + 1)}
                                     className="p-1.5 bg-white rounded shadow-sm text-slate-600 border border-slate-200 active:scale-95 transition-transform"
                                 >
@@ -1790,7 +1796,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
 
                         {!isMobile && selectedCycleId === 'rolling' && (
                             <div className="flex items-center bg-white rounded-lg border border-slate-200 p-0.5 shadow-sm gap-1">
-                                <button onClick={() => handleNavigate('prev')} className="p-1.5 hover:bg-slate-50 rounded text-slate-500" title="上一週">
+                                <button type="button" onClick={() => handleNavigate('prev')} className="p-1.5 hover:bg-slate-50 rounded text-slate-500" title="上一週">
                                     <ChevronLeft size={16} />
                                 </button>
 
@@ -1808,7 +1814,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                     />
                                 </div>
 
-                                <button onClick={() => handleNavigate('next')} className="p-1.5 hover:bg-slate-50 rounded text-slate-500" title="下一週">
+                                <button type="button" onClick={() => handleNavigate('next')} className="p-1.5 hover:bg-slate-50 rounded text-slate-500" title="下一週">
                                     <ChevronRight size={16} />
                                 </button>
                             </div>
@@ -1823,6 +1829,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
 
                         {!isMobile && (currentUser.role === UserRole.SUPERVISOR || currentUser.role === UserRole.SYSTEM_ADMIN) && selectedCycleId !== 'rolling' && (
                             <button
+                                type="button"
                                 onClick={() => setIsConfirmCycleOpen(true)}
                                 disabled={isCycleConfirmed && currentUser.role !== UserRole.SYSTEM_ADMIN}
                                 className={`px-3 py-1.5 rounded-lg text-sm font-medium border flex items-center gap-1.5 shadow-sm transition-all ${isCycleConfirmed
@@ -1862,6 +1869,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                     <>
                                         {/* Auto Station Button */}
                                         <button
+                                            type="button"
                                             onClick={onAutoScheduleClick}
                                             disabled={isProcessing || isCycleConfirmed}
                                             className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-1.5 shadow-sm ${(isProcessing || isCycleConfirmed)
@@ -1876,6 +1884,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
 
                                         {/* Special Role Button */}
                                         <button
+                                            type="button"
                                             onClick={onSpecialRoleClick}
                                             disabled={isProcessing || isCycleConfirmed}
                                             className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-all flex items-center gap-1.5 shadow-sm ${(isProcessing || isCycleConfirmed)
@@ -1896,6 +1905,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                         {/* Edit Button: Desktop Only (Mobile uses FAB) */}
                         {!isMobile && (
                             <button
+                                type="button"
                                 onClick={isEditMode ? handleComplete : () => setIsEditMode(true)}
                                 disabled={isProcessing}
                                 className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-all ${isEditMode
@@ -1926,6 +1936,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                         <div className="sticky top-0 z-30 bg-white rounded-xl shadow-md border border-slate-200 p-4 flex items-center justify-between">
                             <div className="flex items-center gap-4">
                                 <button
+                                    type="button"
                                     onClick={() => {
                                         const d = new Date(dailyDate);
                                         d.setDate(d.getDate() - 1);
@@ -1945,6 +1956,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                     </h2>
                                 </div>
                                 <button
+                                    type="button"
                                     onClick={() => {
                                         const d = new Date(dailyDate);
                                         d.setDate(d.getDate() + 1);
@@ -1957,6 +1969,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                             </div>
 
                             <button
+                                type="button"
                                 onClick={() => setDailyDate(new Date())}
                                 className="px-3 py-1.5 text-sm bg-teal-50 text-teal-700 font-bold rounded-lg border border-teal-100 hover:bg-teal-100 transition-colors"
                             >
@@ -2294,6 +2307,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                         {isEditMode && !isMobile && (
                                                             <div className="flex flex-col gap-0.5">
                                                                 <button
+                                                                    type="button"
                                                                     disabled={isFirst}
                                                                     onClick={() => handleMoveUser(idx, 'up')}
                                                                     className={`p-0.5 rounded ${isFirst ? 'text-gray-200' : 'text-gray-400 hover:text-teal-600 hover:bg-gray-100'} `}
@@ -2301,6 +2315,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                                     <ChevronUp size={12} />
                                                                 </button>
                                                                 <button
+                                                                    type="button"
                                                                     disabled={isLast}
                                                                     onClick={() => handleMoveUser(idx, 'down')}
                                                                     className={`p-0.5 rounded ${isLast ? 'text-gray-200' : 'text-gray-400 hover:text-teal-600 hover:bg-gray-100'} `}
@@ -2349,7 +2364,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                                 <div className="h-full w-full flex flex-col items-center justify-center gap-1">
                                                                     <span className="text-slate-300 font-bold select-none text-[12px]">休</span>
                                                                     {isEditMode && (
-                                                                        <button onClick={() => handleUpdateShift(user.id, date, '未分配', [])} className="text-[10px] text-teal-600 hover:text-white hover:bg-teal-500 bg-white border border-teal-200 px-1.5 rounded shadow-sm transition-all">+</button>
+                                                                        <button type="button" onClick={() => handleUpdateShift(user.id, date, '未分配', [])} className="text-[10px] text-teal-600 hover:text-white hover:bg-teal-500 bg-white border border-teal-200 px-1.5 rounded shadow-sm transition-all">+</button>
                                                                     )}
                                                                 </div>
                                                             ) : (
@@ -2379,7 +2394,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                                             {specialRolesList.map(role => {
                                                                                 const isSelected = specialRoles.includes(role);
                                                                                 return (
-                                                                                    <button key={role} onClick={() => handleSpecialRoleToggle(user.id, date, role, station || StationDefault.UNASSIGNED, specialRoles)} className={`px-1 py-0.5 text-[9px] rounded border transition-all font-bold ${isSelected ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-slate-400 border-slate-200 hover:border-purple-300 hover:text-purple-500'} `}>{role[0]}</button>
+                                                                                    <button key={role} type="button" onClick={() => handleSpecialRoleToggle(user.id, date, role, station || StationDefault.UNASSIGNED, specialRoles)} className={`px-1 py-0.5 text-[9px] rounded border transition-all font-bold ${isSelected ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-slate-400 border-slate-200 hover:border-purple-300 hover:text-purple-500'} `}>{role[0]}</button>
                                                                                 );
                                                                             })}
                                                                         </div>
@@ -2595,6 +2610,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                                     {doc?.alias || doc?.name}
                                                                     {(currentUser.role === UserRole.SYSTEM_ADMIN || currentUser.role === UserRole.SUPERVISOR) && isEditMode && (
                                                                          <button 
+                                                                            type="button"
                                                                             onClick={(e) => {
                                                                                 e.stopPropagation();
                                                                                 db.removeDoctorFromStation(doc?.id || '', date);
@@ -3014,7 +3030,7 @@ BMD :{{bmd}}
                     今日崗位總覽 (管理員專用)
                 </h3>
                  <div className="flex gap-2">
-                     <button onClick={handleCopy} className="bg-gray-800 text-white px-3 py-1 rounded text-sm hover:bg-gray-900 transition flex items-center gap-1">
+                     <button type="button" onClick={handleCopy} className="bg-gray-800 text-white px-3 py-1 rounded text-sm hover:bg-gray-900 transition flex items-center gap-1">
                         <Copy size={16} />
                         複製到剪貼簿
                      </button>
