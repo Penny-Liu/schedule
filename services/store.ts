@@ -196,7 +196,12 @@ class Store {
             if (doctorsData) this.doctors = doctorsData;
 
             const { data: doctorShiftsData } = await supabase.from('doctor_shifts').select('*');
-            if (doctorShiftsData) this.doctorShifts = doctorShiftsData;
+            if (doctorShiftsData) {
+                this.doctorShifts = doctorShiftsData.map((s: any) => ({
+                    ...s,
+                    explanationTaskType: s.explanation_task_type || s.explanationTaskType // Map snake to camel
+                }));
+            }
 
             // Initialize default doctorStations if missing
             if (!this.settings.doctorStations) {
@@ -1217,6 +1222,36 @@ BMD :{{bmd}}
         if (shift) {
             this.doctorShifts = this.doctorShifts.filter(s => s.id !== shift.id);
             await supabase.from('doctor_shifts').delete().eq('id', shift.id);
+            this.notifyListeners();
+        }
+    }
+
+    async cycleExplanationTaskType(shiftId: string) {
+        const shift = this.doctorShifts.find(s => s.id === shiftId);
+        if (shift) {
+            // Cycle through: null -> 'with_task' -> 'standalone' -> null
+            if (!shift.explanationTaskType) {
+                shift.explanationTaskType = 'with_task';
+            } else if (shift.explanationTaskType === 'with_task') {
+                shift.explanationTaskType = 'standalone';
+            } else {
+                shift.explanationTaskType = undefined;
+            }
+            
+            const { data, error } = await supabase.from('doctor_shifts').update({ 
+                explanation_task_type: shift.explanationTaskType || null
+            }).eq('id', shift.id).select();
+
+            if (error) {
+                console.error("Error updating explanation_task_type:", error);
+                alert("儲存失敗，請檢查網路或是權限：" + error.message);
+                // Revert local change if needed, but for now just alerting is enough
+            } else {
+                console.log("Success updating explanation_task_type:", data);
+                if (data.length === 0) {
+                     console.warn("Update successful but NO ROWS modified. ID mismatch?", shift.id);
+                }
+            }
             this.notifyListeners();
         }
     }

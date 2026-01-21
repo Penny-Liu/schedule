@@ -144,6 +144,7 @@ export interface DoctorShift {
     doctorId: string;
     date: string; // YYYY-MM-DD
     station: string;
+    explanationTaskType?: 'with_task' | 'standalone'; // Type of explanation task: 'with_task' (+解说) or 'standalone' ((解说))
 }
 
 export interface SystemSettings {

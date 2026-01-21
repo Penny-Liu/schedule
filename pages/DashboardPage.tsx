@@ -2599,21 +2599,47 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                         </td>
                                         {dateRange.map(date => {
                                             const shiftsHere = db.getDoctorShifts().filter(s => s.date === date && s.station === station);
+                                            const isToday = date === new Date().toISOString().split('T')[0];
                                             
                                             return (
-                                                <td key={date} className="p-0.5 border-r border-slate-200 text-center align-middle relative group">
+                                                <td key={date} className={`p-0.5 border-r border-slate-200 text-center align-middle relative group ${
+                                                    isToday ? 'bg-amber-100 ring-2 ring-inset ring-amber-400' : ''
+                                                }`}>
                                                     <div className="flex flex-wrap gap-1 justify-center min-h-[24px]">
                                                         {shiftsHere.map(s => {
                                                             const doc = db.getDoctors().find(d => d.id === s.doctorId);
+                                                            const isSupervisor = currentUser.role === UserRole.SYSTEM_ADMIN || currentUser.role === UserRole.SUPERVISOR;
+                                                            
                                                             return (
-                                                                <span key={s.id} className="bg-teal-100 text-teal-800 text-[10px] px-1 rounded border border-teal-200 cursor-default flex items-center gap-0.5">
+                                                                <span 
+                                                                    key={s.id} 
+                                                                    className="bg-teal-100 text-teal-800 text-[10px] px-1 rounded border border-teal-200 flex items-center gap-0.5"
+                                                                    style={{
+                                                                        cursor: isSupervisor ? 'pointer' : 'default'
+                                                                    }}
+                                                                    title={
+                                                                        s.explanationTaskType === 'with_task' ? '有任务解说（点击切换）' :
+                                                                        s.explanationTaskType === 'standalone' ? '单纯解说（点击切换）' : 
+                                                                        isSupervisor ? '点击标记解说任务' : ''
+                                                                    }
+                                                                    onClick={(e) => {
+                                                                        if (isSupervisor) {
+                                                                            e.stopPropagation();
+                                                                            db.cycleExplanationTaskType(s.id);
+                                                                            showToast('已更新解說狀態', 'success');
+                                                                        }
+                                                                    }}
+                                                                >
+                                                                    {s.explanationTaskType === 'with_task' && <span className="text-yellow-500">🟡</span>}
+                                                                    {s.explanationTaskType === 'standalone' && <span className="text-red-500">🔴</span>}
                                                                     {doc?.alias || doc?.name}
-                                                                    {(currentUser.role === UserRole.SYSTEM_ADMIN || currentUser.role === UserRole.SUPERVISOR) && isEditMode && (
+                                                                    {isSupervisor && isEditMode && (
                                                                          <button 
                                                                             type="button"
                                                                             onClick={(e) => {
                                                                                 e.stopPropagation();
                                                                                 db.removeDoctorFromStation(doc?.id || '', date);
+                                                                                showToast('已移除醫師', 'success');
                                                                             }}
                                                                             className="text-teal-600 hover:text-red-500"
                                                                          >
@@ -2632,6 +2658,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                                     onChange={(e) => {
                                                                         if (e.target.value) {
                                                                             db.assignDoctor(e.target.value, date, station);
+                                                                            showToast('已指派醫師', 'success');
                                                                             e.target.value = ''; // Reset
                                                                         }
                                                                     }}
@@ -2732,6 +2759,8 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                     <div className="flex items-center gap-2"><LayoutList size={14} /><span>崗位視角說明：</span></div>
                                     <div className="flex items-center gap-2"><span className="w-3 h-3 bg-teal-100 border border-teal-200 rounded-sm"></span> <span>正式人員</span></div>
                                     <div className="flex items-center gap-2"><span className="w-3 h-3 bg-white border border-slate-200 border-dashed rounded-sm flex items-center justify-center text-[8px] text-slate-500">學</span> <span>學習人員 (排序於後)</span></div>
+                                    <div className="flex items-center gap-2"><span className="text-yellow-500 text-xs">🟡</span> <span>兼解說 (點擊切換)</span></div>
+                                    <div className="flex items-center gap-2"><span className="text-red-500 text-xs">🔴</span> <span>單純解說 (點擊切換)</span></div>
                                     {isEditMode && <div className="flex items-center gap-2 text-teal-600 font-bold ml-auto">可使用左側箭頭調整顯示順序</div>}
                                 </>
                             )}
@@ -2926,13 +2955,29 @@ const DailyManpowerSummary: React.FC<{
             return doc ? (doc.alias || doc.name) : '';
         };
 
+        // Helper to format doctor name with explanation suffix based on the specific shift
+        const formatShiftWithSuffix = (shift: any, alias: string) => {
+            if (shift?.explanationTaskType === 'standalone') {
+                return `${alias}(解說)`;
+            } else if (shift?.explanationTaskType === 'with_task') {
+                return `${alias}+解說`;
+            }
+            return alias;
+        };
+
         const imagingDocs = docShifts.filter(s => s.station === '影像').map(s => getDocAlias(s.doctorId));
-        const remoteDocs = docShifts.filter(s => s.station === '遠').map(s => getDocAlias(s.doctorId));
-        const supportDocs = docShifts.filter(s => s.station === '支援').map(s => getDocAlias(s.doctorId));
+        
+        // For Remote Header and Third Line Support, we need the suffix included
+        // Pass the shift 's' directly to ensure we use the correct explanationTaskType for THAT shift
+        const remoteDocsWithSuffix = docShifts.filter(s => s.station === '遠').map(s => formatShiftWithSuffix(s, getDocAlias(s.doctorId)));
+        const supportDocsWithSuffix = docShifts.filter(s => s.station === '支援').map(s => formatShiftWithSuffix(s, getDocAlias(s.doctorId)));
+
+        // Raw aliases for detail mapping (we'll re-apply suffix logic there or just use the helper if cleaner)
+        const remoteDocsRaw = docShifts.filter(s => s.station === '遠').map(s => getDocAlias(s.doctorId));
 
         // --- Radiographer Data: "Third Line" Detection ---
         // Block 3: Only Doctors (supportDocs)
-        const thirdLineSupportList = [...supportDocs]; 
+        const thirdLineSupportList = [...supportDocsWithSuffix]; 
 
         // Block 1: Support Section
         // Technical Support: manpower.support (assigned to '支援')
@@ -2947,7 +2992,9 @@ const DailyManpowerSummary: React.FC<{
         
         // Result of filtering for falsy values to avoid "undefined" or empty strings in output
         // Remote Group Header: Combine Remote Docs + Remote Radiographers with spacing
-        const joinedRemoteDocs = remoteDocs.filter(Boolean).join('/');
+        // Result of filtering for falsy values to avoid "undefined" or empty strings in output
+        // Remote Group Header: Combine Remote Docs + Remote Radiographers with spacing
+        const joinedRemoteDocs = remoteDocsWithSuffix.filter(Boolean).join('/');
         const joinedRemoteRads = manpower.remote.filter(Boolean).join('/');
         let remoteGroupHeader = joinedRemoteDocs;
         if (joinedRemoteRads) {
@@ -3005,16 +3052,50 @@ BMD :{{bmd}}
         // Doctor Lists formatting
         let imgDocStr = '';
         if (imagingDocs.length > 0) {
-            imgDocStr = imagingDocs.map(doc => `${doc}  N(N大 N小 N無 ) →N 單位`).join('\n');
+            imgDocStr = imagingDocs.map(docAlias => {
+                // Find doctor shift to check for explanation task
+                const docShift = docShifts.find(s => {
+                    const doc = doctors.find(d => d.id === s.doctorId);
+                    return s.station === '影像' && (doc?.alias || doc?.name) === docAlias;
+                });
+                
+                // Format based on explanation task type
+                if (docShift?.explanationTaskType === 'standalone') {
+                    // Standalone: Append "(解說)" at end
+                    return `${docAlias}  N(N大 N小 N無 ) →N 單位 (解說)`;
+                } else if (docShift?.explanationTaskType === 'with_task') {
+                    // With task: Append at end
+                    return `${docAlias}  N(N大 N小 N無 ) →N 單位 +解說`;
+                } else {
+                    return `${docAlias}  N(N大 N小 N無 ) →N 單位`;
+                }
+            }).join('\n');
         } else {
             imgDocStr = `(無影像醫師)  N(N大 N小 N無 ) →N 單位`;
         }
         replacements['{{imaging_doctors}}'] = imgDocStr;
 
         let remDocStr = '';
-        if (remoteDocs.length > 0) {
+        if (remoteDocsRaw.length > 0) {
             // New Format: Name X (...) +大直 {{dazhi_clients}} →N 單位
-            remDocStr = remoteDocs.map(doc => `${doc}  X (X大 X小 X無) +大直 ${stats.dazhi_clients} →N 單位`).join('\n');
+            remDocStr = remoteDocsRaw.map(docAlias => {
+                // Find doctor shift to check for explanation task
+                const docShift = docShifts.find(s => {
+                    const doc = doctors.find(d => d.id === s.doctorId);
+                    return s.station === '遠' && (doc?.alias || doc?.name) === docAlias;
+                });
+                
+                // Format based on explanation task type
+                if (docShift?.explanationTaskType === 'standalone') {
+                    // Standalone: Append "(解說)" at end
+                    return `${docAlias}  X (X大 X小 X無) +大直 ${stats.dazhi_clients} →N 單位 (解說)`;
+                } else if (docShift?.explanationTaskType === 'with_task') {
+                    // With task: Append at end
+                    return `${docAlias}  X (X大 X小 X無) +大直 ${stats.dazhi_clients} →N 單位 +解說`;
+                } else {
+                    return `${docAlias}  X (X大 X小 X無) +大直 ${stats.dazhi_clients} →N 單位`;
+                }
+            }).join('\n');
         }
         replacements['{{remote_doctors_detail}}'] = remDocStr;
 
