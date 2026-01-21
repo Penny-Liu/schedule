@@ -93,6 +93,7 @@ const DoctorManagerPage: React.FC<DoctorManagerPageProps> = ({ currentUser }) =>
                     醫師管理
                 </h1>
                 <button
+                    type="button"
                     onClick={() => setIsStationSettingsOpen(!isStationSettingsOpen)}
                     className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200"
                 >
@@ -113,7 +114,7 @@ const DoctorManagerPage: React.FC<DoctorManagerPageProps> = ({ currentUser }) =>
                             className="flex-1 px-4 py-2 border border-slate-300 rounded-lg"
                             placeholder="輸入新崗位名稱"
                         />
-                        <button onClick={addStation} className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700">
+                        <button type="button" onClick={addStation} className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700">
                             新增
                         </button>
                     </div>
@@ -121,14 +122,14 @@ const DoctorManagerPage: React.FC<DoctorManagerPageProps> = ({ currentUser }) =>
                         {stations.map(station => (
                             <div key={station} className="bg-white px-3 py-1 rounded-full border border-slate-200 flex items-center gap-2 shadow-sm">
                                 <span>{station}</span>
-                                <button onClick={() => removeStation(station)} className="text-red-400 hover:text-red-600">
+                                <button type="button" onClick={() => removeStation(station)} className="text-red-400 hover:text-red-600">
                                     <X size={14} />
                                 </button>
                             </div>
                         ))}
                     </div>
                      <div className="mt-4 flex justify-end">
-                        <button onClick={handleSaveStations} className="px-6 py-2 bg-slate-800 text-white rounded-lg hover:bg-slate-900">
+                        <button type="button" onClick={handleSaveStations} className="px-6 py-2 bg-slate-800 text-white rounded-lg hover:bg-slate-900">
                             儲存變更
                         </button>
                     </div>
@@ -231,6 +232,7 @@ const DoctorManagerPage: React.FC<DoctorManagerPageProps> = ({ currentUser }) =>
                                             {editingDoctor?.id === doctor.id ? (
                                                 <>
                                                     <button
+                                                        type="button"
                                                         onClick={handleUpdateDoctor}
                                                         className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition"
                                                         title="儲存"
@@ -238,6 +240,7 @@ const DoctorManagerPage: React.FC<DoctorManagerPageProps> = ({ currentUser }) =>
                                                         <Save size={18} />
                                                     </button>
                                                     <button
+                                                        type="button"
                                                         onClick={() => setEditingDoctor(null)}
                                                         className="p-2 text-gray-400 hover:bg-gray-100 rounded-lg transition"
                                                         title="取消"
@@ -248,6 +251,7 @@ const DoctorManagerPage: React.FC<DoctorManagerPageProps> = ({ currentUser }) =>
                                             ) : (
                                                 <>
                                                     <button
+                                                        type="button"
                                                         onClick={() => setEditingDoctor(doctor)}
                                                         className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition"
                                                         title="編輯"
@@ -255,6 +259,7 @@ const DoctorManagerPage: React.FC<DoctorManagerPageProps> = ({ currentUser }) =>
                                                         <Edit2 size={18} />
                                                     </button>
                                                     <button
+                                                        type="button"
                                                         onClick={() => handleDeleteDoctor(doctor.id)}
                                                         className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
                                                         title="刪除"

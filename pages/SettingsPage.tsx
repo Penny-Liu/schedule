@@ -436,6 +436,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
                                                     className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 outline-none shadow-sm"
                                                 />
                                                 <button
+                                                    type="button"
                                                     onClick={handleUpdateCycleStartDate}
                                                     className="bg-gray-800 hover:bg-gray-900 text-white px-3 py-2 rounded-lg text-xs font-bold shadow-sm whitespace-nowrap"
                                                 >
@@ -478,6 +479,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
                                                     />
                                                 </div>
                                                 <button
+                                                    type="button"
                                                     onClick={handleAddAnchor}
                                                     className="col-span-2 mt-1 bg-teal-600 text-white text-xs font-bold py-1.5 rounded hover:bg-teal-700 transition-colors flex items-center justify-center gap-1"
                                                 >
@@ -501,6 +503,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
                                                                 <td className="px-3 py-2 font-mono text-slate-700">{anchor.anchorDate}</td>
                                                                 <td className="px-3 py-2 text-right">
                                                                     <button
+                                                                        type="button"
                                                                         onClick={() => handleRemoveAnchor(anchor.effectiveDate)}
                                                                         className="text-red-400 hover:text-red-600 p-1"
                                                                         title="刪除"
@@ -541,6 +544,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
                                     請點擊下方按鈕進行資料庫清理。
                                 </p>
                                 <button
+                                    type="button"
                                     onClick={async () => {
                                         if (confirm('確定要執行資料庫清理嗎？這將掃描所有排班並移除重複的無效資料。')) {
                                             try {
@@ -572,6 +576,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
                                             className="border border-gray-300 rounded px-2 text-sm"
                                         />
                                         <button
+                                            type="button"
                                             onClick={async () => {
                                                 const monthInput = document.getElementById('forceCleanMonth') as HTMLInputElement;
                                                 const yearMonth = monthInput.value;
@@ -622,6 +627,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
                                 />
                                 <div className="flex gap-2 mb-4">
                                     <button
+                                        type="button"
                                         onClick={() => {
                                             db.settings.lineCopyTemplate = lineTemplate;
                                             db.saveSettings();
@@ -632,6 +638,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
                                         <Save size={16} /> 儲存設定
                                     </button>
                                     <button
+                                        type="button"
                                         onClick={() => {
                                             if (confirm('確定要回復成系統預設格式嗎？您的修改將會遺失。')) {
                                                 const defaultTemplate = `{{date}}
@@ -681,6 +688,7 @@ BMD :{{bmd}}
                                         ].map(v => (
                                             <button
                                                 key={v}
+                                                type="button"
                                                 onClick={() => {
                                                     navigator.clipboard.writeText(v);
                                                     alert(`已複製 ${v}`);
@@ -769,6 +777,7 @@ BMD :{{bmd}}
                                                 </div>
                                             </div>
                                             <button
+                                                type="button"
                                                 onClick={() => handleDeleteCycleClick(cycle.id)}
                                                 className="text-gray-300 hover:text-red-500 transition-colors p-2 rounded-full hover:bg-white"
                                             >
@@ -934,6 +943,7 @@ BMD :{{bmd}}
                                                 </span>
                                             </div>
                                             <button
+                                                type="button"
                                                 onClick={() => handleDeleteHolidayClick(h.date)}
                                                 className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all p-1"
                                             >
@@ -1004,6 +1014,7 @@ BMD :{{bmd}}
                                                         ))}
                                                         <td className="px-6 py-3 text-right">
                                                             <button
+                                                                type="button"
                                                                 onClick={() => handleDeleteStationClick(station)}
                                                                 className="text-gray-300 hover:text-red-500 transition-colors p-1.5 hover:bg-red-50 rounded"
                                                             >
