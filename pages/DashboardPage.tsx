@@ -2823,7 +2823,12 @@ const DailyManpowerSummary: React.FC<{
         // Helper to get formatted name
         const getName = (userId: string) => {
             const u = users.find(user => user.id === userId);
-            return u ? (u.alias || u.name.slice(-2)) : ''; // Use Alias or last 2 chars
+            if (!u) return '';
+            // If alias is purely English (e.g., "K"), use last 2 chars of name instead
+            if (u.alias && /^[A-Za-z]+$/.test(u.alias)) {
+                 return u.name.slice(-2);
+            }
+            return u.alias || u.name.slice(-2);
         };
         
         // Helper to get full name with alias fallback
@@ -2934,9 +2939,13 @@ const DailyManpowerSummary: React.FC<{
         const learningText = manpower.learning.length > 0 ? `\n學習：${manpower.learning.join('/')}` : '';
         
         // Result of filtering for falsy values to avoid "undefined" or empty strings in output
-        const remoteGroupAll = [...remoteDocs, ...manpower.remote].filter(Boolean);
-        const remoteGroupHeader = remoteGroupAll.length > 0 ? remoteGroupAll.join('/') : '';
-
+        // Remote Group Header: Combine Remote Docs + Remote Radiographers with spacing
+        const joinedRemoteDocs = remoteDocs.filter(Boolean).join('/');
+        const joinedRemoteRads = manpower.remote.filter(Boolean).join('/');
+        let remoteGroupHeader = joinedRemoteDocs;
+        if (joinedRemoteRads) {
+             remoteGroupHeader += (joinedRemoteDocs ? '  ' : '') + joinedRemoteRads;
+        }
 
         // --- Prepare Template & Variables ---
         let template = db.settings.lineCopyTemplate;
@@ -2946,7 +2955,7 @@ const DailyManpowerSummary: React.FC<{
 {{imaging_doctors}}
 
 放射師人力
-北投： (客戶：{{beitou_clients}}  CTA  {{beitou_cta}})
+北投：{{beitou_count}} (客戶：{{beitou_clients}}  CTA  {{beitou_cta}})
 BU領頭 場控：{{floor_control}}
 MR : {{mr}}
 US：{{us}}
@@ -2958,7 +2967,7 @@ BMD :{{bmd}}
 {{remote_doctors_detail}}
 遠：{{remote_radiographers}}
 
-大直 {{dazhi_count}} （客戶 {{dazhi_clients}} ）
+大直：{{dazhi_count}} （客戶 {{dazhi_clients}} ）
 {{dazhi_radiographers}}
 
 三線支援：{{third_line_support}}`;
@@ -2983,6 +2992,7 @@ BMD :{{bmd}}
             '{{dazhi_radiographers}}': manpower.dazhi.join('/') || '無',
             '{{third_line_support}}': thirdLineSupportList.join('/'),
             '{{remote_group_header}}': remoteGroupHeader,
+            '{{remote_group}}': remoteGroupHeader,
         };
 
         // Doctor Lists formatting
@@ -3008,6 +3018,18 @@ BMD :{{bmd}}
              finalText = finalText.replace(/支援\s*[:：]\s*{{support}}\n?/g, '');
         }
 
+        // Custom Logic: Check if "北投：" header is missing the count variable (legacy template issue)
+        // Look for pattern like "北投：" followed immediately by "(客戶" or space, without the count
+        // We want to force inject it: "北投：{{beitou_count}} (客戶..."
+        if (finalText.includes('北投：') && !finalText.includes('{{beitou_count}}')) {
+             finalText = finalText.replace(/北投：\s*(\(客戶|（客戶)/, '北投：{{beitou_count}} $1');
+        }
+
+        // Custom Logic: Ensure "大直" has a colon if missing
+        if (finalText.includes('大直 ') && finalText.includes('{{dazhi_count}}')) {
+             finalText = finalText.replace(/大直\s+{{dazhi_count}}/, '大直：{{dazhi_count}}');
+        }
+
         Object.keys(replacements).forEach(key => {
             const val = replacements[key];
             // Safe replace all
@@ -3015,10 +3037,24 @@ BMD :{{bmd}}
         });
 
         // Split into sections for UI
-        const parts = finalText.split(/\n(?=放射師人力)|(?=遠群)/);
-        const section1 = parts[0] || '';
-        const section2 = parts.find(p => p.trim().startsWith('放射師人力')) || '';
-        const section3 = parts.find(p => p.trim().startsWith('遠群')) || '';
+        // Block 1: Before "遠群"
+        // Block 2: From "遠群" to before "三線支援"
+        // Block 3: From "三線支援" to end
+        const split1 = finalText.split('遠群');
+        const section1 = split1[0] || '';
+        
+        let section2 = '';
+        let section3 = '';
+
+        if (split1.length > 1) {
+            // Rejoin the rest in case "遠群" appears multiple times (unlikely but safe)
+            const rest = '遠群' + split1.slice(1).join('遠群');
+            const split2 = rest.split('三線支援');
+            section2 = split2[0] || '';
+            if (split2.length > 1) {
+                section3 = '三線支援' + split2.slice(1).join('三線支援');
+            }
+        }
 
         return { full: finalText, section1, section2, section3 };
     }, [date, shifts, manpower, users, stats]);
@@ -3046,13 +3082,13 @@ BMD :{{bmd}}
                 {/* Section 1: Imaging Doctors */}
                 <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
                     <div className="flex justify-between items-center mb-2">
-                         <div className="text-xs text-gray-500 font-medium">區塊 1：影像醫師</div>
+                         <div className="text-xs text-gray-500 font-medium">區塊 1：北投崗位</div>
                          <button type="button" onClick={() => handleCopy(copyText.section1)} className="text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 px-2 py-1 rounded flex items-center gap-1">
                             <Copy size={12} /> 複製
                          </button>
                     </div>
                     <textarea 
-                        className="w-full h-24 text-sm font-mono text-gray-700 bg-transparent outline-none resize-none"
+                        className="w-full h-64 text-sm font-mono text-gray-700 bg-transparent outline-none resize-none"
                         readOnly
                         value={copyText.section1}
                      />
@@ -3061,7 +3097,7 @@ BMD :{{bmd}}
                 {/* Section 2: Beitou Staff */}
                 <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
                     <div className="flex justify-between items-center mb-2">
-                         <div className="text-xs text-gray-500 font-medium">區塊 2：放射師人力</div>
+                         <div className="text-xs text-gray-500 font-medium">區塊 2：遠群</div>
                          <button type="button" onClick={() => handleCopy(copyText.section2)} className="text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 px-2 py-1 rounded flex items-center gap-1">
                             <Copy size={12} /> 複製
                          </button>
@@ -3076,13 +3112,13 @@ BMD :{{bmd}}
                  {/* Section 3: Remote & Support */}
                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
                     <div className="flex justify-between items-center mb-2">
-                         <div className="text-xs text-gray-500 font-medium">區塊 3：遠群與其他</div>
+                         <div className="text-xs text-gray-500 font-medium">區塊 3：其它</div>
                          <button type="button" onClick={() => handleCopy(copyText.section3)} className="text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 px-2 py-1 rounded flex items-center gap-1">
                             <Copy size={12} /> 複製
                          </button>
                     </div>
-                    <textarea 
-                        className="w-full h-40 text-sm font-mono text-gray-700 bg-transparent outline-none resize-none"
+                     <textarea 
+                        className="w-full h-16 text-sm font-mono text-gray-700 bg-transparent outline-none resize-none"
                         readOnly
                         value={copyText.section3}
                      />

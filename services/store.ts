@@ -209,7 +209,7 @@ class Store {
 {{imaging_doctors}}
 
 放射師人力
-北投： (客戶：{{beitou_clients}}  CTA  {{beitou_cta}})
+北投：{{beitou_count}} (客戶：{{beitou_clients}}  CTA  {{beitou_cta}})
 BU領頭 場控：{{floor_control}}
 MR : {{mr}}
 US：{{us}}
@@ -221,7 +221,7 @@ BMD :{{bmd}}
 {{remote_doctors_detail}}
 遠：{{remote_radiographers}}
 
-大直 {{dazhi_count}} （客戶 {{dazhi_clients}} ）
+大直：{{dazhi_count}} （客戶 {{dazhi_clients}} ）
 {{dazhi_radiographers}}
 
 三線支援：{{third_line_support}}`;

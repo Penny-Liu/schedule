@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { User, UserRole, RosterCycle, SYSTEM_OFF, StationDefault, Holiday, DateEventType, CycleAnchor } from '../types';
 import { db } from '../services/store';
 import { Plus, Trash2, Save, Settings, Calendar, AlertCircle, Users, Clock, Globe, X, RefreshCw, Key, UserCircle, ChevronDown, CalendarPlus } from 'lucide-react';
@@ -39,7 +39,33 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
         frequency: '1' // Default every 1 month
     });
 
-    const [lineTemplate, setLineTemplate] = useState(db.settings.lineCopyTemplate || '');
+    // Template blocks state: [Block1, Block2, Block3]
+    const [templateBlocks, setTemplateBlocks] = useState<string[]>(['', '', '']);
+
+    // Helper to parse template into blocks
+    const parseTemplate = (text: string) => {
+        const split1 = text.split('遠群');
+        const b1 = split1[0] || '';
+        let b2 = '';
+        let b3 = '';
+        if (split1.length > 1) {
+             const rest = split1.slice(1).join('遠群'); // Content after first "遠群"
+             const split2 = rest.split('三線支援');
+             b2 = split2[0] || '';
+             if (split2.length > 1) {
+                 b3 = split2.slice(1).join('三線支援'); // Content after "三線支援"
+             }
+        }
+        return [b1, b2, b3];
+    };
+
+    // Initialize blocks on mount using current setting
+    useEffect(() => {
+        const currentTemplate = db.settings.lineCopyTemplate || '';
+         if (currentTemplate) {
+            setTemplateBlocks(parseTemplate(currentTemplate));
+         }
+    }, [db.settings.lineCopyTemplate]);
 
 
 
@@ -619,17 +645,76 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
                                 <p className="text-sm text-gray-500 mb-2">
                                     您可以自訂「複製文字」的內容格式。請使用下方的變數代碼進行排版，系統會自動帶入當日資料。
                                 </p>
-                                <textarea
-                                    className="w-full h-64 p-3 border border-gray-200 rounded-lg text-sm font-mono focus:ring-2 focus:ring-teal-500 outline-none resize-y mb-2"
-                                    value={lineTemplate}
-                                    onChange={(e) => setLineTemplate(e.target.value)}
-                                    placeholder="請輸入格式範本..."
-                                />
+                                <div className="space-y-4 mb-4">
+                                    {/* Block 1 */}
+                                    <div>
+                                        <label className="text-xs font-bold text-gray-500 mb-1 block">區塊 1 (北投/影像醫師)</label>
+                                        <textarea
+                                            className="w-full h-48 p-3 border border-gray-200 rounded-lg text-sm font-mono focus:ring-2 focus:ring-teal-500 outline-none resize-y"
+                                            value={templateBlocks[0]}
+                                            onChange={(e) => {
+                                                const newBlocks = [...templateBlocks];
+                                                newBlocks[0] = e.target.value;
+                                                setTemplateBlocks(newBlocks);
+                                            }}
+                                            placeholder="請輸入格式範本..."
+                                        />
+                                    </div>
+
+                                    {/* Separator 1 */}
+                                    <div className="flex items-center gap-4">
+                                        <div className="h-px bg-gray-200 flex-1"></div>
+                                        <span className="text-xs font-bold text-teal-600 bg-teal-50 px-3 py-1 rounded-full border border-teal-100">
+                                            系統分隔線：遠群
+                                        </span>
+                                        <div className="h-px bg-gray-200 flex-1"></div>
+                                    </div>
+
+                                    {/* Block 2 */}
+                                     <div>
+                                        <label className="text-xs font-bold text-gray-500 mb-1 block">區塊 2 (遠群/大直)</label>
+                                        <textarea
+                                            className="w-full h-40 p-3 border border-gray-200 rounded-lg text-sm font-mono focus:ring-2 focus:ring-teal-500 outline-none resize-y"
+                                            value={templateBlocks[1]}
+                                            onChange={(e) => {
+                                                const newBlocks = [...templateBlocks];
+                                                newBlocks[1] = e.target.value;
+                                                setTemplateBlocks(newBlocks);
+                                            }}
+                                        />
+                                    </div>
+
+                                    {/* Separator 2 */}
+                                    <div className="flex items-center gap-4">
+                                        <div className="h-px bg-gray-200 flex-1"></div>
+                                        <span className="text-xs font-bold text-teal-600 bg-teal-50 px-3 py-1 rounded-full border border-teal-100">
+                                            系統分隔線：三線支援
+                                        </span>
+                                        <div className="h-px bg-gray-200 flex-1"></div>
+                                    </div>
+
+                                     {/* Block 3 */}
+                                     <div>
+                                        <label className="text-xs font-bold text-gray-500 mb-1 block">區塊 3 (其它)</label>
+                                        <textarea
+                                            className="w-full h-24 p-3 border border-gray-200 rounded-lg text-sm font-mono focus:ring-2 focus:ring-teal-500 outline-none resize-y"
+                                            value={templateBlocks[2]}
+                                            onChange={(e) => {
+                                                const newBlocks = [...templateBlocks];
+                                                newBlocks[2] = e.target.value;
+                                                setTemplateBlocks(newBlocks);
+                                            }}
+                                        />
+                                    </div>
+                                </div>
+
                                 <div className="flex gap-2 mb-4">
                                     <button
                                         type="button"
                                         onClick={() => {
-                                            db.settings.lineCopyTemplate = lineTemplate;
+                                            // Join blocks with forced delimiters
+                                            const finalTemplate = `${templateBlocks[0]}遠群${templateBlocks[1]}三線支援${templateBlocks[2]}`;
+                                            db.settings.lineCopyTemplate = finalTemplate;
                                             db.saveSettings();
                                             alert('格式已儲存！');
                                         }}
@@ -645,7 +730,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
 {{imaging_doctors}}
 
 放射師人力
-北投： (客戶：{{beitou_clients}}  CTA  {{beitou_cta}})
+北投：{{beitou_count}} (客戶：{{beitou_clients}}  CTA  {{beitou_cta}})
 BU領頭 場控：{{floor_control}}
 MR : {{mr}}
 US：{{us}}
@@ -657,11 +742,11 @@ BMD :{{bmd}}
 {{remote_doctors_detail}}
 遠：{{remote_radiographers}}
 
-大直 {{dazhi_count}} （客戶 {{dazhi_clients}} ）
+大直：{{dazhi_count}} （客戶 {{dazhi_clients}} ）
 {{dazhi_radiographers}}
 
 三線支援：{{third_line_support}}`;
-                                                setLineTemplate(defaultTemplate);
+                                                setTemplateBlocks(parseTemplate(defaultTemplate));
                                                 db.settings.lineCopyTemplate = defaultTemplate;
                                                 db.saveSettings();
                                                 alert('已回復預設值');
