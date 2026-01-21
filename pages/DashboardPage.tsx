@@ -3126,71 +3126,7 @@ BMD :{{bmd}}
              </div>
 
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm">
-                {/* Beitou Section */}
-                <div className="space-y-2">
-                    <div className="font-bold text-base text-gray-800 border-b pb-1 mb-2">
-                        北投人力：{manpower.beitouCount}
-                    </div>
-                     <div className="flex items-center gap-4 bg-gray-50 p-2 rounded">
-                        <label className="flex items-center gap-2">
-                            <span className="text-gray-600">客戶數:</span>
-                            <span className="font-mono font-bold text-lg">{stats.beitou_clients}</span>
-                        </label>
-                        <label className="flex items-center gap-2">
-                            <span className="text-gray-600">CTA:</span>
-                            <span className="font-mono font-bold text-lg">{stats.beitou_cta}</span>
-                        </label>
-                    </div>
 
-                    <div className="grid grid-cols-[80px_1fr] gap-y-1">
-                         <span className="text-gray-500">場控:</span>
-                         <span className="font-medium">{manpower.floorControl.join('/') || '-'}</span>
-
-                         <span className="text-gray-500">MR:</span>
-                         <span className="font-medium">{manpower.mr.join('/') || '-'}</span>
-
-                         <span className="text-gray-500">US:</span>
-                         <span className="font-medium">{manpower.us.join('/') || '-'}</span>
-
-                         <span className="text-gray-500">CT:</span>
-                         <span className="font-medium">{manpower.ct.join('/') || '-'}</span>
-
-                         <span className="text-gray-500">BMD:</span>
-                         <span className="font-medium">{manpower.bmd.join('/') || '-'}</span>
-
-                         <span className="text-gray-500">支援:</span>
-                         <span className="font-medium">{manpower.support.join('/') || '-'}</span>
-                    </div>
-                </div>
-
-                {/* Remote & Dazhi Section */}
-                <div className="space-y-4">
-                     <div>
-                        <div className="font-bold text-base text-gray-800 border-b pb-1 mb-2">
-                            遠距：{manpower.remoteCount}
-                        </div>
-                        <div className="pl-4 font-medium text-gray-700">
-                             {manpower.remote.join('/') || '無'}
-                        </div>
-                     </div>
-
-                     <div className="pt-2">
-                        <div className="font-bold text-base text-gray-800 border-b pb-1 mb-2">
-                            大直：{manpower.dazhiCount}
-                        </div>
-                         <div className="flex items-center gap-4 bg-gray-50 p-2 rounded mb-2">
-                            <label className="flex items-center gap-2">
-                                <span className="text-gray-600">客戶數:</span>
-                                <span className="font-mono font-bold text-lg">{stats.dazhi_clients}</span>
-                            </label>
-                        </div>
-                        <div className="pl-4 font-medium text-gray-700">
-                             {manpower.dazhi.join('/') || '無'}
-                        </div>
-                     </div>
-                </div>
-            </div>
         </div>
     );
 };
