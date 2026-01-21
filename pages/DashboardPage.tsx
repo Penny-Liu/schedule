@@ -2933,8 +2933,8 @@ const DailyManpowerSummary: React.FC<{
         const supportText = manpower.support.length > 0 ? `支援  :${manpower.support.join('/')}` : '';
         const learningText = manpower.learning.length > 0 ? `\n學習：${manpower.learning.join('/')}` : '';
         
-        // Remote Group Header: Combine Remote Docs + Remote Radiographers
-        const remoteGroupAll = [...remoteDocs, ...manpower.remote];
+        // Result of filtering for falsy values to avoid "undefined" or empty strings in output
+        const remoteGroupAll = [...remoteDocs, ...manpower.remote].filter(Boolean);
         const remoteGroupHeader = remoteGroupAll.length > 0 ? remoteGroupAll.join('/') : '';
 
 
@@ -3014,18 +3014,21 @@ BMD :{{bmd}}
             finalText = finalText.split(key).join(val); 
         });
 
-        // Clean up double newlines
-        // finalText = finalText.replace(/\n\n\n/g, '\n\n'); 
+        // Split into sections for UI
+        const parts = finalText.split(/\n(?=放射師人力)|(?=遠群)/);
+        const section1 = parts[0] || '';
+        const section2 = parts.find(p => p.trim().startsWith('放射師人力')) || '';
+        const section3 = parts.find(p => p.trim().startsWith('遠群')) || '';
 
-        return finalText;
+        return { full: finalText, section1, section2, section3 };
     }, [date, shifts, manpower, users, stats]);
 
-    const handleCopy = () => {
-        navigator.clipboard.writeText(copyText).then(() => {
+    const handleCopy = (text: string) => {
+        navigator.clipboard.writeText(text).then(() => {
             alert('已複製到剪貼簿');
         }).catch(err => {
             console.error('Failed to copy: ', err);
-            prompt('複製失敗，請手動複製:', copyText);
+            prompt('複製失敗，請手動複製:', text);
         });
     };
 
@@ -3036,22 +3039,54 @@ BMD :{{bmd}}
                     <Briefcase className="w-5 h-5 text-blue-600" />
                     今日崗位總覽 (管理員專用)
                 </h3>
-                 <div className="flex gap-2">
-                     <button type="button" onClick={handleCopy} className="bg-gray-800 text-white px-3 py-1 rounded text-sm hover:bg-gray-900 transition flex items-center gap-1">
-                        <Copy size={16} />
-                        複製到剪貼簿
-                     </button>
-                 </div>
              </div>
 
-             {/* Live Preview Box */}
-             <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mb-4">
-                 <div className="text-xs text-gray-500 mb-1 font-medium">預覽內容 (自動生成)</div>
-                 <textarea 
-                    className="w-full h-64 text-sm font-mono text-gray-700 bg-transparent outline-none resize-none"
-                    readOnly
-                    value={copyText}
-                 />
+             {/* Live Preview Box - Sections */}
+             <div className="grid grid-cols-1 gap-4 mb-4">
+                {/* Section 1: Imaging Doctors */}
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                    <div className="flex justify-between items-center mb-2">
+                         <div className="text-xs text-gray-500 font-medium">區塊 1：影像醫師</div>
+                         <button type="button" onClick={() => handleCopy(copyText.section1)} className="text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 px-2 py-1 rounded flex items-center gap-1">
+                            <Copy size={12} /> 複製
+                         </button>
+                    </div>
+                    <textarea 
+                        className="w-full h-24 text-sm font-mono text-gray-700 bg-transparent outline-none resize-none"
+                        readOnly
+                        value={copyText.section1}
+                     />
+                </div>
+
+                {/* Section 2: Beitou Staff */}
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                    <div className="flex justify-between items-center mb-2">
+                         <div className="text-xs text-gray-500 font-medium">區塊 2：放射師人力</div>
+                         <button type="button" onClick={() => handleCopy(copyText.section2)} className="text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 px-2 py-1 rounded flex items-center gap-1">
+                            <Copy size={12} /> 複製
+                         </button>
+                    </div>
+                    <textarea 
+                        className="w-full h-40 text-sm font-mono text-gray-700 bg-transparent outline-none resize-none"
+                        readOnly
+                        value={copyText.section2}
+                     />
+                </div>
+
+                 {/* Section 3: Remote & Support */}
+                 <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                    <div className="flex justify-between items-center mb-2">
+                         <div className="text-xs text-gray-500 font-medium">區塊 3：遠群與其他</div>
+                         <button type="button" onClick={() => handleCopy(copyText.section3)} className="text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 px-2 py-1 rounded flex items-center gap-1">
+                            <Copy size={12} /> 複製
+                         </button>
+                    </div>
+                    <textarea 
+                        className="w-full h-40 text-sm font-mono text-gray-700 bg-transparent outline-none resize-none"
+                        readOnly
+                        value={copyText.section3}
+                     />
+                </div>
              </div>
 
 
