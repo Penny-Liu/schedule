@@ -355,9 +355,40 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
 
           // Must not already have a special role (to keep it simple, or check specific conflicts)
           const theirShift = shifts.find(s => s.userId === u.id);
-          if (theirShift && theirShift.specialRoles.length > 0) return false;
+          // if (theirShift && theirShift.specialRoles.length > 0) return false; // OLD STRICT LOGIC
 
-          return true;
+          // NEW LOGIC: Allow Opening + Assist
+          const theirRoles = theirShift?.specialRoles || [];
+          
+          // 1. Universal Blockers: Late & Scheduler cannot coexist with anything (on them)
+          if (theirRoles.includes(SPECIAL_ROLES.LATE) || theirRoles.includes(SPECIAL_ROLES.SCHEDULER)) return false;
+
+          // 2. If we are swapping LATE or SCHEDULER to them, they must be completely free
+          if (roleToCheck === SPECIAL_ROLES.LATE || roleToCheck === SPECIAL_ROLES.SCHEDULER) {
+             return theirRoles.length === 0;
+          }
+
+          // 3. Coexistence Rules for OPENING / ASSIST
+          if (roleToCheck === SPECIAL_ROLES.OPENING) {
+             // Can have ASSIST. Cannot have OPENING (Duplicate).
+             if (theirRoles.includes(SPECIAL_ROLES.OPENING)) return false;
+             // Ensure no other unexpected roles (other than ASSIST)
+             const others = theirRoles.filter(r => r !== SPECIAL_ROLES.ASSIST);
+             if (others.length > 0) return false; 
+             return true;
+          }
+
+          if (roleToCheck === SPECIAL_ROLES.ASSIST) {
+             // Can have OPENING. Cannot have ASSIST (Duplicate).
+             if (theirRoles.includes(SPECIAL_ROLES.ASSIST)) return false;
+             // Ensure no other unexpected roles (other than OPENING)
+             const others = theirRoles.filter(r => r !== SPECIAL_ROLES.OPENING);
+             if (others.length > 0) return false;
+             return true;
+          }
+
+          // Fallback: For any other role, require empty
+          return theirRoles.length === 0;
         });
 
         if (validCandidates.length === 0) {
@@ -593,6 +624,7 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
       case LeaveType.PRE_SCHEDULED: return <Calendar size={14} />;
       case LeaveType.SWAP_SHIFT: return <ArrowRightLeft size={14} />;
       case LeaveType.DUTY_SWAP: return <UserCheck size={14} />;
+      case LeaveType.ASK_LEAVE: return <UserIcon size={14} />; // Using existing UserIcon for "Ask User"
       case LeaveType.CANCEL_LEAVE: return <Briefcase size={14} />; // Distinct icon for Cancel
       case LeaveType.LONG_LEAVE: return <CalendarDays size={14} />;
       default: return <Clock size={14} />;
@@ -610,6 +642,8 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
         return "bg-indigo-50 text-indigo-700 border-indigo-200";
       case LeaveType.DUTY_SWAP:
         return "bg-purple-50 text-purple-700 border-purple-200";
+      case LeaveType.ASK_LEAVE:
+        return "bg-cyan-50 text-cyan-700 border-cyan-200";
       case LeaveType.LONG_LEAVE:
         return "bg-rose-50 text-rose-700 border-rose-200";
       default:
@@ -697,7 +731,7 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
           const days = Math.ceil((new Date(leave.endDate).getTime() - new Date(leave.startDate).getTime()) / (1000 * 3600 * 24)) + 1;
 
           // Determine if target approval flow is active
-          const isSwap = leave.type === LeaveType.SWAP_SHIFT || leave.type === LeaveType.DUTY_SWAP;
+          const isSwap = leave.type === LeaveType.SWAP_SHIFT || leave.type === LeaveType.DUTY_SWAP || leave.type === LeaveType.ASK_LEAVE;
           const needsTargetAction = isSwap && leave.status === LeaveStatus.PENDING && leave.targetApproval === 'PENDING';
           const waitingForSupervisor = !isSwap || (isSwap && leave.targetApproval === 'AGREED');
 
@@ -982,18 +1016,34 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
 
               {/* Dynamic Calendar Inputs */}
               <div className="space-y-4">
-                {/* Start Date */}
-                <CalendarPicker
-                  label="想休日期"
-                  value={formData.startDate}
-                  onChange={(d) => setFormData({ ...formData, startDate: d })}
-                  userId={currentUser.id}
-                  validStatus={
-                    formData.type === LeaveType.PRE_SCHEDULED ? 'WORK' :
-                      formData.type === LeaveType.CANCEL_LEAVE ? 'OFF' :
-                        (formData.type === LeaveType.SWAP_SHIFT || formData.type === LeaveType.DUTY_SWAP) ? 'WORK' : undefined
-                  }
-                />
+                {/* Calculate Tomorrow for minDate restriction */}
+                {(() => {
+                   const t = new Date();
+                   t.setDate(t.getDate() + 1);
+                   const tomorrowStr = t.toLocaleDateString('en-CA');
+                   
+                   const isPlanningType = 
+                     formData.type === LeaveType.SWAP_SHIFT || 
+                     formData.type === LeaveType.ASK_LEAVE || 
+                     formData.type === LeaveType.DUTY_SWAP ||
+                     formData.type === LeaveType.PRE_SCHEDULED;
+
+                   return (
+                    <CalendarPicker
+                      label="想休日期"
+                      value={formData.startDate}
+                      onChange={(d) => setFormData({ ...formData, startDate: d })}
+                      userId={currentUser.id}
+                      validStatus={
+                        formData.type === LeaveType.PRE_SCHEDULED ? 'WORK' :
+                          formData.type === LeaveType.CANCEL_LEAVE ? 'OFF' :
+                            (formData.type === LeaveType.SWAP_SHIFT || formData.type === LeaveType.DUTY_SWAP) ? 'WORK' : undefined
+                      }
+                      // RESTRICTION: Start Date must be Tomorrow or later for planning types
+                      minDate={isPlanningType ? tomorrowStr : undefined}
+                    />
+                   );
+                })()}
 
                 {/* End Date (Only for Long Leave) */}
                 {formData.type === LeaveType.LONG_LEAVE && (
@@ -1014,7 +1064,12 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
                     onChange={(d) => setFormData({ ...formData, returnDate: d })}
                     userId={currentUser.id}
                     validStatus="OFF" // I must be OFF on return date
-                    minDate={formData.startDate}
+                    // RESTRICTION: Return Date must also be Tomorrow or later (can be earlier than StartDate, but must be future)
+                    minDate={(() => {
+                       const t = new Date();
+                       t.setDate(t.getDate() + 1);
+                       return t.toLocaleDateString('en-CA');
+                    })()}
                   />
                 )}
               </div>

@@ -2618,9 +2618,9 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                                         cursor: isSupervisor ? 'pointer' : 'default'
                                                                     }}
                                                                     title={
-                                                                        s.explanationTaskType === 'with_task' ? '有任务解说（点击切换）' :
-                                                                        s.explanationTaskType === 'standalone' ? '单纯解说（点击切换）' : 
-                                                                        isSupervisor ? '点击标记解说任务' : ''
+                                                                        s.explanationTaskType === 'with_task' ? '有任務解說（點擊切換）' :
+                                                                        s.explanationTaskType === 'standalone' ? '單純解說（點擊切換）' : 
+                                                                        isSupervisor ? '點擊標記解說任務' : ''
                                                                     }
                                                                     onClick={(e) => {
                                                                         if (isSupervisor) {
