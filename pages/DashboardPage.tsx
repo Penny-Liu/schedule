@@ -1661,12 +1661,13 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                                 </div>
                                                             );
                                                         })}
-                                                    </div>
-                                                </td>
-                                            );
-                                        })}
-                                    </tr>
-                                ))}
+                                                        </div>
+                                                    </td>
+                                                );
+                                            })}
+                                        </tr>
+                                    ))
+                                }
                             </>
                         )}
                     </tbody>
@@ -2592,14 +2593,52 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                     </td>
                                 </tr>
                                 
-                                {(db.settings.doctorStations || ['影像', '遠', '支援']).map(station => (
-                                    <tr key={`doc-${station}`} className="bg-white border-t border-slate-200">
+                                {['北投', '影像', '遠班', '支援'].map(rowLabel => {
+                                    return (
+                                    <tr key={`doc-${rowLabel}`} className="bg-white border-t border-slate-200">
                                         <td className={`sticky left-0 z-10 bg-slate-50/95 backdrop-blur border-r border-slate-200 shadow-[4px_0_8px_rgba(0,0,0,0.02)] ${isMobile ? 'p-1 w-[85px] min-w-[85px]' : 'p-2'}`}>
-                                            <div className="text-xs font-bold text-slate-600 flex items-center justify-end pr-2">{station}</div>
+                                            <div className="flex flex-col items-end pr-2">
+                                                <div className="text-xs font-bold text-slate-600">{rowLabel}</div>
+                                            </div>
                                         </td>
                                         {dateRange.map(date => {
-                                            const shiftsHere = db.getDoctorShifts().filter(s => s.date === date && s.station === station);
+                                            // 1. Get all shifts for this date
+                                            const allShifts = db.getDoctorShifts().filter(s => s.date === date);
+                                            
+                                            // 2. Filter & Group
+                                            const shiftsHere = allShifts.filter(s => {
+                                                const doc = db.getDoctors().find(d => d.id === s.doctorId);
+                                                // Filter: Must be Radiology
+                                                if (!doc?.specialty?.includes('放射')) return false;
+                                                
+                                                // Grouping Logic
+                                                const st = s.station;
+                                                if (rowLabel === '北投') {
+                                                    // Beitou Summary: Include everything valid in Beitou + Remote
+                                                    // Exclude Support (Dazhi) and Taichung (if any slipped through specialty filter)
+                                                    // Also assume '大直' in station name means support/dazhi
+                                                    if (st === '支援' || st.includes('大直') || s.location === '台中') return false;
+                                                    return true; 
+                                                } else if (rowLabel === '影像') {
+                                                    // Strict: Only '影像' station
+                                                    return st === '影像';
+                                                } else if (rowLabel === '遠班') {
+                                                    return st.includes('遠');
+                                                } else if (rowLabel === '支援') {
+                                                    return st === '支援';
+                                                }
+                                                return false;
+                                            });
+
                                             const isToday = date === new Date().toISOString().split('T')[0];
+                                            const isReadOnlyRow = rowLabel === '北投';
+
+                                            // Sort shifts? Maybe by doctor display order
+                                            shiftsHere.sort((a, b) => {
+                                                const docA = db.getDoctors().find(d => d.id === a.doctorId);
+                                                const docB = db.getDoctors().find(d => d.id === b.doctorId);
+                                                return (docA?.displayOrder || 0) - (docB?.displayOrder || 0);
+                                            });
                                             
                                             return (
                                                 <td key={date} className={`p-0.5 border-r border-slate-200 text-center align-middle relative group ${
@@ -2613,7 +2652,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                             return (
                                                                 <span 
                                                                     key={s.id} 
-                                                                    className="bg-teal-100 text-teal-800 text-[10px] px-1 rounded border border-teal-200 flex items-center gap-0.5"
+                                                                    className={`${isReadOnlyRow ? 'bg-slate-100 text-slate-700 border-slate-200' : 'bg-teal-100 text-teal-800 border-teal-200'} text-[10px] px-1 rounded border flex items-center gap-0.5`}
                                                                     style={{
                                                                         cursor: isSupervisor ? 'pointer' : 'default'
                                                                     }}
@@ -2633,7 +2672,11 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                                     {s.explanationTaskType === 'with_task' && <span className="text-yellow-500">🟡</span>}
                                                                     {s.explanationTaskType === 'standalone' && <span className="text-red-500">🔴</span>}
                                                                     {doc?.alias || doc?.name}
-                                                                    {isSupervisor && isEditMode && (
+                                                                    <span className={`${isReadOnlyRow ? 'text-slate-500' : 'text-teal-600'} text-[9px] scale-90 font-medium`}>
+                                                                        ({s.station})
+                                                                    </span>
+
+                                                                    {isSupervisor && isEditMode && !isReadOnlyRow && (
                                                                          <button 
                                                                             type="button"
                                                                             onClick={(e) => {
@@ -2641,7 +2684,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                                                 db.removeDoctorFromStation(doc?.id || '', date);
                                                                                 showToast('已移除醫師', 'success');
                                                                             }}
-                                                                            className="text-teal-600 hover:text-red-500"
+                                                                            className="text-teal-600 hover:text-red-500 ml-0.5"
                                                                          >
                                                                             &times;
                                                                          </button>
@@ -2650,14 +2693,19 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                             );
                                                         })}
                                                         
-                                                        {(currentUser.role === UserRole.SYSTEM_ADMIN || currentUser.role === UserRole.SUPERVISOR) && isEditMode && (
+                                                        {(currentUser.role === UserRole.SYSTEM_ADMIN || currentUser.role === UserRole.SUPERVISOR) && isEditMode && !isReadOnlyRow && (
                                                             <div className="relative w-4 h-4 bg-slate-100 hover:bg-slate-200 rounded text-slate-400 text-[10px] border border-slate-200 flex items-center justify-center">
                                                                 +
                                                                 <select
                                                                     className="w-full h-full opacity-0 absolute inset-0 cursor-pointer"
                                                                     onChange={(e) => {
                                                                         if (e.target.value) {
-                                                                            db.assignDoctor(e.target.value, date, station);
+                                                                            // Default station based on row
+                                                                            let targetStation = '影像'; 
+                                                                            if (rowLabel === '遠班') targetStation = '遠'; 
+                                                                            if (rowLabel === '支援') targetStation = '支援';
+                                                                            
+                                                                            db.assignDoctor(e.target.value, date, targetStation);
                                                                             showToast('已指派醫師', 'success');
                                                                             e.target.value = ''; // Reset
                                                                         }
@@ -2665,7 +2713,16 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                                     value=""
                                                                 >
                                                                     <option value="">+</option>
-                                                                    {db.getDoctors().filter(d => !db.getDoctorShift(d.id, date)).map(d => (
+                                                                    {db.getDoctors()
+                                                                        .filter(d => {
+                                                                            // 1. Not assigned today
+                                                                            const hasShift = db.getDoctorShift(d.id, date);
+                                                                            if (hasShift) return false;
+                                                                            // 2. Must be Radiology
+                                                                            if (!d.specialty?.includes('放射')) return false;
+                                                                            return true;
+                                                                        })
+                                                                        .map(d => (
                                                                         <option key={d.id} value={d.id}>{d.name}</option>
                                                                     ))}
                                                                 </select>
@@ -2676,7 +2733,8 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                             );
                                         })}
                                     </tr>
-                                ))}
+                                    );
+                                })}
                                 {/* --- Daily Stats Rows (Admin/Supervisor Only) --- */}
                                 {(currentUser.role === UserRole.SYSTEM_ADMIN || currentUser.role === UserRole.SUPERVISOR) && (
                                     <>
