@@ -976,7 +976,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                             // Check BOTH scheduled_station (for doctor schedules) and station (for tech assignments)
                                                             const currentShifts = shifts.filter(s => 
                                                                 s.date === date && 
-                                                                (s.scheduled_station === stationName || s.station === stationName) && 
+                                                                s.scheduled_station === stationName && 
                                                                 s.location === location
                                                             );
                                                             const isWeekend = new Date(date).getDay() === 0 || new Date(date).getDay() === 6;
