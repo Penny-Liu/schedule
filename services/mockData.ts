@@ -18,14 +18,14 @@ export const MOCK_USERS: User[] = [
     id: 'user-001',
     name: '劉雅萍',
     email: 'penny@example.com',
-    role: UserRole.SUPERVISOR,
+    role: UserRole.SCHEDULER,
     groupId: StaffGroup.GROUP_A,
     alias: '萍',
     color: '#EC4899', // Pink
     capabilities: ALL_SKILLS, // Supervisor usually can do most things
     primaryStation: '遠距', // Test: This user belongs to Remote team
-    password: '1234',
-    mustChangePassword: true
+    password: '12345',
+    mustChangePassword: false
   },
   {
     id: 'user-admin',
@@ -38,7 +38,7 @@ export const MOCK_USERS: User[] = [
     capabilities: ALL_SKILLS,
     primaryStation: 'REMOTE',
     password: 'admin',
-    mustChangePassword: true
+    mustChangePassword: false
   },
   {
     id: 'user-002',
@@ -93,7 +93,7 @@ export const MOCK_USERS: User[] = [
     id: 'user-006',
     name: '李國強',
     email: 'li@example.com',
-    role: UserRole.EMPLOYEE,
+    role: UserRole.VIEWER,
     groupId: StaffGroup.GROUP_A,
     alias: '強',
     color: '#EF4444', // Red 500
@@ -204,3 +204,17 @@ export const MOCK_LEAVES: LeaveRequest[] = [];
 export const MOCK_SHIFTS: Shift[] = [];
 
 
+
+// Mock Doctors
+export const MOCK_DOCTORS = [
+    { id: 'doc-001', name: '陳醫師', alias: '陳', capabilities: ['影像', '遠班', '支援', '行政'], locations: ['北投', '大直'] },
+    { id: 'doc-002', name: '林醫師', alias: '林', capabilities: ['影像', 'GI', '麻醉'], locations: ['北投'] },
+    { id: 'doc-003', name: '黃醫師', alias: '黃', capabilities: ['影像', '遠班', '支援'], locations: ['北投', '台中'] },
+    { id: 'doc-004', name: '張醫師', alias: '張', capabilities: ['影像', '行政', 'GI'], locations: ['大直'] },
+    { id: 'doc-005', name: '李醫師', alias: '李', capabilities: ['影像', '遠班', '麻醉'], locations: ['北投', '大直', '台中'] },
+    { id: 'doc-006', name: '王醫師', alias: '王', capabilities: ['影像', '支援'], locations: ['台中'] },
+    { id: 'doc-007', name: '吳醫師', alias: '吳', capabilities: ['影像', '遠班', '支援', '行政'], locations: ['北投'] },
+    { id: 'doc-008', name: '蔡醫師', alias: '蔡', capabilities: ['影像', 'GI'], locations: ['大直', '台中'] },
+    { id: 'doc-009', name: '楊醫師', alias: '楊', capabilities: ['影像', '遠班', '麻醉'], locations: ['北投', '大直'] },
+    { id: 'doc-010', name: '鄭醫師', alias: '鄭', capabilities: ['影像', '支援', '行政'], locations: ['大直'] }
+];

@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { User, LeaveStatus } from './types';
+import { User, LeaveStatus, UserRole } from './types';
 import Sidebar from './components/Sidebar';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
@@ -12,6 +12,9 @@ import DoctorManagerPage from './pages/DoctorManagerPage';
 import { db } from './services/store';
 import { Loader2 } from 'lucide-react';
 import ChangePasswordPage from './pages/ChangePasswordPage';
+import PhysicianSchedulePage from './pages/PhysicianSchedulePage';
+import PhysicianSettingsPage from './pages/PhysicianSettingsPage';
+
 
 
 
@@ -80,7 +83,11 @@ const App: React.FC = () => {
 
   const handleLogin = (user: User) => {
     setCurrentUser(user);
-    setCurrentPage('dashboard');
+    if (user.role === UserRole.SCHEDULER || user.role === UserRole.VIEWER) {
+      setCurrentPage('physician_schedule');
+    } else {
+      setCurrentPage('dashboard');
+    }
   };
 
   const handleLogout = () => {
@@ -160,7 +167,12 @@ const App: React.FC = () => {
       case 'settings':
         return <SettingsPage currentUser={currentUser} />;
       case 'doctors':
+      case 'doctors':
         return <DoctorManagerPage currentUser={currentUser} />;
+      case 'physician_settings':
+          return <PhysicianSettingsPage currentUser={currentUser} />;
+      case 'physician_schedule':
+        return <PhysicianSchedulePage currentUser={currentUser} />;
       default:
         return <DashboardPage currentUser={currentUser} />;
     }

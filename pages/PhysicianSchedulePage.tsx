@@ -30,7 +30,8 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
     const [currentDate, setCurrentDate] = useState(new Date());
     
     // Permission Check
-    const canEdit = currentUser.role === UserRole.SYSTEM_ADMIN || currentUser.role === UserRole.SUPERVISOR || currentUser.role === UserRole.SCHEDULER;
+    // Permission Check
+    const canEdit = currentUser.role === UserRole.SYSTEM_ADMIN || currentUser.role === UserRole.SCHEDULER;
     
     const [doctors, setDoctors] = useState<Doctor[]>(db.getDoctors());
     const [shifts, setShifts] = useState(db.getDoctorShifts());

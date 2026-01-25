@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Users, FileText, LogOut, LayoutDashboard, Settings, Menu, BarChart3 } from 'lucide-react';
+import { Users, FileText, LogOut, LayoutDashboard, Settings, Menu, BarChart3, Stethoscope } from 'lucide-react';
 import { User, UserRole } from '../types';
 
 interface SidebarProps {
@@ -41,16 +41,28 @@ const Sidebar: React.FC<SidebarProps> = ({ currentUser, onNavigate, currentPage,
       roles: [UserRole.SUPERVISOR, UserRole.SYSTEM_ADMIN]
     },
     {
+      id: 'physician_schedule',
+      label: '醫師排班',
+      icon: Users, // Using same icon, or maybe Calendar
+      roles: [UserRole.SYSTEM_ADMIN, UserRole.SUPERVISOR, UserRole.SCHEDULER, UserRole.VIEWER]
+    },
+    {
       id: 'doctors',
       label: '醫師管理',
       icon: Users, // Using same icon as Staff for now
-      roles: [UserRole.SYSTEM_ADMIN]
+      roles: [UserRole.SYSTEM_ADMIN, UserRole.SCHEDULER]
+    },
+    {
+      id: 'physician_settings',
+      label: '醫師排班設定',
+      icon: Stethoscope,
+      roles: [UserRole.SYSTEM_ADMIN, UserRole.SCHEDULER]
     },
     {
       id: 'settings',
       label: '系統與個人設定',
       icon: Settings,
-      roles: [UserRole.SUPERVISOR, UserRole.SYSTEM_ADMIN, UserRole.EMPLOYEE]
+      roles: [UserRole.SUPERVISOR, UserRole.SYSTEM_ADMIN, UserRole.EMPLOYEE, UserRole.SCHEDULER]
     },
   ];
 
@@ -58,6 +70,8 @@ const Sidebar: React.FC<SidebarProps> = ({ currentUser, onNavigate, currentPage,
     switch (role) {
       case UserRole.SUPERVISOR: return '部門主管';
       case UserRole.SYSTEM_ADMIN: return '系統管理員';
+      case UserRole.SCHEDULER: return '排班管理員';
+      case UserRole.VIEWER: return '瀏覽者';
       default: return '放射師';
     }
   };

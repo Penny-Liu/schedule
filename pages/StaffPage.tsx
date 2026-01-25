@@ -44,7 +44,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
   const [formData, setFormData] = useState<{
     name: string;
     alias: string;
-    email: string;
+    username: string;
     role: UserRole;
     groupId: StaffGroup;
     color: string;
@@ -54,7 +54,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
   }>({
     name: '',
     alias: '',
-    email: '',
+    username: '',
     role: UserRole.EMPLOYEE,
     groupId: StaffGroup.GROUP_A,
     color: COLOR_PALETTE[5], // Default Blue
@@ -67,7 +67,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
     setFormData({
       name: '',
       alias: '',
-      email: '',
+      username: '',
       role: UserRole.EMPLOYEE,
       groupId: StaffGroup.GROUP_A,
       color: COLOR_PALETTE[5],
@@ -89,7 +89,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
       db.updateUser(editingId, {
         name: formData.name,
         alias: finalAlias,
-        email: formData.email,
+        username: formData.username,
         role: formData.role,
         groupId: formData.groupId,
         color: formData.color,
@@ -103,7 +103,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
         id: Math.random().toString(36).substr(2, 9),
         name: formData.name,
         alias: finalAlias,
-        email: formData.email,
+        username: formData.username,
         role: formData.role,
         groupId: formData.groupId,
         color: formData.color,
@@ -126,7 +126,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
     setFormData({
       name: user.name,
       alias: user.alias || user.name.charAt(0),
-      email: user.email,
+      username: user.username,
       role: user.role,
       groupId: user.groupId,
       color: user.color || COLOR_PALETTE[5],
@@ -215,8 +215,8 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
     }
   };
 
-  // Only Supervisor and Admin can access
-  if (currentUser.role !== UserRole.SUPERVISOR && currentUser.role !== UserRole.SYSTEM_ADMIN) {
+  // Only Supervisor, Admin, and Scheduler can access
+  if (currentUser.role !== UserRole.SUPERVISOR && currentUser.role !== UserRole.SYSTEM_ADMIN && currentUser.role !== UserRole.SCHEDULER) {
     return <div className="p-8 text-center text-gray-500">權限不足。</div>;
   }
 
@@ -295,14 +295,14 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                 </div>
               </div>
               <div>
-                <label className="text-xs font-semibold text-gray-500 mb-1 block">Email</label>
+                <label className="text-xs font-semibold text-gray-500 mb-1 block">帳號 (Username)</label>
                 <input
-                  type="email"
+                  type="text"
                   required
-                  value={formData.email}
-                  onChange={e => setFormData({ ...formData, email: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-teal-500 outline-none text-sm shadow-sm transition-all bg-white"
-                  placeholder="wang@med.com"
+                  value={formData.username}
+                  onChange={e => setFormData({ ...formData, username: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-teal-500 outline-none text-sm shadow-sm transition-all bg-white font-mono"
+                  placeholder="請輸入登入帳號"
                 />
               </div>
               <div className="grid grid-cols-2 gap-3">
@@ -314,24 +314,28 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                     className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-teal-500 outline-none text-sm shadow-sm bg-white cursor-pointer"
                   >
                     <option value={UserRole.EMPLOYEE}>放射師</option>
+                    <option value={UserRole.SCHEDULER}>HR / 排班管理員</option>
+                    <option value={UserRole.VIEWER}>瀏覽者 (Viewer)</option>
                     <option value={UserRole.SUPERVISOR}>部門主管</option>
                     {currentUser.role === UserRole.SYSTEM_ADMIN && (
                       <option value={UserRole.SYSTEM_ADMIN}>系統管理員</option>
                     )}
                   </select>
                 </div>
-                <div>
-                  <label className="text-xs font-semibold text-gray-500 mb-1 block">組別</label>
-                  <select
-                    value={formData.groupId}
-                    onChange={e => setFormData({ ...formData, groupId: e.target.value as StaffGroup })}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-teal-500 outline-none text-sm shadow-sm bg-white cursor-pointer"
-                  >
-                    <option value={StaffGroup.GROUP_A}>A 組</option>
-                    <option value={StaffGroup.GROUP_B}>B 組</option>
-                    <option value={StaffGroup.GROUP_C}>C 組</option>
-                  </select>
-                </div>
+                {(formData.role === UserRole.EMPLOYEE || formData.role === UserRole.SUPERVISOR || formData.role === UserRole.SYSTEM_ADMIN) && (
+                  <div>
+                    <label className="text-xs font-semibold text-gray-500 mb-1 block">組別</label>
+                    <select
+                      value={formData.groupId}
+                      onChange={e => setFormData({ ...formData, groupId: e.target.value as StaffGroup })}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-teal-500 outline-none text-sm shadow-sm bg-white cursor-pointer"
+                    >
+                      <option value={StaffGroup.GROUP_A}>A 組</option>
+                      <option value={StaffGroup.GROUP_B}>B 組</option>
+                      <option value={StaffGroup.GROUP_C}>C 組</option>
+                    </select>
+                  </div>
+                )}
               </div>
 
               {/* Color Selection */}
@@ -362,50 +366,51 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                 </div>
               </div>
 
-              {/* Capabilities Selection */}
-              <div>
-                <div className="flex justify-between items-center mb-2">
-                  <label className="text-xs font-semibold text-gray-500 block">技能與特殊任務資格</label>
-                  <span className="text-[10px] text-gray-400 bg-gray-50 px-2 py-0.5 rounded">點擊切換：無 → 獨立 → 學習 → 不排</span>
+              {/* Capabilities Selection (Only for Radiographer related roles) */}
+              {(formData.role === UserRole.EMPLOYEE || formData.role === UserRole.SUPERVISOR || formData.role === UserRole.SYSTEM_ADMIN) && (
+                <div>
+                  <div className="flex justify-between items-center mb-2">
+                    <label className="text-xs font-semibold text-gray-500 block">技能與特殊任務資格</label>
+                    <span className="text-[10px] text-gray-400 bg-gray-50 px-2 py-0.5 rounded">點擊切換：無 → 獨立 → 學習 → 不排</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto p-1 custom-scrollbar">
+                    {allCapabilities.map(cap => {
+                      const isCertified = formData.capabilities.includes(cap);
+                      const isLearning = formData.learningCapabilities.includes(cap);
+                      const isExcluded = formData.excludedCapabilities.includes(cap);
+                      const isSpecial = isSpecialRole(cap);
+
+                      let btnClass = 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100 opacity-80 hover:opacity-100';
+                      let icon = <Square size={14} className="text-gray-400" />;
+
+                      if (isCertified) {
+                        btnClass = isSpecial
+                          ? 'bg-purple-50 border-purple-200 text-purple-700 font-bold'
+                          : 'bg-teal-50 border-teal-200 text-teal-700 font-bold';
+                        icon = <CheckSquare size={14} className={isSpecial ? "text-purple-600" : "text-teal-600"} />;
+                      } else if (isLearning) {
+                        btnClass = 'bg-yellow-50 border-yellow-200 text-yellow-700 font-bold';
+                        icon = <BookOpen size={14} className="text-yellow-600" />;
+                      } else if (isExcluded) {
+                        btnClass = 'bg-gray-200 border-gray-300 text-gray-700 font-bold';
+                        icon = <Shield size={14} className="text-gray-600" />;
+                      }
+
+                      return (
+                        <button
+                          key={cap}
+                          type="button"
+                          onClick={() => toggleCapability(cap)}
+                          className={`flex items-center gap-2 px-2 py-1.5 rounded text-xs border transition-all text-left ${btnClass}`}
+                        >
+                          {icon}
+                          <span className="truncate">{cap}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
-                <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto p-1 custom-scrollbar">
-                  {allCapabilities.map(cap => {
-                    const isCertified = formData.capabilities.includes(cap);
-                    const isLearning = formData.learningCapabilities.includes(cap);
-                    const isExcluded = formData.excludedCapabilities.includes(cap);
-                    const isSpecial = isSpecialRole(cap);
-
-                    let btnClass = 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100 opacity-80 hover:opacity-100';
-                    let icon = <Square size={14} className="text-gray-400" />;
-
-                    if (isCertified) {
-                      btnClass = isSpecial
-                        ? 'bg-purple-50 border-purple-200 text-purple-700 font-bold'
-                        : 'bg-teal-50 border-teal-200 text-teal-700 font-bold';
-                      icon = <CheckSquare size={14} className={isSpecial ? "text-purple-600" : "text-teal-600"} />;
-                    } else if (isLearning) {
-                      btnClass = 'bg-yellow-50 border-yellow-200 text-yellow-700 font-bold';
-                      icon = <BookOpen size={14} className="text-yellow-600" />;
-                    } else if (isExcluded) {
-                      btnClass = 'bg-gray-200 border-gray-300 text-gray-700 font-bold';
-                      icon = <Shield size={14} className="text-gray-600" />;
-                    }
-
-                    return (
-                      <button
-                        key={cap}
-                        type="button"
-                        onClick={() => toggleCapability(cap)}
-                        className={`flex items-center gap-2 px-2 py-1.5 rounded text-xs border transition-all text-left ${btnClass}`}
-                      >
-                        {icon}
-                        {isSpecial && <Star size={10} className={isCertified ? "text-yellow-500 fill-yellow-500" : "text-gray-400"} />}
-                        <span className="truncate">{cap} {isLearning ? '(學習)' : (isExcluded ? '(不排)' : '')}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
+              )}
 
               <div className="pt-2 flex flex-col gap-2">
                 <div className="flex gap-2">
@@ -489,16 +494,19 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                   <div className="flex-1 min-w-0 pr-16">
                     <h4 className="font-bold text-gray-900 truncate text-base">{user.name}</h4>
                     <div className="text-xs text-gray-500 flex items-center gap-1 mb-2 truncate font-medium">
-                      <Mail size={12} /> {user.email}
+                      <Key size={12} /> {user.username}
                     </div>
                     <div className="flex gap-2">
-                      <span className={`text-[10px] px-2 py-0.5 rounded font-bold border flex items-center gap-1 ${user.role === UserRole.SUPERVISOR
-                        ? 'bg-purple-50 text-purple-700 border-purple-100'
-                        : (user.role === UserRole.SYSTEM_ADMIN
-                          ? 'bg-gray-800 text-white border-gray-900'
-                          : 'bg-blue-50 text-blue-700 border-blue-100')
+                       <span className={`text-[10px] px-2 py-0.5 rounded font-bold border flex items-center gap-1 ${
+                          user.role === UserRole.SUPERVISOR
+                          ? 'bg-purple-50 text-purple-700 border-purple-100'
+                          : (user.role === UserRole.SYSTEM_ADMIN
+                            ? 'bg-gray-800 text-white border-gray-900'
+                            : (user.role === UserRole.SCHEDULER 
+                                ? 'bg-teal-50 text-teal-700 border-teal-100' 
+                                : 'bg-blue-50 text-blue-700 border-blue-100'))
                         }`}>
-                        {user.role === UserRole.SUPERVISOR ? '主管' : (user.role === UserRole.SYSTEM_ADMIN ? '系統管理員' : '放射師')}
+                        {user.role === UserRole.SUPERVISOR ? '主管' : (user.role === UserRole.SYSTEM_ADMIN ? '系統管理員' : (user.role === UserRole.SCHEDULER ? 'HR / 排班' : '放射師'))}
                       </span>
                       {user.role !== UserRole.SYSTEM_ADMIN && (
                         <span className="text-[10px] px-2 py-0.5 rounded font-bold border bg-orange-50 text-orange-700 border-orange-100 flex items-center gap-1">
