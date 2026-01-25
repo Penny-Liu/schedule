@@ -2593,7 +2593,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                     </td>
                                 </tr>
                                 
-                                {['北投', '影像', '遠班', '支援'].map(rowLabel => {
+                                {['上班醫師', '影像', '遠班', '支援'].map(rowLabel => {
                                     return (
                                     <tr key={`doc-${rowLabel}`} className="bg-white border-t border-slate-200">
                                         <td className={`sticky left-0 z-10 bg-slate-50/95 backdrop-blur border-r border-slate-200 shadow-[4px_0_8px_rgba(0,0,0,0.02)] ${isMobile ? 'p-1 w-[85px] min-w-[85px]' : 'p-2'}`}>
@@ -2613,11 +2613,20 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                 
                                                 // Grouping Logic
                                                 const st = s.station;
-                                                if (rowLabel === '北投') {
-                                                    // Beitou Summary: Include everything valid in Beitou + Remote
-                                                    // Exclude Support (Dazhi) and Taichung (if any slipped through specialty filter)
-                                                    // Also assume '大直' in station name means support/dazhi
-                                                    if (st === '支援' || st.includes('大直') || s.location === '台中') return false;
+                                                if (rowLabel === '上班醫師') {
+                                                    // Summary Row: Show working radiologists in Beitou or Remote
+                                                    // 1. Exclude OFF
+                                                    if (st === '休假' || st === 'OFF') return false;
+                                                    
+                                                    // 2. Include Remote explicitly
+                                                    if (st.includes('遠')) return true;
+
+                                                    // 3. Exclude other specific locations (Dazhi, Taichung)
+                                                    // Check both location field and station name just in case
+                                                    if (s.location === '大直' || s.location === '台中') return false;
+                                                    if (st.includes('大直') || st.includes('台中')) return false;
+
+                                                    // 4. Default: Assume Beitou
                                                     return true; 
                                                 } else if (rowLabel === '影像') {
                                                     // Strict: Only '影像' station
@@ -2631,7 +2640,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                             });
 
                                             const isToday = date === new Date().toISOString().split('T')[0];
-                                            const isReadOnlyRow = rowLabel === '北投';
+                                            const isReadOnlyRow = rowLabel === '上班醫師';
 
                                             // Sort shifts? Maybe by doctor display order
                                             shiftsHere.sort((a, b) => {
@@ -2639,42 +2648,38 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                 const docB = db.getDoctors().find(d => d.id === b.doctorId);
                                                 return (docA?.displayOrder || 0) - (docB?.displayOrder || 0);
                                             });
-                                            
+
                                             return (
-                                                <td key={date} className={`p-0.5 border-r border-slate-200 text-center align-middle relative group ${
-                                                    isToday ? 'bg-amber-100 ring-2 ring-inset ring-amber-400' : ''
-                                                }`}>
-                                                    <div className="flex flex-wrap gap-1 justify-center min-h-[24px]">
+                                                <td key={date} className="p-1 border-r border-gray-100 align-top min-w-[120px]">
+                                                     <div className="flex flex-col gap-1">
                                                         {shiftsHere.map(s => {
                                                             const doc = db.getDoctors().find(d => d.id === s.doctorId);
+                                                            // Display Logic: 
+                                                            // For '上班醫師' (Summary Row), prefer scheduled_station (CT, MR...) if available
+                                                            // For others, show nothing specific (just Name) as row implies station
+                                                            const displayStation = (rowLabel === '上班醫師' && s.scheduled_station) 
+                                                                ? s.scheduled_station 
+                                                                : (rowLabel === '上班醫師' ? s.station : '');
+
                                                             const isSupervisor = currentUser.role === UserRole.SYSTEM_ADMIN || currentUser.role === UserRole.SUPERVISOR;
-                                                            
+
                                                             return (
-                                                                <span 
+                                                                <div 
                                                                     key={s.id} 
-                                                                    className={`${isReadOnlyRow ? 'bg-slate-100 text-slate-700 border-slate-200' : 'bg-teal-100 text-teal-800 border-teal-200'} text-[10px] px-1 rounded border flex items-center gap-0.5`}
+                                                                    className="flex items-center justify-between bg-slate-50 px-2 py-1 rounded border border-slate-100 text-xs text-gray-700"
                                                                     style={{
                                                                         cursor: isSupervisor ? 'pointer' : 'default'
                                                                     }}
-                                                                    title={
-                                                                        s.explanationTaskType === 'with_task' ? '有任務解說（點擊切換）' :
-                                                                        s.explanationTaskType === 'standalone' ? '單純解說（點擊切換）' : 
-                                                                        isSupervisor ? '點擊標記解說任務' : ''
-                                                                    }
-                                                                    onClick={(e) => {
-                                                                        if (isSupervisor) {
-                                                                            e.stopPropagation();
-                                                                            db.cycleExplanationTaskType(s.id);
-                                                                            showToast('已更新解說狀態', 'success');
-                                                                        }
-                                                                    }}
+                                                                    title={s.scheduled_station} 
                                                                 >
-                                                                    {s.explanationTaskType === 'with_task' && <span className="text-yellow-500">🟡</span>}
-                                                                    {s.explanationTaskType === 'standalone' && <span className="text-red-500">🔴</span>}
+                                                                    {s.scheduled_station === '支援' && <span className="text-yellow-500">🟡</span>}
+                                                                    {s.scheduled_station === '解說' && <span className="text-red-500">🔴</span>}
                                                                     {doc?.alias || doc?.name}
-                                                                    <span className={`${isReadOnlyRow ? 'text-slate-500' : 'text-teal-600'} text-[9px] scale-90 font-medium`}>
-                                                                        ({s.station})
-                                                                    </span>
+                                                                    {displayStation && (
+                                                                        <span className={`${isReadOnlyRow ? 'text-slate-500' : 'text-teal-600'} text-[9px] scale-90 font-medium`}>
+                                                                            ({displayStation})
+                                                                        </span>
+                                                                    )}
 
                                                                     {isSupervisor && isEditMode && !isReadOnlyRow && (
                                                                          <button 
@@ -2689,7 +2694,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                                             &times;
                                                                          </button>
                                                                     )}
-                                                                </span>
+                                                                </div>
                                                             );
                                                         })}
                                                         

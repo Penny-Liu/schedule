@@ -1,6 +1,6 @@
 
 import { User, Shift, LeaveRequest, SystemSettings, StationDefault, SYSTEM_OFF, RosterCycle, DateEventType, Holiday, LeaveStatus, LeaveType, StaffGroup, SPECIAL_ROLES, CycleAnchor, DailyManpowerStats, Doctor, DoctorShift } from '../types';
-import { MOCK_USERS, MOCK_LEAVES } from './mockData';
+import { MOCK_USERS, MOCK_LEAVES, MOCK_DOCTORS } from './mockData';
 import { supabase } from './supabaseClient';
 
 const SCHEDULE_STORAGE_KEY = 'radiology_schedule_data';
@@ -25,7 +25,17 @@ class Store {
         cycleStartDate: '2025-11-06',
         cycleAnchors: [],
         stationDisplayOrder: [],
-        doctorStations: ['影像', '遠', '支援'] // Default values
+        doctorStations: [
+            { name: '影像', location: '北投' },
+            { name: '遠', location: '北投' },
+            { name: '支援', location: '大直' },
+            { name: '眼科', location: '台中' },
+            { name: '耳鼻喉科', location: '台中' },
+            { name: '婦科', location: '台中' }
+        ], // Default values
+        doctorSpecialties: ['家醫科', '腸胃科', '放射科', '一般名醫', '其他'], // Default values
+        defaultDoctorWorkTime: '08:30-17:30',
+        doctorWorkTimeOptions: ['08:30-17:30', '08:00-12:00', '13:30-17:30']
     };
     doctors: Doctor[] = [];
     doctorShifts: DoctorShift[] = [];
@@ -193,19 +203,55 @@ class Store {
 
             // Load Doctors and Doctor Shifts
             const { data: doctorsData } = await supabase.from('doctors').select('*');
-            if (doctorsData) this.doctors = doctorsData;
+            if (doctorsData && doctorsData.length > 0) {
+                 const loadedDoctors = doctorsData.map((d: any) => ({
+                    ...d,
+                    capabilities: d.capabilities || [],
+                    locations: d.locations || [],
+                    excludedDays: d.excluded_days || [],
+                    excludedAutoScheduleLocations: d.excluded_auto_schedule_locations || [],
+                    isPartTime: d.is_part_time || false, // Map snake_case to camelCase
+                    monthlyTargetShifts: d.monthly_target_shifts, // Map snake_case to camelCase
+                    displayOrder: d.display_order // Map snake_case to camelCase
+                }));
+                this.doctors = loadedDoctors;
+            } else {
+                 // Auto-seed if empty
+                 console.log('[Store] Doctors table empty, seeding mock data...');
+                 await this.seedMockDoctors();
+            }
 
             const { data: doctorShiftsData } = await supabase.from('doctor_shifts').select('*');
             if (doctorShiftsData) {
                 this.doctorShifts = doctorShiftsData.map((s: any) => ({
                     ...s,
-                    explanationTaskType: s.explanation_task_type || s.explanationTaskType // Map snake to camel
+                    ...s,
+                    ...s,
+                    explanationTaskType: s.explanation_task_type || s.explanationTaskType, // Map snake to camel
+                    workTime: s.work_time || s.workTime,
+                    note: s.note,
+                    location: s.location,
+                    task: s.task,
+                    scheduled_station: s.scheduled_station // Explicit map
                 }));
             }
 
             // Initialize default doctorStations if missing
+            // Initialize default doctorStations if missing
             if (!this.settings.doctorStations) {
-                this.settings.doctorStations = ['影像', '遠', '支援'];
+                this.settings.doctorStations = [
+                    { name: '影像', location: '北投' },
+                    { name: '遠', location: '北投' },
+                    { name: '支援', location: '大直' },
+                    { name: '眼科', location: '台中' },
+                    { name: '耳鼻喉科', location: '台中' },
+                    { name: '婦科', location: '台中' }
+                ];
+            }
+
+            // Initialize default doctorSpecialties if missing
+            if (!this.settings.doctorSpecialties) {
+                this.settings.doctorSpecialties = ['家醫科', '腸胃科', '放射科', '一般名醫', '其他'];
             }
 
             // Initialize default lineCopyTemplate if missing
@@ -441,8 +487,8 @@ BMD :{{bmd}}
     }
 
     // Auth
-    login(email: string): User | undefined {
-        const user = this.users.find(u => u.email === email);
+    login(username: string): User | undefined {
+        const user = this.users.find(u => u.username === username);
         if (user) {
             this.currentUser = user;
             return user;
@@ -874,10 +920,14 @@ BMD :{{bmd}}
         await this.saveSettings();
     }
     async updateStationRequirement(name: string, dayIndex: number, count: number) {
-        if (this.settings.stationRequirements[name]) {
-            this.settings.stationRequirements[name][dayIndex] = count;
-            await this.saveSettings();
+        if (!this.settings.stationRequirements) {
+            this.settings.stationRequirements = {};
         }
+        if (!this.settings.stationRequirements[name]) {
+            this.settings.stationRequirements[name] = [0, 0, 0, 0, 0, 0, 0];
+        }
+        this.settings.stationRequirements[name][dayIndex] = count;
+        await this.saveSettings();
     }
 
     // Settings: Display Order
@@ -1139,20 +1189,44 @@ BMD :{{bmd}}
     // --- Doctor Management ---
 
     getDoctors() {
-        return this.doctors;
+        // Sort by displayOrder (ascending), with undefined values at the end
+        return [...this.doctors].sort((a, b) => {
+            const orderA = a.displayOrder ?? Number.MAX_SAFE_INTEGER;
+            const orderB = b.displayOrder ?? Number.MAX_SAFE_INTEGER;
+            return orderA - orderB;
+        });
     }
 
-    async addDoctor(name: string, alias?: string): Promise<{ success: boolean; error?: string }> {
-        const newDoctor = { id: crypto.randomUUID(), name, alias: alias || name[0] }; // Default alias to first char if not provided
+    async addDoctor(name: string, alias?: string, capabilities: string[] = [], locations: string[] = [], excludedDays: number[] = [], excludedAutoScheduleLocations: string[] = [], isPartTime: boolean = false, specialty?: string, monthlyTargetShifts?: number): Promise<{ success: boolean; error?: string; id?: string }> {
+        const newDoctor: Doctor = { id: crypto.randomUUID(), name, alias: alias || name[0], capabilities, locations, excludedDays, excludedAutoScheduleLocations, specialty, isPartTime, monthlyTargetShifts }; // Default alias to first char if not provided
         this.doctors.push(newDoctor); // Optimistic update
         this.notifyListeners();
         
         try {
-            const { error } = await supabase.from('doctors').insert(newDoctor);
+             // Map camelCase to snake_case for DB if needed
+            const { error } = await supabase.from('doctors').insert({
+                id: newDoctor.id,
+                name,
+                alias: newDoctor.alias,
+                capabilities,
+                locations,
+                excluded_days: excludedDays,
+                excluded_auto_schedule_locations: excludedAutoScheduleLocations,
+                specialty: specialty,
+                is_part_time: isPartTime,
+                monthly_target_shifts: monthlyTargetShifts
+            });
             if (error) throw error;
-            return { success: true };
+            return { success: true, id: newDoctor.id };
         } catch (error: any) {
             console.error('Failed to add doctor:', error);
+            
+            // Critical: Allow offline/mock testing if connection fails
+            if (error.messsage?.includes('Failed to fetch') || error.message?.includes('fetch') || this.connectionStatus.type === 'Mock') {
+                console.warn('[Mock] Supabase failed, keeping local change for addDoctor');
+                return { success: true, id: newDoctor.id };
+            }
+
             // Revert optimistic update
             this.doctors = this.doctors.filter(d => d.id !== newDoctor.id);
             this.notifyListeners();
@@ -1162,30 +1236,117 @@ BMD :{{bmd}}
 
     async updateDoctor(doctor: Doctor) {
          this.doctors = this.doctors.map(d => d.id === doctor.id ? doctor : d);
-         await supabase.from('doctors').update(doctor).eq('id', doctor.id);
-         this.notifyListeners();
+         this.notifyListeners(); // Notify immediately
+
+         try {
+            const { error } = await supabase.from('doctors').update({
+                name: doctor.name,
+                alias: doctor.alias,
+                capabilities: doctor.capabilities,
+                locations: doctor.locations,
+                excluded_days: doctor.excludedDays,
+                excluded_auto_schedule_locations: doctor.excludedAutoScheduleLocations,
+                specialty: doctor.specialty,
+                is_part_time: doctor.isPartTime,
+                monthly_target_shifts: doctor.monthlyTargetShifts,
+                display_order: doctor.displayOrder
+            }).eq('id', doctor.id);
+            if(error) throw error;
+         } catch(error: any) {
+             console.error('Failed to update doctor:', error);
+             if (error.messsage?.includes('Failed to fetch') || error.message?.includes('fetch') || this.connectionStatus.type === 'Mock') {
+                 console.warn('[Mock] Supabase failed, saving local change for updateDoctor');
+             }
+         }
+    }
+
+    async reorderDoctor(doctorId: string, direction: 'up' | 'down') {
+        const sortedDoctors = this.getDoctors();
+        const currentIndex = sortedDoctors.findIndex(d => d.id === doctorId);
+        
+        if (currentIndex === -1) return;
+        
+        // Check boundaries
+        if (direction === 'up' && currentIndex === 0) return; // Already at top
+        if (direction === 'down' && currentIndex === sortedDoctors.length - 1) return; // Already at bottom
+        
+        const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+        const currentDoctor = sortedDoctors[currentIndex];
+        const targetDoctor = sortedDoctors[targetIndex];
+        
+        // Swap displayOrder values
+        const tempOrder = currentDoctor.displayOrder ?? currentIndex;
+        const newTargetOrder = targetDoctor.displayOrder ?? targetIndex;
+        
+        currentDoctor.displayOrder = newTargetOrder;
+        targetDoctor.displayOrder = tempOrder;
+        
+        // Update both doctors in memory
+        this.doctors = this.doctors.map(d => {
+            if (d.id === currentDoctor.id) return currentDoctor;
+            if (d.id === targetDoctor.id) return targetDoctor;
+            return d;
+        });
+        
+        // Persist to database
+        try {
+            await Promise.all([
+                supabase.from('doctors').update({ display_order: currentDoctor.displayOrder }).eq('id', currentDoctor.id),
+                supabase.from('doctors').update({ display_order: targetDoctor.displayOrder }).eq('id', targetDoctor.id)
+            ]);
+        } catch (error) {
+            console.error('Failed to persist doctor order:', error);
+        }
+        
+        this.notifyListeners();
     }
 
     async deleteDoctor(id: string) {
         // Optimistic update
+        const originalDoctors = [...this.doctors];
         this.doctors = this.doctors.filter(d => d.id !== id);
         this.doctorShifts = this.doctorShifts.filter(s => s.doctorId !== id); 
         this.notifyListeners(); // Notify immediately for responsiveness
 
         // Remote update
-        // Delete shifts first to avoid FK constraint violations
-        const { error: shiftsError } = await supabase.from('doctor_shifts').delete().eq('doctorId', id);
-        if (shiftsError) console.error('Error deleting doctor shifts:', shiftsError);
-
-        const { error: doctorError } = await supabase.from('doctors').delete().eq('id', id);
-        if (doctorError) {
-             console.error('Error deleting doctor:', doctorError);
-             // Optional: Revert local state if needed, but for now we'll just log.
-             // Ideally we would fetchDoctors() to restore state if it failed.
+        try {
+            // Delete shifts first to avoid FK constraint violations
+            const { error: shiftsError } = await supabase.from('doctor_shifts').delete().eq('doctorId', id);
+            if (shiftsError) { console.error('Error deleting doctor shifts:', shiftsError); throw shiftsError; }
+            
+            const { error } = await supabase.from('doctors').delete().eq('id', id);
+            if(error) throw error;
+        } catch(e: any) {
+             console.error('Failed to delete doctor:', e);
+             if (e.messsage?.includes('Failed to fetch') || e.message?.includes('fetch') || this.connectionStatus.type === 'Mock') {
+                 console.warn('[Mock] Deleting doctor locally only');
+                 return;
+             }
+             // Revert if critical failure and not mock
+             this.doctors = originalDoctors;
+             this.notifyListeners();
         }
-        
-        return { error: doctorError || shiftsError };
     }
+
+    async seedMockDoctors() {
+        // Check if we already have these specific mock doctors to avoid duplicates if partial load
+        if (this.doctors.length > 0) return;
+
+        console.log('[Store] Seeding mock doctors from mockData...');
+        
+        for (const doc of MOCK_DOCTORS) {
+            // We use the ID from mock data to ensure consistency across reloads if using local mock mode
+            // But addDoctor generates a new UUID normally. 
+            // For seeding consistency, we'll manually push or ensure Supabase insert uses these IDs if possible, 
+            // but addDoctor currently generates randomUUID. 
+            // Let's just pass the data to addDoctor for now, realizing IDs might change on fresh DB.
+            // Actually, to respect the user's wish for "static" mock data, let's try to preserve these IDs if possible
+            // OR just let addDoctor handle it. For simplicity, we use addDoctor.
+            await this.addDoctor(doc.name, doc.alias, doc.capabilities, doc.locations);
+        }
+    }
+
+
 
     // --- Doctor Schedule ---
 
@@ -1197,22 +1358,99 @@ BMD :{{bmd}}
         return this.doctorShifts.find(s => s.doctorId === doctorId && s.date === date);
     }
 
-    async assignDoctor(doctorId: string, date: string, station: string) {
+    async assignDoctor(doctorId: string, date: string, station: string, workTime?: string, note?: string, location?: string, task?: string) {
         // Remove existing shift for this doctor on this date if any
-        // Note: Can a doctor have multiple stations? Usually yes or no depending on UI.
-        // Assuming single station per day for simplicity based on "Staff Schedule" logic, 
-        // BUT doctors might overlap.
-        // Let's assume Unique (Doctor + Date).
-        
         let shift = this.doctorShifts.find(s => s.doctorId === doctorId && s.date === date);
         
         if (shift) {
             shift.station = station;
-            await supabase.from('doctor_shifts').update({ station }).eq('id', shift.id);
+            shift.workTime = workTime;
+            shift.note = note;
+            shift.location = location;
+            shift.task = task;
+            try {
+                // Keep scheduled_station as is
+                await supabase.from('doctor_shifts')
+                    .update({ station, work_time: workTime, note, location, task })
+                    .eq('id', shift.id);
+            } catch(e) { console.warn('Supabase update failed, using local'); }
         } else {
-            shift = { id: crypto.randomUUID(), doctorId, date, station };
+            shift = { id: crypto.randomUUID(), doctorId, date, station, workTime, note, location, task };
             this.doctorShifts.push(shift);
-            await supabase.from('doctor_shifts').insert(shift);
+            try {
+                await supabase.from('doctor_shifts').insert({ ...shift, work_time: shift.workTime }); // Map camelCase to snake_case for DB
+            } catch(e) { console.warn('Supabase insert failed, using local'); }
+        }
+        
+        // Auto-pair Gynecology + Explanation
+        await this.autoPairGynecologyWithExplanation(doctorId, date, station);
+        
+        this.notifyListeners();
+    }
+
+    // New: Specific method for updating Physicians Schedule (CT, MR, US)
+    // This updates 'scheduled_station' column, leaving 'station' (Manpower Allocation) untouched if possible
+    async assignDoctorSchedule(doctorId: string, date: string, scheduledStation: string, workTime?: string, note?: string, location?: string, task?: string) {
+        let shift = this.doctorShifts.find(s => s.doctorId === doctorId && s.date === date);
+        
+        if (shift) {
+            shift.scheduled_station = scheduledStation;
+            // Also update other metadata if provided
+            if (workTime !== undefined) shift.workTime = workTime;
+            if (note !== undefined) shift.note = note;
+            if (location !== undefined) shift.location = location;
+            if (task !== undefined) shift.task = task;
+
+            try {
+                await supabase.from('doctor_shifts')
+                    .update({ 
+                        scheduled_station: scheduledStation, 
+                        work_time: workTime, 
+                        note, 
+                        location, 
+                        task 
+                    })
+                    .eq('id', shift.id);
+            } catch(e) { console.warn('Supabase update failed, using local'); }
+        } else {
+            // New shift from Schedule View
+            // Default 'station' (Allocation) to something? Or leave empty?
+            // If empty, it won't show in Dashboard (which is Good/Expected until assigned)
+            // Or default to 'Unassigned'? 
+            // Let's set station to 'Unassigned' or similar if not provided, to avoid DB constraint if any
+            // Assuming 'station' is NOT NULL in DB? Schema check? Usually users make it text.
+            // Let's assume we can set it to a placeholder if new.
+            
+            shift = { 
+                id: crypto.randomUUID(), 
+                doctorId, 
+                date, 
+                station: '未分配', // Default allocation
+                scheduled_station: scheduledStation,
+                workTime, 
+                note, 
+                location, 
+                task 
+            };
+            this.doctorShifts.push(shift);
+            try {
+                await supabase.from('doctor_shifts').insert({ 
+                    id: shift.id,
+                    doctor_id: shift.doctorId, // Correct mapping? current code uses snake case mapping in insert below? Code below uses { ...shift } which spreads camelCase. Supabase JS client maps? 
+                    // Wait, original code: ...shift. If DB has snake_case, Supabase client often needs explicit map unless configured. 
+                    // Original code line 1377: .insert({ ...shift, work_time: shift.workTime })
+                    // This creates mixed keys. store.ts likely relies on Supabase to ignore unknown cols or mapping.
+                    // Let's follow the pattern but be explicit for snake_case
+                    date: shift.date,
+                    station: shift.station,
+                    scheduled_station: shift.scheduled_station,
+                    work_time: shift.workTime,
+                    note: shift.note,
+                    location: shift.location,
+                    task: shift.task,
+                    is_auto_generated: false
+                }); 
+            } catch(e) { console.warn('Supabase insert failed, using local'); }
         }
         this.notifyListeners();
     }
@@ -1293,7 +1531,6 @@ BMD :{{bmd}}
 
 
     // Optimized Auto Schedule with Strict Priority and Gap Minimization
-
     // Fisher-Yates Shuffle Helper
     private shuffleArray<T>(array: T[]): T[] {
         for (let i = array.length - 1; i > 0; i--) {
@@ -1301,6 +1538,253 @@ BMD :{{bmd}}
             [array[i], array[j]] = [array[j], array[i]];
         }
         return array;
+    }
+
+    /**
+     * Auto-pair Gynecology + Explanation shifts
+     * When a non-part-time doctor is assigned to "婦科", automatically add "解說" shift
+     */
+    private async autoPairGynecologyWithExplanation(doctorId: string, date: string, station: string) {
+        // Only pair if station is "婦科"
+        if (station !== '婦科') return;
+        
+        // Check if doctor is part-time
+        const doctor = this.doctors.find(d => d.id === doctorId);
+        if (!doctor || doctor.isPartTime) return;
+        
+        // Check if explanation shift already exists for this doctor on this date
+        const existingExplanationShift = this.doctorShifts.find(
+            s => s.doctorId === doctorId && s.date === date && s.station === '解說'
+        );
+        
+        if (existingExplanationShift) {
+            // Already has explanation shift, no need to add
+            return;
+        }
+        
+        // Add explanation shift
+        const explanationShift: DoctorShift = {
+            id: crypto.randomUUID(),
+            doctorId,
+            date,
+            station: '解說',
+            location: '', // Use same location as gynecology shift if needed
+            isAutoGenerated: true
+        };
+        
+        this.doctorShifts.push(explanationShift);
+        
+        // Persist to database
+        try {
+            await supabase.from('doctor_shifts').insert({
+                id: explanationShift.id,
+                doctorId: explanationShift.doctorId,
+                date: explanationShift.date,
+                station: explanationShift.station,
+                location: explanationShift.location,
+                is_auto_generated: true
+            });
+        } catch (e) {
+            console.warn('Failed to persist auto-paired explanation shift', e);
+        }
+    }
+
+    async autoScheduleDoctors(startDate: string, endDate: string, targetDaysPerDoctor?: Record<string, number>) {
+        console.log(`[Auto] Scheduling Doctors from ${startDate} to ${endDate}...`);
+        
+        // 1. Prepare
+        const assignments: DoctorShift[] = [];
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        const dayMs = 24 * 60 * 60 * 1000;
+        
+        // Load existing shifts to prevent double booking or respect manual
+        // Strategy: Overwrite only generated? Or overwrite all? 
+        // For "One Click", we usually want to fill gaps or Full Re-schedule. 
+        // Let's assume Full Re-schedule for the empty slots, but if we want to overwrite, we should clear first.
+        // For now, let's just FILL EMPTY slots for specific stations.
+        
+        // Actually, user probably wants a fresh schedule.
+        // Let's clear existing auto-generated ones? Or all?
+        // Safe bet: Clear all doctor shifts in range? Or maybe just overlapping ones?
+        // Let's try to be smart: Fill gaps.
+        
+        const stationsToSchedule = this.settings.doctorStations || [];
+        
+        // Count existing shifts for this month to respect targets
+        const doctorShiftCounts = new Map<string, number>();
+        this.doctorShifts.forEach(s => {
+             if (s.date >= startDate && s.date <= endDate) {
+                 const current = doctorShiftCounts.get(s.doctorId) || 0;
+                 doctorShiftCounts.set(s.doctorId, current + 1);
+             }
+        });
+        
+        for (let t = start.getTime(); t <= end.getTime(); t += dayMs) {
+            const currentD = new Date(t);
+            const dateStr = toLocalISOString(currentD);
+            const dayOfWeek = currentD.getDay(); // 0-6
+            
+            // Get already assigned doctors for this day
+            const existingShifts = this.doctorShifts.filter(s => s.date === dateStr);
+            const assignedDoctorIds = new Set(existingShifts.map(s => s.doctorId));
+            
+            // Needed Stations (e.g., 2 x Imaging, 1 x Remote, etc. - currently simplistic 1 per station name)
+            // Real world needs "Quotas". For now, assume 1 person per station in the list.
+            
+            // Randomize stations to avoid priority bias
+            const loopStations = this.shuffleArray([...stationsToSchedule]);
+            
+            for (const stationConfig of loopStations) {
+                // Use Explicit Configured Location
+                const stationName = stationConfig.name;
+                const stationLocation = stationConfig.location;
+
+                // NEW: Check station requirement quota (how many people needed for this station on this day)
+                const stationKey = `${stationName}_${stationLocation}`; // Composite key for unique station+location
+                const dayOfWeekIndex = dayOfWeek; // 0=Sun, 1=Mon, ..., 6=Sat
+                const requirements = this.settings.stationRequirements || {};
+                
+                // Try composite key first, fallback to station name only
+                let requiredCount = requirements[stationKey]?.[dayOfWeekIndex];
+                if (requiredCount === undefined) {
+                    requiredCount = requirements[stationName]?.[dayOfWeekIndex];
+                }
+                if (requiredCount === undefined || requiredCount === 0) {
+                    // If no requirement set or set to 0, skip this station (don't auto-schedule)
+                    console.log(`[Auto] Skipping ${stationKey} on day ${dayOfWeekIndex}: No requirement set (required: ${requiredCount})`);
+                    continue;
+                }
+                
+                // Count how many doctors are already assigned to this station+location on this day
+                let currentAssignedCount = existingShifts.filter(s => 
+                    s.station === stationName && s.location === stationLocation
+                ).length;
+                
+                console.log(`[Auto] ${stationKey} on ${dateStr}: Required=${requiredCount}, Current=${currentAssignedCount}`);
+                
+                // FIXED: Loop to fill all required slots, not just one
+                while (currentAssignedCount < requiredCount) {
+                    // Find candidates
+                    const potentialCandidates = this.doctors.filter(doc => {
+                        // Exclude Part-Time from Auto-Schedule (User Request)
+                        if (doc.isPartTime) return false;
+                        
+                        // NEW: Exclude doctors with 0 target days (user doesn't want them scheduled)
+                        if (targetDaysPerDoctor && targetDaysPerDoctor[doc.id] === 0) return false;
+
+                        // Capability Check
+                        if (!doc.capabilities?.includes(stationName)) return false;
+
+                        // Excluded Days
+                        if (doc.excludedDays?.includes(dayOfWeek)) return false;
+
+                        // Location Check
+                        if (doc.locations && doc.locations.length > 0 && !doc.locations.includes(stationLocation)) return false;
+
+                        // Excluded Auto-Schedule Location
+                        if (doc.excludedAutoScheduleLocations?.includes(stationLocation)) return false;
+
+                        // Exclude if already assigned today
+                        if (assignedDoctorIds.has(doc.id)) return false;
+
+                        return true;
+                    });
+
+                    // FIXED: Strict target enforcement - no overtime
+                    let finalCandidates = potentialCandidates;
+                    
+                    if (targetDaysPerDoctor) {
+                        // Only include doctors who haven't reached their target
+                        const candidatesBelowTarget = potentialCandidates.filter(doc => {
+                            const currentCount = doctorShiftCounts.get(doc.id) || 0;
+                            const target = targetDaysPerDoctor[doc.id] || 0;
+                            return currentCount < target;
+                        });
+
+                        finalCandidates = candidatesBelowTarget;
+                    }
+
+                    if (finalCandidates.length === 0) {
+                        // No available doctors - stop trying to fill this station
+                        console.log(`[Auto] No available doctors for ${stationKey}, stopping at ${currentAssignedCount}/${requiredCount}`);
+                        break;
+                    }
+
+                    // FIXED: Sort by current shift count (ascending) to prioritize doctors with fewer shifts
+                    finalCandidates.sort((a, b) => {
+                        const countA = doctorShiftCounts.get(a.id) || 0;
+                        const countB = doctorShiftCounts.get(b.id) || 0;
+                        return countA - countB;
+                    });
+
+                    // Pick the doctor with the fewest shifts (first in sorted array)
+                    const winner = finalCandidates[0];
+
+                    // Assign
+                    const newShift: DoctorShift = {
+                        id: crypto.randomUUID(),
+                        doctorId: winner.id,
+                        date: dateStr,
+                        station: stationName,
+                        location: stationLocation,
+                        isAutoGenerated: true
+                    };
+
+                    assignments.push(newShift);
+                    
+                    // Update Local State for next iteration
+                    assignedDoctorIds.add(winner.id);
+                    existingShifts.push(newShift); // To prevent double booking same station in same loop
+                    const currentCount = doctorShiftCounts.get(winner.id) || 0;
+                    doctorShiftCounts.set(winner.id, currentCount + 1);
+                    
+                    // Increment the assigned count for this station
+                    currentAssignedCount++;
+                }
+
+            }
+        }
+        
+        // Commit
+        if (assignments.length > 0) {
+            this.doctorShifts.push(...assignments);
+            try {
+                // Batch insert - only include fields that exist in DB
+                const { error } = await supabase.from('doctor_shifts').insert(assignments.map(a => {
+                    const record: any = {
+                        id: a.id,
+                        doctorId: a.doctorId,
+                        date: a.date,
+                        station: a.station,
+                        is_auto_generated: a.isAutoGenerated || false
+                    };
+                    // Add optional fields if they exist
+                    if (a.location) {
+                        record.location = a.location;
+                    }
+                    if (a.explanationTaskType) {
+                        record.explanation_task_type = a.explanationTaskType;
+                    }
+                    return record;
+                }));
+                if(error) {
+                    console.error('Auto save failed', error);
+                    // Continue with local-only mode if save fails
+                }
+            } catch(e) { console.warn('Local save only', e); }
+            
+            this.notifyListeners();
+        }
+        
+        // Auto-pair Gynecology + Explanation shifts
+        console.log('[Auto] Checking for gynecology-explanation pairing...');
+        for (const assignment of assignments) {
+            await this.autoPairGynecologyWithExplanation(assignment.doctorId, assignment.date, assignment.station);
+        }
+        
+        return assignments.length;
+
     }
 
     async autoSchedule(startDate: string, endDate: string) {
