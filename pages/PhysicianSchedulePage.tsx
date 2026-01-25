@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { db } from '../services/store';
 import { Doctor, UserRole, DoctorStationConfig, DateEventType } from '../types';
-import { ChevronLeft, ChevronRight, Download, User, X, Clock, FileText, MapPin, Plus, Briefcase, Wand2, BarChart2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Download, User, X, Clock, FileText, MapPin, Plus, Briefcase, Wand2, BarChart2, Lock, Unlock, ArrowUpDown } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import ConfirmModal from '../components/ConfirmModal';
@@ -28,10 +28,13 @@ const LOCATION_COLORS: Record<string, string> = {
 
 const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUser }) => {
     const [currentDate, setCurrentDate] = useState(new Date());
+    const currentYearMonth = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
+    const [isLocked, setIsLocked] = useState(db.isMonthLocked(currentYearMonth));
     
     // Permission Check
-    // Permission Check
-    const canEdit = currentUser.role === UserRole.SYSTEM_ADMIN || currentUser.role === UserRole.SCHEDULER;
+    // Can edit if Admin/Scheduler AND NOT Locked
+    const canEdit = (currentUser.role === UserRole.SYSTEM_ADMIN || currentUser.role === UserRole.SCHEDULER) && !isLocked;
+    const canManageLock = currentUser.role === UserRole.SYSTEM_ADMIN || currentUser.role === UserRole.SCHEDULER;
     
     const [doctors, setDoctors] = useState<Doctor[]>(db.getDoctors());
     const [shifts, setShifts] = useState(db.getDoctorShifts());
@@ -87,11 +90,21 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
         const handleDataChange = () => {
             setDoctors(db.getDoctors());
             setShifts(db.getDoctorShifts());
+            setIsLocked(db.isMonthLocked(currentYearMonth));
         };
 
         const unsubscribe = db.subscribe(handleDataChange);
+        // Initial check
+        setIsLocked(db.isMonthLocked(currentYearMonth));
+        
         return () => unsubscribe();
-    }, []);
+    }, [currentYearMonth]);
+
+    const handleToggleLock = async () => {
+        if (!canManageLock) return;
+        const newLockState = await db.toggleMonthLock(currentYearMonth);
+        setIsLocked(newLockState);
+    };
 
     const handleStationCellClick = (station: string, location: string, date: string) => {
         if (currentUser.role !== UserRole.SYSTEM_ADMIN && currentUser.role !== UserRole.SUPERVISOR && currentUser.role !== UserRole.SCHEDULER) return;
@@ -697,6 +710,20 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                             {isQuickExcludeMode ? '關閉禁排模式' : '禁排'}
                         </button>
                     )}
+
+                    {canEdit && (
+                        <button 
+                            onClick={() => {
+                                if (confirm('這將依照科別（放射>家醫>腸胃>其他）重新排列醫師順序，是否繼續？')) {
+                                    db.resortDoctorsBySpecialty().then(() => alert('已依科別排序完成'));
+                                }
+                            }}
+                            className="ml-2 px-3 py-1.5 bg-white text-slate-500 hover:bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold transition-all flex items-center gap-1"
+                        >
+                            <ArrowUpDown size={16} />
+                            科別排序
+                        </button>
+                    )}
                     
                     <div className="h-6 w-px bg-gray-200 mx-1"></div>
 
@@ -718,6 +745,21 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                         <Download size={16} />
                         匯出
                     </button>
+
+                    {canManageLock && (
+                        <button 
+                            onClick={handleToggleLock}
+                            className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-bold transition-all border shadow-sm ${
+                                isLocked 
+                                ? 'bg-amber-100 text-amber-800 hover:bg-amber-200 border-amber-200' 
+                                : 'bg-emerald-600 text-white hover:bg-emerald-700 border-emerald-700'
+                            }`}
+                            title={isLocked ? "目前已鎖定 (唯讀)。點擊以解鎖。" : "排班完成後點擊此處鎖定，避免誤觸。"}
+                        >
+                            {isLocked ? <Unlock size={16} /> : <Lock size={16} />}
+                            {isLocked ? '已鎖定' : '完成(上鎖)'}
+                        </button>
+                    )}
                 </div>
             </div>
             
@@ -760,9 +802,10 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                         <td className="p-3 font-bold text-gray-700 border-r border-gray-200 sticky left-0 bg-white z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] flex items-center gap-2">
                                             <div className="flex flex-col gap-0.5">
                                                 <button
-                                                    onClick={(e) => {
+                                                    onClick={async (e) => {
                                                         e.stopPropagation();
-                                                        db.reorderDoctor(doc.id, 'up');
+                                                        await db.reorderDoctor(doc.id, 'up');
+                                                        setDoctors(db.getDoctors());
                                                     }}
                                                     className="text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded p-0.5 transition-colors disabled:opacity-20 disabled:cursor-not-allowed"
                                                     disabled={doctors.indexOf(doc) === 0}
@@ -773,9 +816,10 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                     </svg>
                                                 </button>
                                                 <button
-                                                    onClick={(e) => {
+                                                    onClick={async (e) => {
                                                         e.stopPropagation();
-                                                        db.reorderDoctor(doc.id, 'down');
+                                                        await db.reorderDoctor(doc.id, 'down');
+                                                        setDoctors(db.getDoctors());
                                                     }}
                                                     className="text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded p-0.5 transition-colors disabled:opacity-20 disabled:cursor-not-allowed"
                                                     disabled={doctors.indexOf(doc) === doctors.length - 1}
@@ -929,9 +973,10 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                         {/* Date Cells */}
                                                         {dateRange.map(date => {
                                                             // NEW: Get ALL shifts for this station+location+date (support multiple doctors)
+                                                            // Check BOTH scheduled_station (for doctor schedules) and station (for tech assignments)
                                                             const currentShifts = shifts.filter(s => 
                                                                 s.date === date && 
-                                                                s.station === stationName && 
+                                                                (s.scheduled_station === stationName || s.station === stationName) && 
                                                                 s.location === location
                                                             );
                                                             const isWeekend = new Date(date).getDay() === 0 || new Date(date).getDay() === 6;
@@ -1005,7 +1050,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                                         {locStations.map(config => {
                                             const st = config.name;
-                                            const shiftsOnStation = shifts.filter(s => s.date === toLocalISOString(currentDate) && s.station === st && s.location === config.location); 
+                                            const shiftsOnStation = shifts.filter(s => s.date === toLocalISOString(currentDate) && (s.station === st || s.scheduled_station === st) && s.location === config.location); 
                                             // Get Requirement
                                             const dayOfWeek = (currentDate.getDay() + 6) % 7;
                                             const reqKey = `${config.name}_${config.location}`;
@@ -1093,7 +1138,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                         {date.slice(5)} <span className="text-gray-400 font-normal">({dayLabel})</span>
                                                     </td>
                                                     {stations.map(st => {
-                                                        const count = shifts.filter(s => s.date === date && s.station === st.name && s.location === st.location && s.doctorId).length;
+                                                        const count = shifts.filter(s => s.date === date && (s.station === st.name || s.scheduled_station === st.name) && s.location === st.location && s.doctorId).length;
                                                         const reqKey = `${st.name}_${st.location}`;
                                                         // Fallback to legacy
                                                         const reqs = requirements[reqKey] || requirements[st.name] || [0,0,0,0,0,0,0];
@@ -1155,7 +1200,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                         {total}
                                                     </td>
                                                     {stations.map(st => {
-                                                        const count = docShifts.filter(s => s.station === st.name && s.location === st.location).length;
+                                                        const count = docShifts.filter(s => (s.station === st.name || s.scheduled_station === st.name) && s.location === st.location).length;
                                                         return (
                                                             <td key={`${doc.id}-${st.name}-${st.location}`} className={`px-2 py-2 text-center border-r border-gray-50 ${count > 0 ? 'font-bold text-slate-700 bg-slate-50' : 'text-gray-200'}`}>
                                                                 {count > 0 ? count : '-'}

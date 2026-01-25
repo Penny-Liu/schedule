@@ -247,6 +247,26 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
         return dates;
     }, [currentDate, selectedCycleId, currentCycle, isMobile, mobileOffset, viewMode]);
 
+    // Auto-assign Remote Doctors logic
+    useEffect(() => {
+        const shifts = db.getDoctorShifts();
+        
+        // Check current week shifts
+        dateRange.forEach(date => {
+            const daysShifts = shifts.filter(s => s.date === date);
+            daysShifts.forEach(s => {
+                // If scheduled for Remote but currently Unassigned, auto-move to Remote station
+                // User requirement: "如果上班醫師裡有崗位在遠班的，直接拉到下面遠班那欄"
+                if (s.scheduled_station?.includes('遠') && s.station === '未分配') {
+                    // Using setTimeout to prevent state update loops during render phase
+                    setTimeout(() => {
+                        db.assignDoctor(s.doctorId, s.date, '遠'); // Auto-set to '遠'
+                    }, 0);
+                }
+            });
+        });
+    }, [db.doctorShifts, dateRange]);
+
     // Update schedule range when cycle changes OR when view changes
     useEffect(() => {
         if (selectedCycleId !== 'rolling' && currentCycle) {
@@ -2605,31 +2625,26 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                             // 1. Get all shifts for this date
                                             const allShifts = db.getDoctorShifts().filter(s => s.date === date);
                                             
-                                            // 2. Filter & Group
+                                            // 2. Filter & Group by station field
                                             const shiftsHere = allShifts.filter(s => {
                                                 const doc = db.getDoctors().find(d => d.id === s.doctorId);
                                                 // Filter: Must be Radiology
                                                 if (!doc?.specialty?.includes('放射')) return false;
                                                 
-                                                // Grouping Logic
+                                                // Simple station-based grouping
                                                 const st = s.station;
+                                                
                                                 if (rowLabel === '上班醫師') {
-                                                    // Summary Row: Show working radiologists in Beitou or Remote
-                                                    // 1. Exclude OFF
-                                                    if (st === '休假' || st === 'OFF') return false;
+                                                    // Show doctors with station = '未分配'
+                                                    if (st !== '未分配') return false;
                                                     
-                                                    // 2. Include Remote explicitly
-                                                    if (st.includes('遠')) return true;
-
-                                                    // 3. Exclude other specific locations (Dazhi, Taichung)
-                                                    // Check both location field and station name just in case
-                                                    if (s.location === '大直' || s.location === '台中') return false;
-                                                    if (st.includes('大直') || st.includes('台中')) return false;
-
-                                                    // 4. Default: Assume Beitou
-                                                    return true; 
+                                                    // Strict Location Filter:
+                                                    // Only show if Location is '北投' (or empty) OR scheduled_station includes '遠'
+                                                    const isBeitou = s.location === '北投' || !s.location;
+                                                    const isRemote = s.scheduled_station?.includes('遠');
+                                                    
+                                                    return isBeitou || isRemote;
                                                 } else if (rowLabel === '影像') {
-                                                    // Strict: Only '影像' station
                                                     return st === '影像';
                                                 } else if (rowLabel === '遠班') {
                                                     return st.includes('遠');
@@ -2642,7 +2657,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                             const isToday = date === new Date().toISOString().split('T')[0];
                                             const isReadOnlyRow = rowLabel === '上班醫師';
 
-                                            // Sort shifts? Maybe by doctor display order
+                                            // Sort shifts by doctor display order
                                             shiftsHere.sort((a, b) => {
                                                 const docA = db.getDoctors().find(d => d.id === a.doctorId);
                                                 const docB = db.getDoctors().find(d => d.id === b.doctorId);
@@ -2650,7 +2665,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                             });
 
                                             // Highlight 'Today' only for '上班醫師' row as pale yellow
-                                            const cellBg = (isReadOnlyRow && isToday) ? 'bg-yellow-50' : '';
+                                            const cellBg = (isReadOnlyRow && isToday) ? 'bg-amber-100 ring-2 ring-amber-200 ring-inset' : '';
 
                                             return (
                                                 <td key={date} className={`p-1 border-r border-gray-100 align-top min-w-[120px] ${cellBg}`}>
@@ -2666,38 +2681,48 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
 
                                                             const isSupervisor = currentUser.role === UserRole.SYSTEM_ADMIN || currentUser.role === UserRole.SUPERVISOR;
                                                             
-                                                            // Style: "上班醫師" = Slate/Gray, Others (Allocation) = Light Green (Teal)
+                                                            // Style: Minimalist text-only (no cards)
                                                             const itemStyle = isReadOnlyRow
-                                                                ? 'bg-slate-50 border-slate-100 text-gray-700'
-                                                                : 'bg-teal-50 border-teal-100 text-teal-800';
+                                                                ? 'text-gray-700'
+                                                                : 'text-teal-700 font-medium';
 
                                                             return (
                                                                 <div 
                                                                     key={s.id} 
-                                                                    className={`flex items-center justify-between px-2 py-1 rounded border text-xs ${itemStyle}`}
+                                                                    className={`flex items-center justify-center relative px-1 py-0.5 rounded text-xs hover:bg-gray-100 transition-colors ${itemStyle}`}
                                                                     style={{
                                                                         cursor: isSupervisor ? 'pointer' : 'default'
                                                                     }}
-                                                                    title={s.scheduled_station} 
+                                                                    draggable={isSupervisor && isEditMode}
+                                                                    onDragStart={(e) => {
+                                                                        e.dataTransfer.setData('text/plain', JSON.stringify({
+                                                                            doctorId: doc.id,
+                                                                            fromDate: date,
+                                                                            fromStation: s.station
+                                                                        }));
+                                                                    }}
+                                                                    title={s.scheduled_station}
                                                                 >
-                                                                    {s.scheduled_station === '支援' && <span className="text-yellow-500">🟡</span>}
-                                                                    {s.scheduled_station === '解說' && <span className="text-red-500">🔴</span>}
-                                                                    {doc?.alias || doc?.name}
+                                                                    {s.scheduled_station === '支援' && <span className="text-[10px] mr-0.5">🟡</span>}
+                                                                    {s.scheduled_station === '解說' && <span className="text-[10px] mr-0.5">🔴</span>}
+                                                                    <span className="whitespace-nowrap">
+                                                                        {doc?.alias || doc?.name}
+                                                                    </span>
                                                                     {displayStation && (
-                                                                        <span className={`${isReadOnlyRow ? 'text-slate-500' : 'text-teal-600'} text-[9px] scale-90 font-medium`}>
+                                                                        <span className={`${isReadOnlyRow ? 'text-slate-500' : 'text-teal-600'} text-[9px] scale-90 font-medium ml-1`}>
                                                                             ({displayStation})
                                                                         </span>
                                                                     )}
 
-                                                                    {isSupervisor && isEditMode && !isReadOnlyRow && (
+                                                                    {isSupervisor && isEditMode && (
                                                                          <button 
                                                                             type="button"
                                                                             onClick={(e) => {
                                                                                 e.stopPropagation();
-                                                                                db.removeDoctorFromStation(doc?.id || '', date);
-                                                                                showToast('已移除醫師', 'success');
+                                                                                db.assignDoctor(doc?.id || '', date, '未分配');
+                                                                                showToast('已移回上班醫師', 'success');
                                                                             }}
-                                                                            className="text-teal-600 hover:text-red-500 ml-0.5"
+                                                                            className={`${isReadOnlyRow ? 'text-slate-400 hover:text-red-400' : 'text-teal-600 hover:text-red-500'} absolute right-0.5`}
                                                                          >
                                                                             &times;
                                                                          </button>
@@ -2706,15 +2731,16 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                             );
                                                         })}
                                                         
-                                                        {(currentUser.role === UserRole.SYSTEM_ADMIN || currentUser.role === UserRole.SUPERVISOR) && isEditMode && !isReadOnlyRow && (
+                                                        {(currentUser.role === UserRole.SYSTEM_ADMIN || currentUser.role === UserRole.SUPERVISOR) && isEditMode && (
                                                             <div className="relative w-4 h-4 bg-slate-100 hover:bg-slate-200 rounded text-slate-400 text-[10px] border border-slate-200 flex items-center justify-center">
                                                                 +
                                                                 <select
                                                                     className="w-full h-full opacity-0 absolute inset-0 cursor-pointer"
                                                                     onChange={(e) => {
                                                                         if (e.target.value) {
-                                                                            // Default station based on row
-                                                                            let targetStation = '影像'; 
+                                                                            // Determine target station based on row
+                                                                            let targetStation = '未分配';
+                                                                            if (rowLabel === '影像') targetStation = '影像';
                                                                             if (rowLabel === '遠班') targetStation = '遠'; 
                                                                             if (rowLabel === '支援') targetStation = '支援';
                                                                             
@@ -2728,9 +2754,19 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                                     <option value="">+</option>
                                                                     {db.getDoctors()
                                                                         .filter(d => {
-                                                                            // 1. Not assigned today
-                                                                            const hasShift = db.getDoctorShift(d.id, date);
-                                                                            if (hasShift) return false;
+                                                                            // 1. Filter logic based on row
+                                                                            const shift = db.getDoctorShift(d.id, date);
+                                                                            
+                                                                            if (rowLabel === '上班醫師') {
+                                                                                // For "Working Doctors": Show doctors with NO shift (to add them)
+                                                                                if (shift) return false;
+                                                                            } else {
+                                                                                // For Assignment Rows: Show ONLY available doctors (from "Working Doctors" pool)
+                                                                                // Must have shift AND station must be '未分配'
+                                                                                if (!shift) return false; 
+                                                                                if (shift.station !== '未分配') return false;
+                                                                            }
+
                                                                             // 2. Must be Radiology
                                                                             if (!d.specialty?.includes('放射')) return false;
                                                                             return true;
@@ -3028,9 +3064,9 @@ const DailyManpowerSummary: React.FC<{
 
         // Helper to format doctor name with explanation suffix based on the specific shift
         const formatShiftWithSuffix = (shift: any, alias: string) => {
-            if (shift?.explanationTaskType === 'standalone') {
+            if (shift?.scheduled_station === '解說') {
                 return `${alias}(解說)`;
-            } else if (shift?.explanationTaskType === 'with_task') {
+            } else if (shift?.scheduled_station === '支援') {
                 return `${alias}+解說`;
             }
             return alias;
@@ -3124,18 +3160,16 @@ BMD :{{bmd}}
         let imgDocStr = '';
         if (imagingDocs.length > 0) {
             imgDocStr = imagingDocs.map(docAlias => {
-                // Find doctor shift to check for explanation task
+                // Find doctor shift to check for explanation suffix
                 const docShift = docShifts.find(s => {
                     const doc = doctors.find(d => d.id === s.doctorId);
                     return s.station === '影像' && (doc?.alias || doc?.name) === docAlias;
                 });
                 
-                // Format based on explanation task type
-                if (docShift?.explanationTaskType === 'standalone') {
-                    // Standalone: Append "(解說)" at end
+                // Format based on scheduled_station
+                if (docShift?.scheduled_station === '解說') {
                     return `${docAlias}  N(N大 N小 N無 ) →N 單位 (解說)`;
-                } else if (docShift?.explanationTaskType === 'with_task') {
-                    // With task: Append at end
+                } else if (docShift?.scheduled_station === '支援') {
                     return `${docAlias}  N(N大 N小 N無 ) →N 單位 +解說`;
                 } else {
                     return `${docAlias}  N(N大 N小 N無 ) →N 單位`;
@@ -3150,18 +3184,16 @@ BMD :{{bmd}}
         if (remoteDocsRaw.length > 0) {
             // New Format: Name X (...) +大直 {{dazhi_clients}} →N 單位
             remDocStr = remoteDocsRaw.map(docAlias => {
-                // Find doctor shift to check for explanation task
+                // Find doctor shift to check for explanation suffix
                 const docShift = docShifts.find(s => {
                     const doc = doctors.find(d => d.id === s.doctorId);
                     return s.station === '遠' && (doc?.alias || doc?.name) === docAlias;
                 });
                 
-                // Format based on explanation task type
-                if (docShift?.explanationTaskType === 'standalone') {
-                    // Standalone: Append "(解說)" at end
+                // Format based on scheduled_station
+                if (docShift?.scheduled_station === '解說') {
                     return `${docAlias}  X (X大 X小 X無) +大直 ${stats.dazhi_clients} →N 單位 (解說)`;
-                } else if (docShift?.explanationTaskType === 'with_task') {
-                    // With task: Append at end
+                } else if (docShift?.scheduled_station === '支援') {
                     return `${docAlias}  X (X大 X小 X無) +大直 ${stats.dazhi_clients} →N 單位 +解說`;
                 } else {
                     return `${docAlias}  X (X大 X小 X無) +大直 ${stats.dazhi_clients} →N 單位`;

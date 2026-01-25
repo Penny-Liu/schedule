@@ -184,6 +184,7 @@ export interface SystemSettings {
   lineCopyTemplate?: string; // Custom template for 'Copy to Line'
   defaultDoctorWorkTime?: string; // Default work time for auto-schedule
   doctorWorkTimeOptions?: string[]; // New: List of available work times
+  lockedMonths?: string[]; // New: List of locked months (YYYY-MM)
 }
 
 

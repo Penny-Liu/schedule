@@ -1500,6 +1500,25 @@ BMD :{{bmd}}
         }
     }
 
+    // Check if a specific month is locked (YYYY-MM)
+    isMonthLocked(yearMonth: string): boolean {
+        return this.settings.lockedMonths?.includes(yearMonth) ?? false;
+    }
+
+    // Toggle lock status for a month
+    async toggleMonthLock(yearMonth: string) {
+        let current = this.settings.lockedMonths || [];
+        if (current.includes(yearMonth)) {
+            current = current.filter(m => m !== yearMonth);
+        } else {
+            current = [...current, yearMonth];
+        }
+        this.settings.lockedMonths = current;
+        await this.saveSettings();
+        this.notifyListeners();
+        return this.isMonthLocked(yearMonth);
+    }
+
     // New: Safer "Complete" button logic - Batch Upsert
     // Does NOT delete data. Only overwrites/adds.
     async commitShiftsForRange(startDate: string, endDate: string, latestShifts?: Shift[]) {
@@ -1593,6 +1612,60 @@ BMD :{{bmd}}
         } catch (e) {
             console.warn('Failed to persist auto-paired explanation shift', e);
         }
+    }
+
+    async resortDoctorsBySpecialty() {
+        // Priority: 放射線科 > 家醫科 > 腸胃科 > Others
+        const getRank = (doc: Doctor) => {
+            // Hotfix: Force specific doctors to Radiology if data is missing
+            // Use includes to handle potential whitespace (e.g. "謝 弼丞" or "謝弼丞 ")
+            if (doc.name && doc.name.replace(/\s/g, '').includes('謝弼丞')) return 1;
+
+            const specialty = doc.specialty;
+            if (!specialty) return 4;
+            
+            // Chinese & English support
+            const s = specialty.toLowerCase();
+            if (s.includes('放射') || s.includes('radio') || s.includes('img')) return 1;
+            if (s.includes('家醫') || s.includes('家庭') || s.includes('family') || s.includes('fm')) return 2;
+            if (s.includes('腸胃') || s.includes('胃腸') || s.includes('消化') || s.includes('gastro') || s.includes('gi')) return 3;
+            
+            return 4;
+        };
+
+        const sorted = [...this.doctors].sort((a, b) => {
+            const rankA = getRank(a);
+            const rankB = getRank(b);
+            
+            // Debug Log for specific doctors
+            if (a.name.includes('蘇芳儀') || a.name.includes('謝弼丞') || a.name.includes('鄭敏')) {
+                 console.log(`Sorting Debug: ${a.name} (${a.specialty}) Rank=${rankA}`);
+            }
+            if (b.name.includes('蘇芳儀') || b.name.includes('謝弼丞') || b.name.includes('鄭敏')) {
+                 console.log(`Sorting Debug: ${b.name} (${b.specialty}) Rank=${rankB}`);
+            }
+
+            if (rankA !== rankB) return rankA - rankB;
+            // Maintain relative current order
+            return (a.displayOrder || 0) - (b.displayOrder || 0);
+        });
+        
+        console.log('--- Sorted Doctors Sample ---');
+        sorted.slice(0, 10).forEach(d => console.log(`${d.name}: Rank=${getRank(d)} Order=${d.displayOrder}`));
+
+        // Re-assign display orders
+        for (let i = 0; i < sorted.length; i++) {
+            const doc = sorted[i];
+            if (doc.displayOrder !== i) {
+                doc.displayOrder = i;
+                // Update in DB (fire and forget / parallel)
+                await this.updateDoctor(doc);
+            }
+        }
+        
+        this.doctors = sorted;
+        this.notifyListeners();
+        return true;
     }
 
     async autoScheduleDoctors(startDate: string, endDate: string, targetDaysPerDoctor?: Record<string, number>) {
