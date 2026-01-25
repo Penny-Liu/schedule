@@ -225,8 +225,7 @@ class Store {
             if (doctorShiftsData) {
                 this.doctorShifts = doctorShiftsData.map((s: any) => ({
                     ...s,
-                    ...s,
-                    ...s,
+                    doctorId: s.doctor_id || s.doctorId, // Map snake_case to camelCase
                     explanationTaskType: s.explanation_task_type || s.explanationTaskType, // Map snake to camel
                     workTime: s.work_time || s.workTime,
                     note: s.note,
@@ -1288,6 +1287,8 @@ BMD :{{bmd}}
             return d;
         });
         
+        this.notifyListeners(); // Optimistic Update
+
         // Persist to database
         try {
             await Promise.all([
@@ -1296,9 +1297,8 @@ BMD :{{bmd}}
             ]);
         } catch (error) {
             console.error('Failed to persist doctor order:', error);
+            // Revert? Complex. For now just warn.
         }
-        
-        this.notifyListeners();
     }
 
     async deleteDoctor(id: string) {
@@ -1402,7 +1402,7 @@ BMD :{{bmd}}
             if (task !== undefined) shift.task = task;
 
             try {
-                await supabase.from('doctor_shifts')
+                const { error } = await supabase.from('doctor_shifts')
                     .update({ 
                         scheduled_station: scheduledStation, 
                         work_time: workTime, 
@@ -1411,7 +1411,12 @@ BMD :{{bmd}}
                         task 
                     })
                     .eq('id', shift.id);
-            } catch(e) { console.warn('Supabase update failed, using local'); }
+                
+                if (error) {
+                    console.error('[Store] Update Error:', error);
+                    alert(`儲存失敗: ${error.message}\n請確認已執行 SQL 腳本 (add_scheduled_station_column.sql)`);
+                }
+            } catch(e) { console.warn('Supabase update failed, using local', e); }
         } else {
             // New shift from Schedule View
             // Default 'station' (Allocation) to something? Or leave empty?
@@ -1434,13 +1439,9 @@ BMD :{{bmd}}
             };
             this.doctorShifts.push(shift);
             try {
-                await supabase.from('doctor_shifts').insert({ 
+                const { error } = await supabase.from('doctor_shifts').insert({ 
                     id: shift.id,
-                    doctor_id: shift.doctorId, // Correct mapping? current code uses snake case mapping in insert below? Code below uses { ...shift } which spreads camelCase. Supabase JS client maps? 
-                    // Wait, original code: ...shift. If DB has snake_case, Supabase client often needs explicit map unless configured. 
-                    // Original code line 1377: .insert({ ...shift, work_time: shift.workTime })
-                    // This creates mixed keys. store.ts likely relies on Supabase to ignore unknown cols or mapping.
-                    // Let's follow the pattern but be explicit for snake_case
+                    doctor_id: shift.doctorId, 
                     date: shift.date,
                     station: shift.station,
                     scheduled_station: shift.scheduled_station,
@@ -1450,7 +1451,12 @@ BMD :{{bmd}}
                     task: shift.task,
                     is_auto_generated: false
                 }); 
-            } catch(e) { console.warn('Supabase insert failed, using local'); }
+                
+                if (error) {
+                    console.error('[Store] Insert Error:', error);
+                    alert(`新增失敗: ${error.message}\n請確認已執行 SQL 腳本 (add_scheduled_station_column.sql)`);
+                }
+            } catch(e) { console.warn('Supabase insert failed, using local', e); }
         }
         this.notifyListeners();
     }

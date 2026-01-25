@@ -2649,8 +2649,11 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                 return (docA?.displayOrder || 0) - (docB?.displayOrder || 0);
                                             });
 
+                                            // Highlight 'Today' only for '上班醫師' row as pale yellow
+                                            const cellBg = (isReadOnlyRow && isToday) ? 'bg-yellow-50' : '';
+
                                             return (
-                                                <td key={date} className="p-1 border-r border-gray-100 align-top min-w-[120px]">
+                                                <td key={date} className={`p-1 border-r border-gray-100 align-top min-w-[120px] ${cellBg}`}>
                                                      <div className="flex flex-col gap-1">
                                                         {shiftsHere.map(s => {
                                                             const doc = db.getDoctors().find(d => d.id === s.doctorId);
@@ -2662,11 +2665,16 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                                 : (rowLabel === '上班醫師' ? s.station : '');
 
                                                             const isSupervisor = currentUser.role === UserRole.SYSTEM_ADMIN || currentUser.role === UserRole.SUPERVISOR;
+                                                            
+                                                            // Style: "上班醫師" = Slate/Gray, Others (Allocation) = Light Green (Teal)
+                                                            const itemStyle = isReadOnlyRow
+                                                                ? 'bg-slate-50 border-slate-100 text-gray-700'
+                                                                : 'bg-teal-50 border-teal-100 text-teal-800';
 
                                                             return (
                                                                 <div 
                                                                     key={s.id} 
-                                                                    className="flex items-center justify-between bg-slate-50 px-2 py-1 rounded border border-slate-100 text-xs text-gray-700"
+                                                                    className={`flex items-center justify-between px-2 py-1 rounded border text-xs ${itemStyle}`}
                                                                     style={{
                                                                         cursor: isSupervisor ? 'pointer' : 'default'
                                                                     }}
