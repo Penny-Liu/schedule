@@ -1615,22 +1615,35 @@ BMD :{{bmd}}
     }
 
     async resortDoctorsBySpecialty() {
-        // Priority: 放射線科 > 家醫科 > 腸胃科 > Others
+        // Priority: 放射 > GI > 家醫 > 神經內科 > 胸腔內科 > 婦科 > 耳鼻喉科 > 眼科 > Others
+        // Part-time doctors go to the bottom.
+        
         const getRank = (doc: Doctor) => {
-            // Hotfix: Force specific doctors to Radiology if data is missing
-            // Use includes to handle potential whitespace (e.g. "謝 弼丞" or "謝弼丞 ")
-            if (doc.name && doc.name.replace(/\s/g, '').includes('謝弼丞')) return 1;
+            let rank = 9; // Default Others
 
-            const specialty = doc.specialty;
-            if (!specialty) return 4;
+            // Hotfix: Force specific doctors to Radiology if data is missing
+            if (doc.name && doc.name.replace(/\s/g, '').includes('謝弼丞')) rank = 1;
+            else {
+                const specialty = doc.specialty;
+                if (specialty) {
+                    const s = specialty.toLowerCase();
+                    if (s.includes('放射') || s.includes('radio') || s.includes('img') || s.includes('x-ray')) rank = 1;
+                    else if (s.includes('腸胃') || s.includes('胃腸') || s.includes('消化') || s.includes('gastro') || s.includes('gi')) rank = 2;
+                    else if (s.includes('家醫') || s.includes('家庭') || s.includes('family') || s.includes('fm')) rank = 3;
+                    else if (s.includes('神經') || s.includes('neuro')) rank = 4;
+                    else if (s.includes('胸腔') || s.includes('chest') || s.includes('pulmo')) rank = 5;
+                    else if (s.includes('婦') || s.includes('gyn')) rank = 6;
+                    else if (s.includes('耳') || s.includes('ent') || s.includes('oto')) rank = 7;
+                    else if (s.includes('眼') || s.includes('oph') || s.includes('eye')) rank = 8;
+                }
+            }
             
-            // Chinese & English support
-            const s = specialty.toLowerCase();
-            if (s.includes('放射') || s.includes('radio') || s.includes('img')) return 1;
-            if (s.includes('家醫') || s.includes('家庭') || s.includes('family') || s.includes('fm')) return 2;
-            if (s.includes('腸胃') || s.includes('胃腸') || s.includes('消化') || s.includes('gastro') || s.includes('gi')) return 3;
+            // Part-time penalty
+            if (doc.isPartTime) {
+                rank += 100;
+            }
             
-            return 4;
+            return rank;
         };
 
         const sorted = [...this.doctors].sort((a, b) => {
@@ -1639,10 +1652,7 @@ BMD :{{bmd}}
             
             // Debug Log for specific doctors
             if (a.name.includes('蘇芳儀') || a.name.includes('謝弼丞') || a.name.includes('鄭敏')) {
-                 console.log(`Sorting Debug: ${a.name} (${a.specialty}) Rank=${rankA}`);
-            }
-            if (b.name.includes('蘇芳儀') || b.name.includes('謝弼丞') || b.name.includes('鄭敏')) {
-                 console.log(`Sorting Debug: ${b.name} (${b.specialty}) Rank=${rankB}`);
+                 console.log(`Sorting Debug: ${a.name} (${a.specialty}) isPT=${a.isPartTime} Rank=${rankA}`);
             }
 
             if (rankA !== rankB) return rankA - rankB;
@@ -1650,8 +1660,8 @@ BMD :{{bmd}}
             return (a.displayOrder || 0) - (b.displayOrder || 0);
         });
         
-        console.log('--- Sorted Doctors Sample ---');
-        sorted.slice(0, 10).forEach(d => console.log(`${d.name}: Rank=${getRank(d)} Order=${d.displayOrder}`));
+        console.log('--- Sorted Doctors Summary ---');
+        sorted.forEach(d => console.log(`${d.name}: Rank=${getRank(d)}`));
 
         // Re-assign display orders
         for (let i = 0; i < sorted.length; i++) {

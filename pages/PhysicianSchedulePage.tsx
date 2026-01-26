@@ -38,28 +38,77 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
     
     const [doctors, setDoctors] = useState<Doctor[]>(db.getDoctors());
     const [shifts, setShifts] = useState(db.getDoctorShifts());
+
+    // Define User's Preferred Order and Defaults
+    // Define User's Preferred Order and Defaults
+    const PREFERRED_STATIONS = [
+        { name: '解說', location: '北投' },
+        { name: '影像', location: '北投' },
+        { name: '遠距', location: '北投' }, // Map '遠班' to '遠距'
+        { name: '支援', location: '大直' },
+        { name: 'GI', location: '北投' },
+        { name: '麻醉', location: '北投' },
+        { name: '耳鼻喉科', location: '台中' },
+        { name: '眼科', location: '台中' },
+        { name: '婦科', location: '台中' },
+        { name: '行政', location: '北投' }
+    ];
+
     const [stations, setStations] = useState<DoctorStationConfig[]>(() => {
-        const stored = db.settings.doctorStations;
-        if (!stored) return [
+        let currentList = db.settings.doctorStations || [];
+        
+        // Ensure defaults if empty
+        if (currentList.length === 0) {
+            currentList = [
              { name: '影像', location: '北投' }, { name: '遠距', location: '北投' },
              { name: '支援', location: '大直' },
              { name: '眼科', location: '台中' }, { name: '耳鼻喉科', location: '台中' }, { name: '婦科', location: '台中' }
-        ];
-        // Migration check
-        if (typeof stored[0] === 'string') {
-            return (stored as any[]).map(s => ({
+            ];
+        }
+
+        // Normalize migration (string check)
+        if (typeof currentList[0] === 'string') {
+             currentList = (currentList as any[]).map(s => ({
                 name: s,
-                location: s.includes('大直') ? '大直' : s.includes('台中') ? '台中' : '北投'
+                location: ['眼科', '耳鼻喉科', '婦科'].includes(s) ? '台中' : (['支援'].includes(s) ? '大直' : '北投')
             }));
         }
-        return stored as DoctorStationConfig[];
+
+        // Add Missing Preferred Stations
+        PREFERRED_STATIONS.forEach(pref => {
+            if (!currentList.find(s => s.name === pref.name)) {
+                currentList.push(pref);
+            }
+        });
+
+        // Sort based on Preferred Order
+        return currentList.sort((a, b) => {
+            const idxA = PREFERRED_STATIONS.findIndex(p => p.name === a.name);
+            const idxB = PREFERRED_STATIONS.findIndex(p => p.name === b.name);
+            
+            // If both in list, sort by index
+            if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+            // If A in list, A comes first
+            if (idxA !== -1) return -1;
+            // If B in list, B comes first
+            if (idxB !== -1) return 1;
+            // Keep original relative order for others (or sort by name/location)
+            return 0; 
+        });
     });
+
     
     // Edit Modal State
     const [selectedCell, setSelectedCell] = useState<{ doctorId: string, date: string } | null>(null);
     const [editData, setEditData] = useState<{ station: string, workTime: string, note: string, location: string, task: string }>({ station: '', workTime: '', note: '', location: '', task: '' });
     const [viewMode, setViewMode] = useState<'personnel' | 'station' | 'daily' | 'statistics'>('personnel');
     const [isQuickExcludeMode, setIsQuickExcludeMode] = useState(false);
+    const [isReorderMode, setIsReorderMode] = useState(false);
+    
+    // Quick Assign (Paintbrush) State
+    const [isQuickAssignMode, setIsQuickAssignMode] = useState(false);
+    const [quickAssignData, setQuickAssignData] = useState<{ station: string, location: string, workTime: string }>({ station: '影像', location: '北投', workTime: '' });
+
     const [requirements, setRequirements] = useState(db.getStationRequirements());
 
     const dateRange = useMemo(() => {
@@ -146,6 +195,13 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
              }
              setShifts([...db.getDoctorShifts()]);
              return; 
+        }
+
+        if (isQuickAssignMode) {
+             // Quick Assign Logic
+             await db.assignDoctorSchedule(doctorId, date, quickAssignData.station, quickAssignData.workTime, undefined, quickAssignData.location);
+             setShifts(db.getDoctorShifts());
+             return;
         }
 
         setSelectedCell({ doctorId, date });
@@ -281,11 +337,19 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                          const rowData: any[] = [{ content: `${st.name}`, styles: { fontStyle: 'bold' }, location: st.location }];
                          
                          dateRange.forEach(date => {
-                             const assignedShifts = shifts.filter(s => 
-                                 s.date === date && 
-                                 s.scheduled_station === st.name && 
-                                 s.location === st.location
-                             );
+                             const assignedShifts = shifts.filter(s => {
+                                 if (s.date !== date || s.location !== st.location) return false;
+                                 if (s.scheduled_station === st.name) return true;
+                                 
+                                 // Logic: Show 'Explanation' doctors in 'Gyn' station if FamilyMed + Gyn Capable
+                                 if (st.name === '婦科' && s.scheduled_station === '解說') {
+                                     const doc = doctors.find(d => d.id === s.doctorId);
+                                     // Check Specialty="家醫科" and Cap="婦科" (or imply cap from task request)
+                                     // User said: "解說醫師是家醫科，且可排婦科崗位"
+                                     return doc?.specialty === '家醫科' && doc?.capabilities?.includes('婦科');
+                                 }
+                                 return false;
+                             });
                              
                              // Format: Name + Time + Task
                              const formatTimeShort = (time: string) => {
@@ -615,9 +679,9 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
 
     return (
         <div className="flex flex-col h-full bg-slate-50">
-            <div className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between shrink-0 shadow-sm z-30 sticky top-0">
-                <div className="flex items-center gap-4">
-                    <div className="flex items-center gap-2 text-teal-700 bg-teal-50 px-3 py-1.5 rounded-lg border border-teal-100">
+            <div className="bg-white border-b border-gray-200 px-4 py-2 flex flex-wrap items-center justify-between gap-y-2 shrink-0 shadow-sm z-30 sticky top-0">
+                <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 text-teal-700 bg-teal-50 px-2 py-1 rounded-lg border border-teal-100">
                         <User className="h-5 w-5" />
                         <h1 className="text-lg font-bold">醫師排班表</h1>
                     </div>
@@ -692,22 +756,44 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
 
                     <button 
                         onClick={() => setCurrentDate(new Date())}
-                        className="px-3 py-1.5 bg-slate-100 text-slate-600 rounded-lg text-sm font-bold hover:bg-slate-200 transition-colors border border-slate-200"
+                        className="px-2 py-1 bg-slate-100 text-slate-600 rounded-lg text-xs font-bold hover:bg-slate-200 transition-colors border border-slate-200"
                     >
                         {viewMode === 'daily' ? '今天' : '本月'}
                     </button>
 
                     {canEdit && (
                         <button 
-                            onClick={() => setIsQuickExcludeMode(!isQuickExcludeMode)}
-                            className={`ml-2 px-3 py-1.5 rounded-lg text-sm font-bold transition-all border flex items-center gap-1 ${
+                            onClick={() => {
+                                const newVal = !isQuickExcludeMode;
+                                setIsQuickExcludeMode(newVal);
+                                if (newVal) setIsQuickAssignMode(false); // Mutually exclusive
+                            }}
+                            className={`ml-1 px-2 py-1 rounded-lg text-xs font-bold transition-all border flex items-center gap-1 ${
                                 isQuickExcludeMode 
                                 ? 'bg-red-500 text-white border-red-600 shadow-md animate-pulse' 
                                 : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
                             }`}
                         >
-                            {isQuickExcludeMode ? <X size={16}/> : <X size={16} className="text-red-400"/>}
-                            {isQuickExcludeMode ? '關閉禁排模式' : '禁排'}
+                            {isQuickExcludeMode ? <X size={14}/> : <X size={14} className="text-red-400"/>}
+                            {isQuickExcludeMode ? '關閉' : '禁排'}
+                        </button>
+                    )}
+
+                    {canEdit && (
+                         <button 
+                            onClick={() => {
+                                const newVal = !isQuickAssignMode;
+                                setIsQuickAssignMode(newVal);
+                                if (newVal) setIsQuickExcludeMode(false); // Mutually exclusive
+                            }}
+                            className={`ml-1 px-2 py-1 rounded-lg text-xs font-bold transition-all border flex items-center gap-1 ${
+                                isQuickAssignMode 
+                                ? 'bg-amber-500 text-white border-amber-600 shadow-md' 
+                                : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
+                            }`}
+                        >
+                            <span className="text-sm">{isQuickAssignMode ? '🖌️' : '🖊️'}</span>
+                            {isQuickAssignMode ? '關閉' : '快排'}
                         </button>
                     )}
 
@@ -718,46 +804,110 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                     db.resortDoctorsBySpecialty().then(() => alert('已依科別排序完成'));
                                 }
                             }}
-                            className="ml-2 px-3 py-1.5 bg-white text-slate-500 hover:bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold transition-all flex items-center gap-1"
+                            className="ml-1 px-2 py-1 bg-white text-slate-500 hover:bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold transition-all flex items-center gap-1"
                         >
-                            <ArrowUpDown size={16} />
-                            科別排序
+                            <ArrowUpDown size={14} />
+                            排序
+                        </button>
+                    )}
+
+                    {canEdit && (
+                         <button 
+                            onClick={() => setIsReorderMode(!isReorderMode)}
+                            className={`ml-1 px-2 py-1 rounded-lg text-xs font-bold transition-all border flex items-center gap-1 ${
+                                isReorderMode 
+                                ? 'bg-indigo-500 text-white border-indigo-600 shadow-md' 
+                                : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
+                            }`}
+                        >
+                            <ArrowUpDown size={14} className={isReorderMode ? "text-white" : "text-gray-400"} />
+                            {isReorderMode ? '完成' : '調序'}
                         </button>
                     )}
                     
-                    <div className="h-6 w-px bg-gray-200 mx-1"></div>
+                    <div className="h-5 w-px bg-gray-200 mx-1"></div>
+
+                    {/* Quick Assign Toolbar */}
+                    {isQuickAssignMode && (
+                        <div className="absolute top-full left-0 right-0 bg-amber-50 border-b border-amber-200 p-2 flex items-center justify-center gap-3 z-20 shadow-sm animate-in slide-in-from-top-2">
+                             <div className="text-xs font-bold text-amber-800 uppercase flex items-center gap-1">
+                                 <span>🖌️ 設定:</span>
+                             </div>
+                             {/* ... same inputs ... */}
+                             <select 
+                                value={quickAssignData.station}
+                                onChange={(e) => {
+                                    // Auto-update location if unique
+                                    const stName = e.target.value;
+                                    const assoc = stations.filter(s => s.name === stName);
+                                    let newLoc = quickAssignData.location;
+                                    if (assoc.length === 1) newLoc = assoc[0].location;
+                                    
+                                    setQuickAssignData({ ...quickAssignData, station: stName, location: newLoc });
+                                }}
+                                className="px-2 py-1 text-sm bg-white border border-amber-300 rounded text-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-400"
+                             >
+                                {Array.from(new Set(stations.map(s => s.name))).map(s => (
+                                    <option key={s} value={s}>{s}</option>
+                                ))}
+                             </select>
+
+                             <div className="flex bg-white rounded border border-amber-300 overflow-hidden">
+                                {LOCATIONS.map(loc => (
+                                    <button
+                                        key={loc}
+                                        onClick={() => setQuickAssignData({ ...quickAssignData, location: loc })}
+                                        className={`px-3 py-1 text-xs font-bold transition-colors ${quickAssignData.location === loc ? 'bg-amber-500 text-white' : 'text-gray-600 hover:bg-amber-100'}`}
+                                    >
+                                        {loc}
+                                    </button>
+                                ))}
+                             </div>
+
+                             <div className="flex items-center gap-1">
+                                <Clock size={14} className="text-amber-700"/>
+                                <input 
+                                    type="text" 
+                                    value={quickAssignData.workTime}
+                                    onChange={(e) => setQuickAssignData({ ...quickAssignData, workTime: e.target.value })}
+                                    className="px-2 py-1 text-sm bg-white border border-amber-300 rounded text-gray-700 w-24 focus:outline-none focus:ring-2 focus:ring-amber-400"
+                                    placeholder="時段"
+                                />
+                             </div>
+                        </div>
+                    )}
 
 
                     {canEdit && (
                         <button 
                             onClick={handleOpenTargetDaysModal}
-                            className="flex items-center gap-1 px-3 py-1.5 bg-gradient-to-r from-purple-500 to-indigo-600 text-white hover:opacity-90 rounded-lg text-sm font-bold transition-all shadow-md shadow-purple-200"
+                            className="flex items-center gap-1 px-2 py-1 bg-gradient-to-r from-purple-500 to-indigo-600 text-white hover:opacity-90 rounded-lg text-xs font-bold transition-all shadow-md shadow-purple-200"
                         >
-                            <Wand2 size={16} />
-                            一鍵排班
+                            <Wand2 size={14} />
+                            一鍵
                         </button>
                     )}
 
                     <button 
                         onClick={handleExportPDF}
-                        className="flex items-center gap-1 px-3 py-1.5 bg-teal-50 text-teal-700 hover:bg-teal-100 rounded-lg text-sm font-bold transition-colors border border-teal-100"
+                        className="flex items-center gap-1 px-2 py-1 bg-teal-50 text-teal-700 hover:bg-teal-100 rounded-lg text-xs font-bold transition-colors border border-teal-100"
                     >
-                        <Download size={16} />
+                        <Download size={14} />
                         匯出
                     </button>
 
                     {canManageLock && (
                         <button 
                             onClick={handleToggleLock}
-                            className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-bold transition-all border shadow-sm ${
+                            className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-bold transition-all border shadow-sm ${
                                 isLocked 
                                 ? 'bg-amber-100 text-amber-800 hover:bg-amber-200 border-amber-200' 
                                 : 'bg-emerald-600 text-white hover:bg-emerald-700 border-emerald-700'
                             }`}
-                            title={isLocked ? "目前已鎖定 (唯讀)。點擊以解鎖。" : "排班完成後點擊此處鎖定，避免誤觸。"}
+                            title={isLocked ? "目前已鎖定" : "點擊鎖定"}
                         >
-                            {isLocked ? <Unlock size={16} /> : <Lock size={16} />}
-                            {isLocked ? '已鎖定' : '完成(上鎖)'}
+                            {isLocked ? <Unlock size={14} /> : <Lock size={14} />}
+                            {isLocked ? '已鎖' : '鎖定'}
                         </button>
                     )}
                 </div>
@@ -800,61 +950,85 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                 {doctors.map(doc => (
                                     <tr key={doc.id} className="hover:bg-slate-50/50 transition-colors">
                                         <td className="p-3 font-bold text-gray-700 border-r border-gray-200 sticky left-0 bg-white z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] flex items-center gap-2">
-                                            <div className="flex flex-col gap-0.5">
-                                                <button
-                                                    onClick={async (e) => {
-                                                        e.stopPropagation();
-                                                        await db.reorderDoctor(doc.id, 'up');
-                                                        setDoctors(db.getDoctors());
-                                                    }}
-                                                    className="text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded p-0.5 transition-colors disabled:opacity-20 disabled:cursor-not-allowed"
-                                                    disabled={doctors.indexOf(doc) === 0}
-                                                    title="向上移動"
-                                                >
-                                                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                                                        <path fillRule="evenodd" d="M14.707 12.707a1 1 0 01-1.414 0L10 9.414l-3.293 3.293a1 1 0 01-1.414-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 010 1.414z" clipRule="evenodd" />
-                                                    </svg>
-                                                </button>
-                                                <button
-                                                    onClick={async (e) => {
-                                                        e.stopPropagation();
-                                                        await db.reorderDoctor(doc.id, 'down');
-                                                        setDoctors(db.getDoctors());
-                                                    }}
-                                                    className="text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded p-0.5 transition-colors disabled:opacity-20 disabled:cursor-not-allowed"
-                                                    disabled={doctors.indexOf(doc) === doctors.length - 1}
-                                                    title="向下移動"
-                                                >
-                                                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                                                        <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
-                                                    </svg>
-                                                </button>
-                                            </div>
+                                            {isReorderMode && (
+                                                <div className="flex flex-col gap-0.5">
+                                                    <button
+                                                        onClick={async (e) => {
+                                                            e.stopPropagation();
+                                                            await db.reorderDoctor(doc.id, 'up');
+                                                            setDoctors(db.getDoctors());
+                                                        }}
+                                                        className="text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded p-0.5 transition-colors disabled:opacity-20 disabled:cursor-not-allowed"
+                                                        disabled={doctors.indexOf(doc) === 0}
+                                                        title="向上移動"
+                                                    >
+                                                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                                                            <path fillRule="evenodd" d="M14.707 12.707a1 1 0 01-1.414 0L10 9.414l-3.293 3.293a1 1 0 01-1.414-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 010 1.414z" clipRule="evenodd" />
+                                                        </svg>
+                                                    </button>
+                                                    <button
+                                                        onClick={async (e) => {
+                                                            e.stopPropagation();
+                                                            await db.reorderDoctor(doc.id, 'down');
+                                                            setDoctors(db.getDoctors());
+                                                        }}
+                                                        className="text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded p-0.5 transition-colors disabled:opacity-20 disabled:cursor-not-allowed"
+                                                        disabled={doctors.indexOf(doc) === doctors.length - 1}
+                                                        title="向下移動"
+                                                    >
+                                                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                                                            <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                                                        </svg>
+                                                    </button>
+                                                </div>
+                                            )}
                                             <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-500">
                                                 {doc.alias}
                                             </div>
                                             <div className="flex flex-col">
                                                 <span>{doc.name}</span>
                                                 <span className="text-[10px] text-slate-400 font-normal">
-                                                    {shifts.filter(s => s.doctorId === doc.id && dateRange.includes(s.date) && s.station !== 'X').length} 天
+                                                    {shifts.filter(s => s.doctorId === doc.id && dateRange.includes(s.date) && s.scheduled_station && s.scheduled_station !== 'X').length} 天
                                                 </span>
                                             </div>
                                         </td>
                                         {dateRange.map(date => {
                                             const shift = shifts.find(s => s.doctorId === doc.id && s.date === date);
-                                            const d = new Date(date);
+                                            const d = new Date(date); 
                                             // Fix: 0 is Sunday in JS, but user might map differently? 
                                             // In DoctorManager: Sunday=0, Monday=1... 
                                             const dayOfWeek = d.getDay(); 
                                             const isExcluded = doc.excludedDays?.includes(dayOfWeek);
+                                            
+                                            const hasStation = shift && shift.scheduled_station;
 
                                             return (
                                                 <td 
                                                     key={date} 
                                                     onClick={() => handleCellClick(doc.id, date)}
                                                     className={`p-1 border-r border-gray-100 h-12 cursor-pointer transition-all relative group text-center
-                                                        ${shift 
-                                                            ? 'bg-teal-50 hover:bg-teal-100' 
+                                                        ${hasStation 
+                                                            ? (() => {
+                                                                const st = shift.scheduled_station || '';
+                                                                if (st === 'X') return 'bg-slate-50';
+                                                                
+                                                                // Empty check - safeguard
+                                                                if (!st) return 'hover:bg-gray-50';
+
+                                                                // Admin -> White
+                                                                if (st.includes('行政')) return 'bg-white hover:bg-gray-50';
+                                                                
+                                                                // Special Depts -> Brown
+                                                                if (st.includes('眼') || st.includes('婦') || st.includes('耳')) return 'bg-[#D7CCC8] hover:bg-[#BCAAA4]';
+
+                                                                // Darker tints (100)
+                                                                if (st.includes('遠') || st.includes('Remote')) return 'bg-pink-100 hover:bg-pink-200';
+                                                                if (st.includes('腸胃') || st.toLowerCase().includes('gi') || st.toLowerCase().includes('gastro')) return 'bg-blue-100 hover:bg-blue-200';
+                                                                if (st.includes('解說')) return 'bg-orange-100 hover:bg-orange-200';
+                                                                if (st.includes('支援')) return 'bg-yellow-100 hover:bg-yellow-200';
+                                                                
+                                                                return 'bg-teal-100 hover:bg-teal-200';
+                                                            })()
                                                             : isExcluded 
                                                                 ? 'bg-slate-100/70 hover:bg-slate-200/70 pattern-diagonal-lines pattern-slate-200 pattern-bg-transparent pattern-opacity-20' 
                                                                 : 'hover:bg-gray-50'
@@ -881,11 +1055,11 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                                 })()}
                                                                 {shift.workTime && (
                                                                     <span className="text-[10px] text-slate-500 leading-tight font-medium">
-                                                                        {shift.workTime.replace(/(\d{1,2}):\d{2}/g, (match, p1) => parseInt(p1) + '\'').replace(/\s/g, '')}
+                                                                        {shift.workTime.replace(/(\d{1,2}):(\d{2})/g, (match, h, m) => m === '00' ? String(parseInt(h)) : parseInt(h) + "'").replace(/\s/g, '')}
                                                                     </span>
                                                                 )}
                                                                 {shift.task && (
-                                                                    <span className="text-[10px] text-blue-600 leading-tight font-medium overflow-hidden text-ellipsis w-full px-1">
+                                                                    <span className={`text-[10px] leading-tight font-medium overflow-hidden text-ellipsis w-full px-1 ${shift.task.includes('晚班') ? 'text-red-600 font-bold' : 'text-blue-600'}`}>
                                                                         {shift.task}
                                                                     </span>
                                                                 )}
@@ -974,11 +1148,19 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                         {dateRange.map(date => {
                                                             // NEW: Get ALL shifts for this station+location+date (support multiple doctors)
                                                             // Check BOTH scheduled_station (for doctor schedules) and station (for tech assignments)
-                                                            const currentShifts = shifts.filter(s => 
-                                                                s.date === date && 
-                                                                s.scheduled_station === stationName && 
-                                                                s.location === location
-                                                            );
+                                                            // NEW: Get ALL shifts for this station+location+date (support multiple doctors)
+                                                            // Check BOTH scheduled_station (for doctor schedules) and station (for tech assignments)
+                                                            const currentShifts = shifts.filter(s => {
+                                                                if (s.date !== date || s.location !== location) return false;
+                                                                if (s.scheduled_station === stationName) return true;
+                                                                
+                                                                // Logic: Show 'Explanation' doctors in 'Gyn' station if FamilyMed + Gyn Capable
+                                                                if (stationName === '婦科' && s.scheduled_station === '解說') {
+                                                                     const doc = doctors.find(d => d.id === s.doctorId);
+                                                                     return doc?.specialty === '家醫科' && doc?.capabilities?.includes('婦科');
+                                                                }
+                                                                return false;
+                                                            });
                                                             const isWeekend = new Date(date).getDay() === 0 || new Date(date).getDay() === 6;
 
                                                             return (
@@ -1050,7 +1232,18 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                                         {locStations.map(config => {
                                             const st = config.name;
-                                            const shiftsOnStation = shifts.filter(s => s.date === toLocalISOString(currentDate) && (s.station === st || s.scheduled_station === st) && s.location === config.location); 
+                                            const shiftsOnStation = shifts.filter(s => {
+                                                if (s.date !== toLocalISOString(currentDate) || s.location !== config.location) return false;
+                                                const assignedSt = s.scheduled_station || s.station;
+                                                if (assignedSt === st) return true;
+                                                
+                                                 // Logic: Show 'Explanation' doctors in 'Gyn' station if FamilyMed + Gyn Capable
+                                                if (st === '婦科' && assignedSt === '解說') {
+                                                     const doc = doctors.find(d => d.id === s.doctorId);
+                                                     return doc?.specialty === '家醫科' && doc?.capabilities?.includes('婦科');
+                                                }
+                                                return false;
+                                            }); 
                                             // Get Requirement
                                             const dayOfWeek = (currentDate.getDay() + 6) % 7;
                                             const reqKey = `${config.name}_${config.location}`;
@@ -1244,6 +1437,14 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                     {editData.station && <span className="text-teal-600 cursor-pointer hover:underline" onClick={() => setEditData({...editData, station: ''})}>清除分配</span>}
                                 </label>
                                 <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto p-1">
+                                    <button
+                                        onClick={() => setEditData({ station: '', location: '', workTime: '', note: '', task: '' })}
+                                        className={`p-2 rounded-lg text-sm font-bold border transition-all ${!editData.station ? 'bg-slate-200 text-slate-600 border-slate-300 shadow-inner' : 'bg-slate-50 text-gray-400 border-gray-200 hover:bg-white'}`}
+                                    >
+                                        <div className="flex flex-col items-center">
+                                            <span>無 (清除)</span>
+                                        </div>
+                                    </button>
                                     {Array.from(new Set(stations.map(s => s.name))).map(stationName => {
                                         // Check associated locations for this station name
                                         const associatedLocs = stations.filter(s => s.name === stationName);
