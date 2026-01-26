@@ -40,11 +40,10 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
     const [shifts, setShifts] = useState(db.getDoctorShifts());
 
     // Define User's Preferred Order and Defaults
-    // Define User's Preferred Order and Defaults
     const PREFERRED_STATIONS = [
         { name: '解說', location: '北投' },
         { name: '影像', location: '北投' },
-        { name: '遠距', location: '北投' }, // Map '遠班' to '遠距'
+        { name: '遠班', location: '北投' },
         { name: '支援', location: '大直' },
         { name: 'GI', location: '北投' },
         { name: '麻醉', location: '北投' },
