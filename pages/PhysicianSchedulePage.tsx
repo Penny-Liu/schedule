@@ -43,11 +43,12 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
     const PREFERRED_STATIONS = [
         { name: '解說', location: '北投' },
         { name: '影像', location: '北投' },
+        { name: '遠班', location: '大直' },
         { name: '遠班', location: '北投' },
         { name: '支援', location: '大直' },
         { name: 'GI', location: '北投' },
         { name: '麻醉', location: '北投' },
-        { name: 'ENT', location: '台中' },
+        { name: '耳鼻喉科', location: '台中' },
         { name: '眼科', location: '台中' },
         { name: '婦科', location: '台中' },
         { name: '行政', location: '北投' }
@@ -72,9 +73,6 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                 location: ['眼科', '耳鼻喉科', '婦科'].includes(s) ? '台中' : (['支援'].includes(s) ? '大直' : '北投')
             }));
         }
-
-        // Rename '耳鼻喉科' to 'ENT'
-        currentList = currentList.map(s => s.name === '耳鼻喉科' ? { ...s, name: 'ENT' } : s);
 
         // Add Missing Preferred Stations
         PREFERRED_STATIONS.forEach(pref => {
@@ -341,7 +339,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                          dateRange.forEach(date => {
                              const assignedShifts = shifts.filter(s => {
                                  if (s.date !== date || s.location !== st.location) return false;
-                                 if (s.scheduled_station === st.name || (st.name === 'ENT' && s.scheduled_station === '耳鼻喉科')) return true;
+                                 if (s.scheduled_station === st.name) return true;
                                  
                                  // Logic: Show 'Explanation' doctors in 'Gyn' station if FamilyMed + Gyn Capable
                                  if (st.name === '婦科' && s.scheduled_station === '解說') {
@@ -433,7 +431,8 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                 const allShiftsForDate = shifts.filter(s => s.doctorId === doc.id && s.date === date);
                                 const hasGynecology = allShiftsForDate.some(s => s.scheduled_station === '婦科'); // Requires store update for explanation
                                 const hasExplanation = allShiftsForDate.some(s => s.scheduled_station === '解說');
-                                const displayStation = (hasGynecology && hasExplanation) ? '解+婦' : st;
+                                let displayStation = (hasGynecology && hasExplanation) ? '解+婦' : st;
+                                if (displayStation === '耳鼻喉科') displayStation = 'ENT'; // Display Transform for Personnel View
                                 
                                 // Construct content for Height Calculation (approx lines)
                                 // We will custom draw, but need autoTable to allocate space
@@ -1003,6 +1002,18 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                             const isExcluded = doc.excludedDays?.includes(dayOfWeek);
                                             
                                             const hasStation = shift && shift.scheduled_station;
+                                            
+                                            // Display logic just for this cell
+                                            let cellDisplayStation = shift?.scheduled_station || '';
+                                            if (cellDisplayStation === '耳鼻喉科') cellDisplayStation = 'ENT';
+                                            
+                                            // Gyn+Explanation Logic (simplified visual check, or use computed)
+                                            // We need to check if '解+婦' applies here too? 
+                                            // The previous logic for grid display was simpler, let's inject it.
+                                            if (shift?.scheduled_station === '解說') {
+                                                const allShiftsForDate = shifts.filter(s => s.doctorId === doc.id && s.date === date);
+                                                if (allShiftsForDate.some(s => s.scheduled_station === '婦科')) cellDisplayStation = '解+婦';
+                                            }
 
                                             return (
                                                 <td 
@@ -1051,9 +1062,12 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                                     );
                                                                     const hasGynecology = allShiftsForDate.some(s => s.scheduled_station === '婦科');
                                                                     const hasExplanation = allShiftsForDate.some(s => s.scheduled_station === '解說');
-                                                                    const displayStation = (hasGynecology && hasExplanation) ? '解+婦' : (shift.scheduled_station || '');
                                                                     
-                                                                    return <span className="font-bold text-teal-700 block text-xs md:text-sm leading-tight">{displayStation}</span>;
+                                                                    const displayStation = (hasGynecology && hasExplanation) 
+                                                                        ? '解+婦' 
+                                                                        : (shift.scheduled_station === '耳鼻喉科' ? 'ENT' : (shift.scheduled_station || ''));
+                                                                    
+                                                                    return <span className="font-bold text-teal-700 block text-xs md:text-sm leading-tight text-center">{displayStation}</span>;
                                                                 })()}
                                                                 {shift.workTime && (
                                                                     <span className="text-[10px] text-slate-500 leading-tight font-medium">
@@ -1101,7 +1115,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                         <table className="text-sm border-collapse w-auto">
                             <thead>
                                 <tr className="bg-slate-50 border-b border-gray-200">
-                                    <th className="p-3 text-left font-bold text-gray-600 w-32 sticky left-0 top-0 bg-slate-50 z-30 border-r border-gray-200 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">崗位</th>
+                                    <th className="p-3 text-center font-bold text-gray-600 w-32 sticky left-0 top-0 bg-slate-50 z-30 border-r border-gray-200 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">崗位</th>
                                     {dateRange.map(date => {
                                         const d = new Date(date);
                                         const isWeekend = d.getDay() === 0 || d.getDay() === 6;
@@ -1140,8 +1154,8 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                 return (
                                                     <tr key={`${location}-${stationName}`} className="hover:bg-gray-50/80 transition-colors border-b border-gray-100">
                                                         {/* Station Name Header */}
-                                                        <th className="p-3 text-left font-medium text-gray-600 w-32 sticky left-0 bg-white z-10 border-r border-gray-200">
-                                                            <div className="flex flex-col">
+                                                        <th className="p-3 text-center font-medium text-gray-600 w-32 sticky left-0 bg-white z-10 border-r border-gray-200">
+                                                            <div className="flex flex-col items-center">
                                                                 <span className="text-sm font-bold text-gray-800">{stationName}</span>
                                                             </div>
                                                         </th>
@@ -1154,7 +1168,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                             // Check BOTH scheduled_station (for doctor schedules) and station (for tech assignments)
                                                             const currentShifts = shifts.filter(s => {
                                                                 if (s.date !== date || s.location !== location) return false;
-                                                                if (s.scheduled_station === stationName || (stationName === 'ENT' && s.scheduled_station === '耳鼻喉科')) return true;
+                                                                if (s.scheduled_station === stationName) return true;
                                                                 
                                                                 // Logic: Show 'Explanation' doctors in 'Gyn' station if FamilyMed + Gyn Capable
                                                                 if (stationName === '婦科' && s.scheduled_station === '解說') {
@@ -1163,6 +1177,29 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                                 }
                                                                 return false;
                                                             });
+                                                            
+                                                            // Logic: Cross-site Remote/Imaging Fallback (Station View)
+                                                            let displayShifts = [...currentShifts];
+                                                            let suffix = '';
+                                                            
+                                                            // Case A: Dazhi Remote empty -> Pull Beitou Remote
+                                                            if (location === '大直' && ['遠班', '遠距', '遠'].includes(stationName) && displayShifts.length === 0) {
+                                                                const beitouRemoteShifts = shifts.filter(s => s.date === date && s.location === '北投' && ['遠班', '遠距', '遠'].includes(s.scheduled_station));
+                                                                if (beitouRemoteShifts.length > 0) {
+                                                                    displayShifts = beitouRemoteShifts;
+                                                                    suffix = '(北)';
+                                                                }
+                                                            }
+                                                            
+                                                            // Case B: Beitou Remote empty -> Pull Dazhi Remote
+                                                            if (location === '北投' && ['遠班', '遠距', '遠'].includes(stationName) && displayShifts.length === 0) {
+                                                                const dazhiRemoteShifts = shifts.filter(s => s.date === date && s.location === '大直' && ['遠班', '遠距', '遠'].includes(s.scheduled_station));
+                                                                 if (dazhiRemoteShifts.length > 0) {
+                                                                    displayShifts = dazhiRemoteShifts;
+                                                                    suffix = '(直)';
+                                                                }
+                                                            }
+
                                                             const isWeekend = new Date(date).getDay() === 0 || new Date(date).getDay() === 6;
 
                                                             return (
@@ -1174,14 +1211,15 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                                     `}
                                                                     onClick={() => handleStationCellClick(stationName, location, date)}
                                                                 >
-                                                                    {currentShifts.length > 0 ? (
+                                                                    {displayShifts.length > 0 ? (
                                                                         <div className="flex flex-col items-center justify-center h-full w-full gap-0.5 py-1">
-                                                                            {currentShifts.map((shift, index) => {
+                                                                            {displayShifts.map((shift, index) => {
                                                                                 const doc = doctors.find(d => d.id === shift.doctorId);
                                                                                 return (
                                                                                     <div key={shift.id} className="flex flex-col items-center w-full">
-                                                                                        <span className="text-xs font-bold text-gray-900 bg-white/80 px-1.5 py-0.5 rounded shadow-sm border border-gray-200">
+                                                                                        <span className="text-xs font-bold text-gray-900 bg-white/80 px-1.5 py-0.5 rounded shadow-sm border border-gray-200 text-center">
                                                                                             {doc?.alias || doc?.name?.charAt(0) || '?'}
+                                                                                            {suffix && <span className="text-[8px] text-gray-500 ml-0.5">{suffix}</span>}
                                                                                         </span>
                                                                                         {shift.workTime && (
                                                                                             <span className="text-[9px] text-slate-500 leading-tight font-medium">
@@ -1237,7 +1275,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                             const shiftsOnStation = shifts.filter(s => {
                                                 if (s.date !== toLocalISOString(currentDate) || s.location !== config.location) return false;
                                                 const assignedSt = s.scheduled_station || s.station;
-                                                if (assignedSt === st || (st === 'ENT' && assignedSt === '耳鼻喉科')) return true;
+                                                if (assignedSt === st) return true;
                                                 
                                                  // Logic: Show 'Explanation' doctors in 'Gyn' station if FamilyMed + Gyn Capable
                                                 if (st === '婦科' && assignedSt === '解說') {
@@ -1245,13 +1283,34 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                      return doc?.specialty === '家醫科' && doc?.capabilities?.includes('婦科');
                                                 }
                                                 return false;
-                                            }); 
+                                            });
+                                            let displayShifts = [...shiftsOnStation];
+                                            let suffix = '';
+
+                                            // Case A: Dazhi Remote empty -> Pull Beitou Remote
+                                            if (config.location === '大直' && ['遠班', '遠距', '遠'].includes(st) && displayShifts.length === 0) {
+                                                const beitouRemoteShifts = shifts.filter(s => s.date === toLocalISOString(currentDate) && s.location === '北投' && ['遠班', '遠距', '遠'].includes(s.scheduled_station));
+                                                if (beitouRemoteShifts.length > 0) {
+                                                    displayShifts = beitouRemoteShifts;
+                                                    suffix = '(北投)';
+                                                }
+                                            }
+
+                                            // Case B: Beitou Remote empty -> Pull Dazhi Remote
+                                            if (config.location === '北投' && ['遠班', '遠距', '遠'].includes(st) && displayShifts.length === 0) {
+                                                const dazhiRemoteShifts = shifts.filter(s => s.date === toLocalISOString(currentDate) && s.location === '大直' && ['遠班', '遠距', '遠'].includes(s.scheduled_station));
+                                                if (dazhiRemoteShifts.length > 0) {
+                                                    displayShifts = dazhiRemoteShifts;
+                                                    suffix = '(大直)';
+                                                }
+                                            }
+                                            
                                             // Get Requirement
                                             const dayOfWeek = (currentDate.getDay() + 6) % 7;
                                             const reqKey = `${config.name}_${config.location}`;
                                             const reqs = requirements[reqKey] || requirements[config.name] || [0,0,0,0,0,0,0];
                                             const req = reqs[dayOfWeek];
-                                            const isShort = shiftsOnStation.length < req;
+                                            const isShort = displayShifts.length < req;
 
                                             return (
                                                 <div key={`${loc}-${st}`} className={`rounded-xl border p-4 shadow-sm flex flex-col h-full bg-white transition-all ${isShort ? 'border-red-200 shadow-red-50' : 'border-gray-200'}`}>
@@ -1261,13 +1320,13 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                             {isShort && <span className="flex h-2 w-2 rounded-full bg-red-500 animate-pulse" title="人力不足"></span>}
                                                         </h3>
                                                         <span className={`text-xs font-bold px-2 py-1 rounded-full ${isShort ? 'bg-red-50 text-red-600' : 'bg-slate-50 text-slate-400'}`}>
-                                                            {shiftsOnStation.length} / {req} 人
+                                                            {displayShifts.length} / {req} 人
                                                         </span>
                                                     </div>
                                                     
                                                     <div className="space-y-2 flex-1">
-                                                        {shiftsOnStation.length > 0 ? (
-                                                            shiftsOnStation.map(s => {
+                                                        {displayShifts.length > 0 ? (
+                                                            displayShifts.map(s => {
                                                                 const doc = doctors.find(d => d.id === s.doctorId);
                                                                 return (
                                                                     <div key={s.id} className="flex items-center gap-3 p-2 rounded-lg bg-slate-50 border border-slate-100 transform hover:scale-[1.02] transition-all cursor-pointer hover:bg-white hover:shadow-sm" onClick={()=>handleCellClick(s.doctorId, s.date)}>
@@ -1275,7 +1334,10 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                                             {doc?.alias}
                                                                         </div>
                                                                         <div className="flex-1 min-w-0">
-                                                                            <div className="font-bold text-gray-800 truncate">{doc?.name}</div>
+                                                                            <div className="font-bold text-gray-800 truncate flex items-center gap-1">
+                                                                                {doc?.name}
+                                                                                {suffix && <span className="text-[10px] text-teal-700 bg-teal-50 px-1 rounded border border-teal-100">{suffix}</span>}
+                                                                            </div>
                                                                             {s.workTime && <div className="text-xs text-gray-500 flex items-center gap-1"><Clock size={10}/> {s.workTime}</div>}
                                                                         </div>
                                                                     </div>
@@ -1333,7 +1395,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                         {date.slice(5)} <span className="text-gray-400 font-normal">({dayLabel})</span>
                                                     </td>
                                                     {stations.map(st => {
-                                                        const count = shifts.filter(s => s.date === date && (s.station === st.name || s.scheduled_station === st.name || (st.name === 'ENT' && (s.station === '耳鼻喉科' || s.scheduled_station === '耳鼻喉科'))) && s.location === st.location && s.doctorId).length;
+                                                        const count = shifts.filter(s => s.date === date && (s.station === st.name || s.scheduled_station === st.name) && s.location === st.location && s.doctorId).length;
                                                         const reqKey = `${st.name}_${st.location}`;
                                                         // Fallback to legacy
                                                         const reqs = requirements[reqKey] || requirements[st.name] || [0,0,0,0,0,0,0];
@@ -1395,7 +1457,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                         {total}
                                                     </td>
                                                     {stations.map(st => {
-                                                        const count = docShifts.filter(s => (s.station === st.name || s.scheduled_station === st.name || (st.name === 'ENT' && (s.station === '耳鼻喉科' || s.scheduled_station === '耳鼻喉科'))) && s.location === st.location).length;
+                                                        const count = docShifts.filter(s => (s.station === st.name || s.scheduled_station === st.name) && s.location === st.location).length;
                                                         return (
                                                             <td key={`${doc.id}-${st.name}-${st.location}`} className={`px-2 py-2 text-center border-r border-gray-50 ${count > 0 ? 'font-bold text-slate-700 bg-slate-50' : 'text-gray-200'}`}>
                                                                 {count > 0 ? count : '-'}
