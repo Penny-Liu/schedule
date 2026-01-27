@@ -47,7 +47,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
         { name: '支援', location: '大直' },
         { name: 'GI', location: '北投' },
         { name: '麻醉', location: '北投' },
-        { name: '耳鼻喉科', location: '台中' },
+        { name: 'ENT', location: '台中' },
         { name: '眼科', location: '台中' },
         { name: '婦科', location: '台中' },
         { name: '行政', location: '北投' }
@@ -72,6 +72,9 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                 location: ['眼科', '耳鼻喉科', '婦科'].includes(s) ? '台中' : (['支援'].includes(s) ? '大直' : '北投')
             }));
         }
+
+        // Rename '耳鼻喉科' to 'ENT'
+        currentList = currentList.map(s => s.name === '耳鼻喉科' ? { ...s, name: 'ENT' } : s);
 
         // Add Missing Preferred Stations
         PREFERRED_STATIONS.forEach(pref => {
@@ -338,7 +341,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                          dateRange.forEach(date => {
                              const assignedShifts = shifts.filter(s => {
                                  if (s.date !== date || s.location !== st.location) return false;
-                                 if (s.scheduled_station === st.name) return true;
+                                 if (s.scheduled_station === st.name || (st.name === 'ENT' && s.scheduled_station === '耳鼻喉科')) return true;
                                  
                                  // Logic: Show 'Explanation' doctors in 'Gyn' station if FamilyMed + Gyn Capable
                                  if (st.name === '婦科' && s.scheduled_station === '解說') {
@@ -1151,7 +1154,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                             // Check BOTH scheduled_station (for doctor schedules) and station (for tech assignments)
                                                             const currentShifts = shifts.filter(s => {
                                                                 if (s.date !== date || s.location !== location) return false;
-                                                                if (s.scheduled_station === stationName) return true;
+                                                                if (s.scheduled_station === stationName || (stationName === 'ENT' && s.scheduled_station === '耳鼻喉科')) return true;
                                                                 
                                                                 // Logic: Show 'Explanation' doctors in 'Gyn' station if FamilyMed + Gyn Capable
                                                                 if (stationName === '婦科' && s.scheduled_station === '解說') {
@@ -1234,7 +1237,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                             const shiftsOnStation = shifts.filter(s => {
                                                 if (s.date !== toLocalISOString(currentDate) || s.location !== config.location) return false;
                                                 const assignedSt = s.scheduled_station || s.station;
-                                                if (assignedSt === st) return true;
+                                                if (assignedSt === st || (st === 'ENT' && assignedSt === '耳鼻喉科')) return true;
                                                 
                                                  // Logic: Show 'Explanation' doctors in 'Gyn' station if FamilyMed + Gyn Capable
                                                 if (st === '婦科' && assignedSt === '解說') {
@@ -1330,7 +1333,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                         {date.slice(5)} <span className="text-gray-400 font-normal">({dayLabel})</span>
                                                     </td>
                                                     {stations.map(st => {
-                                                        const count = shifts.filter(s => s.date === date && (s.station === st.name || s.scheduled_station === st.name) && s.location === st.location && s.doctorId).length;
+                                                        const count = shifts.filter(s => s.date === date && (s.station === st.name || s.scheduled_station === st.name || (st.name === 'ENT' && (s.station === '耳鼻喉科' || s.scheduled_station === '耳鼻喉科'))) && s.location === st.location && s.doctorId).length;
                                                         const reqKey = `${st.name}_${st.location}`;
                                                         // Fallback to legacy
                                                         const reqs = requirements[reqKey] || requirements[st.name] || [0,0,0,0,0,0,0];
@@ -1392,7 +1395,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                         {total}
                                                     </td>
                                                     {stations.map(st => {
-                                                        const count = docShifts.filter(s => (s.station === st.name || s.scheduled_station === st.name) && s.location === st.location).length;
+                                                        const count = docShifts.filter(s => (s.station === st.name || s.scheduled_station === st.name || (st.name === 'ENT' && (s.station === '耳鼻喉科' || s.scheduled_station === '耳鼻喉科'))) && s.location === st.location).length;
                                                         return (
                                                             <td key={`${doc.id}-${st.name}-${st.location}`} className={`px-2 py-2 text-center border-r border-gray-50 ${count > 0 ? 'font-bold text-slate-700 bg-slate-50' : 'text-gray-200'}`}>
                                                                 {count > 0 ? count : '-'}
