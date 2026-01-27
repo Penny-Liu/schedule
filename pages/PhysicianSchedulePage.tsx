@@ -74,34 +74,16 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
             }));
         }
 
-        // Add Missing Preferred Stations
-        PREFERRED_STATIONS.forEach(pref => {
-            if (!currentList.find(s => s.name === pref.name)) {
-                currentList.push(pref);
-            }
-        });
-
-        // Sort based on Preferred Order
-        return currentList.sort((a, b) => {
-            const idxA = PREFERRED_STATIONS.findIndex(p => p.name === a.name);
-            const idxB = PREFERRED_STATIONS.findIndex(p => p.name === b.name);
-            
-            // If both in list, sort by index
-            if (idxA !== -1 && idxB !== -1) return idxA - idxB;
-            // If A in list, A comes first
-            if (idxA !== -1) return -1;
-            // If B in list, B comes first
-            if (idxB !== -1) return 1;
-            // Keep original relative order for others (or sort by name/location)
-            return 0; 
-        });
+        return currentList;
     });
 
     
     // Edit Modal State
     const [selectedCell, setSelectedCell] = useState<{ doctorId: string, date: string } | null>(null);
     const [editData, setEditData] = useState<{ station: string, workTime: string, note: string, location: string, task: string }>({ station: '', workTime: '', note: '', location: '', task: '' });
-    const [viewMode, setViewMode] = useState<'personnel' | 'station' | 'daily' | 'statistics'>('personnel');
+    const [viewMode, setViewMode] = useState<'personnel' | 'station' | 'daily' | 'statistics'>(() => {
+        return currentUser.role === UserRole.VIEWER ? 'daily' : 'personnel';
+    });
     const [isQuickExcludeMode, setIsQuickExcludeMode] = useState(false);
     const [isReorderMode, setIsReorderMode] = useState(false);
     
@@ -133,6 +115,40 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
     const [showTargetDaysModal, setShowTargetDaysModal] = useState(false);
     const [targetDays, setTargetDays] = useState<Record<string, number>>({});
     const [batchDays, setBatchDays] = useState<number>(20); // Default batch value
+
+    // Specialty Order Modal State
+    const [showSpecialtyOrderModal, setShowSpecialtyOrderModal] = useState(false);
+    const [tempSpecialties, setTempSpecialties] = useState<string[]>([]);
+    const [specialtyOrder, setSpecialtyOrder] = useState<string[]>(db.settings.doctorSpecialties || []);
+
+    const handleOpenSpecialtyOrder = () => {
+        // Ensure we have the latest list from DB + any derived ones from loaded doctors
+        const currentSpecs = new Set(db.settings.doctorSpecialties || []);
+        // Also add any specialties found in current doctors that might be missing
+        doctors.forEach(d => {
+            if (d.specialty) currentSpecs.add(d.specialty);
+        });
+        const list = Array.from(currentSpecs);
+        setTempSpecialties(list);
+        setShowSpecialtyOrderModal(true);
+    };
+
+    const handleSaveSpecialtyOrder = async () => {
+        db.settings.doctorSpecialties = tempSpecialties;
+        await db.saveSettings();
+        setSpecialtyOrder([...tempSpecialties]);
+        setShowSpecialtyOrderModal(false);
+    };
+    
+    const moveSpecialty = (index: number, direction: 'up' | 'down') => {
+        const newList = [...tempSpecialties];
+        if (direction === 'up' && index > 0) {
+            [newList[index], newList[index - 1]] = [newList[index - 1], newList[index]];
+        } else if (direction === 'down' && index < newList.length - 1) {
+            [newList[index], newList[index + 1]] = [newList[index + 1], newList[index]];
+        }
+        setTempSpecialties(newList);
+    };
 
     // Subscribe to database changes
     useEffect(() => {
@@ -389,11 +405,22 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                 // Personnel View Headers
                 headRow = [['醫師', ...dateHeaders]];
                 
-                // Sort doctors: Specialty -> Name
+                // Sort doctors: Specialty Index -> Name
                 const sortedDoctors = [...doctors].sort((a, b) => {
-                    const specA = a.specialty || 'Z_Other';
-                    const specB = b.specialty || 'Z_Other';
-                    if (specA !== specB) return specA.localeCompare(specB, 'zh-TW');
+                    const specA = a.specialty || '';
+                    const specB = b.specialty || '';
+                    
+                    // Get index from custom order
+                    let idxA = specialtyOrder.indexOf(specA);
+                    let idxB = specialtyOrder.indexOf(specB);
+                    
+                    // If not found in order list, push to end
+                    if (idxA === -1) idxA = 999;
+                    if (idxB === -1) idxB = 999;
+                    
+                    if (idxA !== idxB) return idxA - idxB;
+                    
+                    // Secondary sort: Name
                     return a.name.localeCompare(b.name, 'zh-TW');
                 }).filter(doc => {
                     // Only include doctors who have at least one shift in this month AND are not Part-Time
@@ -800,15 +827,29 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
 
                     {canEdit && (
                         <button 
+                            onClick={handleOpenSpecialtyOrder}
+                            className={`ml-1 px-2 py-1 rounded-lg text-xs font-bold transition-all border flex items-center gap-1 ${
+                                showSpecialtyOrderModal 
+                                ? 'bg-teal-500 text-white border-teal-600 shadow-md' 
+                                : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
+                            }`}
+                        >
+                            <ArrowUpDown size={14} className={showSpecialtyOrderModal ? "text-white" : "text-gray-400"} />
+                            科別排序
+                        </button>
+                    )}
+
+                    {canEdit && (
+                        <button 
                             onClick={() => {
-                                if (confirm('這將依照科別（放射>家醫>腸胃>其他）重新排列醫師順序，是否繼續？')) {
-                                    db.resortDoctorsBySpecialty().then(() => alert('已依科別排序完成'));
+                                if (confirm('確定要依照設定的科別順序，重新排列所有醫師的順序嗎？\n(這將會更新資料庫中的排序設定)')) {
+                                    db.resortDoctorsBySpecialty().then(() => alert('已完成排序執行！'));
                                 }
                             }}
                             className="ml-1 px-2 py-1 bg-white text-slate-500 hover:bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold transition-all flex items-center gap-1"
                         >
-                            <ArrowUpDown size={14} />
-                            排序
+                            <ArrowUpDown size={14} className="text-teal-600" />
+                            執行排序
                         </button>
                     )}
 
@@ -1847,6 +1888,70 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                 confirmText="開始排班"
                 confirmColor="purple"
             />
+
+            {/* Specialty Order Modal */}
+            {showSpecialtyOrderModal && (
+                <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm border border-gray-100 animate-in zoom-in-95 duration-200 overflow-hidden flex flex-col max-h-[80vh]">
+                        <div className="px-5 py-4 border-b border-gray-100 flex justify-between items-center bg-teal-50/50">
+                            <h3 className="font-bold text-gray-800 text-lg flex items-center gap-2">
+                                <ArrowUpDown size={18} className="text-teal-600"/>
+                                科別排序設定
+                            </h3>
+                            <button onClick={() => setShowSpecialtyOrderModal(false)} className="text-gray-400 hover:text-gray-600 bg-white p-1 rounded-full shadow-sm hover:shadow transition-all">
+                                <X size={20} />
+                            </button>
+                        </div>
+                        
+                        <div className="p-4 overflow-y-auto flex-1 space-y-2">
+                             <div className="text-xs text-gray-500 mb-2 px-1">
+                                請使用箭頭調整科別顯示順序。(排序靠前者將顯示在上方)
+                             </div>
+                             {tempSpecialties.map((spec, idx) => (
+                                 <div key={spec} className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg shadow-sm hover:border-teal-300 transition-colors">
+                                     <div className="flex items-center gap-3">
+                                         <span className="w-6 h-6 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center text-xs font-bold font-mono">
+                                             {idx + 1}
+                                         </span>
+                                         <div className="font-bold text-gray-800 text-sm">{spec || '未分類'}</div>
+                                     </div>
+                                     <div className="flex items-center gap-1">
+                                         <button 
+                                            onClick={() => moveSpecialty(idx, 'up')}
+                                            disabled={idx === 0}
+                                            className="p-1.5 rounded hover:bg-slate-100 text-slate-400 disabled:opacity-30 disabled:hover:bg-transparent"
+                                         >
+                                             <ChevronLeft size={16} className="rotate-90"/>
+                                         </button>
+                                         <button 
+                                            onClick={() => moveSpecialty(idx, 'down')}
+                                            disabled={idx === tempSpecialties.length - 1}
+                                            className="p-1.5 rounded hover:bg-slate-100 text-slate-400 disabled:opacity-30 disabled:hover:bg-transparent"
+                                         >
+                                             <ChevronLeft size={16} className="-rotate-90"/>
+                                         </button>
+                                     </div>
+                                 </div>
+                             ))}
+                        </div>
+
+                        <div className="p-4 border-t border-gray-100 bg-gray-50 flex justify-end gap-2">
+                            <button
+                                onClick={() => setShowSpecialtyOrderModal(false)}
+                                className="px-4 py-2 rounded-lg text-sm font-bold text-gray-500 hover:bg-gray-200 transition-colors"
+                            >
+                                取消
+                            </button>
+                            <button
+                                onClick={handleSaveSpecialtyOrder}
+                                className="px-4 py-2 rounded-lg text-sm font-bold bg-teal-600 text-white hover:bg-teal-700 shadow-md transition-colors"
+                            >
+                                儲存排序
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

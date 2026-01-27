@@ -1615,66 +1615,43 @@ BMD :{{bmd}}
     }
 
     async resortDoctorsBySpecialty() {
-        // Priority: 放射 > GI > 家醫 > 神經內科 > 胸腔內科 > 婦科 > 耳鼻喉科 > 眼科 > Others
-        // Part-time doctors go to the bottom.
+        // Use custom specialty order from settings
+        const specialtyOrder = this.settings.doctorSpecialties || ['放射科', '家醫科', '腸胃科', '其他'];
         
         const getRank = (doc: Doctor) => {
-            let rank = 9; // Default Others
-
-            // Hotfix: Force specific doctors to Radiology if data is missing
-            if (doc.name && doc.name.replace(/\s/g, '').includes('謝弼丞')) rank = 1;
-            else {
-                const specialty = doc.specialty;
-                if (specialty) {
-                    const s = specialty.toLowerCase();
-                    if (s.includes('放射') || s.includes('radio') || s.includes('img') || s.includes('x-ray')) rank = 1;
-                    else if (s.includes('腸胃') || s.includes('胃腸') || s.includes('消化') || s.includes('gastro') || s.includes('gi')) rank = 2;
-                    else if (s.includes('家醫') || s.includes('家庭') || s.includes('family') || s.includes('fm')) rank = 3;
-                    else if (s.includes('神經') || s.includes('neuro')) rank = 4;
-                    else if (s.includes('胸腔') || s.includes('chest') || s.includes('pulmo')) rank = 5;
-                    else if (s.includes('婦') || s.includes('gyn')) rank = 6;
-                    else if (s.includes('耳') || s.includes('ent') || s.includes('oto')) rank = 7;
-                    else if (s.includes('眼') || s.includes('oph') || s.includes('eye')) rank = 8;
-                }
+            let rank = 999;
+            const s = (doc.specialty || '').trim();
+            if (s) {
+                 const idx = specialtyOrder.indexOf(s);
+                 if (idx !== -1) {
+                     rank = idx;
+                 }
             }
-            
-            // Part-time penalty
+            // Part-time penalty (append to end)
             if (doc.isPartTime) {
-                rank += 100;
+                rank += 1000;
             }
-            
             return rank;
         };
 
         const sorted = [...this.doctors].sort((a, b) => {
             const rankA = getRank(a);
             const rankB = getRank(b);
-            
-            // Debug Log for specific doctors
-            if (a.name.includes('蘇芳儀') || a.name.includes('謝弼丞') || a.name.includes('鄭敏')) {
-                 console.log(`Sorting Debug: ${a.name} (${a.specialty}) isPT=${a.isPartTime} Rank=${rankA}`);
-            }
-
             if (rankA !== rankB) return rankA - rankB;
-            // Maintain relative current order
-            return (a.displayOrder || 0) - (b.displayOrder || 0);
+            // Secondary sort by Name
+            return a.name.localeCompare(b.name, 'zh-TW');
         });
-        
-        console.log('--- Sorted Doctors Summary ---');
-        sorted.forEach(d => console.log(`${d.name}: Rank=${getRank(d)}`));
 
-        // Re-assign display orders
-        for (let i = 0; i < sorted.length; i++) {
-            const doc = sorted[i];
-            if (doc.displayOrder !== i) {
-                doc.displayOrder = i;
-                // Update in DB (fire and forget / parallel)
-                await this.updateDoctor(doc);
-            }
+        // Apply new order
+        this.doctors = sorted.map((d, i) => ({ ...d, displayOrder: i }));
+        this.notifyListeners();
+
+        // Persist to DB
+        for (const doc of this.doctors) {
+            await supabase.from('doctors').update({ display_order: doc.displayOrder }).eq('id', doc.id);
         }
         
-        this.doctors = sorted;
-        this.notifyListeners();
+        console.log('[Store] Doctors resorted by specialty:', specialtyOrder);
         return true;
     }
 
