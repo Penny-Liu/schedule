@@ -1207,8 +1207,9 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                             return (
                                                 <td 
                                                     key={date} 
-                                                    onClick={() => handleCellClick(doc.id, date)}
-                                                    className={`p-1 border-r border-gray-100 h-12 cursor-pointer transition-all relative group text-center
+                                                    onClick={() => canEdit && handleCellClick(doc.id, date)}
+                                                    className={`p-1 border-r border-gray-100 h-12 transition-all relative group text-center
+                                                        ${canEdit ? 'cursor-pointer' : 'cursor-not-allowed'}
                                                         ${hasStation 
                                                             ? (() => {
                                                                 const st = shift.scheduled_station || '';
@@ -1534,7 +1535,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                             displayShifts.map(s => {
                                                                 const doc = doctors.find(d => d.id === s.doctorId);
                                                                 return (
-                                                                    <div key={s.id} className="flex items-center gap-3 p-2 rounded-lg bg-slate-50 border border-slate-100 transform hover:scale-[1.02] transition-all cursor-pointer hover:bg-white hover:shadow-sm" onClick={()=>handleCellClick(s.doctorId, s.date)}>
+                                                                    <div key={s.id} className={`flex items-center gap-3 p-2 rounded-lg bg-slate-50 border border-slate-100 transform hover:scale-[1.02] transition-all ${canEdit ? 'cursor-pointer hover:bg-white hover:shadow-sm' : 'cursor-not-allowed'}`} onClick={()=>canEdit && handleCellClick(s.doctorId, s.date)}>
                                                                         <div className="w-10 h-10 rounded-full bg-teal-100 text-teal-600 flex items-center justify-center font-bold text-sm shadow-sm border border-teal-50">
                                                                             {doc?.alias}
                                                                         </div>
@@ -1552,8 +1553,8 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                             })
                                                         ) : (
                                                             <div 
-                                                                onClick={() => handleStationCellClick(st, loc, toLocalISOString(currentDate))}
-                                                                className="h-20 flex items-center justify-center text-slate-300 text-xs italic border-2 border-dashed border-slate-50 rounded-lg bg-slate-50/50 cursor-pointer hover:bg-teal-50 hover:border-teal-200 hover:text-teal-600 transition-all font-bold group"
+                                                                onClick={() => canEdit && handleStationCellClick(st, loc, toLocalISOString(currentDate))}
+                                                                className={`h-20 flex items-center justify-center text-slate-300 text-xs italic border-2 border-dashed border-slate-50 rounded-lg bg-slate-50/50 transition-all font-bold group ${canEdit ? 'cursor-pointer hover:bg-teal-50 hover:border-teal-200 hover:text-teal-600' : 'cursor-not-allowed'}`}
                                                             >
                                                                 <span className="group-hover:scale-105 transition-transform flex items-center gap-1">
                                                                     <Plus size={14}/> 指派醫師
