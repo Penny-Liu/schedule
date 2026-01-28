@@ -134,6 +134,7 @@ export interface DailyManpowerStats {
   beitou_clients: number;
   beitou_cta: number;
   dazhi_clients: number;
+  beitou_total?: number; // Manually entered total radiographer count for Beitou
 }
 
 export interface Doctor {

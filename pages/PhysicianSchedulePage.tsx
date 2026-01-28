@@ -18,6 +18,8 @@ const toLocalISOString = (date: Date) => {
     const day = String(date.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
 };
+// Alias for internal use if needed
+const propsToLocalISOString = toLocalISOString;
 
 const LOCATIONS = ['北投', '大直', '台中'];
 
@@ -28,6 +30,131 @@ const LOCATION_COLORS: Record<string, string> = {
 };
 
 const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUser }) => {
+    
+    // --- Copy Text Generators ---
+    const generateBeitouCopyText = (date: Date, shifts: any[], doctors: Doctor[]) => {
+        const dateStr = `${propsToLocalISOString(date)} (${['日', '一', '二', '三', '四', '五', '六'][date.getDay()]})`;
+        const dateKey = propsToLocalISOString(date);
+        
+        const getDocs = (stationName: string) => {
+            return shifts
+                .filter(s => s.date === dateKey && s.location === '北投' && (s.scheduled_station === stationName || s.station === stationName))
+                .map(s => {
+                    const d = doctors.find(doc => doc.id === s.doctorId);
+                    let name = d?.alias || d?.name?.charAt(0) || '?';
+                    // 如果有晚班任務標籤，加上 (晚)
+                    if (s.task === '晚班') {
+                        name += '(晚)';
+                    }
+                    return name;
+                });
+        };
+
+        const mainDocs = getDocs('主');
+        const assistDocs = getDocs('輔');
+        const imgDocs = getDocs('影像');
+        const expDocs = getDocs('解說');
+        const supDocs = getDocs('支援');
+        const giDocs = getDocs('GI');
+        
+        // 檢查崗位在行政的醫師
+        const adminDocs = shifts
+            .filter(s => s.date === dateKey && (s.station === '行政' || s.scheduled_station === '行政'))
+            .map(s => {
+                const d = doctors.find(doc => doc.id === s.doctorId);
+                return d?.alias || d?.name?.charAt(0) || '?';
+            });
+        
+        // 使用手動輸入的北投客戶數
+        const manualStats = db.getDailyStats(dateKey);
+        const radTotal = manualStats?.beitou_clients ?? '';
+
+        const lines = [
+            `${date.getMonth() + 1}/${date.getDate()} （${['日', '一', '二', '三', '四', '五', '六'][date.getDay()]}）`,
+            `影像：${imgDocs.join('/')}`,
+            `解說：${expDocs.join('/')}`,
+            `支援：${supDocs.join('/')}`,
+            `GI：${giDocs.join('/')}`,
+            adminDocs.length > 0 ? `行政：${adminDocs.join('/')}` : '',
+            `總人數 : ${radTotal}人`,
+            `MR：      人`,
+            `GI：     台`
+        ];
+
+        return lines.filter(l => l !== '').join('\n');
+    };
+
+    const generateDazhiCopyText = (date: Date, shifts: any[], doctors: Doctor[]) => {
+        const dateKey = propsToLocalISOString(date);
+
+        const getFullDocs = (stationName: string) => {
+            return shifts
+                .filter(s => s.date === dateKey && s.location === '大直' && (s.scheduled_station === stationName || s.station === stationName))
+                .map(s => {
+                    const d = doctors.find(doc => doc.id === s.doctorId);
+                    let suffix = ' 醫師'; // Default suffix
+                    if (s.scheduled_station === '腸胃' && d?.name === '梁程超') suffix = ' 院長 醫師'; // Example mimic
+                    
+                    // Specific logic: if "Remote" (遠距), append "(北投)"
+                    if (['遠班', '遠距', '遠'].includes(s.scheduled_station || '')) return `${d?.name} 醫師 (北投)`;
+                    
+                    return `${d?.name}${suffix}`;
+                });
+        };
+        
+        // Special handler for imaging line: get "遠班" doctors regardless of location
+        const getRemoteDocs = () => {
+            return shifts
+                .filter(s => {
+                    if (s.date !== dateKey) return false;
+                    const station = s.scheduled_station || s.station;
+                    return ['遠班', '遠距', '遠'].includes(station);
+                })
+                .map(s => {
+                    const d = doctors.find(doc => doc.id === s.doctorId);
+                    // Append (北投) if location is 北投
+                    if (s.location === '北投') {
+                        return `${d?.name} 醫師 (北投)`;
+                    }
+                    return `${d?.name} 醫師`;
+                });
+        };
+        
+        // Specific Stations
+        // User Request: Imaging line shows "遠班" doctors, with (北投) suffix if location is 北投
+        const imgDocs = getRemoteDocs();
+        const expDocs = getFullDocs('解說');
+        const giDocs = [...getFullDocs('GI'), ...getFullDocs('腸胃')]; // GI or 腸胃
+        const anesthDocs = [...getFullDocs('麻醫'), ...getFullDocs('麻醉')];
+
+        // 3-Specialty
+        const getSpecDocs = (station: string) => {
+             return shifts
+                .filter(s => s.date === dateKey && s.location === '大直' && (s.scheduled_station === station || s.station === station))
+                .map(s => {
+                    const d = doctors.find(doc => doc.id === s.doctorId);
+                    return d?.name || '';
+                }).join('、');
+        };
+        const gynDocs = getSpecDocs('婦科');
+        const entDocs = getSpecDocs('耳鼻喉科');
+        const eyeDocs = getSpecDocs('眼科');
+
+        const lines = [
+            `${date.getMonth() + 1}/${date.getDate()}(${['日', '一', '二', '三', '四', '五', '六'][date.getDay()]})`,
+            `影像 : ${imgDocs.join('、')}`,
+            `解說 : ${expDocs.join('、')}`,
+            `腸胃：${giDocs.join('、')}`,
+            `麻醫：${anesthDocs.join('、')}`,
+            `3科會診醫師(09:00~12:00)`,
+            `婦科：${gynDocs}`,
+            `耳鼻喉科：${entDocs}`,
+            `眼科：${eyeDocs}`
+        ];
+
+         return lines.filter(l => l !== '').join('\n');
+    };
+
     const [currentDate, setCurrentDate] = useState(new Date());
     const currentYearMonth = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
     const [isLocked, setIsLocked] = useState(db.isMonthLocked(currentYearMonth));
@@ -39,6 +166,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
     
     const [doctors, setDoctors] = useState<Doctor[]>(db.getDoctors());
     const [shifts, setShifts] = useState(db.getDoctorShifts());
+    const [staffShifts, setStaffShifts] = useState(db.shifts); // New: For Radiologist Total Count
 
     // Define User's Preferred Order and Defaults
     const PREFERRED_STATIONS = [
@@ -156,13 +284,19 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
         const handleDataChange = () => {
             setDoctors(db.getDoctors());
             setShifts(db.getDoctorShifts());
+            setStaffShifts(db.shifts);
             setIsLocked(db.isMonthLocked(currentYearMonth));
         };
 
         const unsubscribe = db.subscribe(handleDataChange);
-        // Initial check
-        setIsLocked(db.isMonthLocked(currentYearMonth));
         
+        // Ensure data is loaded
+        db.initializeData().then(() => {
+            setDoctors(db.getDoctors());
+            setShifts(db.getDoctorShifts());
+            setStaffShifts(db.shifts);
+        });
+
         return () => unsubscribe();
     }, [currentYearMonth]);
 
@@ -802,7 +936,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                         </button>
                         <span className="px-4 font-mono font-bold text-gray-700 min-w-[100px] text-center">
                            {viewMode === 'daily' 
-                                ? toLocalISOString(currentDate) 
+                                ? `${toLocalISOString(currentDate)} (${['日', '一', '二', '三', '四', '五', '六'][currentDate.getDay()]})`
                                 : `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`
                            }
                         </span>
@@ -1375,7 +1509,8 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                             }
                                             
                                             // Get Requirement
-                                            const dayOfWeek = (currentDate.getDay() + 6) % 7;
+                                            // Fix: Settings uses [Sun, Mon...] index 0-6. currentDate.getDay() returns 0-6 (Sun-Sat).
+                                            const dayOfWeek = currentDate.getDay();
                                             const reqKey = `${config.name}_${config.location}`;
                                             const reqs = requirements[reqKey] || requirements[config.name] || [0,0,0,0,0,0,0];
                                             const req = reqs[dayOfWeek];
@@ -1432,6 +1567,62 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                 </div>
                             );
                         })}
+                    </div>
+                )}
+
+                {/* Copy to Line Section (Daily View Only) */}
+                {viewMode === 'daily' && (
+                    <div className="p-4 max-w-full">
+                        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                            <h3 className="text-sm font-bold bg-green-50 px-4 py-2 border-b border-green-100 flex items-center gap-2 text-green-700">
+                                <FileText size={16} className="text-green-600"/> 複製 Line 文字 (Copy to Line)
+                            </h3>
+                            <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-6">
+                                {/* Beitou Copy Block */}
+                                <div className="space-y-2">
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-xs font-bold text-gray-500">北投區塊</span>
+                                        <button
+                                            onClick={() => {
+                                                const text = generateBeitouCopyText(currentDate, shifts, doctors);
+                                                navigator.clipboard.writeText(text);
+                                                alert('已複製北投班表！');
+                                            }}
+                                            className="px-2 py-1 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded text-xs font-bold flex items-center gap-1 transition-colors"
+                                        >
+                                            <Check size={12} /> 複製
+                                        </button>
+                                    </div>
+                                    <textarea
+                                        readOnly
+                                        className="w-full h-64 p-3 text-xs font-mono border border-gray-200 rounded-lg bg-slate-50 focus:ring-2 focus:ring-green-500 outline-none resize-none"
+                                        value={generateBeitouCopyText(currentDate, shifts, doctors)}
+                                    />
+                                </div>
+
+                                {/* Dazhi Copy Block */}
+                                <div className="space-y-2">
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-xs font-bold text-gray-500">大直區塊</span>
+                                        <button
+                                            onClick={() => {
+                                                const text = generateDazhiCopyText(currentDate, shifts, doctors);
+                                                navigator.clipboard.writeText(text);
+                                                alert('已複製大直班表！');
+                                            }}
+                                            className="px-2 py-1 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded text-xs font-bold flex items-center gap-1 transition-colors"
+                                        >
+                                            <Check size={12} /> 複製
+                                        </button>
+                                    </div>
+                                    <textarea
+                                        readOnly
+                                        className="w-full h-64 p-3 text-xs font-mono border border-gray-200 rounded-lg bg-slate-50 focus:ring-2 focus:ring-green-500 outline-none resize-none"
+                                        value={generateDazhiCopyText(currentDate, shifts, doctors)}
+                                    />
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 )}
                 

@@ -20,8 +20,8 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
     });
     const [currentDate, setCurrentDate] = useState(new Date());
 
-    // Include all users including SYSTEM_ADMIN as requested
-    const users = db.getUsers();
+    // 只統計有勾選為放射師的人員
+    const users = db.getUsers().filter(u => u.isRadiographer === true);
     const shifts = db.getShifts('', '');
     const holidays = db.getHolidays();
 
