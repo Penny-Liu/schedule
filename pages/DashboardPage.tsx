@@ -2638,8 +2638,8 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                     // Show doctors with station = '未分配'
                                                     if (st !== '未分配') return false;
                                                     
-                                                    // Exclude doctors who are OFF or on leave (scheduled_station = 'X')
-                                                    if (s.scheduled_station === 'X' || s.scheduled_station === 'OFF') return false;
+                                                    // Exclude doctors who are OFF, on leave, or have no scheduled station
+                                                    if (!s.scheduled_station || s.scheduled_station === 'X' || s.scheduled_station === 'OFF') return false;
                                                     
                                                     // Strict Location Filter:
                                                     // Only show if Location is '北投' (or empty) OR scheduled_station includes '遠'
