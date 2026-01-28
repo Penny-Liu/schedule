@@ -64,7 +64,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
     const [scheduleRange, setScheduleRange] = useState({ start: '', end: '' });
 
     // Include all users including SYSTEM_ADMIN as requested
-    const [users, setUsers] = useState<User[]>(() => db.getUsers().filter(u => u.role !== UserRole.SYSTEM_ADMIN && u.role !== UserRole.SCHEDULER && u.role !== UserRole.VIEWER));
+    const [users, setUsers] = useState<User[]>(() => db.getUsers().filter(u => u.isRadiographer));
     const holidays = db.getHolidays();
 
     const pendingLeaves = db.getLeaves().filter(l => l.status === LeaveStatus.PENDING);
@@ -132,7 +132,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
     // Subscribe to Store updates to ensure UI reflects data changes
     useEffect(() => {
         const unsubscribe = db.subscribe(() => {
-            setUsers(db.getUsers().filter(u => u.role !== UserRole.SYSTEM_ADMIN && u.role !== UserRole.SCHEDULER && u.role !== UserRole.VIEWER));
+            setUsers(db.getUsers().filter(u => u.isRadiographer));
             setShifts([...db.getShifts('', '')]);
             setDisplayOrder([...db.getStationDisplayOrder()]);
         });
@@ -322,7 +322,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
         setUsers(newUsers);
 
         db.updateUserDisplayOrder(newOrderIds).then(() => {
-            setUsers(db.getUsers().filter(u => u.role !== UserRole.SYSTEM_ADMIN && u.role !== UserRole.SCHEDULER && u.role !== UserRole.VIEWER));
+            setUsers(db.getUsers().filter(u => u.isRadiographer));
         });
     };
 

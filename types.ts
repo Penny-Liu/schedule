@@ -28,6 +28,7 @@ export interface User {
   password?: string; // User defined password
   mustChangePassword?: boolean; // New: Force password change on next login
   primaryStation?: string; // New: Identifies the user's "Home" station (e.g., '遠距')
+  isRadiographer?: boolean; // New: Flag to indicate if user should appear in Radiographer Schedule
 }
 
 // Updated Station Defaults: MR moved before US
@@ -147,6 +148,14 @@ export interface Doctor {
     isPartTime?: boolean; // New: Part-time doctor tag
     monthlyTargetShifts?: number; // New: Target number of shifts per month
     displayOrder?: number; // New: Custom display order (lower number = higher priority)
+    fixedShifts?: FixedShift[]; // New: Fixed weekly shifts
+}
+
+export interface FixedShift {
+    dayOfWeek: number; // 0=Sun, 1=Mon...
+    station: string;
+    location: string;
+    workTime?: string;
 }
 
 export interface DoctorShift {

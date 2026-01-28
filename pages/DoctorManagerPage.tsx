@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../services/store';
-import { Doctor, UserRole } from '../types';
-import { Users, Trash2, Plus, Save, Square, CheckSquare, Pencil, AlertCircle } from 'lucide-react';
+import { Doctor, UserRole, FixedShift } from '../types';
+import { Users, Trash2, Plus, Save, Square, CheckSquare, Pencil, AlertCircle, Clock } from 'lucide-react';
 import ConfirmModal from '../components/ConfirmModal';
 
 interface DoctorManagerPageProps {
@@ -34,6 +34,7 @@ const DoctorManagerPage: React.FC<DoctorManagerPageProps> = ({ currentUser }) =>
         excludedAutoScheduleLocations: string[];
         isPartTime: boolean;
         monthlyTargetShifts?: number;
+        fixedShifts: FixedShift[]; // New
     }>({
         name: '',
         alias: '',
@@ -43,7 +44,8 @@ const DoctorManagerPage: React.FC<DoctorManagerPageProps> = ({ currentUser }) =>
         locations: ['北投'], // Default to Beitou
         excludedAutoScheduleLocations: [],
         isPartTime: false,
-        monthlyTargetShifts: undefined
+        monthlyTargetShifts: undefined,
+        fixedShifts: [] // New
     });
 
     const [editingId, setEditingId] = useState<string | null>(null);
@@ -63,7 +65,7 @@ const DoctorManagerPage: React.FC<DoctorManagerPageProps> = ({ currentUser }) =>
     }, []);
 
     const resetForm = () => {
-        setFormData({ name: '', alias: '', specialty: '', capabilities: [], excludedDays: [], locations: ['北投'], excludedAutoScheduleLocations: [], isPartTime: false, monthlyTargetShifts: undefined });
+        setFormData({ name: '', alias: '', specialty: '', capabilities: [], excludedDays: [], locations: ['北投'], excludedAutoScheduleLocations: [], isPartTime: false, monthlyTargetShifts: undefined, fixedShifts: [] });
         setEditingId(null);
         setError(null);
     };
@@ -79,7 +81,8 @@ const DoctorManagerPage: React.FC<DoctorManagerPageProps> = ({ currentUser }) =>
             locations: doc.locations || [],
             excludedAutoScheduleLocations: doc.excludedAutoScheduleLocations || [],
             isPartTime: doc.isPartTime || false,
-            monthlyTargetShifts: doc.monthlyTargetShifts
+            monthlyTargetShifts: doc.monthlyTargetShifts,
+            fixedShifts: doc.fixedShifts || []
         });
         setError(null);
     };
@@ -134,6 +137,31 @@ const DoctorManagerPage: React.FC<DoctorManagerPageProps> = ({ currentUser }) =>
         });
     };
 
+    // Fixed Shift Helpers
+    const [newFixedShift, setNewFixedShift] = useState<{day: number, station: string, location: string, time: string}>({ day: 1, station: '', location: '北投', time: '' });
+
+    const handleAddFixedShift = () => {
+        if (!newFixedShift.station) return;
+        const newShift: FixedShift = {
+            dayOfWeek: newFixedShift.day,
+            station: newFixedShift.station,
+            location: newFixedShift.location,
+            workTime: newFixedShift.time
+        };
+        setFormData(prev => ({
+            ...prev,
+            fixedShifts: [...prev.fixedShifts, newShift]
+        }));
+        setNewFixedShift(prev => ({ ...prev, station: '', time: '' }));
+    };
+
+    const handleRemoveFixedShift = (index: number) => {
+        setFormData(prev => ({
+            ...prev,
+            fixedShifts: prev.fixedShifts.filter((_, i) => i !== index)
+        }));
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!formData.name.trim()) {
@@ -154,7 +182,8 @@ const DoctorManagerPage: React.FC<DoctorManagerPageProps> = ({ currentUser }) =>
                 locations: formData.locations,
                 excludedAutoScheduleLocations: formData.excludedAutoScheduleLocations,
                 isPartTime: formData.isPartTime,
-                monthlyTargetShifts: formData.monthlyTargetShifts
+                monthlyTargetShifts: formData.monthlyTargetShifts,
+                fixedShifts: formData.fixedShifts
             });
         } else {
             const result = await db.addDoctor(
@@ -172,9 +201,19 @@ const DoctorManagerPage: React.FC<DoctorManagerPageProps> = ({ currentUser }) =>
                 setError(result.error || '新增失敗');
                 return;
             }
-            // Update with specialty immediately
-            if (formData.specialty && result.id) {
-               await db.updateDoctor({ id: result.id, name: formData.name, specialty: formData.specialty, capabilities: formData.capabilities, locations: formData.locations, excludedDays: formData.excludedDays, excludedAutoScheduleLocations: formData.excludedAutoScheduleLocations, isPartTime: formData.isPartTime });
+            // Update with specialty AND fixedShifts immediately
+            if ((formData.specialty || formData.fixedShifts.length > 0) && result.id) {
+               await db.updateDoctor({ 
+                   id: result.id, 
+                   name: formData.name, 
+                   specialty: formData.specialty, 
+                   capabilities: formData.capabilities, 
+                   locations: formData.locations, 
+                   excludedDays: formData.excludedDays, 
+                   excludedAutoScheduleLocations: formData.excludedAutoScheduleLocations, 
+                   isPartTime: formData.isPartTime,
+                   fixedShifts: formData.fixedShifts 
+               });
             }
         }
         resetForm();
@@ -415,6 +454,85 @@ const DoctorManagerPage: React.FC<DoctorManagerPageProps> = ({ currentUser }) =>
                                         </button>
                                     );
                                 })}
+                            </div>
+                        </div>
+
+                        {/* Fixed Shifts */}
+                        <div>
+                             <div className="flex justify-between items-center mb-2">
+                                <label className="text-xs font-bold text-gray-500 uppercase">固定排班設定 (Fixed Schedule)</label>
+                                <span className="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">針對兼職醫師設定每週固定班表</span>
+                            </div>
+                            
+                            {/* Add New Fixed Shift */}
+                            <div className="flex flex-wrap gap-2 mb-3 bg-slate-50 p-2 rounded-lg border border-slate-100">
+                                <select 
+                                    className="text-xs p-1.5 rounded border border-gray-300"
+                                    value={newFixedShift.day}
+                                    onChange={e => setNewFixedShift({...newFixedShift, day: parseInt(e.target.value)})}
+                                >
+                                    {['日', '一', '二', '三', '四', '五', '六'].map((d, i) => <option key={i} value={i}>{d}</option>)}
+                                </select>
+                                <select 
+                                    className="text-xs p-1.5 rounded border border-gray-300 flex-1 min-w-[80px]"
+                                    value={newFixedShift.station}
+                                    onChange={e => setNewFixedShift({...newFixedShift, station: e.target.value})}
+                                >
+                                    <option value="">選擇崗位...</option>
+                                    {availableStations.map(s => <option key={s} value={s}>{s}</option>)}
+                                </select>
+                                <select 
+                                    className="text-xs p-1.5 rounded border border-gray-300 min-w-[60px]"
+                                    value={newFixedShift.location}
+                                    onChange={e => setNewFixedShift({...newFixedShift, location: e.target.value})}
+                                >
+                                    {LOCATIONS.map(l => <option key={l} value={l}>{l}</option>)}
+                                </select>
+                                <div className="relative w-20">
+                                    <Clock size={10} className="absolute left-1.5 top-2 text-gray-400"/>
+                                    <input 
+                                        type="text" 
+                                        className="w-full pl-5 pr-1 py-1.5 text-xs border border-gray-300 rounded" 
+                                        placeholder="08:30"
+                                        value={newFixedShift.time}
+                                        onChange={e => setNewFixedShift({...newFixedShift, time: e.target.value})}
+                                    />
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={handleAddFixedShift}
+                                    disabled={!newFixedShift.station}
+                                    className="bg-teal-600 text-white px-3 py-1 rounded text-xs font-bold hover:bg-teal-700 disabled:opacity-50"
+                                >
+                                    +
+                                </button>
+                            </div>
+
+                            {/* List */}
+                            <div className="space-y-1">
+                                {formData.fixedShifts.length === 0 ? (
+                                    <div className="text-xs text-gray-400 italic text-center py-2">無固定班表</div>
+                                ) : (
+                                    formData.fixedShifts.map((shift, idx) => (
+                                        <div key={idx} className="flex items-center justify-between text-xs bg-white border border-gray-200 p-2 rounded shadow-sm">
+                                            <div className="flex items-center gap-2">
+                                                <span className="font-bold text-gray-700 bg-slate-100 px-1.5 py-0.5 rounded">
+                                                    週{['日', '一', '二', '三', '四', '五', '六'][shift.dayOfWeek]}
+                                                </span>
+                                                <span className="text-gray-800">{shift.station}</span>
+                                                <span className="text-[10px] text-gray-500 bg-gray-50 px-1 rounded border border-gray-100">{shift.location}</span>
+                                                {shift.workTime && <span className="text-gray-400 flex items-center gap-0.5"><Clock size={10}/>{shift.workTime}</span>}
+                                            </div>
+                                            <button 
+                                                type="button"
+                                                onClick={() => handleRemoveFixedShift(idx)}
+                                                className="text-gray-400 hover:text-red-500"
+                                            >
+                                                <Trash2 size={14}/>
+                                            </button>
+                                        </div>
+                                    ))
+                                )}
                             </div>
                         </div>
 

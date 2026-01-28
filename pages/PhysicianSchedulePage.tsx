@@ -1,7 +1,8 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { db } from '../services/store';
 import { Doctor, UserRole, DoctorStationConfig, DateEventType } from '../types';
-import { ChevronLeft, ChevronRight, Download, User, X, Clock, FileText, MapPin, Plus, Briefcase, Wand2, BarChart2, Lock, Unlock, ArrowUpDown } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Download, Lock, RefreshCw, Save, Unlock, User, UserPlus, X, Calendar as CalendarIcon, Clock, Filter, Sliders, ArrowUpDown, Wand2, BarChart2, Check, AlertCircle, Plus, LayoutGrid, List as ListIcon, Trash2, Briefcase, FileText, MapPin } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import ConfirmModal from '../components/ConfirmModal';
@@ -184,9 +185,21 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
         // If already assigned to THIS station (in Schedule), confirm
         // Use scheduled_station
         if (existingShift && confirm(`${doctors.find(d=>d.id===doctorId)?.name} 當天已有排班 (${existingShift.scheduled_station || '未分配'})。要改派至 ${assignModal.station} (${assignModal.location}) 嗎？`)) {
-             await db.assignDoctorSchedule(doctorId, assignModal.date, assignModal.station, undefined, undefined, assignModal.location);
+             if (assignModal.station === '晚班') {
+                 // User Request: "Late Shift is a Task". Do NOT change station. Keep existing.
+                 // We filtered for existingShift via "Only working" rule, so it exists.
+                 await db.assignDoctorSchedule(doctorId, assignModal.date, existingShift.scheduled_station, existingShift.workTime, existingShift.note, existingShift.location, '晚班');
+             } else {
+                 await db.assignDoctorSchedule(doctorId, assignModal.date, assignModal.station, undefined, undefined, assignModal.location);
+             }
         } else if (!existingShift) {
-             await db.assignDoctorSchedule(doctorId, assignModal.date, assignModal.station, undefined, undefined, assignModal.location);
+             if (assignModal.station === '晚班') {
+                 // Should be blocked by filter, but if reached, maybe assign as station '晚班'?
+                 // Or treat as normal assignment station='晚班', task='晚班'
+                 await db.assignDoctorSchedule(doctorId, assignModal.date, assignModal.station, undefined, undefined, assignModal.location, '晚班');
+             } else {
+                 await db.assignDoctorSchedule(doctorId, assignModal.date, assignModal.station, undefined, undefined, assignModal.location);
+             }
         }
         setAssignModal(null);
     };
@@ -362,7 +375,8 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                      const doc = doctors.find(d => d.id === s.doctorId);
                                      // Check Specialty="家醫科" and Cap="婦科" (or imply cap from task request)
                                      // User said: "解說醫師是家醫科，且可排婦科崗位"
-                                     return doc?.specialty === '家醫科' && doc?.capabilities?.includes('婦科');
+                                     // Mod: Allow ANY doctor with Gyn capability (not just Family Med)
+                                     return doc?.capabilities?.includes('婦科');
                                  }
                                  return false;
                              });
@@ -705,6 +719,32 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
         }
     };
 
+    // New: Daily View specific actions
+    const handleAutoScheduleDay = async () => {
+        if (!confirm(`確定要為 ${toLocalISOString(currentDate)} 執行自動排班嗎？\n(將會自動填補空缺)`)) return;
+        setIsAutoScheduling(true);
+        try {
+            await db.autoScheduleDoctors(toLocalISOString(currentDate), toLocalISOString(currentDate));
+            alert('單日排班完成！');
+        } catch (error) {
+            console.error(error);
+            alert('排班失敗');
+        } finally {
+            setIsAutoScheduling(false);
+        }
+    };
+
+    const handleClearDay = async () => {
+        if (!confirm(`⚠️ 警告：確定要清空 ${toLocalISOString(currentDate)} 的所有排班嗎？\n此動作無法復原！`)) return;
+        try {
+            await db.clearDoctorShifts(toLocalISOString(currentDate), toLocalISOString(currentDate));
+            alert('已清空單日排班');
+        } catch (error) {
+            console.error(error);
+            alert('清除失敗');
+        }
+    };
+
     return (
         <div className="flex flex-col h-full bg-slate-50">
             <div className="bg-white border-b border-gray-200 px-4 py-2 flex flex-wrap items-center justify-between gap-y-2 shrink-0 shadow-sm z-30 sticky top-0">
@@ -789,144 +829,118 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                         {viewMode === 'daily' ? '今天' : '本月'}
                     </button>
 
-                    {canEdit && (
-                        <button 
-                            onClick={() => {
-                                const newVal = !isQuickExcludeMode;
-                                setIsQuickExcludeMode(newVal);
-                                if (newVal) setIsQuickAssignMode(false); // Mutually exclusive
-                            }}
-                            className={`ml-1 px-2 py-1 rounded-lg text-xs font-bold transition-all border flex items-center gap-1 ${
-                                isQuickExcludeMode 
-                                ? 'bg-red-500 text-white border-red-600 shadow-md animate-pulse' 
-                                : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
-                            }`}
-                        >
-                            {isQuickExcludeMode ? <X size={14}/> : <X size={14} className="text-red-400"/>}
-                            {isQuickExcludeMode ? '關閉' : '禁排'}
-                        </button>
-                    )}
-
-                    {canEdit && (
-                         <button 
-                            onClick={() => {
-                                const newVal = !isQuickAssignMode;
-                                setIsQuickAssignMode(newVal);
-                                if (newVal) setIsQuickExcludeMode(false); // Mutually exclusive
-                            }}
-                            className={`ml-1 px-2 py-1 rounded-lg text-xs font-bold transition-all border flex items-center gap-1 ${
-                                isQuickAssignMode 
-                                ? 'bg-amber-500 text-white border-amber-600 shadow-md' 
-                                : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
-                            }`}
-                        >
-                            <span className="text-sm">{isQuickAssignMode ? '🖌️' : '🖊️'}</span>
-                            {isQuickAssignMode ? '關閉' : '快排'}
-                        </button>
-                    )}
-
-                    {canEdit && (
-                        <button 
-                            onClick={handleOpenSpecialtyOrder}
-                            className={`ml-1 px-2 py-1 rounded-lg text-xs font-bold transition-all border flex items-center gap-1 ${
-                                showSpecialtyOrderModal 
-                                ? 'bg-teal-500 text-white border-teal-600 shadow-md' 
-                                : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
-                            }`}
-                        >
-                            <ArrowUpDown size={14} className={showSpecialtyOrderModal ? "text-white" : "text-gray-400"} />
-                            科別排序
-                        </button>
-                    )}
-
-                    {canEdit && (
-                        <button 
-                            onClick={() => {
-                                if (confirm('確定要依照設定的科別順序，重新排列所有醫師的順序嗎？\n(這將會更新資料庫中的排序設定)')) {
-                                    db.resortDoctorsBySpecialty().then(() => alert('已完成排序執行！'));
-                                }
-                            }}
-                            className="ml-1 px-2 py-1 bg-white text-slate-500 hover:bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold transition-all flex items-center gap-1"
-                        >
-                            <ArrowUpDown size={14} className="text-teal-600" />
-                            執行排序
-                        </button>
-                    )}
-
-                    {canEdit && (
-                         <button 
-                            onClick={() => setIsReorderMode(!isReorderMode)}
-                            className={`ml-1 px-2 py-1 rounded-lg text-xs font-bold transition-all border flex items-center gap-1 ${
-                                isReorderMode 
-                                ? 'bg-indigo-500 text-white border-indigo-600 shadow-md' 
-                                : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
-                            }`}
-                        >
-                            <ArrowUpDown size={14} className={isReorderMode ? "text-white" : "text-gray-400"} />
-                            {isReorderMode ? '完成' : '調序'}
-                        </button>
-                    )}
+                    {/* View Specific Actions */}
                     
-                    <div className="h-5 w-px bg-gray-200 mx-1"></div>
-
-                    {/* Quick Assign Toolbar */}
-                    {isQuickAssignMode && (
-                        <div className="absolute top-full left-0 right-0 bg-amber-50 border-b border-amber-200 p-2 flex items-center justify-center gap-3 z-20 shadow-sm animate-in slide-in-from-top-2">
-                             <div className="text-xs font-bold text-amber-800 uppercase flex items-center gap-1">
-                                 <span>🖌️ 設定:</span>
-                             </div>
-                             {/* ... same inputs ... */}
-                             <select 
-                                value={quickAssignData.station}
-                                onChange={(e) => {
-                                    // Auto-update location if unique
-                                    const stName = e.target.value;
-                                    const assoc = stations.filter(s => s.name === stName);
-                                    let newLoc = quickAssignData.location;
-                                    if (assoc.length === 1) newLoc = assoc[0].location;
-                                    
-                                    setQuickAssignData({ ...quickAssignData, station: stName, location: newLoc });
+                    {/* Personnel View: Sort, Reorder, Quick Modes */}
+                    {viewMode === 'personnel' && canEdit && (
+                        <>
+                            <button 
+                                onClick={() => {
+                                    const newVal = !isQuickExcludeMode;
+                                    setIsQuickExcludeMode(newVal);
+                                    if (newVal) setIsQuickAssignMode(false);
                                 }}
-                                className="px-2 py-1 text-sm bg-white border border-amber-300 rounded text-gray-700 focus:outline-none focus:ring-2 focus:ring-amber-400"
-                             >
-                                {Array.from(new Set(stations.map(s => s.name))).map(s => (
-                                    <option key={s} value={s}>{s}</option>
-                                ))}
-                             </select>
+                                className={`ml-1 px-2 py-1 rounded-lg text-xs font-bold transition-all border flex items-center gap-1 ${
+                                    isQuickExcludeMode 
+                                    ? 'bg-red-500 text-white border-red-600 shadow-md animate-pulse' 
+                                    : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
+                                }`}
+                            >
+                                {isQuickExcludeMode ? <X size={14}/> : <X size={14} className="text-red-400"/>}
+                                {isQuickExcludeMode ? '關閉' : '禁排'}
+                            </button>
 
-                             <div className="flex bg-white rounded border border-amber-300 overflow-hidden">
-                                {LOCATIONS.map(loc => (
-                                    <button
-                                        key={loc}
-                                        onClick={() => setQuickAssignData({ ...quickAssignData, location: loc })}
-                                        className={`px-3 py-1 text-xs font-bold transition-colors ${quickAssignData.location === loc ? 'bg-amber-500 text-white' : 'text-gray-600 hover:bg-amber-100'}`}
-                                    >
-                                        {loc}
-                                    </button>
-                                ))}
-                             </div>
+                            <button 
+                                onClick={() => {
+                                    const newVal = !isQuickAssignMode;
+                                    setIsQuickAssignMode(newVal);
+                                    if (newVal) setIsQuickExcludeMode(false); 
+                                }}
+                                className={`ml-1 px-2 py-1 rounded-lg text-xs font-bold transition-all border flex items-center gap-1 ${
+                                    isQuickAssignMode 
+                                    ? 'bg-amber-500 text-white border-amber-600 shadow-md' 
+                                    : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
+                                }`}
+                            >
+                                <span className="text-sm">{isQuickAssignMode ? '🖌️' : '🖊️'}</span>
+                                {isQuickAssignMode ? '關閉' : '快排'}
+                            </button>
 
-                             <div className="flex items-center gap-1">
-                                <Clock size={14} className="text-amber-700"/>
-                                <input 
-                                    type="text" 
-                                    value={quickAssignData.workTime}
-                                    onChange={(e) => setQuickAssignData({ ...quickAssignData, workTime: e.target.value })}
-                                    className="px-2 py-1 text-sm bg-white border border-amber-300 rounded text-gray-700 w-24 focus:outline-none focus:ring-2 focus:ring-amber-400"
-                                    placeholder="時段"
-                                />
-                             </div>
-                        </div>
+                            <button 
+                                onClick={handleOpenSpecialtyOrder}
+                                className={`ml-1 px-2 py-1 rounded-lg text-xs font-bold transition-all border flex items-center gap-1 ${
+                                    showSpecialtyOrderModal 
+                                    ? 'bg-teal-500 text-white border-teal-600 shadow-md' 
+                                    : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
+                                }`}
+                            >
+                                <ArrowUpDown size={14} className={showSpecialtyOrderModal ? "text-white" : "text-gray-400"} />
+                                科別排序
+                            </button>
+
+                            <button 
+                                onClick={() => {
+                                    if (confirm('確定要依照設定的科別順序，重新排列所有醫師的順序嗎？\n(這將會更新資料庫中的排序設定)')) {
+                                        db.resortDoctorsBySpecialty().then(() => alert('已完成排序執行！'));
+                                    }
+                                }}
+                                className="ml-1 px-2 py-1 bg-white text-slate-500 hover:bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold transition-all flex items-center gap-1"
+                            >
+                                <ArrowUpDown size={14} className="text-teal-600" />
+                                執行排序
+                            </button>
+
+                            <button 
+                                onClick={() => setIsReorderMode(!isReorderMode)}
+                                className={`ml-1 px-2 py-1 rounded-lg text-xs font-bold transition-all border flex items-center gap-1 ${
+                                    isReorderMode 
+                                    ? 'bg-indigo-500 text-white border-indigo-600 shadow-md' 
+                                    : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
+                                }`}
+                            >
+                                <ArrowUpDown size={14} className={isReorderMode ? "text-white" : "text-gray-400"} />
+                                {isReorderMode ? '完成' : '調序'}
+                            </button>
+
+                            <button 
+                                onClick={handleOpenTargetDaysModal}
+                                className="ml-1 flex items-center gap-1 px-2 py-1 bg-gradient-to-r from-purple-500 to-indigo-600 text-white hover:opacity-90 rounded-lg text-xs font-bold transition-all shadow-md shadow-purple-200"
+                            >
+                                <Wand2 size={14} />
+                                一鍵排班(月)
+                            </button>
+                        </>
                     )}
 
+                    {/* Daily View: Auto-Schedule Day, Clear Day */}
+                    {viewMode === 'daily' && canEdit && (
+                        <>
+                             <button 
+                                onClick={handleAutoScheduleDay}
+                                disabled={isAutoScheduling}
+                                className="ml-1 flex items-center gap-1 px-3 py-1 bg-gradient-to-r from-teal-500 to-emerald-600 text-white hover:opacity-90 rounded-lg text-xs font-bold transition-all shadow-md shadow-teal-200 disabled:opacity-50"
+                            >
+                                <Wand2 size={14} />
+                                今日一鍵排班
+                            </button>
+                            <button 
+                                onClick={handleClearDay}
+                                className="ml-1 flex items-center gap-1 px-3 py-1 bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700 rounded-lg text-xs font-bold transition-all border border-red-200"
+                            >
+                                <Trash2 size={14} />
+                                清空今日
+                            </button>
+                        </>
+                    )}
 
-                    {canEdit && (
-                        <button 
+                    {/* Station View: Limited Actions or Future Expansion */}
+                    {viewMode === 'station' && canEdit && (
+                         <button 
                             onClick={handleOpenTargetDaysModal}
-                            className="flex items-center gap-1 px-2 py-1 bg-gradient-to-r from-purple-500 to-indigo-600 text-white hover:opacity-90 rounded-lg text-xs font-bold transition-all shadow-md shadow-purple-200"
+                            className="ml-1 flex items-center gap-1 px-2 py-1 bg-gradient-to-r from-purple-500 to-indigo-600 text-white hover:opacity-90 rounded-lg text-xs font-bold transition-all shadow-md shadow-purple-200"
                         >
                             <Wand2 size={14} />
-                            一鍵
+                            一鍵排班(月)
                         </button>
                     )}
 
@@ -1125,6 +1139,11 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                                         {shift.location}
                                                                     </div>
                                                                  )}
+                                                                 {shift.note && (
+                                                                    <div className="text-[8px] text-slate-500 scale-90 w-full text-center overflow-hidden text-ellipsis whitespace-nowrap px-0.5" title={shift.note}>
+                                                                        {shift.note.length > 4 ? shift.note.substring(0, 4) + '..' : shift.note}
+                                                                    </div>
+                                                                 )}
                                                             </div>
                                                         )
                                                     ) : (
@@ -1214,8 +1233,13 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                                 // Logic: Show 'Explanation' doctors in 'Gyn' station if FamilyMed + Gyn Capable
                                                                 if (stationName === '婦科' && s.scheduled_station === '解說') {
                                                                      const doc = doctors.find(d => d.id === s.doctorId);
-                                                                     return doc?.specialty === '家醫科' && doc?.capabilities?.includes('婦科');
+                                                                     // Mod: Allow ANY doctor with Gyn capability
+                                                                     return doc?.capabilities?.includes('婦科');
                                                                 }
+                                                                
+                                                                // Logic: Show 'Late Shift' task in 'Late Shift' station row
+                                                                if (stationName === '晚班' && s.task?.includes('晚班')) return true;
+
                                                                 return false;
                                                             });
                                                             
@@ -1313,6 +1337,9 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                                         {locStations.map(config => {
                                             const st = config.name;
+                                            // User Request: Daily View restore original (do not show Late Shift card)
+                                            if (st === '晚班') return null;
+
                                             const shiftsOnStation = shifts.filter(s => {
                                                 if (s.date !== toLocalISOString(currentDate) || s.location !== config.location) return false;
                                                 const assignedSt = s.scheduled_station || s.station;
@@ -1321,7 +1348,8 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                  // Logic: Show 'Explanation' doctors in 'Gyn' station if FamilyMed + Gyn Capable
                                                 if (st === '婦科' && assignedSt === '解說') {
                                                      const doc = doctors.find(d => d.id === s.doctorId);
-                                                     return doc?.specialty === '家醫科' && doc?.capabilities?.includes('婦科');
+                                                     // Mod: Allow ANY doctor with Gyn capability
+                                                     return doc?.capabilities?.includes('婦科');
                                                 }
                                                 return false;
                                             });
@@ -1380,13 +1408,20 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                                                 {suffix && <span className="text-[10px] text-teal-700 bg-teal-50 px-1 rounded border border-teal-100">{suffix}</span>}
                                                                             </div>
                                                                             {s.workTime && <div className="text-xs text-gray-500 flex items-center gap-1"><Clock size={10}/> {s.workTime}</div>}
+                                                                            {s.task && <div className="text-xs text-blue-600 font-bold">{s.task}</div>}
+                                                                            {s.note && <div className="text-xs text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-100 mt-0.5 break-all">📝 {s.note}</div>}
                                                                         </div>
                                                                     </div>
                                                                 );
                                                             })
                                                         ) : (
-                                                            <div className="h-20 flex items-center justify-center text-slate-300 text-xs italic border-2 border-dashed border-slate-50 rounded-lg bg-slate-50/50">
-                                                                無人值班
+                                                            <div 
+                                                                onClick={() => handleStationCellClick(st, loc, toLocalISOString(currentDate))}
+                                                                className="h-20 flex items-center justify-center text-slate-300 text-xs italic border-2 border-dashed border-slate-50 rounded-lg bg-slate-50/50 cursor-pointer hover:bg-teal-50 hover:border-teal-200 hover:text-teal-600 transition-all font-bold group"
+                                                            >
+                                                                <span className="group-hover:scale-105 transition-transform flex items-center gap-1">
+                                                                    <Plus size={14}/> 指派醫師
+                                                                </span>
                                                             </div>
                                                         )}
                                                     </div>
@@ -1550,7 +1585,9 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                             <span>無 (清除)</span>
                                         </div>
                                     </button>
-                                    {Array.from(new Set(stations.map(s => s.name))).map(stationName => {
+                                    {Array.from(new Set(stations.map(s => s.name)))
+                                        .filter(name => name !== '晚班') // User Request: Late Shift is a Task, not a Station assignment here
+                                        .map(stationName => {
                                         // Check associated locations for this station name
                                         const associatedLocs = stations.filter(s => s.name === stationName);
                                         const isUniqueLoc = associatedLocs.length === 1;
@@ -1705,7 +1742,19 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                     具備此技能之醫師
                                 </div>
                                 <div className="grid grid-cols-2 gap-2 p-2">
-                                    {doctors.filter(d => d.capabilities?.includes(assignModal.station)).map(doc => {
+                                    {doctors.filter(d => {
+                                        // User Request: Only full-time doctors for '晚班'
+                                        if (assignModal.station === '晚班' && d.isPartTime) return false;
+                                        
+                                        // User Request: Only doctors with an EXISTING station on that day
+                                        // User Request: Only doctors with an EXISTING station on that day
+                                        const s = shifts.find(shift => shift.doctorId === d.id && shift.date === assignModal.date);
+                                        const assignedSt = s?.scheduled_station || s?.station;
+                                        const hasWorkingStation = assignedSt && !['X', 'OFF', '休假', 'Unassigned', '未分配'].includes(assignedSt);
+                                        if (!hasWorkingStation) return false;
+
+                                        return d.capabilities?.includes(assignModal.station);
+                                    }).map(doc => {
                                         const isAlreadyAssigned = shifts.some(s => s.doctorId === doc.id && s.date === assignModal.date);
                                         return (
                                             <button 
@@ -1732,7 +1781,19 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                     其他醫師
                                 </div>
                                 <div className="grid grid-cols-2 gap-2 p-2">
-                                    {doctors.filter(d => !d.capabilities?.includes(assignModal.station)).map(doc => {
+                                    {doctors.filter(d => {
+                                        // User Request: Only full-time doctors for '晚班'
+                                        if (assignModal.station === '晚班' && d.isPartTime) return false;
+                                        
+                                        // User Request: Only doctors with an EXISTING station on that day
+                                        // User Request: Only doctors with an EXISTING station on that day
+                                        const s = shifts.find(shift => shift.doctorId === d.id && shift.date === assignModal.date);
+                                        const assignedSt = s?.scheduled_station || s?.station;
+                                        const hasWorkingStation = assignedSt && !['X', 'OFF', '休假', 'Unassigned', '未分配'].includes(assignedSt);
+                                        if (!hasWorkingStation) return false;
+
+                                        return !d.capabilities?.includes(assignModal.station);
+                                    }).map(doc => {
                                         const isAlreadyAssigned = shifts.some(s => s.doctorId === doc.id && s.date === assignModal.date);
                                         return (
                                             <button 

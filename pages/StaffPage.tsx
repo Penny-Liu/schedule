@@ -51,6 +51,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
     capabilities: string[];
     learningCapabilities: string[];
     excludedCapabilities: string[]; // New
+    isRadiographer: boolean; // New
   }>({
     name: '',
     alias: '',
@@ -60,7 +61,8 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
     color: COLOR_PALETTE[5], // Default Blue
     capabilities: [],
     learningCapabilities: [],
-    excludedCapabilities: [] // New
+    excludedCapabilities: [], // New
+    isRadiographer: false // New
   });
 
   const resetForm = () => {
@@ -73,7 +75,8 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
       color: COLOR_PALETTE[5],
       capabilities: [],
       learningCapabilities: [],
-      excludedCapabilities: []
+      excludedCapabilities: [],
+      isRadiographer: false
     });
     setEditingId(null);
   };
@@ -95,10 +98,11 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
         color: formData.color,
         capabilities: formData.capabilities,
         learningCapabilities: formData.learningCapabilities,
-        excludedCapabilities: formData.excludedCapabilities
+        excludedCapabilities: formData.excludedCapabilities,
+        isRadiographer: formData.isRadiographer
       });
     } else {
-      // Create new user
+        // Create new user
       const u: User = {
         id: Math.random().toString(36).substr(2, 9),
         name: formData.name,
@@ -110,6 +114,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
         capabilities: formData.capabilities,
         learningCapabilities: formData.learningCapabilities,
         excludedCapabilities: formData.excludedCapabilities,
+        isRadiographer: formData.isRadiographer,
         password: '1234',
         mustChangePassword: true
       };
@@ -132,7 +137,8 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
       color: user.color || COLOR_PALETTE[5],
       capabilities: user.capabilities || [],
       learningCapabilities: user.learningCapabilities || [],
-      excludedCapabilities: user.excludedCapabilities || []
+      excludedCapabilities: user.excludedCapabilities || [],
+      isRadiographer: user.isRadiographer || false
     });
   };
 
@@ -304,6 +310,18 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                   className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-teal-500 outline-none text-sm shadow-sm transition-all bg-white font-mono"
                   placeholder="請輸入登入帳號"
                 />
+              </div>
+              <div className="flex items-center gap-2 mb-2">
+                 <input
+                    type="checkbox"
+                    id="isRadiographer"
+                    checked={formData.isRadiographer}
+                    onChange={e => setFormData({ ...formData, isRadiographer: e.target.checked })}
+                    className="w-4 h-4 text-teal-600 border-gray-300 rounded focus:ring-teal-500"
+                 />
+                 <label htmlFor="isRadiographer" className="text-xs font-bold text-gray-700 cursor-pointer">
+                    是否為放射師 (顯示於排班總覽)
+                 </label>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>

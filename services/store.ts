@@ -248,6 +248,21 @@ class Store {
                 ];
             }
 
+            // Ensure '晚班' exists for Beitou/Dazhi (User Request) and is at the top
+            const requiredLateStations = [
+                { name: '晚班', location: '大直' }, // Order: Dazhi Late
+                { name: '晚班', location: '北投' }  // Order: Beitou Late (First, if array unshifted reversed? No, unshift puts at index 0. So last unshifted is top.)
+                // Actually, let's just use array logic.
+            ];
+            
+            // We want '晚班' to be the first station in each location group.
+            // Since we render by Location -> Filter Stations, the order within doctorStations matters.
+            requiredLateStations.forEach(req => {
+                if (!this.settings.doctorStations.some(s => s.name === req.name && s.location === req.location)) {
+                     this.settings.doctorStations.unshift(req);
+                }
+            });
+
             // Initialize default doctorSpecialties if missing
             if (!this.settings.doctorSpecialties) {
                 this.settings.doctorSpecialties = ['家醫科', '腸胃科', '放射科', '一般名醫', '其他'];
@@ -1197,7 +1212,7 @@ BMD :{{bmd}}
     }
 
     async addDoctor(name: string, alias?: string, capabilities: string[] = [], locations: string[] = [], excludedDays: number[] = [], excludedAutoScheduleLocations: string[] = [], isPartTime: boolean = false, specialty?: string, monthlyTargetShifts?: number): Promise<{ success: boolean; error?: string; id?: string }> {
-        const newDoctor: Doctor = { id: crypto.randomUUID(), name, alias: alias || name[0], capabilities, locations, excludedDays, excludedAutoScheduleLocations, specialty, isPartTime, monthlyTargetShifts }; // Default alias to first char if not provided
+        const newDoctor: Doctor = { id: crypto.randomUUID(), name, alias: alias || name[0], capabilities, locations, excludedDays, excludedAutoScheduleLocations, specialty, isPartTime, monthlyTargetShifts, fixedShifts: [] }; // Default alias to first char if not provided
         this.doctors.push(newDoctor); // Optimistic update
         this.notifyListeners();
         
@@ -1248,7 +1263,8 @@ BMD :{{bmd}}
                 specialty: doctor.specialty,
                 is_part_time: doctor.isPartTime,
                 monthly_target_shifts: doctor.monthlyTargetShifts,
-                display_order: doctor.displayOrder
+                display_order: doctor.displayOrder,
+                fixed_shifts: doctor.fixedShifts
             }).eq('id', doctor.id);
             if(error) throw error;
          } catch(error: any) {
@@ -1650,14 +1666,29 @@ BMD :{{bmd}}
         for (const doc of this.doctors) {
             await supabase.from('doctors').update({ display_order: doc.displayOrder }).eq('id', doc.id);
         }
-        
-        console.log('[Store] Doctors resorted by specialty:', specialtyOrder);
         return true;
+    }
+
+    async clearDoctorShifts(startDate: string, endDate: string) {
+        // Optimistic
+        this.doctorShifts = this.doctorShifts.filter(s => s.date < startDate || s.date > endDate);
+        this.notifyListeners();
+        
+        try {
+            const { error } = await supabase.from('doctor_shifts')
+                .delete()
+                .gte('date', startDate)
+                .lte('date', endDate);
+            
+            if (error) throw error;
+        } catch (e) {
+            console.error('Failed to clear shifts:', e);
+        }
     }
 
     async autoScheduleDoctors(startDate: string, endDate: string, targetDaysPerDoctor?: Record<string, number>) {
         console.log(`[Auto] Scheduling Doctors from ${startDate} to ${endDate}...`);
-        
+
         // 1. Prepare
         const assignments: DoctorShift[] = [];
         const start = new Date(startDate);
@@ -1694,6 +1725,40 @@ BMD :{{bmd}}
             // Get already assigned doctors for this day
             const existingShifts = this.doctorShifts.filter(s => s.date === dateStr);
             const assignedDoctorIds = new Set(existingShifts.map(s => s.doctorId));
+
+            // --- NEW: Pre-fill Fixed Shifts ---
+            // Priority 1: Fixed Part-Time/Full-Time Schedules
+            for (const doc of this.doctors) {
+                if (doc.fixedShifts && doc.fixedShifts.length > 0) {
+                    for (const fixed of doc.fixedShifts) {
+                         if (fixed.dayOfWeek === dayOfWeek) {
+                             // Check if already assigned (by manual or previous fixed)
+                             if (assignedDoctorIds.has(doc.id)) continue;
+                             
+                             // Create Fixed Shift
+                             const newFixedShift: DoctorShift = {
+                                 id: crypto.randomUUID(),
+                                 doctorId: doc.id,
+                                 date: dateStr,
+                                 station: fixed.station,
+                                 location: fixed.location,
+                                 workTime: fixed.workTime,
+                                 isAutoGenerated: true,
+                                 task: '固定班'
+                             };
+                             assignments.push(newFixedShift);
+                             assignedDoctorIds.add(doc.id);
+                             
+                             // Update metrics
+                             const currentCount = doctorShiftCounts.get(doc.id) || 0;
+                             doctorShiftCounts.set(doc.id, currentCount + 1);
+                             
+                             // Also update temporary existing shifts for this loop so we don't double book station capacity check
+                             existingShifts.push(newFixedShift);
+                         }
+                    }
+                }
+            }
             
             // Needed Stations (e.g., 2 x Imaging, 1 x Remote, etc. - currently simplistic 1 per station name)
             // Real world needs "Quotas". For now, assume 1 person per station in the list.
@@ -1705,6 +1770,12 @@ BMD :{{bmd}}
                 // Use Explicit Configured Location
                 const stationName = stationConfig.name;
                 const stationLocation = stationConfig.location;
+
+                // --- NEW: Exclude Specific Stations from Auto-Schedule ---
+                // Ophthalmology, ENT, Gynecology are Manual Only
+                if (['眼科', '耳鼻喉科', '婦科'].includes(stationName)) {
+                    continue;
+                }
 
                 // NEW: Check station requirement quota (how many people needed for this station on this day)
                 const stationKey = `${stationName}_${stationLocation}`; // Composite key for unique station+location
