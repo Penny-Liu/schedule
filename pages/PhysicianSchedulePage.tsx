@@ -1404,11 +1404,12 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                             return (
                                                                 <td 
                                                                     key={date} 
-                                                                    className={`p-1 border-r border-gray-100 relative group cursor-pointer min-w-[40px] 
+                                                                    className={`p-1 border-r border-gray-100 relative group min-w-[40px] 
+                                                                        ${canEdit ? 'cursor-pointer' : 'cursor-not-allowed'}
                                                                         ${isWeekend ? 'bg-red-50/10' : ''} 
                                                                         ${selectedCell?.date === date && selectedCell?.doctorId === '' /* Just checks selection */ ? 'ring-2 ring-inset ring-blue-400' : ''}
                                                                     `}
-                                                                    onClick={() => handleStationCellClick(stationName, location, date)}
+                                                                    onClick={() => canEdit && handleStationCellClick(stationName, location, date)}
                                                                 >
                                                                     {displayShifts.length > 0 ? (
                                                                         <div className="flex flex-col items-center justify-center h-full w-full gap-0.5 py-1">
