@@ -492,9 +492,42 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                 // Station View Headers
                 headRow = [['崗位', ...dateHeaders]];
                 
-                LOCATIONS.forEach(loc => {
+                LOCATIONS.forEach((loc, locIndex) => {
                     const locStations = stations.filter(s => s.location === loc);
                     if (locStations.length === 0) return;
+                    
+                    // Skip separator row - too much white space
+                    // if (locIndex > 0) {
+                    //     const separatorRow: any[] = [
+                    //         { 
+                    //             content: '', 
+                    //             colSpan: dateRange.length + 1,
+                    //             styles: { 
+                    //                 fillColor: [220, 220, 220],
+                    //                 minCellHeight: 2,
+                    //                 cellPadding: 0
+                    //             }
+                    //         }
+                    //     ];
+                    //     bodyRows.push(separatorRow);
+                    // }
+                    
+                    // Add location header row with minimal height
+                    const locationHeaderRow: any[] = [
+                        {
+                            content: loc,
+                            colSpan: dateRange.length + 1,
+                            styles: {
+                                fillColor: loc === '北投' ? [220, 235, 255] : loc === '大直' ? [245, 235, 230] : [255, 237, 220],
+                                fontStyle: 'bold',
+                                halign: 'center',
+                                fontSize: 9,
+                                cellPadding: 0.5,
+                                minCellHeight: 5
+                            }
+                        }
+                    ];
+                    bodyRows.push(locationHeaderRow);
                     
                     locStations.forEach(st => {
                          const rowData: any[] = [{ content: `${st.name}`, styles: { fontStyle: 'bold' }, location: st.location }];
@@ -502,6 +535,12 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                          dateRange.forEach(date => {
                              const assignedShifts = shifts.filter(s => {
                                  if (s.date !== date || s.location !== st.location) return false;
+                                 
+                                 // Special logic for Late Shift station: find shifts where task includes "晚班"
+                                 if (st.name === '晚班') {
+                                     return s.task?.includes('晚班');
+                                 }
+                                 
                                  if (s.scheduled_station === st.name) return true;
                                  
                                  // Logic: Show 'Explanation' doctors in 'Gyn' station if FamilyMed + Gyn Capable
@@ -524,22 +563,46 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                              // Build content string for height calculation
                              const docInfos = assignedShifts.map(s => {
                                  const doc = doctors.find(d => d.id === s.doctorId);
-                                 const name = doc?.alias || doc?.name || '?';
+                                 const name = doc?.name || '?';
                                  let info = name;
                                  if (s.workTime) info += `\n${formatTimeShort(s.workTime)}`;
-                                 if (s.task) info += `\n${s.task}`;
+                                 // Only skip showing task if we're in the "晚班" station row AND task is "晚班"
+                                 if (s.task && !(st.name === '晚班' && s.task === '晚班')) info += `\n${s.task}`;
                                  return info;
                              }).join('\n\n');
+                             
+                             // Calculate dynamic row height based on actual content
+                             // Only set minCellHeight if there are shifts, otherwise let it auto-size
+                             let cellStyles: any = {};
+                             
+                             if (assignedShifts.length > 0) {
+                                 // Count actual lines for each doctor (name is always 1 line)
+                                 let totalLines = 0;
+                                 assignedShifts.forEach(s => {
+                                     let lines = 1; // Name (10pt = ~3.5mm)
+                                     if (s.workTime) lines++; // Time (7pt = ~2.5mm)
+                                     // Only count task if it will actually be shown
+                                     if (s.task && !(st.name === '晚班' && s.task === '晚班')) lines++; // Task (7pt = ~2.5mm)
+                                     totalLines += lines;
+                                 });
+                                                                  // Calculate height: name lines use 3.8mm (12pt font), time/task lines use 2.2mm
+                                  // No extra padding between doctors
+                                  const estimatedHeight = assignedShifts.length * 3.8 + (totalLines - assignedShifts.length) * 2.2;
+                                  cellStyles = { minCellHeight: Math.max(estimatedHeight, 6) }; // Minimum 6mm
+                             }
+                             // If no shifts, don't set minCellHeight - let it be minimal
                              
                              // Pass raw data for custom rendering
                              rowData.push({
                                  content: docInfos,
+                                 styles: cellStyles,
                                  rawStationShifts: assignedShifts.map(s => {
                                      const doc = doctors.find(d => d.id === s.doctorId);
                                      return {
-                                         name: doc?.alias || doc?.name || '?',
+                                         name: doc?.name || '?',
                                          time: formatTimeShort(s.workTime),
-                                         task: s.task
+                                         task: s.task,
+                                         stationName: st.name // Pass station name for rendering logic
                                      };
                                  })
                              });
@@ -553,26 +616,9 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                 // Personnel View Headers
                 headRow = [['醫師', ...dateHeaders]];
                 
-                // Sort doctors: Specialty Index -> Name
-                const sortedDoctors = [...doctors].sort((a, b) => {
-                    const specA = a.specialty || '';
-                    const specB = b.specialty || '';
-                    
-                    // Get index from custom order
-                    let idxA = specialtyOrder.indexOf(specA);
-                    let idxB = specialtyOrder.indexOf(specB);
-                    
-                    // If not found in order list, push to end
-                    if (idxA === -1) idxA = 999;
-                    if (idxB === -1) idxB = 999;
-                    
-                    if (idxA !== idxB) return idxA - idxB;
-                    
-                    // Secondary sort: Name
-                    return a.name.localeCompare(b.name, 'zh-TW');
-                }).filter(doc => {
-                    // Only include doctors who have at least one shift in this month AND are not Part-Time
-                    // Part-time doctors are excluded from the personnel view PDF list
+                // Personnel View: Use same order as displayed on page (doctors array order)
+                // Filter: Only include doctors with shifts in this month AND not Part-Time
+                const sortedDoctors = doctors.filter(doc => {
                     const hasShifts = shifts.some(s => s.doctorId === doc.id && dateRange.includes(s.date));
                     return hasShifts && !doc.isPartTime;
                 });
@@ -653,13 +699,15 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                 head: headRow,
                 body: bodyRows,
                 theme: 'grid',
+                rowPageBreak: 'avoid', // Prevent unnecessary page breaks
+                tableLineWidth: 0.2,
                 styles: {
                     font: fontName, // CRITICAL: Use the custom font
-                    fontSize: 8,
-                    cellPadding: 0,
+                    fontSize: 9, // Increased from 8 for better readability
+                    cellPadding: 1.5, // Increased for better spacing
                     valign: 'middle',
                     halign: 'center',
-                    lineWidth: 0.1,
+                    lineWidth: 0.2, // Increased from 0.1 for clearer borders
                     lineColor: [0, 0, 0]
                 },
                 headStyles: {
@@ -669,7 +717,6 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                 },
                 didParseCell: function(data: any) {
                     // Header Styling
-                    // ... same ...
                     if (data.section === 'head' && data.column.index > 0) {
                         const dateStr = dateRange[data.column.index - 1];
                         const d = new Date(dateStr);
@@ -679,29 +726,38 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                     }
 
                     // Body Styling
-                    // ... same ...
                     if (data.section === 'body') {
+                        // Station View: Row color by location
                         if (viewMode === 'station' && data.column.index === 0) {
                             const location = data.row.raw[0]?.location;
                             if (location === '北投') data.cell.styles.fillColor = [239, 246, 255]; 
                             if (location === '大直') data.cell.styles.fillColor = [250, 245, 240]; 
                             if (location === '台中') data.cell.styles.fillColor = [255, 247, 237]; 
                         }
+                        
+                        // Station View: Cell color by station type (same as page background)
+                        if (viewMode === 'station' && data.column.index > 0) {
+                            const stationName = data.row.raw[0]?.content || '';
+                            
+                            // Use same color logic as page display
+                            if (stationName.includes('遠')) data.cell.styles.fillColor = [254, 242, 242]; // bg-pink-50
+                            else if (stationName.includes('腸胃') || stationName.toLowerCase().includes('gi')) data.cell.styles.fillColor = [239, 246, 255]; // bg-blue-50
+                            else if (stationName.includes('解說')) data.cell.styles.fillColor = [255, 247, 237]; // bg-orange-50  
+                            else if (stationName.includes('支援')) data.cell.styles.fillColor = [254, 252, 232]; // bg-yellow-50
+                            else if (stationName.includes('行政')) data.cell.styles.fillColor = [255, 255, 255]; // bg-white
+                            else if (stationName.includes('眼') || stationName.includes('婦') || stationName.includes('耳')) data.cell.styles.fillColor = [255, 251, 235]; // bg-amber-50
+                            else data.cell.styles.fillColor = [240, 253, 250]; // bg-teal-50 (default)
+                        }
 
+                        // Personnel View: Cell color by location
                         if (viewMode !== 'station' && data.column.index > 0) {
                              const raw = data.cell.raw;
                              // Check if it's a shift object with rawShift
                              if (raw && raw.rawShift) {
-                                  // Background Color Logic
-                                 // We need to access original location for coloring; rawShift.location is short string
-                                 // But we have the formatLocShort result (e.g. '(北)').
-                                 // Let's use string check or pass raw location? 
-                                 // Simpler: use the data.row logic or check content string?
-                                 // Let's rely on string presence since we formatted it.
-                                 const rawText = raw.content || '';
-                                 if (rawText.includes('北') || raw.rawShift.location === '北') data.cell.styles.fillColor = [239, 246, 255];
-                                 if (rawText.includes('直') || raw.rawShift.location === '直') data.cell.styles.fillColor = [250, 245, 240];
-                                 if (rawText.includes('中') || raw.rawShift.location === '中') data.cell.styles.fillColor = [255, 247, 237];
+                                  const rawText = raw.content || '';
+                                  if (rawText.includes('北') || raw.rawShift.location === '北') data.cell.styles.fillColor = [239, 246, 255];
+                                  if (rawText.includes('直') || raw.rawShift.location === '直') data.cell.styles.fillColor = [250, 245, 240];
+                                  if (rawText.includes('中') || raw.rawShift.location === '中') data.cell.styles.fillColor = [255, 247, 237];
                              }
                              else if (raw === 'X') {
                                  data.cell.styles.textColor = [200, 200, 200];
@@ -757,26 +813,37 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                          if (shifts.length === 0) return;
                          
                          const x = data.cell.x + data.cell.width / 2;
-                         let y = data.cell.y + 3;
+                         
+                         // Calculate total content height for vertical centering
+                         let totalHeight = 0;
+                         shifts.forEach((shift: any, idx: number) => {
+                             totalHeight += 3.8; // Name (12pt font)
+                             if (shift.time) totalHeight += 2.5; // Time
+                             if (shift.task && !(shift.stationName === '晚班' && shift.task === '晚班')) totalHeight += 2.5; // Task
+                             if (idx < shifts.length - 1) totalHeight += 2; // Spacing between doctors
+                         });
+                         
+                         // Start from center and offset by half of content height
+                         let y = data.cell.y + (data.cell.height - totalHeight) / 2 + 3;
                          
                          shifts.forEach((shift: any, idx: number) => {
-                             // Name (8pt)
-                             doc.setFontSize(8);
+                             // Name (12pt, larger font for better clarity)
+                             doc.setFontSize(12);
                              doc.text(shift.name, x, y, { align: 'center' });
-                             y += 3;
+                             y += 3.8; // Adjusted spacing for larger font
                              
-                             // Time (6pt)
+                             // Time (7pt)
                              if (shift.time) {
-                                 doc.setFontSize(6);
+                                 doc.setFontSize(7);
                                  doc.text(shift.time, x, y, { align: 'center' });
-                                 y += 2.5;
+                                 y += 2.5; // Reduced spacing
                              }
                              
-                             // Task (6pt)
-                             if (shift.task) {
-                                 doc.setFontSize(6);
+                             // Task (7pt) - Only skip if we're in "晚班" station AND task is "晚班"
+                             if (shift.task && !(shift.stationName === '晚班' && shift.task === '晚班')) {
+                                 doc.setFontSize(7);
                                  doc.text(shift.task, x, y, { align: 'center' });
-                                 y += 2.5;
+                                 y += 2.5; // Reduced spacing
                              }
                              
                              // Add spacing between doctors
@@ -788,10 +855,11 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                 }
             });
             
-            // Generate Filename: YYYY-MM
+            // Generate Filename: YYYY-MM with view mode suffix
             const year = currentDate.getFullYear();
             const month = String(currentDate.getMonth() + 1).padStart(2, '0');
-            const filename = `${year}${month} 醫師排班表.pdf`;
+            const viewSuffix = viewMode === 'personnel' ? '人員' : viewMode === 'station' ? '崗位' : '';
+            const filename = `${year}${month} 醫師排班表-${viewSuffix}.pdf`;
 
             doc.save(filename);
 
@@ -926,6 +994,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                 if (viewMode === 'daily') {
                                     newDate.setDate(newDate.getDate() - 1);
                                 } else {
+                                    newDate.setDate(1); // Set to 1st to avoid month overflow
                                     newDate.setMonth(newDate.getMonth() - 1);
                                 }
                                 setCurrentDate(newDate);
@@ -946,6 +1015,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                 if (viewMode === 'daily') {
                                     newDate.setDate(newDate.getDate() + 1);
                                 } else {
+                                    newDate.setDate(1); // Set to 1st to avoid month overflow
                                     newDate.setMonth(newDate.getMonth() + 1);
                                 }
                                 setCurrentDate(newDate);
@@ -1083,7 +1153,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                         className="flex items-center gap-1 px-2 py-1 bg-teal-50 text-teal-700 hover:bg-teal-100 rounded-lg text-xs font-bold transition-colors border border-teal-100"
                     >
                         <Download size={14} />
-                        匯出
+                        匯出{viewMode === 'personnel' ? '人員視角' : viewMode === 'station' ? '崗位視角' : ''}
                     </button>
 
                     {canManageLock && (
@@ -1402,35 +1472,49 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
 
                                                             const isWeekend = new Date(date).getDay() === 0 || new Date(date).getDay() === 6;
 
+                                                            // Determine background color based on station type (lighter than personnel view)
+                                                            const getStationBgColor = () => {
+                                                                if (stationName.includes('遠')) return 'bg-pink-50';
+                                                                if (stationName.includes('腸胃') || stationName.toLowerCase().includes('gi')) return 'bg-blue-50';
+                                                                if (stationName.includes('解說')) return 'bg-orange-50';
+                                                                if (stationName.includes('支援')) return 'bg-yellow-50';
+                                                                if (stationName.includes('行政')) return 'bg-white';
+                                                                if (stationName.includes('眼') || stationName.includes('婦') || stationName.includes('耳')) return 'bg-amber-50/50';
+                                                                return 'bg-teal-50'; // Default for 影像, etc.
+                                                            };
+
                                                             return (
                                                                 <td 
                                                                     key={date} 
                                                                     className={`p-1 border-r border-gray-100 relative group min-w-[40px] 
                                                                         ${canEdit ? 'cursor-pointer' : 'cursor-not-allowed'}
-                                                                        ${isWeekend ? 'bg-red-50/10' : ''} 
+                                                                        ${getStationBgColor()} 
                                                                         ${selectedCell?.date === date && selectedCell?.doctorId === '' /* Just checks selection */ ? 'ring-2 ring-inset ring-blue-400' : ''}
                                                                     `}
                                                                     onClick={() => canEdit && handleStationCellClick(stationName, location, date)}
                                                                 >
                                                                     {displayShifts.length > 0 ? (
-                                                                        <div className="flex flex-col items-center justify-center h-full w-full gap-0.5 py-1">
+                                                                        <div className="flex flex-col items-center justify-start h-full w-full gap-0.5 py-1 px-1">
                                                                             {displayShifts.map((shift, index) => {
                                                                                 const doc = doctors.find(d => d.id === shift.doctorId);
                                                                                 return (
-                                                                                    <div key={shift.id} className="flex flex-col items-center w-full">
-                                                                                        <span className="text-xs font-bold text-gray-900 bg-white/80 px-1.5 py-0.5 rounded shadow-sm border border-gray-200 text-center">
-                                                                                            {doc?.alias || doc?.name?.charAt(0) || '?'}
-                                                                                            {suffix && <span className="text-[8px] text-gray-500 ml-0.5">{suffix}</span>}
-                                                                                        </span>
+                                                                                    <div key={shift.id} className="w-full text-center">
+                                                                                        <div className="text-xs font-bold text-gray-900 leading-tight truncate" title={doc?.name}>
+                                                                                            {doc?.name || '?'}
+                                                                                            {suffix && <span className="text-[8px] text-red-600 ml-0.5">{suffix}</span>}
+                                                                                        </div>
                                                                                         {shift.workTime && (
-                                                                                            <span className="text-[9px] text-slate-500 leading-tight font-medium">
+                                                                                            <div className="text-[9px] text-slate-500 leading-tight font-medium">
                                                                                                  {shift.workTime.replace(/(\d{1,2}):\d{2}/g, (match, p1) => parseInt(p1) + '\'').replace(/\s/g, '')}
-                                                                                            </span>
+                                                                                            </div>
                                                                                         )}
                                                                                         {shift.task && (
-                                                                                            <span className="text-[9px] text-blue-600 leading-tight font-medium px-1">
+                                                                                            <div className="text-[9px] text-blue-600 leading-tight font-medium">
                                                                                                 {shift.task}
-                                                                                            </span>
+                                                                                            </div>
+                                                                                        )}
+                                                                                        {index < displayShifts.length - 1 && (
+                                                                                            <div className="border-b border-gray-100 my-0.5"></div>
                                                                                         )}
                                                                                     </div>
                                                                                 );
@@ -1654,7 +1738,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                     </thead>
                                     <tbody className="divide-y divide-gray-100">
                                         {dateRange.map(date => {
-                                             const dayOfWeek = (new Date(date).getDay() + 6) % 7; // Mon=0
+                                             const dayOfWeek = new Date(date).getDay(); // Sun=0, Mon=1, ..., Sat=6
                                              const dayLabel = ['日','一','二','三','四','五','六'][new Date(date).getDay()];
                                              const isWeekend = new Date(date).getDay() === 0 || new Date(date).getDay() === 6;
                                              
@@ -1664,7 +1748,21 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                         {date.slice(5)} <span className="text-gray-400 font-normal">({dayLabel})</span>
                                                     </td>
                                                     {stations.map(st => {
-                                                        const count = shifts.filter(s => s.date === date && (s.station === st.name || s.scheduled_station === st.name) && s.location === st.location && s.doctorId).length;
+                                                        // Special logic for Gynecology: include Explanation doctors with Gyn capability
+                                                        let count = shifts.filter(s => {
+                                                            if (s.date !== date || s.location !== st.location || !s.doctorId) return false;
+                                                            
+                                                            // Direct station match
+                                                            if (s.station === st.name || s.scheduled_station === st.name) return true;
+                                                            
+                                                            // Special: For Gyn station, include Explanation doctors with Gyn capability
+                                                            if (st.name === '婦科' && s.scheduled_station === '解說') {
+                                                                const doc = doctors.find(d => d.id === s.doctorId);
+                                                                return doc?.capabilities?.includes('婦科');
+                                                            }
+                                                            
+                                                            return false;
+                                                        }).length;
                                                         const reqKey = `${st.name}_${st.location}`;
                                                         // Fallback to legacy
                                                         const reqs = requirements[reqKey] || requirements[st.name] || [0,0,0,0,0,0,0];
@@ -1713,7 +1811,15 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                     <tbody className="divide-y divide-gray-100">
                                         {doctors.map(doc => {
                                             const docShifts = shifts.filter(s => s.doctorId === doc.id && dateRange.includes(s.date));
-                                            const total = docShifts.length;
+                                            // Only count shifts that match displayed stations (station+location must exist in stations list)
+                                            const total = docShifts.filter(s => {
+                                                const st = s.station || s.scheduled_station;
+                                                if (!st) return false;
+                                                return stations.some(station => 
+                                                    (s.station === station.name || s.scheduled_station === station.name) && 
+                                                    s.location === station.location
+                                                );
+                                            }).length;
                                             
                                             // Skip doctors with 0 shifts if list is too long? No, show all.
                                             
