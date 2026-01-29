@@ -212,7 +212,8 @@ class Store {
                     excludedAutoScheduleLocations: d.excluded_auto_schedule_locations || [],
                     isPartTime: d.is_part_time || false, // Map snake_case to camelCase
                     monthlyTargetShifts: d.monthly_target_shifts, // Map snake_case to camelCase
-                    displayOrder: d.display_order // Map snake_case to camelCase
+                    displayOrder: d.display_order, // Map snake_case to camelCase
+                    fixedShifts: d.fixed_shifts || [] // Map snake_case to camelCase
                 }));
                 this.doctors = loadedDoctors;
             } else {

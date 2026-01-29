@@ -613,6 +613,7 @@ const DoctorManagerPage: React.FC<DoctorManagerPageProps> = ({ currentUser }) =>
                                     <th className="px-6 py-4 font-bold">可排班地點</th>
                                     <th className="px-6 py-4 font-bold">可勝任崗位</th>
                                     <th className="px-6 py-4 font-bold">禁排日</th>
+                                    <th className="px-6 py-4 font-bold">固定排班</th>
                                     <th className="px-6 py-4 font-bold text-right">操作</th>
                                 </tr>
                             </thead>
@@ -691,6 +692,23 @@ const DoctorManagerPage: React.FC<DoctorManagerPageProps> = ({ currentUser }) =>
                                                         ))}
                                                      </div>
                                                 ) : <span className="text-green-500 text-xs font-bold">全勤</span>}
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                {doc.fixedShifts && doc.fixedShifts.length > 0 ? (
+                                                     <div className="flex flex-col gap-1">
+                                                        {doc.fixedShifts.map((fs, i) => (
+                                                            <div key={i} className="flex items-center gap-1.5 text-[10px]">
+                                                                <span className="font-bold text-gray-600">
+                                                                    {['日', '一', '二', '三', '四', '五', '六'][fs.dayOfWeek]}:
+                                                                </span>
+                                                                <div className="flex items-center gap-1 bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded border border-gray-200">
+                                                                    <span>{fs.station}</span>
+                                                                    <span className="text-gray-400 text-[9px]">({fs.location})</span>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                     </div>
+                                                ) : <span className="text-gray-300 text-xs">-</span>}
                                             </td>
                                             <td className="px-6 py-4 text-right">
                                                  <button 
