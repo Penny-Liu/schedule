@@ -400,7 +400,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
         setSelectedCell(null);
     };
 
-     const handleExportPDF = async (e?: React.MouseEvent) => {
+    const handleExportPDF = async (e?: React.MouseEvent) => {
         if (e) e.preventDefault();
         
         try {
@@ -467,15 +467,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
             const subtitle = `${dateRange[0]} ~ ${dateRange[dateRange.length - 1]}`;
             const exportDate = `匯出日期: ${new Date().toLocaleDateString('zh-TW')}`;
 
-            doc.setFontSize(14);
-            // Ensure font is set for title
-            doc.setFont(fontName); 
-            doc.text(`${title}  ${subtitle}`, 2, 5);
-
-            doc.setFontSize(9);
-            const pageWidth = doc.internal.pageSize.width;
-            doc.text(exportDate, pageWidth - 2, 5, { align: 'right' });
-
+           
             const weekDays = ['日', '一', '二', '三', '四', '五', '六'];
             
             // Prepare Headers
@@ -484,236 +476,26 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                 return `${d.getDate()} \n${weekDays[d.getDay()]}`;
             });
 
-            let headRow = [];
-            let bodyRows: any[] = [];
-
-            if (viewMode === 'station') {
-                // ... same logic ...
-                // Station View Headers
-                headRow = [['崗位', ...dateHeaders]];
-                
-                LOCATIONS.forEach((loc, locIndex) => {
-                    const locStations = stations.filter(s => s.location === loc);
-                    if (locStations.length === 0) return;
-                    
-                    // Skip separator row - too much white space
-                    // if (locIndex > 0) {
-                    //     const separatorRow: any[] = [
-                    //         { 
-                    //             content: '', 
-                    //             colSpan: dateRange.length + 1,
-                    //             styles: { 
-                    //                 fillColor: [220, 220, 220],
-                    //                 minCellHeight: 2,
-                    //                 cellPadding: 0
-                    //             }
-                    //         }
-                    //     ];
-                    //     bodyRows.push(separatorRow);
-                    // }
-                    
-                    // Add location header row with minimal height
-                    const locationHeaderRow: any[] = [
-                        {
-                            content: loc,
-                            colSpan: dateRange.length + 1,
-                            styles: {
-                                fillColor: loc === '北投' ? [220, 235, 255] : loc === '大直' ? [245, 235, 230] : [255, 237, 220],
-                                fontStyle: 'bold',
-                                halign: 'center',
-                                fontSize: 9,
-                                cellPadding: 0.5,
-                                minCellHeight: 5
-                            }
-                        }
-                    ];
-                    bodyRows.push(locationHeaderRow);
-                    
-                    locStations.forEach(st => {
-                         const rowData: any[] = [{ content: `${st.name}`, styles: { fontStyle: 'bold' }, location: st.location }];
-                         
-                         dateRange.forEach(date => {
-                             const assignedShifts = shifts.filter(s => {
-                                 if (s.date !== date || s.location !== st.location) return false;
-                                 
-                                 // Special logic for Late Shift station: find shifts where task includes "晚班"
-                                 if (st.name === '晚班') {
-                                     return s.task?.includes('晚班');
-                                 }
-                                 
-                                 if (s.scheduled_station === st.name) return true;
-                                 
-                                 // Logic: Show 'Explanation' doctors in 'Gyn' station if FamilyMed + Gyn Capable
-                                 if (st.name === '婦科' && s.scheduled_station === '解說') {
-                                     const doc = doctors.find(d => d.id === s.doctorId);
-                                     // Check Specialty="家醫科" and Cap="婦科" (or imply cap from task request)
-                                     // User said: "解說醫師是家醫科，且可排婦科崗位"
-                                     // Mod: Allow ANY doctor with Gyn capability (not just Family Med)
-                                     return doc?.capabilities?.includes('婦科');
-                                 }
-                                 return false;
-                             });
-                             
-                             // Format: Name + Time + Task
-                             const formatTimeShort = (time: string) => {
-                                 if (!time) return '';
-                                 return time.replace(/(\d{1,2}):\d{2}/g, (match, p1) => parseInt(p1) + '\'').replace(/\s/g, '');
-                             };
-                             
-                             // Build content string for height calculation
-                             const docInfos = assignedShifts.map(s => {
-                                 const doc = doctors.find(d => d.id === s.doctorId);
-                                 const name = doc?.name || '?';
-                                 let info = name;
-                                 if (s.workTime) info += `\n${formatTimeShort(s.workTime)}`;
-                                 // Only skip showing task if we're in the "晚班" station row AND task is "晚班"
-                                 if (s.task && !(st.name === '晚班' && s.task === '晚班')) info += `\n${s.task}`;
-                                 return info;
-                             }).join('\n\n');
-                             
-                             // Calculate dynamic row height based on actual content
-                             // Only set minCellHeight if there are shifts, otherwise let it auto-size
-                             let cellStyles: any = {};
-                             
-                             if (assignedShifts.length > 0) {
-                                 // Count actual lines for each doctor (name is always 1 line)
-                                 let totalLines = 0;
-                                 assignedShifts.forEach(s => {
-                                     let lines = 1; // Name (10pt = ~3.5mm)
-                                     if (s.workTime) lines++; // Time (7pt = ~2.5mm)
-                                     // Only count task if it will actually be shown
-                                     if (s.task && !(st.name === '晚班' && s.task === '晚班')) lines++; // Task (7pt = ~2.5mm)
-                                     totalLines += lines;
-                                 });
-                                                                  // Calculate height: name lines use 3.8mm (12pt font), time/task lines use 2.2mm
-                                  // No extra padding between doctors
-                                  const estimatedHeight = assignedShifts.length * 3.8 + (totalLines - assignedShifts.length) * 2.2;
-                                  cellStyles = { minCellHeight: Math.max(estimatedHeight, 6) }; // Minimum 6mm
-                             }
-                             // If no shifts, don't set minCellHeight - let it be minimal
-                             
-                             // Pass raw data for custom rendering
-                             rowData.push({
-                                 content: docInfos,
-                                 styles: cellStyles,
-                                 rawStationShifts: assignedShifts.map(s => {
-                                     const doc = doctors.find(d => d.id === s.doctorId);
-                                     return {
-                                         name: doc?.name || '?',
-                                         time: formatTimeShort(s.workTime),
-                                         task: s.task,
-                                         stationName: st.name // Pass station name for rendering logic
-                                     };
-                                 })
-                             });
-                         });
-                         bodyRows.push(rowData);
-                    });
-                });
-
-            } else {
-                // ... same logic ...
-                // Personnel View Headers
-                headRow = [['醫師', ...dateHeaders]];
-                
-                // Personnel View: Use same order as displayed on page (doctors array order)
-                // Filter: Only include doctors with shifts in this month AND not Part-Time
-                const sortedDoctors = doctors.filter(doc => {
-                    const hasShifts = shifts.some(s => s.doctorId === doc.id && dateRange.includes(s.date));
-                    return hasShifts && !doc.isPartTime;
-                });
-
-                // Helper Formatters
-                const formatTimeShort = (time: string) => {
-                    if (!time) return '';
-                    // 08:30 -> 8', 17:00 -> 17'
-                    return time.replace(/(\d{1,2}):\d{2}/g, (match, p1) => parseInt(p1) + '\'').replace(/\s/g, '');
-                };
-                const formatLocShort = (loc: string) => {
-                    if (loc === '北投') return '北';
-                    if (loc === '台中') return '中';
-                    if (loc === '大直') return '直';
-                    return loc ? `(${loc})` : '';
-                };
-
-                bodyRows = sortedDoctors.map(doc => {
-                    const rowData: any[] = [{ content: doc.name, styles: { fontStyle: 'bold' } }];
-                    
-                    dateRange.forEach(date => {
-                        const shift = shifts.find(s => s.doctorId === doc.id && s.date === date);
-                        const isExcluded = doc.excludedDays?.includes(new Date(date).getDay());
-                        
-                        if (shift) {
-                            const st = shift.scheduled_station;
-                            if (st === 'X') {
-                                rowData.push('X');
-                            } else if (st) {
-                                // Check if doctor has both 婦科 and 解說 on this date
-                                const allShiftsForDate = shifts.filter(s => s.doctorId === doc.id && s.date === date);
-                                const hasGynecology = allShiftsForDate.some(s => s.scheduled_station === '婦科'); // Requires store update for explanation
-                                const hasExplanation = allShiftsForDate.some(s => s.scheduled_station === '解說');
-                                let displayStation = (hasGynecology && hasExplanation) ? '解+婦' : st;
-                                if (displayStation === '耳鼻喉科') displayStation = 'ENT'; // Display Transform for Personnel View
-                                
-                                // Construct content for Height Calculation (approx lines)
-                                // We will custom draw, but need autoTable to allocate space
-                                let content = displayStation || '';
-                                if (shift.workTime) content += `\n${formatTimeShort(shift.workTime)}`;
-                                if (shift.task) content += `\n${shift.task}`;
-                                if (shift.location) content += `\n${formatLocShort(shift.location)}`;
-                                
-                                rowData.push({
-                                    content: content,
-                                    rawShift: {
-                                        station: displayStation,
-                                        time: formatTimeShort(shift.workTime),
-                                        task: shift.task,
-                                        location: formatLocShort(shift.location)
-                                    }
-                                });
-                            } else {
-                                // No scheduled station but shift exists (e.g. metadata only)
-                                rowData.push('');
-                            }
-                        } else if (isExcluded) {
-                            rowData.push('X');
-                        } else {
-                            rowData.push('');
-                        }
-                    });
-                    
-                    return rowData;
-                });
-            }
-
-            // If no doctors have any shifts for the month, skip PDF generation
-            if (bodyRows.length === 0) {
-                console.warn('No doctors with shifts this month, PDF export aborted.');
-                alert('這個月沒有任何排班資料，無法匯出 PDF');
-                return;
-            }
-            // PDF Styles and Generation
-            autoTable(doc, {
-                startY: 8,
-                margin: { top: 2, right: 2, bottom: 2, left: 2 },
-                head: headRow,
-                body: bodyRows,
+            // Common Table Config
+            const tableConfig: any = {
                 theme: 'grid',
-                rowPageBreak: 'avoid', // Prevent unnecessary page breaks
+                rowPageBreak: 'avoid',
                 tableLineWidth: 0.2,
                 styles: {
-                    font: fontName, // CRITICAL: Use the custom font
-                    fontSize: 9, // Increased from 8 for better readability
-                    cellPadding: 1.5, // Increased for better spacing
+                    font: fontName,
+                    fontSize: 8, // Standardize to 8pt for body (Radiographer style)
+                    cellPadding: 1, // Compact padding
                     valign: 'middle',
                     halign: 'center',
-                    lineWidth: 0.2, // Increased from 0.1 for clearer borders
+                    lineWidth: 0.2,
                     lineColor: [0, 0, 0]
                 },
                 headStyles: {
                     fillColor: [66, 66, 66],
                     textColor: [255, 255, 255],
-                    font: fontName // CRITICAL
+                    font: fontName,
+                    fontSize: 8,
+                    minCellHeight: 8
                 },
                 didParseCell: function(data: any) {
                     // Header Styling
@@ -727,133 +509,340 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
 
                     // Body Styling
                     if (data.section === 'body') {
-                        // Station View: Row color by location
-                        if (viewMode === 'station' && data.column.index === 0) {
-                            const location = data.row.raw[0]?.location;
-                            if (location === '北投') data.cell.styles.fillColor = [239, 246, 255]; 
-                            if (location === '大直') data.cell.styles.fillColor = [250, 245, 240]; 
-                            if (location === '台中') data.cell.styles.fillColor = [255, 247, 237]; 
-                        }
-                        
-                        // Station View: Cell color by station type (same as page background)
-                        if (viewMode === 'station' && data.column.index > 0) {
-                            const stationName = data.row.raw[0]?.content || '';
-                            
-                            // Use same color logic as page display
-                            if (stationName.includes('遠')) data.cell.styles.fillColor = [254, 242, 242]; // bg-pink-50
-                            else if (stationName.includes('腸胃') || stationName.toLowerCase().includes('gi')) data.cell.styles.fillColor = [239, 246, 255]; // bg-blue-50
-                            else if (stationName.includes('解說')) data.cell.styles.fillColor = [255, 247, 237]; // bg-orange-50  
-                            else if (stationName.includes('支援')) data.cell.styles.fillColor = [254, 252, 232]; // bg-yellow-50
-                            else if (stationName.includes('行政')) data.cell.styles.fillColor = [255, 255, 255]; // bg-white
-                            else if (stationName.includes('眼') || stationName.includes('婦') || stationName.includes('耳')) data.cell.styles.fillColor = [255, 251, 235]; // bg-amber-50
-                            else data.cell.styles.fillColor = [240, 253, 250]; // bg-teal-50 (default)
-                        }
-
-                        // Personnel View: Cell color by location
-                        if (viewMode !== 'station' && data.column.index > 0) {
-                             const raw = data.cell.raw;
-                             // Check if it's a shift object with rawShift
-                             if (raw && raw.rawShift) {
-                                  const rawText = raw.content || '';
-                                  if (rawText.includes('北') || raw.rawShift.location === '北') data.cell.styles.fillColor = [239, 246, 255];
-                                  if (rawText.includes('直') || raw.rawShift.location === '直') data.cell.styles.fillColor = [250, 245, 240];
-                                  if (rawText.includes('中') || raw.rawShift.location === '中') data.cell.styles.fillColor = [255, 247, 237];
-                             }
-                             else if (raw === 'X') {
-                                 data.cell.styles.textColor = [200, 200, 200];
-                             }
+                        // Station View: Color logic
+                         if (viewMode === 'station') {
+                            // Row Header Color
+                            if (data.column.index === 0) {
+                                const location = data.row.raw[0]?.location;
+                                if (location === '北投') data.cell.styles.fillColor = [239, 246, 255]; 
+                                if (location === '大直') data.cell.styles.fillColor = [250, 245, 240]; 
+                                if (location === '台中') data.cell.styles.fillColor = [255, 247, 237]; 
+                            }
+                            // Cell Color
+                            if (data.column.index > 0) {
+                                const stationName = data.row.raw[0]?.content || '';
+                                if (stationName.includes('遠')) data.cell.styles.fillColor = [254, 242, 242];
+                                else if (stationName.includes('腸胃') || stationName.toLowerCase().includes('gi')) data.cell.styles.fillColor = [239, 246, 255];
+                                else if (stationName.includes('解說')) data.cell.styles.fillColor = [255, 247, 237];
+                                else if (stationName.includes('支援')) data.cell.styles.fillColor = [254, 252, 232];
+                                else if (stationName.includes('行政')) data.cell.styles.fillColor = [255, 255, 255];
+                                else if (stationName.includes('眼') || stationName.includes('婦') || stationName.includes('耳')) data.cell.styles.fillColor = [255, 251, 235];
+                                else data.cell.styles.fillColor = [240, 253, 250];
+                            }
+                        } else {
+                            // Personnel View Colors
+                            if (data.column.index > 0) {
+                                 const raw = data.cell.raw;
+                                 if (raw && raw.rawShift) {
+                                      const rawText = raw.content || '';
+                                      if (rawText.includes('北') || raw.rawShift.location === '北') data.cell.styles.fillColor = [239, 246, 255];
+                                      if (rawText.includes('直') || raw.rawShift.location === '直') data.cell.styles.fillColor = [250, 245, 240];
+                                      if (rawText.includes('中') || raw.rawShift.location === '中') data.cell.styles.fillColor = [255, 247, 237];
+                                 } else if (raw === 'X') {
+                                     data.cell.styles.textColor = [200, 200, 200];
+                                 }
+                            }
                         }
                     }
                 },
                 willDrawCell: function(data: any) {
                     if (data.section === 'body' && data.column.index > 0) {
                         const raw = data.cell.raw;
-                        // Clear text for custom rendering in both personnel and station views
+                        // Clear text for custom rendering
                         if ((raw && raw.rawShift) || (raw && raw.rawStationShifts)) {
-                            data.cell.text = []; // Prevent default drawing
+                            data.cell.text = []; 
                         }
                     }
                 },
                 didDrawCell: function(data: any) {
-                     // Personnel View Custom Rendering
-                     if (data.section === 'body' && data.column.index > 0 && data.cell.raw && data.cell.raw.rawShift) {
+                     // Custom Rendering
+                     // Personnel View
+                     if (viewMode !== 'station' && data.section === 'body' && data.column.index > 0 && data.cell.raw && data.cell.raw.rawShift) {
                          const { station, time, task, location } = data.cell.raw.rawShift;
                          const x = data.cell.x + data.cell.width / 2;
-                         let y = data.cell.y + 3; // Reduced start padding
+                         // Center vertically roughly
+                         let y = data.cell.y + 3; // Start padding
                          
                          // Station (8pt)
                          doc.setFontSize(8);
                          doc.text(station, x, y, { align: 'center' });
-                         y += 3; // Tighter
+                         y += 3;
 
                          // Time (6pt)
                          if (time) {
                              doc.setFontSize(6);
                              doc.text(time, x, y, { align: 'center' });
-                             y += 2.5; // Tighter
+                             y += 2.5; 
                          }
 
                          // Task (6pt)
                          if (task) {
                             doc.setFontSize(6); 
                             doc.text(task, x, y, { align: 'center' });
-                            y += 2.5; // Tighter
+                            y += 2.5;
                          }
                          
-                         // Location (5pt) - separate line
+                         // Location (5pt)
                          if (location) {
                              doc.setFontSize(5);
                              doc.text(location, x, y, { align: 'center' });
                          }
                      }
                      
-                     // Station View Custom Rendering
-                     if (data.section === 'body' && data.column.index > 0 && data.cell.raw && data.cell.raw.rawStationShifts) {
+                     // Station View
+                     if (viewMode === 'station' && data.section === 'body' && data.column.index > 0 && data.cell.raw && data.cell.raw.rawStationShifts) {
                          const shifts = data.cell.raw.rawStationShifts;
                          if (shifts.length === 0) return;
                          
                          const x = data.cell.x + data.cell.width / 2;
                          
-                         // Calculate total content height for vertical centering
+                         // Calculate Height for Centering
+                         // Logic from Radiographer: 5.5mm vs 3.5mm
+                         // Here: Name(8pt,~3.5mm) + [Time(6pt)+Task(6pt) = ~2mm each?]
+                         // Let's stick to the user request: "Same as radiographer" -> Compact.
+                         // Name: 8pt (~2.8mm height), let's use 3.5mm spacing
+                         // Details: 6pt (~2.1mm height), let's use 2.5mm spacing
+                         
                          let totalHeight = 0;
                          shifts.forEach((shift: any, idx: number) => {
-                             totalHeight += 3.8; // Name (12pt font)
-                             if (shift.time) totalHeight += 2.5; // Time
-                             if (shift.task && !(shift.stationName === '晚班' && shift.task === '晚班')) totalHeight += 2.5; // Task
-                             if (idx < shifts.length - 1) totalHeight += 2; // Spacing between doctors
+                             totalHeight += 3.5; // Name
+                             if (shift.time) totalHeight += 2.5;
+                             if (shift.task && !(shift.stationName === '晚班' && shift.task === '晚班')) totalHeight += 2.5; 
+                             if (idx < shifts.length - 1) totalHeight += 1.5; // Spacing between doctors
                          });
                          
-                         // Start from center and offset by half of content height
-                         let y = data.cell.y + (data.cell.height - totalHeight) / 2 + 3;
+                         let y = data.cell.y + (data.cell.height - totalHeight) / 2 + 2.5; // +2.5 baseline adjust
                          
                          shifts.forEach((shift: any, idx: number) => {
-                             // Name (12pt, larger font for better clarity)
-                             doc.setFontSize(12);
+                             // Name (8pt)
+                             doc.setFontSize(8);
                              doc.text(shift.name, x, y, { align: 'center' });
-                             y += 3.8; // Adjusted spacing for larger font
+                             y += 3.5; 
                              
-                             // Time (7pt)
+                             // Time (6pt)
                              if (shift.time) {
-                                 doc.setFontSize(7);
+                                 doc.setFontSize(6);
                                  doc.text(shift.time, x, y, { align: 'center' });
-                                 y += 2.5; // Reduced spacing
+                                 y += 2.5; 
                              }
                              
-                             // Task (7pt) - Only skip if we're in "晚班" station AND task is "晚班"
+                             // Task (6pt)
                              if (shift.task && !(shift.stationName === '晚班' && shift.task === '晚班')) {
-                                 doc.setFontSize(7);
+                                 doc.setFontSize(6);
                                  doc.text(shift.task, x, y, { align: 'center' });
-                                 y += 2.5; // Reduced spacing
+                                 y += 2.5; 
                              }
                              
-                             // Add spacing between doctors
                              if (idx < shifts.length - 1) {
-                                 y += 2;
+                                 y += 1.5;
                              }
                          });
                      }
                 }
-            });
+            };
+            
+            const addTitle = (doc: jsPDF, pageTitle: string) => {
+                 doc.setFontSize(14);
+                 doc.setFont(fontName); 
+                 doc.text(`${pageTitle}  ${subtitle}`, 7, 10); // Slightly adjusted margins
+                 doc.setFontSize(9);
+                 const pageWidth = doc.internal.pageSize.width;
+                 doc.text(exportDate, pageWidth - 7, 10, { align: 'right' });
+            };
+
+            // ---- GENERATION LOGIC ----
+
+            if (viewMode === 'station') {
+                // Split into two parts: Page 1 (Beitou), Page 2 (Dazhi + Taichung)
+                
+                // Helper to generate rows for a set of locations
+                const generateRows = (targetLocations: string[]) => {
+                    const rows: any[] = [];
+                    // Header for Stations
+                    rows.push(['崗位', ...dateHeaders]); // We will manually handle this in autoTable head
+                    
+                    targetLocations.forEach(loc => {
+                         const locStations = stations.filter(s => s.location === loc);
+                         if (locStations.length === 0) return;
+
+                         // Location Header Row
+                         rows.push([{
+                            content: loc,
+                            colSpan: dateRange.length + 1,
+                            styles: {
+                                fillColor: loc === '北投' ? [220, 235, 255] : loc === '大直' ? [245, 235, 230] : [255, 237, 220],
+                                fontStyle: 'bold',
+                                halign: 'center',
+                                fontSize: 9,
+                                cellPadding: 1,
+                                minCellHeight: 6
+                            },
+                             location: loc // For color logic reference
+                         }]);
+
+                         locStations.forEach(st => {
+                             const rowData: any[] = [{ content: `${st.name}`, styles: { fontStyle: 'bold' }, location: st.location }];
+                             dateRange.forEach(date => {
+                                 // Logic same as before
+                                 const assignedShifts = shifts.filter(s => {
+                                     if (s.date !== date || s.location !== st.location) return false;
+                                     if (st.name === '晚班') return s.task?.includes('晚班');
+                                     if (s.scheduled_station === st.name) return true;
+                                     if (st.name === '婦科' && s.scheduled_station === '解說') {
+                                         const doc = doctors.find(d => d.id === s.doctorId);
+                                         return doc?.capabilities?.includes('婦科');
+                                     }
+                                     return false;
+                                 });
+
+                                 const formatTimeShort = (time: string) => {
+                                     if (!time) return '';
+                                     return time.replace(/(\d{1,2}):\d{2}/g, (match, p1) => parseInt(p1) + '\'').replace(/\s/g, '');
+                                 };
+
+                                 // Prepare content string for Height Calc
+                                 // Name(1) + Time(1) + Task(1)
+                                 const docInfos = assignedShifts.map(s => {
+                                      const doc = doctors.find(d => d.id === s.doctorId);
+                                      return doc?.name || '?'; // Content string doesn't matter much for custom draw, mainly for height
+                                 }).join('\n');
+
+                                 let cellStyles: any = {};
+                                 if (assignedShifts.length > 0) {
+                                     let totalHeight = 0;
+                                     assignedShifts.forEach((s, idx) => {
+                                          totalHeight += 3.5; // Name
+                                          if (s.workTime) totalHeight += 2.5; 
+                                          const showTask = s.task && !(st.name === '晚班' && s.task === '晚班');
+                                          if (showTask) totalHeight += 2.5;
+                                          if (idx < assignedShifts.length - 1) totalHeight += 1.5;
+                                     });
+                                     // Add padding
+                                     cellStyles = { minCellHeight: Math.max(totalHeight + 2, 6) };
+                                 }
+
+                                 rowData.push({
+                                     content: docInfos, // Dummy content for autoTable
+                                     styles: cellStyles,
+                                     rawStationShifts: assignedShifts.map(s => {
+                                         const doc = doctors.find(d => d.id === s.doctorId);
+                                         return {
+                                             name: doc?.name || '?',
+                                             time: formatTimeShort(s.workTime),
+                                             task: s.task,
+                                             stationName: st.name
+                                         };
+                                     })
+                                 });
+                             });
+                             rows.push(rowData);
+                         });
+                    });
+                    
+                    return rows;
+                };
+
+                // Page 1: Beitou
+                const page1Body = generateRows(['北投']);
+                // Remove first element (header) for body, put in head
+                const page1Head = [page1Body.shift()]; 
+                
+                addTitle(doc, title); // Title Page 1
+                autoTable(doc, {
+                    ...tableConfig,
+                    startY: 15,
+                    head: page1Head,
+                    body: page1Body,
+                    margin: { top: 15, right: 2, bottom: 2, left: 2 }, // Top margin for title
+                });
+
+                // Page 2: Dazhi + Taichung
+                const page2Body = generateRows(['大直', '台中']);
+                if (page2Body.length > 1) { // If there is data (more than just header)
+                     doc.addPage();
+                     addTitle(doc, title); // Title Page 2
+                     const page2Head = [page2Body.shift()];
+                     autoTable(doc, {
+                        ...tableConfig,
+                        startY: 15,
+                        head: page2Head,
+                        body: page2Body,
+                        margin: { top: 15, right: 2, bottom: 2, left: 2 },
+                     });
+                }
+
+            } else {
+                // Personnel View (Original Single Page Logic mostly)
+                // ... (Keep existing personnel logic but update styling params)
+                 
+                 const headRow = [['醫師', ...dateHeaders]];
+                 const sortedDoctors = doctors.filter(doc => {
+                    const hasShifts = shifts.some(s => s.doctorId === doc.id && dateRange.includes(s.date));
+                    return hasShifts && !doc.isPartTime;
+                });
+                
+                // ... helper formatters ...
+                 const formatTimeShort = (time: string) => (!time) ? '' : time.replace(/(\d{1,2}):\d{2}/g, (match, p1) => parseInt(p1) + '\'').replace(/\s/g, '');
+                 const formatLocShort = (loc: string) => (loc === '北投' ? '北' : loc === '台中' ? '中' : loc === '大直' ? '直' : loc ? `(${loc})` : '');
+
+                const bodyRows = sortedDoctors.map(doc => {
+                    const rowData: any[] = [{ content: doc.name, styles: { fontStyle: 'bold' } }];
+                    dateRange.forEach(date => {
+                         const shift = shifts.find(s => s.doctorId === doc.id && s.date === date);
+                         const isExcluded = doc.excludedDays?.includes(new Date(date).getDay());
+                         
+                         if (shift) {
+                             const st = shift.scheduled_station;
+                             if (st === 'X') {
+                                 rowData.push('X');
+                             } else if (st) {
+                                 const allShiftsForDate = shifts.filter(s => s.doctorId === doc.id && s.date === date);
+                                 const hasGynecology = allShiftsForDate.some(s => s.scheduled_station === '婦科');
+                                 const hasExplanation = allShiftsForDate.some(s => s.scheduled_station === '解說');
+                                 let displayStation = (hasGynecology && hasExplanation) ? '解+婦' : st;
+                                 if (displayStation === '耳鼻喉科') displayStation = 'ENT';
+                                 
+                                 // Height Calc for Personnel View
+                                 // Station(8pt, 3.5mm) + Time(6pt, 2.5mm) + Task + Loc
+                                 let h = 3.5;
+                                 if(shift.workTime) h += 2.5;
+                                 if(shift.task) h += 2.5;
+                                 if(shift.location) h += 2.0;
+
+                                 rowData.push({
+                                     content: displayStation, 
+                                     styles: { minCellHeight: Math.max(h + 2, 6) },
+                                     rawShift: {
+                                         station: displayStation,
+                                         time: formatTimeShort(shift.workTime),
+                                         task: shift.task,
+                                         location: formatLocShort(shift.location)
+                                     }
+                                 });
+                             } else {
+                                 rowData.push('');
+                             }
+                         } else if (isExcluded) {
+                             rowData.push('X');
+                         } else {
+                             rowData.push('');
+                         }
+                    });
+                    return rowData;
+                });
+                
+                if (bodyRows.length > 0) {
+                     addTitle(doc, title);
+                     autoTable(doc, {
+                        ...tableConfig,
+                        startY: 15,
+                        head: headRow,
+                        body: bodyRows,
+                        margin: { top: 15, right: 2, bottom: 2, left: 2 },
+                     });
+                }
+            }
+
             
             // Generate Filename: YYYY-MM with view mode suffix
             const year = currentDate.getFullYear();
