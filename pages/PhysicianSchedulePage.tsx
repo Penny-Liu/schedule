@@ -868,19 +868,6 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                     const locStations = stations.filter(s => s.location === loc);
                     if (locStations.length === 0) return;
                     
-                    // Add spacing row to separate sections (except the first one)
-                    if (locIndex > 0) {
-                        bodyRows.push([{
-                            content: '',
-                            colSpan: dateRange.length + 1,
-                            styles: {
-                                minCellHeight: 2, // Reduced from 4mm to 2mm
-                                fillColor: [255, 255, 255],
-                                lineWidth: 0 // No borders for spacing row
-                            }
-                        }]);
-                    }
-                    
                     // Location Header Row
                     const locationHeaderRow: any[] = [
                         {
@@ -897,6 +884,50 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                         }
                     ];
                     bodyRows.push(locationHeaderRow);
+                    
+                    // Add Main/Assistant Shift Row (only for Beitou)
+                    if (loc === '北投') {
+                        // Build Main/Assistant row with date-specific data
+                        const mainAssistantRow: any[] = [
+                            {
+                                content: '主/輔',
+                                styles: {
+                                    fontStyle: 'bold',
+                                    fillColor: [255, 250, 205], // Light yellow
+                                    halign: 'center',
+                                    fontSize: 8
+                                }
+                            }
+                        ];
+                        
+                        dateRange.forEach(date => {
+                            const radiographerShifts = db.shifts;
+                            const mainShift = radiographerShifts.find(s => 
+                                s.date === date && s.station?.includes('場控')
+                            );
+                            const assistantShift = radiographerShifts.find(s => 
+                                s.date === date && s.specialRoles?.includes('輔班')
+                            );
+                            
+                            const mainAlias = mainShift 
+                                ? (db.getUsers().find(u => u.id === mainShift.userId)?.alias || '-')
+                                : '-';
+                            const assistantAlias = assistantShift 
+                                ? (db.getUsers().find(u => u.id === assistantShift.userId)?.alias || '-')
+                                : '-';
+                            
+                            mainAssistantRow.push({
+                                content: `${mainAlias}/${assistantAlias}`,
+                                styles: {
+                                    fillColor: [255, 250, 205], // Light yellow to match header
+                                    halign: 'center',
+                                    fontSize: 7
+                                }
+                            });
+                        });
+                        
+                        bodyRows.push(mainAssistantRow);
+                    }
                     
                     locStations.forEach(st => {
                          // Filter out '晚班' for '大直' location as requested
@@ -1053,7 +1084,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
             if (bodyRows.length > 0) {
                  autoTable(doc, {
                     ...tableConfig,
-                    startY: 11, // Moved to 11mm for maximum space
+                    startY: 9, // Moved higher from 11mm
                     head: headRow,
                     body: bodyRows,
                     margin: { top: 11, right: 2, bottom: 2, left: 2 },
@@ -1446,9 +1477,9 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                 {viewMode === 'personnel' && (
                     <div className="bg-white rounded-xl border border-gray-200 shadow-sm inline-block min-w-full">
                         <table className="text-sm border-collapse w-auto">
-                            <thead>
-                                <tr className="bg-slate-50/95 backdrop-blur border-b border-slate-200">
-                                    <th className="p-3 text-left font-bold text-slate-600 w-32 sticky left-0 top-0 bg-slate-50/95 backdrop-blur z-[40] border-r border-slate-200 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">醫師</th>
+                            <thead className="relative z-50">
+                                <tr className="bg-slate-50 backdrop-blur border-b border-slate-200">
+                                    <th className="p-3 text-left font-bold text-slate-600 w-32 sticky left-0 top-0 bg-slate-50 backdrop-blur z-50 border-r border-slate-200 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">醫師</th>
                                     {dateRange.map(date => {
                                         const d = new Date(date);
                                         const isWeekend = d.getDay() === 0 || d.getDay() === 6;
@@ -1470,7 +1501,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                         setMemoModal({ date, content: doctorNote?.name || '' });
                                                     }
                                                 }}
-                                                className={`p-1 text-center border-r border-slate-100 min-w-[40px] sticky top-0 z-20 cursor-pointer hover:bg-slate-100 transition-colors ${isToday ? 'bg-teal-50/50' : (isHoliday || isWeekend ? 'bg-red-50' : 'bg-white')} border-b border-slate-200`}
+                                                className={`p-1 text-center border-r border-slate-100 min-w-[40px] sticky top-0 z-50 cursor-pointer hover:bg-slate-100 transition-colors ${isToday ? 'bg-teal-50' : (isHoliday || isWeekend ? 'bg-red-50' : 'bg-white')} border-b border-slate-200`}
                                             >
                                                 <div className={`font-bold text-sm ${isToday ? 'text-teal-600' : (isHoliday || isWeekend ? 'text-red-500' : 'text-slate-800')}`}>{d.getDate()}</div>
                                                 <div className={`text-[10px] opacity-75 ${isToday ? 'text-teal-600' : (isHoliday || isWeekend ? 'text-red-500' : 'text-slate-700')}`}>
@@ -1504,7 +1535,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                             <tbody className="divide-y divide-slate-100">
                                 {doctors.map(doc => (
                                     <tr key={doc.id} className="group hover:bg-slate-50/50 transition-colors">
-                                        <td className="p-0 border-r border-slate-200 sticky left-0 bg-white z-[30] shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
+                                        <td className="p-0 border-r border-slate-200 sticky left-0 bg-white z-30 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
                                             <div className="p-3 font-bold text-slate-800 flex items-center gap-2 min-w-[128px]">
                                                 {isReorderMode && (
                                                     <div className="flex flex-col gap-0.5">
@@ -1579,9 +1610,9 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                 <td 
                                                     key={date} 
                                                     onClick={() => canEdit && handleCellClick(doc.id, date)}
-                                                    className={`p-1 border-r border-gray-100 h-12 transition-all relative group text-center
+                                                    className={`p-1 border-r border-gray-100 h-12 transition-all group text-center z-0
                                                         ${canEdit ? 'cursor-pointer' : 'cursor-not-allowed'}
-                                                        ${isSimulated ? 'border-2 border-dashed border-amber-400 z-10' : ''}
+                                                        ${isSimulated ? 'border-2 border-dashed border-amber-400' : ''}
                                                         ${hasStation 
                                                             ? (() => {
                                                                 const st = shift.scheduled_station || '';
@@ -1680,14 +1711,14 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                 {viewMode === 'station' && (
                      <div className="bg-white rounded-xl border border-gray-200 shadow-sm inline-block min-w-full">
                         <table className="text-sm border-collapse w-auto">
-                            <thead>
+                            <thead className="relative z-50">
                                 <tr className="bg-slate-50 border-b border-gray-200">
-                                    <th className="p-3 text-center font-bold text-gray-600 w-32 sticky left-0 top-0 bg-slate-50 z-[40] border-r border-gray-200 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">崗位</th>
+                                    <th className="p-3 text-center font-bold text-gray-600 w-32 sticky left-0 top-0 bg-slate-50 z-50 border-r border-gray-200 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">崗位</th>
                                     {dateRange.map(date => {
                                         const d = new Date(date);
                                         const isWeekend = d.getDay() === 0 || d.getDay() === 6;
                                         return (
-                                            <th key={date} className={`p-1 text-center border-r border-gray-100 min-w-[40px] sticky top-0 z-20 ${isWeekend ? 'text-red-500 bg-red-50' : 'text-gray-700 bg-slate-50'}`}>
+                                            <th key={date} className={`p-1 text-center border-r border-gray-100 min-w-[40px] sticky top-0 z-50 ${isWeekend ? 'text-red-500 bg-red-50' : 'text-gray-700 bg-slate-50'}`}>
                                                 <div className="font-bold text-sm">{d.getDate()}</div>
                                                 <div className="text-[10px] opacity-75">
                                                     {['日', '一', '二', '三', '四', '五', '六'][d.getDay()]}
@@ -1715,6 +1746,61 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                     </div>
                                                 </td>
                                             </tr>
+
+                                            {/* Main/Assistant Shift Rows (only for Beitou) */}
+                                            {location === '北投' && (
+                                                <>
+                                                    {/* Main Shift (場控) */}
+                                                    <tr className="bg-yellow-50/50 border-b border-yellow-200">
+                                                        <td className="px-3 py-1.5 text-xs font-bold text-yellow-800 sticky left-0 bg-yellow-50/50 z-10 border-r border-yellow-200">
+                                                            主班
+                                                        </td>
+                                                        {dateRange.map(date => {
+                                                            const radiographerShifts = db.shifts;
+                                                            const mainShift = radiographerShifts.find(s => 
+                                                                s.date === date && s.station?.includes('場控')
+                                                            );
+                                                            const userName = mainShift 
+                                                                ? db.getUsers().find(u => u.id === mainShift.userId)?.name 
+                                                                : '-';
+                                                            
+                                                            return (
+                                                                <td 
+                                                                    key={date} 
+                                                                    className="p-1 border-r border-yellow-100 text-center bg-yellow-50/30 text-xs font-medium text-yellow-900"
+                                                                >
+                                                                    {userName}
+                                                                </td>
+                                                            );
+                                                        })}
+                                                    </tr>
+
+                                                    {/* Assistant Shift (輔控) */}
+                                                    <tr className="bg-yellow-50/50 border-b border-yellow-200">
+                                                        <td className="px-3 py-1.5 text-xs font-bold text-yellow-800 sticky left-0 bg-yellow-50/50 z-10 border-r border-yellow-200">
+                                                            輔班
+                                                        </td>
+                                                        {dateRange.map(date => {
+                                                            const radiographerShifts = db.shifts;
+                                                            const assistantShift = radiographerShifts.find(s => 
+                                                                s.date === date && s.specialRoles?.includes('輔班')
+                                                            );
+                                                            const userName = assistantShift 
+                                                                ? db.getUsers().find(u => u.id === assistantShift.userId)?.name 
+                                                                : '-';
+                                                            
+                                                            return (
+                                                                <td 
+                                                                    key={date} 
+                                                                    className="p-1 border-r border-yellow-100 text-center bg-yellow-50/30 text-xs font-medium text-yellow-900"
+                                                                >
+                                                                    {userName}
+                                                                </td>
+                                                            );
+                                                        })}
+                                                    </tr>
+                                                </>
+                                            )}
 
                                             {locationStations.map(stationConfig => {
                                                 const stationName = stationConfig.name;
@@ -1793,7 +1879,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                             return (
                                                                 <td 
                                                                     key={date} 
-                                                                    className={`p-1 border-r border-gray-100 relative group min-w-[40px] 
+                                                                    className={`p-1 border-r border-gray-100 group min-w-[40px] 
                                                                         ${canEdit ? 'cursor-pointer' : 'cursor-not-allowed'}
                                                                         ${getStationBgColor()} 
                                                                         ${selectedCell?.date === date && selectedCell?.doctorId === '' /* Just checks selection */ ? 'ring-2 ring-inset ring-blue-400' : ''}
@@ -1849,6 +1935,37 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                 
                 {viewMode === 'daily' && (
                     <div className="flex flex-col gap-8 pb-10">
+                        {/* Main/Assistant Shift Display */}
+                        <div className="bg-gradient-to-r from-yellow-50 to-amber-50 border border-yellow-200 rounded-lg p-4">
+                            <div className="flex flex-col sm:flex-row gap-3">
+                                {(() => {
+                                    const dateStr = toLocalISOString(currentDate);
+                                    const radiographerShifts = db.shifts;
+                                    const mainShift = radiographerShifts.find(s => 
+                                        s.date === dateStr && s.station?.includes('場控')
+                                    );
+                                    const assistantShift = radiographerShifts.find(s => 
+                                        s.date === dateStr && s.specialRoles?.includes('輔班')
+                                    );
+                                    const mainName = mainShift ? db.getUsers().find(u => u.id === mainShift.userId)?.name : '-';
+                                    const assistantName = assistantShift ? db.getUsers().find(u => u.id === assistantShift.userId)?.name : '-';
+
+                                    return (
+                                        <>
+                                            <div className="flex-1 flex items-center gap-2 bg-white/60 rounded px-3 py-2 border border-yellow-300/30">
+                                                <span className="text-xs font-bold text-yellow-800">主班：</span>
+                                                <span className="text-sm font-medium text-yellow-900">{mainName}</span>
+                                            </div>
+                                            <div className="flex-1 flex items-center gap-2 bg-white/60 rounded px-3 py-2 border border-yellow-300/30">
+                                                <span className="text-xs font-bold text-yellow-800">輔班：</span>
+                                                <span className="text-sm font-medium text-yellow-900">{assistantName}</span>
+                                            </div>
+                                        </>
+                                    );
+                                })()}
+                            </div>
+                        </div>
+
                         {LOCATIONS.map(loc => {
                             const locStations = stations.filter(s => s.location === loc);
                             if (locStations.length === 0) return null;

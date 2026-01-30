@@ -1,5 +1,5 @@
 
-import { User, Shift, LeaveRequest, SystemSettings, StationDefault, SYSTEM_OFF, RosterCycle, DateEventType, Holiday, LeaveStatus, LeaveType, StaffGroup, SPECIAL_ROLES, CycleAnchor, DailyManpowerStats, Doctor, DoctorShift } from '../types';
+import { User, Shift, LeaveRequest, SystemSettings, StationDefault, SYSTEM_OFF, RosterCycle, DateEventType, Holiday, LeaveStatus, LeaveType, StaffGroup, SPECIAL_ROLES, CycleAnchor, DailyManpowerStats, Doctor, WeekdaySetting, DoctorShift } from '../types';
 import { MOCK_USERS, MOCK_LEAVES, MOCK_DOCTORS } from './mockData';
 import { supabase } from './supabaseClient';
 
@@ -1230,8 +1230,8 @@ BMD :{{bmd}}
         });
     }
 
-    async addDoctor(name: string, alias?: string, capabilities: string[] = [], locations: string[] = [], excludedDays: number[] = [], excludedAutoScheduleLocations: string[] = [], isPartTime: boolean = false, specialty?: string, monthlyTargetShifts?: number): Promise<{ success: boolean; error?: string; id?: string }> {
-        const newDoctor: Doctor = { id: crypto.randomUUID(), name, alias: alias || name[0], capabilities, locations, excludedDays, excludedAutoScheduleLocations, specialty, isPartTime, monthlyTargetShifts, fixedShifts: [] }; // Default alias to first char if not provided
+    async addDoctor(name: string, alias?: string, capabilities: string[] = [], locations: string[] = [], excludedDays: number[] = [], excludedAutoScheduleLocations: string[] = [], isPartTime: boolean = false, specialty?: string, monthlyTargetShifts?: number, weekdaySettings: WeekdaySetting[] = []): Promise<{ success: boolean; error?: string; id?: string }> {
+        const newDoctor: Doctor = { id: crypto.randomUUID(), name, alias: alias || name[0], capabilities, locations, excludedDays, excludedAutoScheduleLocations, specialty, isPartTime, monthlyTargetShifts, fixedShifts: [], weekdaySettings };
         this.doctors.push(newDoctor); // Optimistic update
         this.notifyListeners();
         
@@ -1248,7 +1248,8 @@ BMD :{{bmd}}
                 specialty: specialty,
                 is_part_time: isPartTime,
                 monthly_target_shifts: monthlyTargetShifts,
-                fixed_shifts: []
+                fixed_shifts: [],
+                weekday_settings: weekdaySettings
             });
             if (error) throw error;
             return { success: true, id: newDoctor.id };
@@ -1284,7 +1285,8 @@ BMD :{{bmd}}
                 is_part_time: doctor.isPartTime,
                 monthly_target_shifts: doctor.monthlyTargetShifts,
                 display_order: doctor.displayOrder,
-                fixed_shifts: doctor.fixedShifts
+                fixed_shifts: doctor.fixedShifts,
+                weekday_settings: doctor.weekdaySettings
             }).eq('id', doctor.id);
             if(error) throw error;
          } catch(error: any) {

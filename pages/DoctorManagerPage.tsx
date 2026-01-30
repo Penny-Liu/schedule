@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../services/store';
-import { Doctor, UserRole, FixedShift } from '../types';
+import { UserRole } from '../types';
+import type { Doctor, FixedShift, WeekdaySetting } from '../types';
 import { Users, Trash2, Plus, Save, Square, CheckSquare, Pencil, AlertCircle, Clock } from 'lucide-react';
 import ConfirmModal from '../components/ConfirmModal';
 
@@ -34,7 +35,8 @@ const DoctorManagerPage: React.FC<DoctorManagerPageProps> = ({ currentUser }) =>
         excludedAutoScheduleLocations: string[];
         isPartTime: boolean;
         monthlyTargetShifts?: number;
-        fixedShifts: FixedShift[]; // New
+        fixedShifts: FixedShift[];
+        weekdaySettings: WeekdaySetting[];
     }>({
         name: '',
         alias: '',
@@ -45,7 +47,8 @@ const DoctorManagerPage: React.FC<DoctorManagerPageProps> = ({ currentUser }) =>
         excludedAutoScheduleLocations: [],
         isPartTime: false,
         monthlyTargetShifts: undefined,
-        fixedShifts: [] // New
+        fixedShifts: [],
+        weekdaySettings: []
     });
 
     const [editingId, setEditingId] = useState<string | null>(null);
@@ -65,7 +68,7 @@ const DoctorManagerPage: React.FC<DoctorManagerPageProps> = ({ currentUser }) =>
     }, []);
 
     const resetForm = () => {
-        setFormData({ name: '', alias: '', specialty: '', capabilities: [], excludedDays: [], locations: ['北投'], excludedAutoScheduleLocations: [], isPartTime: false, monthlyTargetShifts: undefined, fixedShifts: [] });
+        setFormData({ name: '', alias: '', specialty: '', capabilities: [], excludedDays: [], locations: ['北投'], excludedAutoScheduleLocations: [], isPartTime: false, monthlyTargetShifts: undefined, fixedShifts: [], weekdaySettings: [] });
         setEditingId(null);
         setError(null);
     };
@@ -83,7 +86,8 @@ const DoctorManagerPage: React.FC<DoctorManagerPageProps> = ({ currentUser }) =>
             excludedAutoScheduleLocations: doc.excludedAutoScheduleLocations || [],
             isPartTime: doc.isPartTime || false,
             monthlyTargetShifts: doc.monthlyTargetShifts,
-            fixedShifts: doc.fixedShifts || []
+            fixedShifts: doc.fixedShifts || [],
+            weekdaySettings: doc.weekdaySettings || []
         });
         
         // Pre-fill fixed shift station if capabilities exist
@@ -187,6 +191,7 @@ const DoctorManagerPage: React.FC<DoctorManagerPageProps> = ({ currentUser }) =>
         const alias = formData.alias || formData.name.charAt(0);
 
         if (editingId) {
+            const currentDoctor = doctors.find(d => d.id === editingId);
             await db.updateDoctor({
                 id: editingId,
                 name: formData.name,
@@ -198,7 +203,9 @@ const DoctorManagerPage: React.FC<DoctorManagerPageProps> = ({ currentUser }) =>
                 excludedAutoScheduleLocations: formData.excludedAutoScheduleLocations,
                 isPartTime: formData.isPartTime,
                 monthlyTargetShifts: formData.monthlyTargetShifts,
-                fixedShifts: formData.fixedShifts
+                fixedShifts: formData.fixedShifts,
+                weekdaySettings: formData.weekdaySettings,
+                displayOrder: currentDoctor?.displayOrder // Preserve original position
             });
         } else {
             const result = await db.addDoctor(
@@ -210,14 +217,15 @@ const DoctorManagerPage: React.FC<DoctorManagerPageProps> = ({ currentUser }) =>
                 formData.excludedAutoScheduleLocations, 
                 formData.isPartTime, 
                 formData.specialty, 
-                formData.monthlyTargetShifts
+                formData.monthlyTargetShifts,
+                formData.weekdaySettings
             );
             if (!result.success) {
                 setError(result.error || '新增失敗');
                 return;
             }
-            // Update with specialty AND fixedShifts immediately
-            if ((formData.specialty || formData.fixedShifts.length > 0) && result.id) {
+            // Update with specialty, fixedShifts, AND weekdaySettings immediately
+            if ((formData.specialty || formData.fixedShifts.length > 0 || formData.weekdaySettings.length > 0) && result.id) {
                await db.updateDoctor({ 
                    id: result.id, 
                    name: formData.name, 
@@ -227,7 +235,8 @@ const DoctorManagerPage: React.FC<DoctorManagerPageProps> = ({ currentUser }) =>
                    excludedDays: formData.excludedDays, 
                    excludedAutoScheduleLocations: formData.excludedAutoScheduleLocations, 
                    isPartTime: formData.isPartTime,
-                   fixedShifts: formData.fixedShifts 
+                   fixedShifts: formData.fixedShifts,
+                   weekdaySettings: formData.weekdaySettings
                });
             }
         }
@@ -551,6 +560,77 @@ const DoctorManagerPage: React.FC<DoctorManagerPageProps> = ({ currentUser }) =>
                                         </div>
                                     ))
                                 )}
+                            </div>
+                        </div>
+
+                        {/* Weekday-Specific Settings */}
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold text-gray-500 uppercase">星期幾特殊設定 (Work Hours & Memos by Day)</label>
+                            <div className="space-y-2 max-h-[300px] overflow-y-auto bg-gradient-to-br from-purple-50/30 to-indigo-50/30 p-3 rounded-lg border border-purple-100">
+                                {['週日', '週一', '週二', '週三', '週四', '週五', '週六'].map((dayName, dayIndex) => {
+                                    const existing = formData.weekdaySettings.find(s => s.dayOfWeek === dayIndex);
+                                    return (
+                                        <div key={dayIndex} className="bg-white border border-gray-200 rounded-lg p-3 shadow-sm">
+                                            <div className="flex items-center justify-between mb-2">
+                                                <span className="text-xs font-bold text-purple-700">{dayName}</span>
+                                                {existing && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setFormData(prev => ({
+                                                                ...prev,
+                                                                weekdaySettings: prev.weekdaySettings.filter(s => s.dayOfWeek !== dayIndex)
+                                                           }));
+                                                        }}
+                                                        className="text-xs text-red-500 hover:text-red-700"
+                                                    >
+                                                        清除
+                                                    </button>
+                                                )}
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-2">
+                                                <input
+                                                    type="text"
+                                                    placeholder="上班時間 (例: 08:00-16:00)"
+                                                    value={existing?.workTime || ''}
+                                                    onChange={(e) => {
+                                                        const value = e.target.value;
+                                                        setFormData(prev => {
+                                                            const filtered = prev.weekdaySettings.filter(s => s.dayOfWeek !== dayIndex);
+                                                            if (value || existing?.memo) {
+                                                                return {
+                                                                    ...prev,
+                                                                    weekdaySettings: [...filtered, { dayOfWeek: dayIndex as any, workTime: value, memo: existing?.memo }]
+                                                                };
+                                                            }
+                                                            return { ...prev, weekdaySettings: filtered };
+                                                        });
+                                                    }}
+                                                    className="px-2 py-1 text-xs border border-gray-300 rounded outline-none focus:border-purple-500"
+                                                />
+                                                <input
+                                                    type="text"
+                                                    placeholder="備忘 (例: 亞東看診)"
+                                                    value={existing?.memo || ''}
+                                                    onChange={(e) => {
+                                                        const value = e.target.value;
+                                                        setFormData(prev => {
+                                                            const filtered = prev.weekdaySettings.filter(s => s.dayOfWeek !== dayIndex);
+                                                            if (value || existing?.workTime) {
+                                                                return {
+                                                                    ...prev,
+                                                                    weekdaySettings: [...filtered, { dayOfWeek: dayIndex as any, workTime: existing?.workTime, memo: value }]
+                                                                };
+                                                            }
+                                                            return { ...prev, weekdaySettings: filtered };
+                                                        });
+                                                    }}
+                                                    className="px-2 py-1 text-xs border border-gray-300 rounded outline-none focus:border-purple-500"
+                                                />
+                                            </div>
+                                        </div>
+                                    );
+                                })}
                             </div>
                         </div>
 

@@ -2097,6 +2097,37 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                 </h3>
                             </div>
 
+                            {/* Main/Assistant Shift Display */}
+                            <div className="px-6 py-3 bg-gradient-to-r from-yellow-50 to-amber-50 border-y border-yellow-200">
+                                <div className="flex flex-col sm:flex-row gap-3">
+                                    {(() => {
+                                        const dateStr = toLocalISOString(dailyDate);
+                                        const radiographerShifts = db.shifts;
+                                        const mainShift = radiographerShifts.find(s => 
+                                            s.date === dateStr && s.station?.includes('場控')
+                                        );
+                                        const assistantShift = radiographerShifts.find(s => 
+                                            s.date === dateStr && s.specialRoles?.includes('輔班')
+                                        );
+                                        const mainName = mainShift ? db.getUsers().find(u => u.id === mainShift.userId)?.name : '-';
+                                        const assistantName = assistantShift ? db.getUsers().find(u => u.id === assistantShift.userId)?.name : '-';
+
+                                        return (
+                                            <>
+                                                <div className="flex-1 flex items-center gap-2 bg-white/60 rounded px-3 py-2 border border-yellow-300/30">
+                                                    <span className="text-xs font-bold text-yellow-800">主班：</span>
+                                                    <span className="text-sm font-medium text-yellow-900">{mainName}</span>
+                                                </div>
+                                                <div className="flex-1 flex items-center gap-2 bg-white/60 rounded px-3 py-2 border border-yellow-300/30">
+                                                    <span className="text-xs font-bold text-yellow-800">輔班：</span>
+                                                    <span className="text-sm font-medium text-yellow-900">{assistantName}</span>
+                                                </div>
+                                            </>
+                                        );
+                                    })()}
+                                </div>
+                            </div>
+
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 p-4">
                                 {(() => {
                                     // Station-based grouping logic

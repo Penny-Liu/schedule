@@ -140,6 +140,12 @@ export interface DailyManpowerStats {
   beitou_total?: number; // Manually entered total radiographer count for Beitou
 }
 
+export interface WeekdaySetting {
+    dayOfWeek: 0 | 1 | 2 | 3 | 4 | 5 | 6; // 0=Sun, 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat
+    workTime?: string; // e.g., "08:00-16:00"
+    memo?: string;     // e.g., "亞東看診"
+}
+
 export interface Doctor {
     id: string;
     name: string;
@@ -153,6 +159,7 @@ export interface Doctor {
     monthlyTargetShifts?: number; // New: Target number of shifts per month
     displayOrder?: number; // New: Custom display order (lower number = higher priority)
     fixedShifts?: FixedShift[]; // New: Fixed weekly shifts
+    weekdaySettings?: WeekdaySetting[]; // New: Weekday-specific work hours and memos
 }
 
 export interface FixedShift {
