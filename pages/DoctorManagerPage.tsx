@@ -588,46 +588,46 @@ const DoctorManagerPage: React.FC<DoctorManagerPageProps> = ({ currentUser }) =>
                                                     </button>
                                                 )}
                                             </div>
-                                            <div className="grid grid-cols-2 gap-2">
-                                                <input
-                                                    type="text"
-                                                    placeholder="上班時間 (例: 08:00-16:00)"
-                                                    value={existing?.workTime || ''}
-                                                    onChange={(e) => {
-                                                        const value = e.target.value;
-                                                        setFormData(prev => {
-                                                            const filtered = prev.weekdaySettings.filter(s => s.dayOfWeek !== dayIndex);
-                                                            if (value || existing?.memo) {
-                                                                return {
-                                                                    ...prev,
-                                                                    weekdaySettings: [...filtered, { dayOfWeek: dayIndex as any, workTime: value, memo: existing?.memo }]
-                                                                };
-                                                            }
-                                                            return { ...prev, weekdaySettings: filtered };
-                                                        });
-                                                    }}
-                                                    className="px-2 py-1 text-xs border border-gray-300 rounded outline-none focus:border-purple-500"
-                                                />
-                                                <input
-                                                    type="text"
-                                                    placeholder="備忘 (例: 亞東看診)"
-                                                    value={existing?.memo || ''}
-                                                    onChange={(e) => {
-                                                        const value = e.target.value;
-                                                        setFormData(prev => {
-                                                            const filtered = prev.weekdaySettings.filter(s => s.dayOfWeek !== dayIndex);
-                                                            if (value || existing?.workTime) {
-                                                                return {
-                                                                    ...prev,
-                                                                    weekdaySettings: [...filtered, { dayOfWeek: dayIndex as any, workTime: existing?.workTime, memo: value }]
-                                                                };
-                                                            }
-                                                            return { ...prev, weekdaySettings: filtered };
-                                                        });
-                                                    }}
-                                                    className="px-2 py-1 text-xs border border-gray-300 rounded outline-none focus:border-purple-500"
-                                                />
-                                            </div>
+                                                <div className="grid grid-cols-2 gap-2">
+                                                    <input
+                                                        type="text"
+                                                        placeholder="上班時間 (例: 08:00-16:00)"
+                                                        value={existing?.workTime || ''}
+                                                        onChange={(e) => {
+                                                            const value = e.target.value;
+                                                            setFormData(prev => {
+                                                                const filtered = prev.weekdaySettings.filter(s => s.dayOfWeek !== dayIndex);
+                                                                if (value || existing?.task) {
+                                                                    return {
+                                                                        ...prev,
+                                                                        weekdaySettings: [...filtered, { dayOfWeek: dayIndex as any, workTime: value, task: existing?.task }]
+                                                                    };
+                                                                }
+                                                                return { ...prev, weekdaySettings: filtered };
+                                                            });
+                                                        }}
+                                                        className="text-xs p-2 border border-purple-200 rounded focus:border-purple-500 focus:outline-none"
+                                                    />
+                                                    <input
+                                                        type="text"
+                                                        placeholder="任務 (例: 行政)"
+                                                        value={existing?.task || ''}
+                                                        onChange={(e) => {
+                                                            const value = e.target.value;
+                                                            setFormData(prev => {
+                                                                const filtered = prev.weekdaySettings.filter(s => s.dayOfWeek !== dayIndex);
+                                                                if (value || existing?.workTime) {
+                                                                    return {
+                                                                        ...prev,
+                                                                        weekdaySettings: [...filtered, { dayOfWeek: dayIndex as any, workTime: existing?.workTime, task: value }]
+                                                                    };
+                                                                }
+                                                                return { ...prev, weekdaySettings: filtered };
+                                                            });
+                                                        }}
+                                                        className="text-xs p-2 border border-purple-200 rounded focus:border-purple-500 focus:outline-none"
+                                                    />
+                                                </div>
                                         </div>
                                     );
                                 })}

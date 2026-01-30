@@ -143,7 +143,7 @@ export interface DailyManpowerStats {
 export interface WeekdaySetting {
     dayOfWeek: 0 | 1 | 2 | 3 | 4 | 5 | 6; // 0=Sun, 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat
     workTime?: string; // e.g., "08:00-16:00"
-    memo?: string;     // e.g., "亞東看診"
+    task?: string;     // e.g., "亞東看診" (was memo)
 }
 
 export interface Doctor {

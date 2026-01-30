@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { db } from '../services/store';
 import { Doctor, UserRole, DoctorStationConfig, DateEventType, DoctorShift } from '../types';
-import { ChevronLeft, ChevronRight, Download, Lock, RefreshCw, Save, Unlock, User, UserPlus, X, Calendar as CalendarIcon, Clock, Filter, Sliders, ArrowUpDown, Wand2, BarChart2, Check, AlertCircle, Plus, LayoutGrid, List as ListIcon, Trash2, Briefcase, FileText, MapPin } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Download, Lock, RefreshCw, Save, Unlock, User, UserPlus, X, Calendar as CalendarIcon, Clock, Filter, Sliders, ArrowUpDown, Wand2, BarChart2, Check, AlertCircle, Plus, LayoutGrid, List as ListIcon, Trash2, Briefcase, FileText, MapPin, FileSpreadsheet } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import ConfirmModal from '../components/ConfirmModal';
@@ -483,16 +483,29 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
         }
 
         if (shift) {
-            // Read scheduled_station
+            const doc = doctors.find(d => d.id === doctorId);
+            const dayOfWeek = new Date(date).getDay();
+            const ws = doc?.weekdaySettings?.find(w => w.dayOfWeek === dayOfWeek);
+            
             setEditData({ 
                 station: shift.scheduled_station || '', 
-                workTime: shift.workTime || '', 
+                workTime: shift.workTime || ws?.workTime || '', 
                 note: shift.note || '', 
                 location: shift.location || '', 
-                task: shift.task || '' 
+                task: shift.task || ws?.task || '' 
             });
         } else {
-             setEditData({ station: '', workTime: '', note: '', location: '', task: '' });
+             const doc = doctors.find(d => d.id === doctorId);
+             const dayOfWeek = new Date(date).getDay();
+             const ws = doc?.weekdaySettings?.find(w => w.dayOfWeek === dayOfWeek);
+
+             setEditData({ 
+                 station: '', 
+                 workTime: ws?.workTime || '', 
+                 note: '', 
+                 location: '', 
+                 task: ws?.task || '' 
+             });
         }
         setSelectedCell({ doctorId, date });
     };
@@ -1105,6 +1118,351 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
         }
     };
 
+    const handleExportExcel = async (e?: React.MouseEvent) => {
+        if (e) e.preventDefault();
+        try {
+            const ExcelJS = (await import('exceljs')).default;
+            const workbook = new ExcelJS.Workbook();
+            
+            // Shared Styles & Config
+            const borderStyle: any = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+            const fontBase = { name: 'Arial', size: 10 };
+            const alignCenter = { vertical: 'middle', horizontal: 'center', wrapText: true } as any;
+
+            const formatTimeForExcel = (timeStr: string) => {
+                if (!timeStr) return '';
+                // 8:00->8, 8:30->8', 16:00->16, 16:30->16'
+                return timeStr
+                    .replace(/:00/g, '')
+                    .replace(/:30/g, "'")
+                    .replace(/\b0+(\d)/g, '$1'); 
+            };
+
+            const applyPageSetup = (ws: any) => {
+
+                ws.pageSetup = {
+                    orientation: 'landscape',
+                    fitToPage: true,
+                    fitToWidth: 1,
+                    fitToHeight: 1,
+                    margins: {
+                        left: 0.25, right: 0.25, top: 0.25, bottom: 0.25,
+                        header: 0.3, footer: 0.3
+                    }
+                };
+            };
+
+            // --- Helper: Generate Header ---
+            const generateHeader = (sheet: any) => {
+                // Row 1: Title
+                const titleRow = sheet.getRow(1);
+                titleRow.getCell(1).value = `醫師排班表 ${dateRange[0]} ~ ${dateRange[dateRange.length - 1]}`;
+                sheet.mergeCells(1, 1, 1, dateRange.length + 1);
+                titleRow.getCell(1).font = { ...fontBase, size: 14, bold: true };
+                titleRow.getCell(1).alignment = alignCenter;
+                titleRow.height = 30;
+
+                // Row 2: Date
+                const headerRow2 = sheet.getRow(2);
+                headerRow2.getCell(1).value = '項目 / 日期';
+                headerRow2.getCell(1).font = { ...fontBase, bold: true };
+                headerRow2.getCell(1).alignment = alignCenter;
+                headerRow2.getCell(1).border = borderStyle;
+                sheet.getColumn(1).width = 15; // Name column width
+
+                // Fill Dates
+                const weekDays = ['日', '一', '二', '三', '四', '五', '六'];
+                dateRange.forEach((dateStr, index) => {
+                    const date = new Date(dateStr);
+                    const colIndex = index + 2;
+                    const cell = headerRow2.getCell(colIndex);
+                    const dayOfWeek = date.getDay();
+                    
+                    cell.value = `${date.getDate()}\n${weekDays[dayOfWeek]}`;
+                    cell.alignment = alignCenter;
+                    cell.border = borderStyle;
+                    cell.font = { ...fontBase, bold: true, color: (dayOfWeek === 0 || dayOfWeek === 6) ? { argb: 'FFFF0000' } : undefined };
+                    
+                    // User requested column width 7.2
+                    sheet.getColumn(colIndex).width = 7.2;
+                });
+                headerRow2.height = 35;
+            };
+
+            // ==========================================
+            // Sheet 1: 崗位視角 (Station View)
+            // ==========================================
+            const sheet1 = workbook.addWorksheet('崗位視角');
+            applyPageSetup(sheet1);
+            generateHeader(sheet1);
+            
+            let currentRowIndex = 3;
+
+            const addLocationSection = (locationName: string, colorHex: string) => {
+                const locShifts = shifts.filter(s => s.location === locationName);
+                const locStations = db.settings.doctorStations.filter(ds => ds.location === locationName);
+                
+                if (!locShifts.length && !locStations.length) return;
+
+                // Header
+                const locRow = sheet1.getRow(currentRowIndex);
+                locRow.getCell(1).value = locationName;
+                sheet1.mergeCells(currentRowIndex, 1, currentRowIndex, dateRange.length + 1);
+                locRow.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: colorHex } };
+                // User Request: Center + Size 14
+                locRow.getCell(1).font = { ...fontBase, size: 14, bold: true, color: { argb: 'FFFFFFFF' } };
+                locRow.getCell(1).alignment = { vertical: 'middle', horizontal: 'center' };
+                locRow.height = 24; // Increased height for larger font
+                currentRowIndex++;
+
+                // Beitou Special Rows: Main -> Assistant -> Late
+                if (locationName === '北投') {
+                    // Use Radiographer Shifts (from db.shifts)
+                    const radShifts = (db as any).shifts || [];
+                    const users = (db as any).users || [];
+
+                    // 1. Main Shift (場控)
+                    const rowMain = sheet1.getRow(currentRowIndex);
+                    rowMain.getCell(1).value = '場控';
+                    rowMain.getCell(1).border = borderStyle;
+                    rowMain.getCell(1).alignment = alignCenter;
+
+                    dateRange.forEach((dateStr, colIdx) => {
+                        const mainShift = radShifts.find((s: any) => s.date === dateStr && s.station?.includes('場控'));
+                        const mainUser = mainShift ? users.find((u: any) => u.id === mainShift.userId) : null;
+                        
+                        const cell = rowMain.getCell(colIdx + 2);
+                        cell.value = mainUser?.name || '';
+                        cell.border = borderStyle;
+                        cell.alignment = alignCenter;
+                        cell.font = { ...fontBase, bold: false }; // No Bold
+                    });
+                    currentRowIndex++;
+
+                    // 2. Assistant Shift (輔班)
+                    const rowAssist = sheet1.getRow(currentRowIndex);
+                    rowAssist.getCell(1).value = '輔班';
+                    rowAssist.getCell(1).border = borderStyle;
+                    rowAssist.getCell(1).alignment = alignCenter;
+
+                    dateRange.forEach((dateStr, colIdx) => {
+                        const assistShift = radShifts.find((s: any) => s.date === dateStr && s.specialRoles?.includes('輔班'));
+                        const assistUser = assistShift ? users.find((u: any) => u.id === assistShift.userId) : null;
+                        
+                        const cell = rowAssist.getCell(colIdx + 2);
+                        cell.value = assistUser?.name ? `${assistUser.name}(輔)` : ''; // Keep (輔)? User requested split, maybe just name is fine? Keeping specific suffix if useful or just name. Let's just use name since row title is '輔班'.
+                        // Actually, let's keep name only for cleaner look since row header says it.
+                        cell.value = assistUser?.name || '';
+                        cell.border = borderStyle;
+                        cell.alignment = alignCenter;
+                        cell.font = { ...fontBase, size: 9 };
+                    });
+                    currentRowIndex++;
+
+                    // 3. Late Shift (晚班) - Moved here
+                    const rowLate = sheet1.getRow(currentRowIndex);
+                    rowLate.getCell(1).value = '晚班';
+                    rowLate.getCell(1).border = borderStyle;
+                    rowLate.getCell(1).alignment = alignCenter;
+
+                    dateRange.forEach((dateStr, colIdx) => {
+                         // Find shifts with task '晚班' in this location (Multiple doctors possible)
+                         const lateShifts = locShifts.filter(s => s.date === dateStr && s.task?.includes('晚班'));
+                         
+                         const date = new Date(dateStr);
+                         const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+                         const cell = rowLate.getCell(colIdx + 2);
+                         cell.border = borderStyle;
+                         if (isWeekend) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF5F5F5' } };
+
+                         if (lateShifts.length > 0) {
+                             const contentParts = lateShifts.map(lateShift => {
+                                 const doc = doctors.find(d => d.id === lateShift.doctorId);
+                                 const name = doc?.name || '?';
+                                 const time = formatTimeForExcel(lateShift.workTime || (lateShift as any).work_time || '');
+                                 return [name, time].filter(Boolean).join('\n');
+                             });
+
+                             cell.value = contentParts.join('\n'); // Single newline
+                             cell.alignment = alignCenter;
+                             cell.font = { ...fontBase, bold: false }; // No Bold
+                         }
+                    });
+                    currentRowIndex++;
+                }
+
+                // Stations
+                locStations.forEach(stationConfig => {
+                    const station = stationConfig.name;
+                    // Skip if station is explicitly '晚班' to avoid duplication
+                    if (station === '晚班') return;
+
+                    const row = sheet1.getRow(currentRowIndex);
+                    row.getCell(1).value = station;
+                    row.getCell(1).border = borderStyle;
+                    row.getCell(1).alignment = alignCenter;
+
+                    dateRange.forEach((dateStr, colIdx) => {
+                        const date = new Date(dateStr);
+                        const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+                        const cell = row.getCell(colIdx + 2);
+                        cell.border = borderStyle;
+                        if (isWeekend) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF5F5F5' } };
+
+                        const stationShifts = locShifts.filter(s => s.date === dateStr && (s.scheduled_station === station || s.station === station));
+                        
+                        if (stationShifts.length > 0) {
+                            const contentParts = stationShifts.map(shift => {
+                                const doc = doctors.find(d => d.id === shift.doctorId);
+                                const name = doc?.name || doc?.alias || '?';
+                                
+                                // User Request: Station View also needs Work Time and Task
+                                const time = formatTimeForExcel(shift.workTime || (shift as any).work_time || '');
+                                const task = (shift.task && !shift.task.includes('固定')) ? `(${shift.task})` : '';
+
+                                return [name, time, task].filter(l => l && l.trim() !== '').join('\n');
+                            });
+
+                            cell.value = contentParts.join('\n'); // Single newline
+                            cell.alignment = alignCenter;
+                            cell.font = { ...fontBase, bold: false }; // No Bold
+                            
+                            // Check if ANY shift is simulated for coloring (simplified logic: if any is simulated, mark cell or part? 
+                            // Since we don't have rich text per part here easily without complex construction, let's just color orange if ANY is simulated)
+                            if (isSimulationMode && stationShifts.some(s => s.isAutoGenerated)) {
+                                cell.font = { ...fontBase, color: { argb: 'FFD97706' }, bold: false }; // Keep no bold
+                            }
+                        }
+                    });
+                    currentRowIndex++;
+                });
+
+                // Removed Late Shift from bottom (logic moved up)
+            };
+
+            addLocationSection('北投', 'FF3B82F6');
+            addLocationSection('大直', 'FFA1887F');
+            addLocationSection('台中', 'FFF97316');
+
+
+            // ==========================================
+            // Sheet 2: 人員視角 (Personnel View)
+            // ==========================================
+            const sheet2 = workbook.addWorksheet('人員視角');
+            applyPageSetup(sheet2);
+            generateHeader(sheet2);
+            
+            let sheet2RowIndex = 3;
+
+            // Iterate all doctors (state order)
+            doctors.forEach(doc => {
+                const row = sheet2.getRow(sheet2RowIndex);
+                // Name Column
+                row.getCell(1).value = doc.name; // Full Name
+                row.getCell(1).border = borderStyle;
+                row.getCell(1).alignment = alignCenter;
+                row.getCell(1).font = { ...fontBase, bold: true };
+
+                dateRange.forEach((dateStr, colIdx) => {
+                    const date = new Date(dateStr);
+                    const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+                    const cell = row.getCell(colIdx + 2);
+                    cell.border = borderStyle;
+                    if (isWeekend) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF5F5F5' } };
+
+                    // Find shift
+                    const shift = (simulatedShifts || []).find(s => s.doctorId === doc.id && s.date === dateStr) || 
+                                  shifts.find(s => s.doctorId === doc.id && s.date === dateStr);
+
+                    if (shift && shift.scheduled_station && shift.scheduled_station !== 'X') {
+                        // Content: Location \n Time \n Station(+Task)
+                        // Safe Access for workTime (camelCase vs snake_case)
+                        // Construct cell content
+                        // User Request: Order -> Station -> Location -> Time -> Task
+                        let stationVal = shift.scheduled_station;
+                        if (stationVal === '耳鼻喉科') stationVal = 'ENT';
+                        // Gyn check
+                        if (shift.scheduled_station === '解說') {
+                            const dayShifts = shifts.filter(s => s.doctorId === doc.id && s.date === dateStr);
+                            if (dayShifts.some(s => s.scheduled_station === '婦科')) stationVal = '解+婦';
+                        }
+                        
+                        const loc = shift.location || '';
+                        const time = formatTimeForExcel(shift.workTime || (shift as any).work_time || '');
+                        const taskVal = (shift.task && !shift.task.includes('固定')) ? shift.task : '';
+
+                        // Order: Station -> Location -> Time -> Task
+                        const lines = [stationVal, loc, time, taskVal].filter(line => line && line.trim() !== '');
+                        
+                        // User Request: Can Station be larger? YES -> Use Rich Text
+                        // Logic: First line is Station (if present), make it Big. Rest Small.
+                        
+                        if (lines.length > 0) {
+                            const richTextParts: any[] = [];
+                            
+                            // 1. Station (Big)
+                            // Check if the first line is indeed stationVal (it should be due to order)
+                            const isFirstLineStation = lines[0] === stationVal;
+                            
+                            lines.forEach((line, idx) => {
+                                const isStation = idx === 0 && isFirstLineStation;
+                                richTextParts.push({
+                                    text: line + (idx < lines.length - 1 ? '\n' : ''), // Add newline to all except last
+                                    font: isStation 
+                                        ? { ...fontBase, size: 14, bold: true } // Big Station
+                                        : { ...fontBase, size: 9, bold: false } // Small details
+                                });
+                            });
+
+                            cell.value = { richText: richTextParts };
+                        } else {
+                            cell.value = '';
+                        }
+
+                        cell.alignment = alignCenter;
+                        
+                        // Simulation styling (Override font color for whole cell via rich text if needed, 
+                        // but rich text parts control their own color. 
+                        // If simulation, we might want to color the Station part distinctively or all parts?
+                        // Let's color all parts orange if auto-generated)
+                        if (isSimulationMode && shift.isAutoGenerated) {
+                            const val = cell.value as any; // Cast to any to access richText safely
+                            if (val && val.richText) {
+                                val.richText.forEach((part: any) => {
+                                    part.font.color = { argb: 'FFD97706' };
+                                });
+                            }
+                        }
+                    } else if (shift && shift.scheduled_station === 'X') {
+                         // X (Off)
+                        cell.value = 'X';
+                        cell.alignment = alignCenter;
+                        cell.font = { ...fontBase, color: { argb: 'FF9CA3AF' } }; // Gray
+                    } else if (doc.excludedDays?.includes(date.getDay())) {
+                         // Excluded
+                         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE5E7EB' } }; // Gray-200
+                    }
+                });
+                sheet2RowIndex++;
+            });
+
+
+            // 4. Save
+            const buffer = await workbook.xlsx.writeBuffer();
+            const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            const year = currentDate.getFullYear();
+            const month = String(currentDate.getMonth() + 1).padStart(2, '0');
+            link.download = `${year}${month} 醫師排班表.xlsx`;
+            link.click();
+
+        } catch (error: any) {
+            console.error('Excel Export Failed:', error);
+            alert(`匯出 Excel 失敗: ${error.message || error}`);
+        }
+    };
+
     const getShiftDisplay = (doctorId: string, date: string) => shifts.find(s => s.doctorId === doctorId && s.date === date);
 
     const getDailyStats = (date: string) => {
@@ -1447,13 +1805,21 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                         </button>
                     )}
 
-                    <button 
-                        onClick={handleExportPDF}
-                        className="flex items-center gap-1 px-2 py-1 bg-teal-50 text-teal-700 hover:bg-teal-100 rounded-lg text-xs font-bold transition-colors border border-teal-100"
-                    >
-                        <Download size={14} />
-                        匯出{viewMode === 'personnel' ? '人員視角' : viewMode === 'station' ? '崗位視角' : ''}
-                    </button>
+                    <div className="flex bg-teal-50 rounded-lg p-0.5 border border-teal-100 items-center h-[26px]">
+                        <button 
+                            onClick={handleExportPDF}
+                            className="px-2 py-0.5 hover:bg-white rounded text-xs font-bold text-teal-700 flex items-center gap-1 transition-all h-full"
+                        >
+                            <Download size={13} /> PDF
+                        </button>
+                        <div className="w-[1px] h-3 bg-teal-200 mx-0.5"></div>
+                        <button 
+                            onClick={handleExportExcel}
+                            className="px-2 py-0.5 hover:bg-white rounded text-xs font-bold text-emerald-700 flex items-center gap-1 transition-all h-full"
+                        >
+                            <FileSpreadsheet size={13} /> Excel
+                        </button>
+                    </div>
 
                     {canManageLock && (
                         <button 
@@ -1610,9 +1976,9 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                 <td 
                                                     key={date} 
                                                     onClick={() => canEdit && handleCellClick(doc.id, date)}
-                                                    className={`p-1 border-r border-gray-100 h-12 transition-all group text-center z-0
+                                                    className={`p-1 border-r border-gray-100 h-12 transition-all group text-center
                                                         ${canEdit ? 'cursor-pointer' : 'cursor-not-allowed'}
-                                                        ${isSimulated ? 'border-2 border-dashed border-amber-400' : ''}
+                                                        ${isSimulated ? 'relative border-2 border-dashed border-amber-400 z-10' : 'z-0'}
                                                         ${hasStation 
                                                             ? (() => {
                                                                 const st = shift.scheduled_station || '';
@@ -1682,6 +2048,20 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                                         {shift.note.length > 4 ? shift.note.substring(0, 4) + '..' : shift.note}
                                                                     </div>
                                                                  )}
+                                                                 {/* Weekday-specific task (visual hint) */}
+                                                                 {(() => {
+                                                                    const dayOfWeek = new Date(date).getDay();
+                                                                    const weekdaySetting = doc.weekdaySettings?.find(ws => ws.dayOfWeek === dayOfWeek);
+                                                                    // Only show weekday task if it's DIFFERENT from the shift task to avoid duplication
+                                                                    if (weekdaySetting?.task && weekdaySetting.task !== shift.task) {
+                                                                        return (
+                                                                            <div className="text-[8px] text-blue-400 font-medium scale-90 w-full text-center overflow-hidden text-ellipsis whitespace-nowrap px-0.5 opacity-75" title={`${['日', '一', '二', '三', '四', '五', '六'][dayOfWeek]}任務: ${weekdaySetting.task}`}>
+                                                                                ({weekdaySetting.task})
+                                                                            </div>
+                                                                        );
+                                                                    }
+                                                                    return null;
+                                                                 })()}
                                                             </div>
                                                         )
                                                     ) : (
