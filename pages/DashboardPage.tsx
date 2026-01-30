@@ -3438,11 +3438,9 @@ BMD :{{bmd}}
     }, [date, shifts, manpower, users, stats]);
 
     const handleCopy = (text: string) => {
-        navigator.clipboard.writeText(text).then(() => {
-            showToast('已複製到剪貼簿', 'success');
-        }).catch(err => {
+        navigator.clipboard.writeText(text).catch(err => {
             console.error('Failed to copy: ', err);
-            showToast('複製失敗', 'error');
+            alert('複製失敗');
         });
     };
 
