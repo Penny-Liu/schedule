@@ -195,13 +195,13 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
         }
     };
 
-    const handleDeleteHolidayClick = (date: string) => {
+    const handleDeleteHolidayClick = (holiday: Holiday) => {
         // Small actions don't always need complex confirmation, but keeping consistent
         setConfirmState({
             type: 'holiday',
-            id: date,
+            id: holiday.id || holiday.date,
             title: '移除特殊日期',
-            message: `確定要移除 ${date} 的設定嗎？`
+            message: `確定要移除 ${holiday.date} (${holiday.name}) 的設定嗎？`
         });
     };
 
@@ -1018,7 +1018,7 @@ BMD :{{bmd}}
                             <div className="p-2 overflow-y-auto max-h-[250px]">
                                 {holidays.length > 0 ? (
                                     holidays.map(h => (
-                                        <div key={h.date} className="flex justify-between items-center p-3 hover:bg-gray-50 rounded-lg text-sm group">
+                                        <div key={h.id || `${h.date}-${h.name}`} className="flex justify-between items-center p-3 hover:bg-gray-50 rounded-lg text-sm group">
                                             <div className="flex items-center gap-3">
                                                 <div className="font-mono text-gray-500 font-bold bg-gray-100 px-2 py-0.5 rounded text-xs">{h.date}</div>
                                                 <div className="font-bold text-gray-800">{h.name}</div>
@@ -1028,7 +1028,7 @@ BMD :{{bmd}}
                                             </div>
                                             <button
                                                 type="button"
-                                                onClick={() => handleDeleteHolidayClick(h.date)}
+                                                onClick={() => handleDeleteHolidayClick(h)}
                                                 className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all p-1"
                                             >
                                                 <X size={14} />

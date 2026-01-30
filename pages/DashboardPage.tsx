@@ -59,6 +59,12 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
     // Confirmation Modal State
     const [isConfirmCycleOpen, setIsConfirmCycleOpen] = useState(false);
 
+    // Daily Memo Modal State
+    const [memoModal, setMemoModal] = useState<{ date: string; content: string } | null>(null);
+
+    // Hover Tooltip State
+    const [hoveredDate, setHoveredDate] = useState<string | null>(null);
+
 
     // Unified Range State for schedulers
     const [scheduleRange, setScheduleRange] = useState({ start: '', end: '' });
@@ -138,6 +144,40 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
         });
         return () => unsubscribe();
     }, []);
+
+    const handleSaveMemo = async (date: string, content: string) => {
+        try {
+            // First, remove any existing radiographer note for this date to avoid duplicates
+            await db.removeHolidaysByDateAndType(date, DateEventType.RADIOGRAPHER_NOTE);
+
+            // If content is not empty, add the new note
+            if (content.trim()) {
+                await db.addHoliday({
+                    date,
+                    name: content.trim(),
+                    type: DateEventType.RADIOGRAPHER_NOTE
+                });
+            }
+
+            setMemoModal(null);
+            showToast('備忘錄已更新', 'success');
+        } catch (error) {
+            console.error('Save memo error:', error);
+            showToast('更新失敗', 'error');
+        }
+    };
+
+    const handleDeleteMemo = async (date: string) => {
+        if (!confirm('確定要刪除此備忘錄嗎？')) return;
+        try {
+            await db.removeHolidaysByDateAndType(date, DateEventType.RADIOGRAPHER_NOTE);
+            setMemoModal(null);
+            showToast('備忘錄已刪除', 'success');
+        } catch (error) {
+            console.error('Delete memo error:', error);
+            showToast('刪除失敗', 'error');
+        }
+    };
 
     // --- Effects ---
     // Auto-scroll to today in Personal View
@@ -2280,22 +2320,79 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                         const isToday = toLocalISOString(new Date()) === date;
                                         const weekDays = ['日', '一', '二', '三', '四', '五', '六'];
                                         const isWeekend = d.getDay() === 0 || d.getDay() === 6;
-                                        const holiday = holidays.find(h => h.date === date);
-                                        const isClosed = holiday?.type === DateEventType.CLOSED;
+                                        const dailyEvents = holidays.filter(h => h.date === date);
+                                        const systemEvents = dailyEvents.filter(e => e.type !== DateEventType.RADIOGRAPHER_NOTE);
+                                        const radioMemo = dailyEvents.find(e => e.type === DateEventType.RADIOGRAPHER_NOTE);
+                                        const isClosed = systemEvents.some(e => e.type === DateEventType.CLOSED);
+
                                         return (
-                                            <th key={date} className={`border-b border-slate-200 py-1.5 min-w-[52px] text-center ${isToday ? 'bg-teal-50/50' : (isClosed ? 'bg-slate-100' : 'bg-white')} `}>
+                                            <th 
+                                                key={date} 
+                                                className={`border-b border-slate-200 py-1.5 min-w-[52px] text-center cursor-pointer hover:bg-slate-50 transition-colors relative ${isToday ? 'bg-teal-50/50' : (isClosed ? 'bg-slate-100' : 'bg-white')} `}
+                                                onMouseEnter={() => setHoveredDate(date)}
+                                                onMouseLeave={() => setHoveredDate(null)}
+                                                onClick={() => {
+                                                    if (currentUser.role === UserRole.SYSTEM_ADMIN || currentUser.role === UserRole.SUPERVISOR || currentUser.role === UserRole.SCHEDULER) {
+                                                        setMemoModal({ date, content: radioMemo?.name || '' });
+                                                    }
+                                                }}
+                                            >
+                                                {/* Tooltip */}
+                                                {(systemEvents.length > 0 || radioMemo) && hoveredDate === date && (
+                                                    <div className="absolute top-[80%] left-1/2 -translate-x-1/2 mt-1 w-56 bg-white rounded-xl shadow-2xl border border-slate-200 p-3 z-[100] animate-in fade-in zoom-in duration-150 pointer-events-none">
+                                                        <div className="flex flex-col gap-2 text-left">
+                                                            {systemEvents.map((event, idx) => (
+                                                                <div key={idx} className="flex items-start gap-2.5">
+                                                                    <div className="w-5 h-5 rounded-full bg-red-100 flex items-center justify-center shrink-0">
+                                                                        <span className="text-[10px]">🚩</span>
+                                                                    </div>
+                                                                    <div className="flex flex-col">
+                                                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">全院事件</span>
+                                                                        <span className="text-xs font-bold text-slate-700">{event.name}</span>
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                            {radioMemo && (
+                                                                <div className={`flex items-start gap-2.5 ${systemEvents.length > 0 ? 'pt-2 border-t border-slate-100' : ''}`}>
+                                                                    <div className="w-5 h-5 rounded-full bg-purple-100 flex items-center justify-center shrink-0">
+                                                                        <span className="text-[10px]">📝</span>
+                                                                    </div>
+                                                                    <div className="flex flex-col">
+                                                                        <span className="text-[10px] font-bold text-purple-400 uppercase tracking-wider">放射師備忘</span>
+                                                                        <span className="text-xs font-bold text-slate-700">{radioMemo.name}</span>
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                        {/* Arrow */}
+                                                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 -mb-1 border-8 border-transparent border-b-white"></div>
+                                                    </div>
+                                                )}
+
                                                 <div className="flex flex-col items-center gap-0.5">
                                                     <span className={`text-[10px] font-bold ${isToday ? 'text-teal-700' : (isWeekend ? 'text-red-500' : 'text-slate-400')} `}>
                                                         {weekDays[d.getDay()]}
                                                     </span>
-                                                    <span className={`text-sm font-bold leading-none ${holiday ? (holiday.type === DateEventType.NOTE ? 'text-blue-600' : 'text-red-600') : (isToday ? 'text-teal-800' : 'text-slate-800')} `}>
+                                                    <span className={`text-sm font-bold leading-none ${systemEvents.length > 0 ? (systemEvents[0].type === DateEventType.NOTE ? 'text-blue-600' : 'text-red-600') : (isToday ? 'text-teal-800' : 'text-slate-800')} `}>
                                                         {d.getDate()}
                                                     </span>
-                                                    {holiday && (
-                                                        <span className={`text-[9px] px-1 rounded-sm leading-tight mt-0.5 ${holiday.type === DateEventType.NOTE ? 'bg-blue-100 text-blue-700 border border-blue-200' : 'bg-red-100 text-red-700 border border-red-200'}`}>
-                                                            {holiday.name}
-                                                        </span>
-                                                    )}
+                                                    
+                                                    {/* Event Display Container */}
+                                                    <div className="flex flex-col gap-0.5 mt-0.5 w-full items-center px-1">
+                                                        {systemEvents.map((event, idx) => (
+                                                            <span key={idx} className={`text-[9px] px-1 rounded-sm leading-tight w-full truncate border ${event.type === DateEventType.NOTE ? 'bg-blue-100 text-blue-700 border-blue-200' : 'bg-red-100 text-red-700 border-red-200'}`}>
+                                                                {event.name}
+                                                            </span>
+                                                        ))}
+                                                        {radioMemo && (
+                                                            <span className="text-[9px] px-1 rounded-sm leading-tight w-full truncate bg-purple-100 text-purple-700 border border-purple-200">
+                                                                📝 {radioMemo.name}
+                                                            </span>
+                                                        )}
+                                                        {radioMemo === undefined && systemEvents.length === 0 && (
+                                                            <div className="h-[12px]"></div>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             </th>
                                         );
@@ -2926,6 +3023,66 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                     </div>
                 </div>
             )}
+
+            {/* Daily Memo Modal */}
+            {memoModal && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200">
+                        <div className="bg-gradient-to-r from-purple-600 to-indigo-600 px-6 py-4 flex justify-between items-center">
+                            <h3 className="text-white font-bold text-lg flex items-center gap-2">
+                                <CalendarIcon size={20} />
+                                每日重要事件備忘 ({memoModal.date.split('-').slice(1).join('/')})
+                            </h3>
+                            <button 
+                                onClick={() => setMemoModal(null)}
+                                className="text-white/80 hover:text-white transition-colors"
+                            >
+                                <X size={20} />
+                            </button>
+                        </div>
+                        
+                        <div className="p-6">
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                備忘內容 (僅顯示於放射師排班表)
+                            </label>
+                            <textarea
+                                autoFocus
+                                className="w-full h-32 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-gray-800 resize-none transition-all"
+                                placeholder="例如：下午有大型健檢、備妥某某耗材..."
+                                value={memoModal.content}
+                                onChange={(e) => setMemoModal({ ...memoModal, content: e.target.value })}
+                            />
+                            <p className="mt-2 text-[11px] text-gray-500 italic">
+                                * 此備忘將在「放師排班表」日期下方顯示 📝 圖示。
+                            </p>
+                        </div>
+
+                        <div className="bg-gray-50 px-6 py-4 flex justify-between items-center gap-3">
+                            <button
+                                onClick={() => handleDeleteMemo(memoModal.date)}
+                                className="px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg text-sm font-medium transition-colors flex items-center gap-1"
+                            >
+                                <Trash2 size={16} /> 刪除
+                            </button>
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={() => setMemoModal(null)}
+                                    className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg text-sm font-medium transition-colors"
+                                >
+                                    取消
+                                </button>
+                                <button
+                                    onClick={() => handleSaveMemo(memoModal.date, memoModal.content)}
+                                    className="px-6 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-bold shadow-md shadow-purple-200 transition-all flex items-center gap-2"
+                                >
+                                    <Check size={18} /> 儲存備忘
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+            
             {/* Toast Notification */}
             {toast && (
                 <div className={`fixed bottom-6 right-6 px-4 py-3 rounded-xl shadow-lg border flex items-center gap-3 animate-in slide-in-from-bottom-5 z-[9999] ${toast.type === 'success' ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : 'bg-red-50 text-red-800 border-red-200'}`}>
@@ -2954,6 +3111,11 @@ const DailyManpowerSummary: React.FC<{
         beitou_cta: 0,
         dazhi_clients: 0
     };
+
+    // Get daily events (holidays, memos, etc.)
+    const dailyEvents = useMemo(() => {
+        return db.getHolidays().filter(h => h.date === date);
+    }, [date]);
 
     // Calculate Manpower
     const manpower = useMemo(() => {
@@ -3116,7 +3278,7 @@ const DailyManpowerSummary: React.FC<{
         // Updated Default Template to match new requirements
         if (!template) {
             template = `{{date}}
-{{imaging_doctors}}
+{{events_section}}{{imaging_doctors}}
 
 放射師人力
 北投：{{beitou_count}} (客戶：{{beitou_clients}}  CTA  {{beitou_cta}})
@@ -3157,6 +3319,7 @@ BMD :{{bmd}}
             '{{third_line_support}}': thirdLineSupportList.join('/'),
             '{{remote_group_header}}': remoteGroupHeader,
             '{{remote_group}}': remoteGroupHeader,
+            '{{events_section}}': dailyEvents.length > 0 ? dailyEvents.map(e => `【${e.name}】`).join(' ') + '\n' : '',
         };
 
         // Doctor Lists formatting
@@ -3276,10 +3439,10 @@ BMD :{{bmd}}
 
     const handleCopy = (text: string) => {
         navigator.clipboard.writeText(text).then(() => {
-            alert('已複製到剪貼簿');
+            showToast('已複製到剪貼簿', 'success');
         }).catch(err => {
             console.error('Failed to copy: ', err);
-            prompt('複製失敗，請手動複製:', text);
+            showToast('複製失敗', 'error');
         });
     };
 
@@ -3291,6 +3454,29 @@ BMD :{{bmd}}
                     今日崗位總覽 (管理員專用)
                 </h3>
              </div>
+
+             {/* Daily Events & Memos */}
+             {dailyEvents.length > 0 && (
+                 <div className="mb-6 flex flex-wrap gap-2">
+                      {dailyEvents.map((event, idx) => (
+                          <div 
+                              key={idx} 
+                              className={`px-3 py-1.5 rounded-lg border flex items-center gap-2 shadow-sm ${
+                                  event.type === DateEventType.RADIOGRAPHER_NOTE ? 'bg-purple-50 text-purple-700 border-purple-100' :
+                                  event.type === DateEventType.DOCTOR_NOTE ? 'bg-fuchsia-50 text-fuchsia-700 border-fuchsia-100' :
+                                  event.type === DateEventType.NOTE ? 'bg-blue-50 text-blue-700 border-blue-100' :
+                                  'bg-red-50 text-red-700 border-red-100'
+                              }`}
+                          >
+                              <span className="text-base">
+                                  {event.type === DateEventType.RADIOGRAPHER_NOTE ? '📝' : 
+                                   event.type === DateEventType.DOCTOR_NOTE ? '👨‍⚕️' : '🚩'}
+                              </span>
+                              <span className="font-bold text-sm">{event.name}</span>
+                          </div>
+                      ))}
+                 </div>
+             )}
 
              {/* Live Preview Box - Sections */}
              <div className="grid grid-cols-1 gap-4 mb-4">
@@ -3339,8 +3525,6 @@ BMD :{{bmd}}
                      />
                 </div>
              </div>
-
-
 
         </div>
     );

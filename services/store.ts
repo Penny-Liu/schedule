@@ -468,6 +468,7 @@ BMD :{{bmd}}
         } else {
             this.settings.holidays = this.settings.holidays.map(h => ({
                 ...h,
+                id: h.id || `${h.date}-${h.name}-${h.type}`,
                 type: h.type || DateEventType.NATIONAL
             }));
         }
@@ -1023,16 +1024,33 @@ BMD :{{bmd}}
 
     async addHoliday(holiday: Holiday) {
         if (!this.settings.holidays) this.settings.holidays = [];
-        if (!this.settings.holidays.some(h => h.date === holiday.date)) {
-            this.settings.holidays.push(holiday);
+        // Check for exact duplicate (date + name + type) to avoid double-adding
+        if (!this.settings.holidays.some(h => h.date === holiday.date && h.name === holiday.name && h.type === holiday.type)) {
+            const newHoliday = { ...holiday, id: holiday.id || `h-${Date.now()}-${Math.random().toString(36).substr(2, 5)}` };
+            this.settings.holidays.push(newHoliday);
             this.settings.holidays.sort((a, b) => a.date.localeCompare(b.date));
             await this.saveSettings();
         }
     }
 
-    async removeHoliday(date: string) {
+    async removeHoliday(id: string) {
         if (this.settings.holidays) {
-            this.settings.holidays = this.settings.holidays.filter(h => h.date !== date);
+            // First try removing by ID
+            const initialCount = this.settings.holidays.length;
+            this.settings.holidays = this.settings.holidays.filter(h => h.id !== id);
+            
+            // Fallback for legacy calls that pass 'date': remove all on that date if ID didn't match anything
+            if (this.settings.holidays.length === initialCount) {
+                this.settings.holidays = this.settings.holidays.filter(h => h.date !== id);
+            }
+            
+            await this.saveSettings();
+        }
+    }
+
+    async removeHolidaysByDateAndType(date: string, type: DateEventType) {
+        if (this.settings.holidays) {
+            this.settings.holidays = this.settings.holidays.filter(h => !(h.date === date && h.type === type));
             await this.saveSettings();
         }
     }
@@ -1229,7 +1247,8 @@ BMD :{{bmd}}
                 excluded_auto_schedule_locations: excludedAutoScheduleLocations,
                 specialty: specialty,
                 is_part_time: isPartTime,
-                monthly_target_shifts: monthlyTargetShifts
+                monthly_target_shifts: monthlyTargetShifts,
+                fixed_shifts: []
             });
             if (error) throw error;
             return { success: true, id: newDoctor.id };
@@ -1328,7 +1347,7 @@ BMD :{{bmd}}
         // Remote update
         try {
             // Delete shifts first to avoid FK constraint violations
-            const { error: shiftsError } = await supabase.from('doctor_shifts').delete().eq('doctorId', id);
+            const { error: shiftsError } = await supabase.from('doctor_shifts').delete().eq('doctor_id', id);
             if (shiftsError) { console.error('Error deleting doctor shifts:', shiftsError); throw shiftsError; }
             
             const { error } = await supabase.from('doctors').delete().eq('id', id);
@@ -1395,7 +1414,16 @@ BMD :{{bmd}}
             shift = { id: crypto.randomUUID(), doctorId, date, station, workTime, note, location, task };
             this.doctorShifts.push(shift);
             try {
-                await supabase.from('doctor_shifts').insert({ ...shift, work_time: shift.workTime }); // Map camelCase to snake_case for DB
+                await supabase.from('doctor_shifts').insert({ 
+                    id: shift.id,
+                    doctor_id: shift.doctorId, // Map camelCase to snake_case for DB
+                    date: shift.date,
+                    station: shift.station,
+                    work_time: shift.workTime,
+                    note: shift.note,
+                    location: shift.location,
+                    task: shift.task
+                });
             } catch(e) { console.warn('Supabase insert failed, using local'); }
         }
         
@@ -1687,7 +1715,7 @@ BMD :{{bmd}}
         }
     }
 
-    async autoScheduleDoctors(startDate: string, endDate: string, targetDaysPerDoctor?: Record<string, number>) {
+    async autoScheduleDoctors(startDate: string, endDate: string, targetDaysPerDoctor?: Record<string, number>, commit: boolean = true) {
         console.log(`[Auto] Scheduling Doctors from ${startDate} to ${endDate}...`);
 
         // 1. Prepare
@@ -1709,193 +1737,161 @@ BMD :{{bmd}}
         
         const stationsToSchedule = this.settings.doctorStations || [];
         
-        // Count existing shifts for this month to respect targets
+        // Count existing shifts for this month to respect targets.
+        // CRITICAL: Ignore PREVIOUS auto-generated shifts to allow fresh re-calculation.
         const doctorShiftCounts = new Map<string, number>();
         this.doctorShifts.forEach(s => {
-             if (s.date >= startDate && s.date <= endDate) {
+             if (s.date >= startDate && s.date <= endDate && !s.isAutoGenerated) {
                  const current = doctorShiftCounts.get(s.doctorId) || 0;
                  doctorShiftCounts.set(s.doctorId, current + 1);
              }
         });
         
+        // Map to track local per-day assignments for station quota and double-booking checks
+        const dailyAssignedIds = new Map<string, Set<string>>();
+        const dailyShiftsForQuota = new Map<string, DoctorShift[]>();
+
+        // --- ROUND 1: Assign ALL Fixed Shifts for the month ---
+        // This pass IGNORES station quotas and prioritizes fixed duties
         for (let t = start.getTime(); t <= end.getTime(); t += dayMs) {
             const currentD = new Date(t);
             const dateStr = toLocalISOString(currentD);
-            const dayOfWeek = currentD.getDay(); // 0-6
-            
-            // Get already assigned doctors for this day
-            const existingShifts = this.doctorShifts.filter(s => s.date === dateStr);
-            const assignedDoctorIds = new Set(existingShifts.map(s => s.doctorId));
+            const dayOfWeek = currentD.getDay();
 
-            // --- NEW: Pre-fill Fixed Shifts ---
-            // Priority 1: Fixed Part-Time/Full-Time Schedules
+            // Honor Clinic Closures
+            const event = this.getEvent(dateStr);
+            if (event && event.type === DateEventType.CLOSED) continue;
+
+            // Initialize daily tracking with MANUAL shifts only
+            const manualInDb = this.doctorShifts.filter(s => s.date === dateStr && !s.isAutoGenerated);
+            const assignedSet = new Set(manualInDb.map(s => s.doctorId));
+            dailyAssignedIds.set(dateStr, assignedSet);
+            dailyShiftsForQuota.set(dateStr, [...manualInDb]);
+
             for (const doc of this.doctors) {
                 if (doc.fixedShifts && doc.fixedShifts.length > 0) {
                     for (const fixed of doc.fixedShifts) {
                          if (fixed.dayOfWeek === dayOfWeek) {
-                             // Check if already assigned (by manual or previous fixed)
-                             if (assignedDoctorIds.has(doc.id)) continue;
+                             if (assignedSet.has(doc.id)) continue;
+
+                             // Enforce Target Limit
+                             const currentCount = doctorShiftCounts.get(doc.id) || 0;
+                             const target = targetDaysPerDoctor ? (targetDaysPerDoctor[doc.id] ?? 99) : 99;
                              
-                             // Create Fixed Shift
+                             if (currentCount >= target) continue;
+                             
                              const newFixedShift: DoctorShift = {
                                  id: crypto.randomUUID(),
                                  doctorId: doc.id,
                                  date: dateStr,
                                  station: fixed.station,
+                                 scheduled_station: fixed.station,
                                  location: fixed.location,
                                  workTime: fixed.workTime,
                                  isAutoGenerated: true,
                                  task: '固定班'
                              };
                              assignments.push(newFixedShift);
-                             assignedDoctorIds.add(doc.id);
-                             
-                             // Update metrics
-                             const currentCount = doctorShiftCounts.get(doc.id) || 0;
+                             assignedSet.add(doc.id);
                              doctorShiftCounts.set(doc.id, currentCount + 1);
                              
-                             // Also update temporary existing shifts for this loop so we don't double book station capacity check
-                             existingShifts.push(newFixedShift);
+                             // Important: Track for ROUND 2 quota checks
+                             dailyShiftsForQuota.get(dateStr)?.push(newFixedShift);
                          }
                     }
                 }
             }
+        }
+
+        // --- ROUND 2: Fill Required Station Quotas ---
+        for (let t = start.getTime(); t <= end.getTime(); t += dayMs) {
+            const currentD = new Date(t);
+            const dateStr = toLocalISOString(currentD);
+            const dayOfWeek = currentD.getDay();
+
+            const event = this.getEvent(dateStr);
+            if (event && event.type === DateEventType.CLOSED) continue;
+
+            const assignedDoctorIds = dailyAssignedIds.get(dateStr)!;
+            const existingShifts = dailyShiftsForQuota.get(dateStr)!;
             
-            // Needed Stations (e.g., 2 x Imaging, 1 x Remote, etc. - currently simplistic 1 per station name)
-            // Real world needs "Quotas". For now, assume 1 person per station in the list.
-            
-            // Randomize stations to avoid priority bias
             const loopStations = this.shuffleArray([...stationsToSchedule]);
             
             for (const stationConfig of loopStations) {
-                // Use Explicit Configured Location
                 const stationName = stationConfig.name;
                 const stationLocation = stationConfig.location;
 
-                // --- NEW: Exclude Specific Stations from Auto-Schedule ---
-                // Ophthalmology, ENT, Gynecology are Manual Only
-                if (['眼科', '耳鼻喉科', '婦科'].includes(stationName)) {
-                    continue;
-                }
+                if (['眼科', '耳鼻喉科', '婦科'].includes(stationName)) continue;
 
-                // NEW: Check station requirement quota (how many people needed for this station on this day)
-                const stationKey = `${stationName}_${stationLocation}`; // Composite key for unique station+location
-                const dayOfWeekIndex = dayOfWeek; // 0=Sun, 1=Mon, ..., 6=Sat
+                const stationKey = `${stationName}_${stationLocation}`;
                 const requirements = this.settings.stationRequirements || {};
                 
-                // Try composite key first, fallback to station name only
-                let requiredCount = requirements[stationKey]?.[dayOfWeekIndex];
-                if (requiredCount === undefined) {
-                    requiredCount = requirements[stationName]?.[dayOfWeekIndex];
-                }
-                if (requiredCount === undefined || requiredCount === 0) {
-                    // If no requirement set or set to 0, skip this station (don't auto-schedule)
-                    console.log(`[Auto] Skipping ${stationKey} on day ${dayOfWeekIndex}: No requirement set (required: ${requiredCount})`);
-                    continue;
-                }
+                let requiredCount = requirements[stationKey]?.[dayOfWeek];
+                if (requiredCount === undefined) requiredCount = requirements[stationName]?.[dayOfWeek];
                 
-                // Count how many doctors are already assigned to this station+location on this day
+                if (requiredCount === undefined || requiredCount === 0) continue;
+                
                 let currentAssignedCount = existingShifts.filter(s => 
-                    s.station === stationName && s.location === stationLocation
+                    (s.scheduled_station || s.station) === stationName && s.location === stationLocation
                 ).length;
                 
-                console.log(`[Auto] ${stationKey} on ${dateStr}: Required=${requiredCount}, Current=${currentAssignedCount}`);
-                
-                // FIXED: Loop to fill all required slots, not just one
                 while (currentAssignedCount < requiredCount) {
-                    // Find candidates
                     const potentialCandidates = this.doctors.filter(doc => {
-                        // Exclude Part-Time from Auto-Schedule (User Request)
                         if (doc.isPartTime) return false;
-                        
-                        // NEW: Exclude doctors with 0 target days (user doesn't want them scheduled)
                         if (targetDaysPerDoctor && targetDaysPerDoctor[doc.id] === 0) return false;
-
-                        // Capability Check
                         if (!doc.capabilities?.includes(stationName)) return false;
-
-                        // Excluded Days
                         if (doc.excludedDays?.includes(dayOfWeek)) return false;
-
-                        // Location Check
                         if (doc.locations && doc.locations.length > 0 && !doc.locations.includes(stationLocation)) return false;
-
-                        // Excluded Auto-Schedule Location
                         if (doc.excludedAutoScheduleLocations?.includes(stationLocation)) return false;
-
-                        // Exclude if already assigned today
                         if (assignedDoctorIds.has(doc.id)) return false;
 
-                        return true;
+                        const currentCount = doctorShiftCounts.get(doc.id) || 0;
+                        const target = targetDaysPerDoctor ? (targetDaysPerDoctor[doc.id] || 0) : 99;
+                        return currentCount < target;
                     });
 
-                    // FIXED: Strict target enforcement - no overtime
-                    let finalCandidates = potentialCandidates;
-                    
-                    if (targetDaysPerDoctor) {
-                        // Only include doctors who haven't reached their target
-                        const candidatesBelowTarget = potentialCandidates.filter(doc => {
-                            const currentCount = doctorShiftCounts.get(doc.id) || 0;
-                            const target = targetDaysPerDoctor[doc.id] || 0;
-                            return currentCount < target;
-                        });
+                    if (potentialCandidates.length === 0) break;
 
-                        finalCandidates = candidatesBelowTarget;
-                    }
-
-                    if (finalCandidates.length === 0) {
-                        // No available doctors - stop trying to fill this station
-                        console.log(`[Auto] No available doctors for ${stationKey}, stopping at ${currentAssignedCount}/${requiredCount}`);
-                        break;
-                    }
-
-                    // FIXED: Sort by current shift count (ascending) to prioritize doctors with fewer shifts
-                    finalCandidates.sort((a, b) => {
+                    potentialCandidates.sort((a, b) => {
                         const countA = doctorShiftCounts.get(a.id) || 0;
                         const countB = doctorShiftCounts.get(b.id) || 0;
                         return countA - countB;
                     });
 
-                    // Pick the doctor with the fewest shifts (first in sorted array)
-                    const winner = finalCandidates[0];
-
-                    // Assign
+                    const winner = potentialCandidates[0];
                     const newShift: DoctorShift = {
                         id: crypto.randomUUID(),
                         doctorId: winner.id,
                         date: dateStr,
                         station: stationName,
+                        scheduled_station: stationName,
                         location: stationLocation,
                         isAutoGenerated: true
                     };
 
                     assignments.push(newShift);
-                    
-                    // Update Local State for next iteration
                     assignedDoctorIds.add(winner.id);
-                    existingShifts.push(newShift); // To prevent double booking same station in same loop
+                    existingShifts.push(newShift);
                     const currentCount = doctorShiftCounts.get(winner.id) || 0;
                     doctorShiftCounts.set(winner.id, currentCount + 1);
-                    
-                    // Increment the assigned count for this station
                     currentAssignedCount++;
                 }
-
             }
         }
         
         // Commit
-        if (assignments.length > 0) {
+        if (assignments.length > 0 && commit) {
             this.doctorShifts.push(...assignments);
             try {
                 // Batch insert - only include fields that exist in DB
                 const { error } = await supabase.from('doctor_shifts').insert(assignments.map(a => {
                     const record: any = {
                         id: a.id,
-                        doctorId: a.doctorId,
+                        doctor_id: a.doctorId, // Standardized
                         date: a.date,
                         station: a.station,
-                        is_auto_generated: a.isAutoGenerated || false
+                        is_auto_generated: a.isAutoGenerated || false,
+                        work_time: a.workTime || null
                     };
                     // Add optional fields if they exist
                     if (a.location) {
@@ -1903,6 +1899,9 @@ BMD :{{bmd}}
                     }
                     if (a.explanationTaskType) {
                         record.explanation_task_type = a.explanationTaskType;
+                    }
+                    if (a.scheduled_station) {
+                        record.scheduled_station = a.scheduled_station;
                     }
                     return record;
                 }));
@@ -1917,11 +1916,13 @@ BMD :{{bmd}}
         
         // Auto-pair Gynecology + Explanation shifts
         console.log('[Auto] Checking for gynecology-explanation pairing...');
-        for (const assignment of assignments) {
-            await this.autoPairGynecologyWithExplanation(assignment.doctorId, assignment.date, assignment.station);
+        if (commit) {
+            for (const assignment of assignments) {
+                await this.autoPairGynecologyWithExplanation(assignment.doctorId, assignment.date, assignment.station);
+            }
         }
         
-        return assignments.length;
+        return commit ? assignments.length : assignments;
 
     }
 

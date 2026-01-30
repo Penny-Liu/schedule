@@ -116,10 +116,13 @@ export enum DateEventType {
   NATIONAL = 'NATIONAL', // 國定假日
   MEETING = 'MEETING',   // 科會
   CLOSED = 'CLOSED',     // 休診 (全員預設休假)
-  NOTE = 'NOTE'          // 備忘
+  NOTE = 'NOTE',          // 備忘
+  RADIOGRAPHER_NOTE = 'RADIOGRAPHER_NOTE', // 放射師備忘 (僅顯示於放射師排班)
+  DOCTOR_NOTE = 'DOCTOR_NOTE' // 醫師備忘 (僅顯示於醫師排班)
 }
 
 export interface Holiday {
+  id?: string; // Unique identifier
   date: string; // YYYY-MM-DD
   name: string;
   type: DateEventType;

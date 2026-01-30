@@ -72,11 +72,12 @@ const DoctorManagerPage: React.FC<DoctorManagerPageProps> = ({ currentUser }) =>
 
     const handleEdit = (doc: Doctor) => {
         setEditingId(doc.id);
+        const caps = doc.capabilities || [];
         setFormData({
             name: doc.name,
             alias: doc.alias || '',
             specialty: doc.specialty || '',
-            capabilities: doc.capabilities || [],
+            capabilities: caps,
             excludedDays: doc.excludedDays || [],
             locations: doc.locations || [],
             excludedAutoScheduleLocations: doc.excludedAutoScheduleLocations || [],
@@ -84,17 +85,31 @@ const DoctorManagerPage: React.FC<DoctorManagerPageProps> = ({ currentUser }) =>
             monthlyTargetShifts: doc.monthlyTargetShifts,
             fixedShifts: doc.fixedShifts || []
         });
+        
+        // Pre-fill fixed shift station if capabilities exist
+        if (caps.length > 0) {
+            setNewFixedShift(prev => ({ ...prev, station: caps[0] }));
+        }
+        
         setError(null);
     };
 
     const toggleCapability = (cap: string) => {
         setFormData(prev => {
             const exists = prev.capabilities.includes(cap);
+            let nextCaps;
             if (exists) {
-                return { ...prev, capabilities: prev.capabilities.filter(c => c !== cap) };
+                nextCaps = prev.capabilities.filter(c => c !== cap);
             } else {
-                return { ...prev, capabilities: [...prev.capabilities, cap] };
+                nextCaps = [...prev.capabilities, cap];
             }
+            
+            // If newFixedShift.station is empty and we just added a capability, pre-fill it
+            if (!newFixedShift.station && nextCaps.length > 0) {
+                setNewFixedShift(f => ({ ...f, station: nextCaps[0] }));
+            }
+            
+            return { ...prev, capabilities: nextCaps };
         });
     };
 
@@ -479,7 +494,10 @@ const DoctorManagerPage: React.FC<DoctorManagerPageProps> = ({ currentUser }) =>
                                     onChange={e => setNewFixedShift({...newFixedShift, station: e.target.value})}
                                 >
                                     <option value="">選擇崗位...</option>
-                                    {availableStations.map(s => <option key={s} value={s}>{s}</option>)}
+                                    {availableStations
+                                        .filter(s => formData.capabilities.includes(s))
+                                        .map(s => <option key={s} value={s}>{s}</option>)
+                                    }
                                 </select>
                                 <select 
                                     className="text-xs p-1.5 rounded border border-gray-300 min-w-[60px]"
@@ -691,7 +709,7 @@ const DoctorManagerPage: React.FC<DoctorManagerPageProps> = ({ currentUser }) =>
                                                             </span>
                                                         ))}
                                                      </div>
-                                                ) : <span className="text-green-500 text-xs font-bold">全勤</span>}
+                                                ) : <span className="text-gray-400 text-xs">無</span>}
                                             </td>
                                             <td className="px-6 py-4">
                                                 {doc.fixedShifts && doc.fixedShifts.length > 0 ? (
