@@ -2,10 +2,11 @@ import React, { useState, useMemo, useEffect } from 'react';
 import type { User, Shift } from '../types';
 import { UserRole, SYSTEM_OFF, SPECIAL_ROLES, LeaveRequest, LeaveStatus, LeaveType, StationDefault, DateEventType } from '../types';
 import { db } from '../services/store';
-import { ChevronLeft, ChevronRight, Briefcase, Moon, Sun, Monitor, Activity, Calendar as CalendarIcon, Filter, Wand2, Users, LayoutList, Star, AlertCircle, Plus, X, Download, BarChart2, Sparkles, ChevronDown, ChevronUp, GripVertical, BookOpen, Lock, Unlock, CheckCircle, Loader2, User as UserIcon, Key, Settings, Trash2, Check, AlertTriangle, Copy } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Briefcase, Moon, Sun, Monitor, Activity, Calendar as CalendarIcon, Filter, Wand2, Users, LayoutList, Star, AlertCircle, Plus, X, Download, BarChart2, Sparkles, ChevronDown, ChevronUp, GripVertical, BookOpen, Lock, Unlock, CheckCircle, Loader2, User as UserIcon, Key, Settings, Trash2, Check, AlertTriangle, Copy, FileSpreadsheet } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import ExcelJS from 'exceljs';
 import ConfirmModal from '../components/ConfirmModal';
 
 interface DashboardPageProps {
@@ -390,6 +391,209 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
             showToast('儲存發生錯誤', 'error');
         } finally {
             setIsProcessing(false);
+        }
+    };
+
+    const handleExportExcel = async () => {
+        setIsExporting(true);
+        try {
+            const workbook = new ExcelJS.Workbook();
+            const today = new Date();
+            // const exportDate = today.toLocaleDateString('zh-TW');
+
+            // --- Sheet 1: User View (人員視角) ---
+            const userSheet = workbook.addWorksheet('人員視角');
+
+            // Headers
+            const userHeaders = ['姓名', ...dateRange.map(d => {
+                const date = new Date(d);
+                const weekArr = ['日', '一', '二', '三', '四', '五', '六'];
+                return `${date.getDate()} (${weekArr[date.getDay()]})`;
+            }), '上班天數'];
+            
+            const userHeaderRow = userSheet.addRow(userHeaders);
+            userHeaderRow.eachCell((cell) => {
+                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF0F0F0' } };
+                cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+                cell.font = { bold: true };
+                cell.alignment = { vertical: 'middle', horizontal: 'center' };
+            });
+
+            // Data Rows (User View)
+            users.forEach((user, idx) => {
+                const rowData: any[] = [user.name];
+                let workDaysCount = 0;
+
+                dateRange.forEach(date => {
+                    const { station, specialRoles, isOff } = getDayShift(user.id, date);
+                    const event = holidays.find(h => h.date === date);
+                    const isClosed = event?.type === DateEventType.CLOSED;
+                    
+                    // Logic from handleExportPDF
+                    const hasAssignedStation = station && station !== StationDefault.UNASSIGNED && station !== SYSTEM_OFF && !station.includes('休假');
+                    
+                    if ((isOff || isClosed) && !hasAssignedStation) {
+                         rowData.push('休');
+                    } else {
+                         // Build content: Station + Roles
+                         let cellText = '';
+                         if (station && station !== StationDefault.UNASSIGNED) cellText += station;
+                         if (specialRoles.length > 0) {
+                             const roleMap: Record<string, string> = {
+                                 [SPECIAL_ROLES.OPENING]: '開',
+                                 [SPECIAL_ROLES.LATE]: '晚',
+                                 [SPECIAL_ROLES.ASSIST]: '輔',
+                                 [SPECIAL_ROLES.SCHEDULER]: '排',
+                                 [SPECIAL_ROLES.DAZHI_SUPPORT]: '支'
+                             };
+                             const rolesShort = specialRoles.map(r => roleMap[r] || r[0]).join('');
+                             // Use Newline for separation
+                             cellText += (cellText ? '\n' : '') + rolesShort;
+                         }
+                         rowData.push(cellText);
+
+                         if (station && station !== StationDefault.UNASSIGNED && station !== SYSTEM_OFF && !station.includes('休假')) {
+                             workDaysCount++;
+                         }
+                    }
+                });
+                rowData.push(workDaysCount);
+
+                const row = userSheet.addRow(rowData);
+                row.eachCell((cell, colNumber) => {
+                     cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+                     cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+                     
+                     // Styling Logic
+                     if (colNumber > 1 && colNumber < userHeaders.length + 1) { // Date Columns
+                         const cellValue = cell.value?.toString() || '';
+                         
+                         if (cellValue === '休') {
+                             // White
+                         } else {
+                            if (cellValue.includes('MR')) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFEDD5' } }; 
+                            else if (cellValue.includes('US')) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFCEFFCE' } };
+                            else if (cellValue.includes('CT')) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF0F9FF' } }; 
+                            else if (cellValue.includes('場控')) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFF' } }; 
+                            else if (cellValue.includes('遠')) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFAE8FF' } }; 
+                            else if (cellValue.includes('BMD') || cellValue.includes('DX')) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEFF6FF' } }; 
+                            else if (cellValue.includes('大直')) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDDD6FF' } }; 
+                            else if (cellValue.includes('技術支援')) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFED97' } };
+                            else if (cellValue.includes('行政')) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF0FDF4' } };
+                            else if (cellValue.includes('閱片')) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFECFEFF' } };
+                            else if (cellValue.includes('放腫')) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFDF2F8' } };
+                            else if (cellValue.includes('體檢')) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF7ED' } };
+                         }
+                     }
+                });
+            });
+
+            // Set Column Widths
+            userSheet.columns = [
+                { width: 15 }, // Name
+                ...dateRange.map(() => ({ width: 10 })), // Dates (Previously auto or standard, now fixed wider for visibility)
+                { width: 10 } // Count
+            ];
+
+            // --- Sheet 2: Station View (崗位視角) ---
+            const stationSheet = workbook.addWorksheet('崗位視角');
+            
+            // Header
+            const stationHeaders = ['崗位', ...dateRange.map(d => {
+                const date = new Date(d);
+                const weekArr = ['日', '一', '二', '三', '四', '五', '六'];
+                return `${date.getDate()} (${weekArr[date.getDay()]})`;
+            })];
+
+            const stationHeaderRow = stationSheet.addRow(stationHeaders);
+            stationHeaderRow.eachCell((cell) => {
+                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF0F0F0' } };
+                cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+                cell.font = { bold: true };
+                cell.alignment = { vertical: 'middle', horizontal: 'center' };
+            });
+
+            // Data Rows (Station View)
+            const stationsToExport = rowConfigs.filter(row =>
+                row.label !== StationDefault.UNASSIGNED &&
+                row.label !== '未分配' &&
+                row.label !== SPECIAL_ROLES.OPENING &&
+                row.label !== SPECIAL_ROLES.LATE
+            );
+
+            stationsToExport.forEach(rowConfig => {
+                const rowData: any[] = [rowConfig.label];
+                
+                dateRange.forEach(date => {
+                    const staff = rowConfig.getData(date);
+                    // Sort (Learners last)
+                    staff.sort((a, b) => {
+                         const isALearner = a.user?.learningCapabilities?.includes(rowConfig.label) || false;
+                         const isBLearner = b.user?.learningCapabilities?.includes(rowConfig.label) || false;
+                         if (isALearner === isBLearner) return 0;
+                         return isALearner ? 1 : -1;
+                    });
+
+                    // Build Content: Name + Roles
+                    const contentParts = staff.map(s => {
+                        let text = formatName(s.user?.name || '');
+                        if (s.shift.specialRoles.length > 0) {
+                            const roleMap: Record<string, string> = {
+                                 [SPECIAL_ROLES.OPENING]: '開機',
+                                 [SPECIAL_ROLES.LATE]: '晚班',
+                                 [SPECIAL_ROLES.ASSIST]: '輔班',
+                                 [SPECIAL_ROLES.SCHEDULER]: '排班',
+                            };
+                            let roleLabels = s.shift.specialRoles.map(r => roleMap[r] || r);
+                            text += `\n(${roleLabels.join(',')})`;
+                        }
+                        return text;
+                    });
+                    
+                    const cellContent = contentParts.join('\n'); // Stack multiple people
+                    rowData.push(cellContent);
+                });
+
+                const row = stationSheet.addRow(rowData);
+                row.height = 40; 
+                row.eachCell((cell, colNumber) => {
+                     cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+                     cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+
+                     if (colNumber === 1) {
+                         const label = cell.value?.toString() || '';
+                         if (label.includes('MR')) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFEDD5' } };
+                         else if (label.includes('US')) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFCEFFCE' } };
+                         else if (label.includes('CT')) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF0F9FF' } };
+                         else if (label.includes('場控')) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFF' } };
+                         else if (label.includes('遠')) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFAE8FF' } };
+                         else if (label.includes('BMD') || label.includes('DX')) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEFF6FF' } };
+                         else if (label.includes('大直')) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDDD6FF' } };
+                     }
+                });
+            });
+
+             // Adjust Column Widths
+            stationSheet.columns.forEach((col, index) => {
+                if (index === 0) col.width = 15;
+                else col.width = 15; 
+            });
+
+            // Generate & Download
+            const buffer = await workbook.xlsx.writeBuffer();
+            const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            const cycleTitle = getCycleTitle().replace(/[/\\?%*:|"<>\s]/g, '_');
+            link.download = `${cycleTitle}_排班表.xlsx`;
+            link.click();
+            URL.revokeObjectURL(link.href);
+
+        } catch (error) {
+            console.error('Excel Export Error:', error);
+            showToast('Excel 匯出失敗', 'error');
+        } finally {
+            setIsExporting(false);
         }
     };
 
@@ -1739,38 +1943,104 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                 </div>
             </div>
 
-            {/* Header Area */}
-            <div className="flex-none px-6 py-4 bg-white border-b border-slate-200 shadow-sm z-10">
-                <div className="flex justify-between items-center">
-                    <div className="flex items-center gap-4">
-                        <h2 className="text-xl font-bold text-slate-800 tracking-tight flex items-center gap-2">
-                            {/* Hide Cycle Title on Mobile */}
+            {/* Header Area - Compact Redesign */}
+            <div className="flex-none bg-white border-b border-slate-200 shadow-sm z-10">
+                <div className="flex flex-col xl:flex-row items-center justify-between px-4 py-2 gap-y-2 gap-x-4">
+                    
+                    {/* LEFT GROUP: Title & Date Navigation */}
+                    <div className="flex items-center gap-4 w-full xl:w-auto justify-between xl:justify-start">
+                        <h2 className="text-lg font-bold text-slate-800 tracking-tight flex items-center gap-2 whitespace-nowrap">
                             {!isMobile && getCycleTitle()}
                             {isCycleConfirmed && (
-                                <span className="bg-red-50 text-red-600 text-xs px-2 py-0.5 rounded border border-red-100 flex items-center gap-1">
+                                <span className="bg-red-50 text-red-600 text-[10px] px-1.5 py-0.5 rounded border border-red-100 flex items-center gap-1">
                                     <Lock size={10} /> {!isMobile && '已鎖定'}
                                 </span>
                             )}
                         </h2>
 
-                        <div className="flex bg-slate-100 p-0.5 rounded-lg border border-slate-200">
-                            <button
+                        {/* Date Navigation */}
+                         <div className="flex items-center gap-2">
+                            {/* Mobile Nav */}
+                            {isMobile && (selectedCycleId === 'rolling' || viewMode === 'user' || viewMode === 'station') && (
+                                <button type="button" onClick={() => setMobileOffset(prev => prev - 1)} className="p-1 bg-white rounded shadow-sm text-slate-600 border border-slate-200 active:scale-95">
+                                    <ChevronLeft size={16} />
+                                </button>
+                            )}
+
+                             {/* Cycle Selector */}
+                            {(!isMobile || viewMode === 'personal') && (
+                                <div className={`flex items-center bg-slate-50 hover:bg-slate-100 rounded-md px-2 py-1 transition-colors border border-slate-200 ${isMobile ? 'max-w-[140px]' : ''}`}>
+                                    <select
+                                        value={selectedCycleId}
+                                        onChange={(e) => setSelectedCycleId(e.target.value)}
+                                        className={`text-xs bg-transparent border-none focus:ring-0 text-slate-700 font-bold cursor-pointer py-0 pl-0 ${isMobile ? 'pr-6 w-full' : 'pr-6'}`}
+                                    >
+                                        <option value="rolling">連續排班</option>
+                                        {cycles.map(c => (
+                                            <option key={c.id} value={c.id}>{c.name} {c.isConfirmed ? '(🔒)' : ''}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
+
+                            {/* Mobile Title View */}
+                            {isMobile && (viewMode === 'user' || viewMode === 'station') && (
+                                <span className="text-xs font-bold text-slate-700 min-w-[80px] text-center">
+                                    {dateRange[0].substring(5)} ~ {dateRange[dateRange.length - 1].substring(5)}
+                                </span>
+                            )}
+
+                             {/* Mobile Right Nav */}
+                            {isMobile && (selectedCycleId === 'rolling' || viewMode === 'user' || viewMode === 'station') && (
+                                <button type="button" onClick={() => setMobileOffset(prev => prev + 1)} className="p-1 bg-white rounded shadow-sm text-slate-600 border border-slate-200 active:scale-95">
+                                    <ChevronRight size={16} />
+                                </button>
+                            )}
+
+                            {/* Desktop Rolling Nav */}
+                            {!isMobile && selectedCycleId === 'rolling' && (
+                                <div className="flex items-center bg-white rounded-md border border-slate-200 p-0.5 shadow-sm gap-1">
+                                    <button type="button" onClick={() => handleNavigate('prev')} className="p-1 hover:bg-slate-50 rounded text-slate-500">
+                                        <ChevronLeft size={14} />
+                                    </button>
+                                    <div className="relative group px-2 text-xs font-bold text-slate-700 cursor-pointer hover:text-slate-900 flex items-center gap-1">
+                                        {currentDate.toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })} 起
+                                         <ChevronDown size={10} className="text-slate-400" />
+                                        <input type="date" className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10" onChange={handleDateJump} />
+                                    </div>
+                                    <button type="button" onClick={() => handleNavigate('next')} className="p-1 hover:bg-slate-50 rounded text-slate-500">
+                                        <ChevronRight size={14} />
+                                    </button>
+                                </div>
+                            )}
+                             
+                             {/* Desktop Date Range Display */}
+                            {!isMobile && selectedCycleId !== 'rolling' && (
+                                <div className="flex items-center gap-1.5 px-2 py-1 bg-indigo-50 text-indigo-700 rounded-md text-xs font-bold border border-indigo-100">
+                                    <CalendarIcon size={12} />
+                                    {cycles.find(c => c.id === selectedCycleId)?.startDate} ~ {cycles.find(c => c.id === selectedCycleId)?.endDate}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+
+                    {/* RIGHT GROUP: Toolbar (View Toggles + Actions) */}
+                    <div className="flex items-center gap-2 w-full xl:w-auto justify-between xl:justify-end overflow-x-auto no-scrollbar">
+                        
+                        {/* View Toggles */}
+                        <div className="flex bg-slate-100 p-0.5 rounded-lg border border-slate-200 shrink-0">
+                             <button
                                 type="button"
-                                onClick={() => {
-                                    setViewMode('user');
-                                }}
-                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${viewMode === 'user' ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-                                    } `}
+                                onClick={() => setViewMode('user')}
+                                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold transition-all ${viewMode === 'user' ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                             >
                                 {!isMobile && <Users size={14} />} <span>{isMobile ? '人員' : '人員視角'}</span>
                             </button>
                             <button
                                 type="button"
-                                onClick={() => {
-                                    setViewMode('station');
-                                }}
-                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${viewMode === 'station' ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-                                    } `}
+                                onClick={() => setViewMode('station')}
+                                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold transition-all ${viewMode === 'station' ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                             >
                                 {!isMobile && <LayoutList size={14} />} <span>{isMobile ? '崗位' : '崗位視角'}</span>
                             </button>
@@ -1778,14 +2048,10 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                 type="button"
                                 onClick={() => {
                                     setViewMode('daily');
-                                    setDailyDate(new Date()); // Reset to today when clicking tab
-                                    if (isMobile) {
-                                        console.log("Mobile Daily View Selected: Forcing refresh...");
-                                        db.initializeData(true);
-                                    }
+                                    setDailyDate(new Date());
+                                    if (isMobile) db.initializeData(true);
                                 }}
-                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${viewMode === 'daily' ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-                                    } `}
+                                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold transition-all ${viewMode === 'daily' ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                             >
                                 {!isMobile && <Activity size={14} />} <span>{isMobile ? '今日' : '今日崗位'}</span>
                             </button>
@@ -1793,197 +2059,94 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                 <button
                                     type="button"
                                     onClick={() => setViewMode('personal')}
-                                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${viewMode === 'personal' ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-                                        } `}
+                                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold transition-all ${viewMode === 'personal' ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                                 >
                                     <span>個人</span>
                                 </button>
                             )}
                         </div>
-                    </div>
 
-                    <div className="flex items-center gap-3">
+                        {!isMobile && <div className="h-4 w-px bg-slate-200 mx-1 shrink-0"></div>}
 
-                        {/* Cycle Selector & Nav - Unified for Mobile/Desktop */}
-                        <div className="flex items-center gap-2">
-                            {/* Mobile Left Nav (For Rolling OR User/Station Views) */}
-                            {isMobile && (selectedCycleId === 'rolling' || viewMode === 'user' || viewMode === 'station') && (
+                        {/* Action Buttons */}
+                        <div className="flex items-center gap-2 shrink-0">
+                           {/* Lock Button */}
+                             {!isMobile && (currentUser.role === UserRole.SUPERVISOR || currentUser.role === UserRole.SYSTEM_ADMIN) && selectedCycleId !== 'rolling' && (
                                 <button
                                     type="button"
-                                    onClick={() => setMobileOffset(prev => prev - 1)}
-                                    className="p-1.5 bg-white rounded shadow-sm text-slate-600 border border-slate-200 active:scale-95 transition-transform"
+                                    onClick={() => setIsConfirmCycleOpen(true)}
+                                    disabled={isCycleConfirmed && currentUser.role !== UserRole.SYSTEM_ADMIN}
+                                    className={`px-2.5 py-1 rounded-md text-xs font-bold border flex items-center gap-1.5 shadow-sm transition-all ${isCycleConfirmed
+                                        ? (currentUser.role === UserRole.SYSTEM_ADMIN ? 'bg-gray-100 text-gray-600 border-gray-200 hover:bg-gray-200' : 'bg-gray-50 text-gray-400 border-gray-100 cursor-not-allowed')
+                                        : 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                                        } `}
+                                    title={isCycleConfirmed ? "排班已鎖定" : "確認並鎖定排班"}
                                 >
-                                    <ChevronLeft size={16} />
+                                    {isCycleConfirmed ? <Lock size={12} /> : <CheckCircle size={12} />}
+                                    <span className="hidden lg:inline">{isCycleConfirmed ? '已鎖定' : '確認'}</span>
                                 </button>
                             )}
 
-                            {/* Cycle Dropdown - Only show on Mobile if in Personal View (or if not mobile) */}
-                            {(!isMobile || viewMode === 'personal') && (
-                                <div className={`flex items-center bg-slate-50 hover:bg-slate-100 rounded-lg px-2 py-1.5 transition-colors border border-slate-200 ${isMobile ? 'max-w-[140px]' : ''}`}>
-                                    {!isMobile && <Filter size={14} className="text-slate-500 mr-2" />}
-                                    <select
-                                        value={selectedCycleId}
-                                        onChange={(e) => setSelectedCycleId(e.target.value)}
-                                        className={`text-sm bg-transparent border-none focus:ring-0 text-slate-700 font-medium cursor-pointer py-0 pl-0 ${isMobile ? 'pr-6 w-full text-xs' : 'pr-8'}`}
+                             {/* Exports */}
+                             {!isMobile && (
+                                <>
+                                    <button onClick={handleExportExcel} disabled={isExporting} className="px-2.5 py-1 rounded-md text-xs font-bold border border-green-200 bg-green-50 text-green-700 hover:bg-green-100 flex items-center gap-1.5 shadow-sm transition-all disabled:opacity-50">
+                                         {isExporting ? <Loader2 size={12} className="animate-spin" /> : <FileSpreadsheet size={12} />}
+                                        <span className="hidden xl:inline">Excel</span>
+                                    </button>
+                                    <button onClick={handleExportPDF} disabled={isExporting} className="px-2.5 py-1 rounded-md text-xs font-bold border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 flex items-center gap-1.5 shadow-sm transition-all">
+                                        <Download size={12} />
+                                        <span className="hidden xl:inline">PDF</span>
+                                    </button>
+                                </>
+                            )}
+                            
+                            {/* Auto Schedule Buttons */}
+                            {(currentUser.role === UserRole.SUPERVISOR || currentUser.role === UserRole.SYSTEM_ADMIN) && !isMobile && (
+                                <>
+                                     <button
+                                        type="button"
+                                        onClick={onAutoScheduleClick}
+                                        disabled={isProcessing || isCycleConfirmed}
+                                        className={`px-2.5 py-1 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm ${(isProcessing || isCycleConfirmed)
+                                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200'
+                                            : 'bg-gradient-to-r from-purple-600 to-purple-500 text-white hover:from-purple-700 hover:to-purple-600 shadow-purple-200'
+                                            } `}
                                     >
-                                        <option value="rolling">連續排班</option>
-                                        {cycles.map(c => (
-                                            <option key={c.id} value={c.id}>
-                                                {c.name} {c.isConfirmed ? '(🔒)' : ''}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </div>
+                                        <Wand2 size={12} /> <span className="hidden lg:inline">自動</span>
+                                    </button>
+                                     <button
+                                        onClick={onSpecialRoleClick}
+                                        disabled={isProcessing || isCycleConfirmed}
+                                        className={`px-2.5 py-1 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm ${(isProcessing || isCycleConfirmed)
+                                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200'
+                                            : 'bg-white text-purple-700 border border-purple-200 hover:bg-purple-50'
+                                            } `}
+                                    >
+                                        <Sparkles size={12} /> <span className="hidden lg:inline">特殊</span>
+                                    </button>
+                                </>
                             )}
 
-                            {/* Mobile Header: Show simple date range text if Selector is hidden (User/Station View) */}
-                            {isMobile && (viewMode === 'user' || viewMode === 'station') && (
-                                <span className="text-xs font-bold text-slate-700 min-w-[80px] text-center">
-                                    {dateRange[0].substring(5)} ~ {dateRange[dateRange.length - 1].substring(5)}
-                                </span>
-                            )}
-
-                            {/* Mobile Right Nav (For Rolling OR User/Station Views) */}
-                            {isMobile && (selectedCycleId === 'rolling' || viewMode === 'user' || viewMode === 'station') && (
+                             {/* Edit Button */}
+                            {!isMobile && (
                                 <button
                                     type="button"
-                                    onClick={() => setMobileOffset(prev => prev + 1)}
-                                    className="p-1.5 bg-white rounded shadow-sm text-slate-600 border border-slate-200 active:scale-95 transition-transform"
+                                    onClick={isEditMode ? handleComplete : () => setIsEditMode(true)}
+                                    disabled={isProcessing}
+                                    className={`px-2.5 py-1 rounded-md text-xs font-bold border transition-all ${isEditMode
+                                        ? 'bg-teal-600 text-white border-teal-600 shadow-sm shadow-teal-200 hover:bg-teal-700'
+                                        : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                                        } ${(isProcessing) ? 'opacity-50 cursor-not-allowed' : ''}`}
                                 >
-                                    <ChevronRight size={16} />
+                                    {isProcessing ? (
+                                       <Loader2 size={12} className="animate-spin" />
+                                    ) : (
+                                        isEditMode ? '完成' : '編輯'
+                                    )}
                                 </button>
                             )}
                         </div>
-
-                        {!isMobile && selectedCycleId === 'rolling' && (
-                            <div className="flex items-center bg-white rounded-lg border border-slate-200 p-0.5 shadow-sm gap-1">
-                                <button type="button" onClick={() => handleNavigate('prev')} className="p-1.5 hover:bg-slate-50 rounded text-slate-500" title="上一週">
-                                    <ChevronLeft size={16} />
-                                </button>
-
-                                {/* Enhanced Date Picker Navigation */}
-                                <div className="relative group">
-                                    <div className="flex items-center gap-1 px-2 py-1 cursor-pointer hover:bg-slate-50 rounded text-sm font-bold text-slate-700">
-                                        {currentDate.toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })} 起
-                                        <ChevronDown size={12} className="text-slate-400" />
-                                    </div>
-                                    <input
-                                        type="date"
-                                        className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10"
-                                        onChange={handleDateJump}
-                                        title="跳轉至指定日期"
-                                    />
-                                </div>
-
-                                <button type="button" onClick={() => handleNavigate('next')} className="p-1.5 hover:bg-slate-50 rounded text-slate-500" title="下一週">
-                                    <ChevronRight size={16} />
-                                </button>
-                            </div>
-                        )}
-
-                        {!isMobile && selectedCycleId !== 'rolling' && (
-                            <div className="flex items-center gap-2 px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-lg text-xs font-bold border border-indigo-100">
-                                <CalendarIcon size={14} />
-                                {cycles.find(c => c.id === selectedCycleId)?.startDate} ~ {cycles.find(c => c.id === selectedCycleId)?.endDate}
-                            </div>
-                        )}
-
-                        {!isMobile && (currentUser.role === UserRole.SUPERVISOR || currentUser.role === UserRole.SYSTEM_ADMIN) && selectedCycleId !== 'rolling' && (
-                            <button
-                                type="button"
-                                onClick={() => setIsConfirmCycleOpen(true)}
-                                disabled={isCycleConfirmed && currentUser.role !== UserRole.SYSTEM_ADMIN}
-                                className={`px-3 py-1.5 rounded-lg text-sm font-medium border flex items-center gap-1.5 shadow-sm transition-all ${isCycleConfirmed
-                                    ? (currentUser.role === UserRole.SYSTEM_ADMIN ? 'bg-gray-100 text-gray-600 border-gray-200 hover:bg-gray-200' : 'bg-gray-50 text-gray-400 border-gray-100 cursor-not-allowed')
-                                    : 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
-                                    } `}
-                                title={isCycleConfirmed
-                                    ? (currentUser.role === UserRole.SYSTEM_ADMIN ? "解鎖排班" : "排班已鎖定 (僅系統管理員可解鎖)")
-                                    : "確認並鎖定排班"}
-                            >
-                                {isCycleConfirmed ? <Lock size={14} /> : <CheckCircle size={14} />}
-                                {isCycleConfirmed ? '已鎖定' : '確認排班'}
-                            </button>
-                        )}
-
-
-
-                        <div className="h-6 w-px bg-slate-200 mx-1"></div>
-
-                        {!isMobile && (
-                            <button
-                                type="button"
-                                onClick={(e) => handleExportPDF(e)}
-                                disabled={isExporting}
-                                className="px-3 py-1.5 rounded-lg text-sm font-medium border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 flex items-center gap-1.5 shadow-sm transition-all"
-                                title="匯出 PDF"
-                            >
-                                <Download size={14} />
-                                {isExporting ? '處理中...' : '匯出'}
-                            </button>
-                        )}
-
-                        {(currentUser.role === UserRole.SUPERVISOR || currentUser.role === UserRole.SYSTEM_ADMIN) && (
-                            <>
-                                {/* Action Buttons: Only show when viewing Users and usually in custom or rolling range */}
-                                {!isMobile && (
-                                    <>
-                                        {/* Auto Station Button */}
-                                        <button
-                                            type="button"
-                                            onClick={onAutoScheduleClick}
-                                            disabled={isProcessing || isCycleConfirmed}
-                                            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-1.5 shadow-sm ${(isProcessing || isCycleConfirmed)
-                                                ? 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200'
-                                                : 'bg-gradient-to-r from-purple-600 to-purple-500 text-white hover:from-purple-700 hover:to-purple-600 shadow-purple-200'
-                                                } `}
-                                            title={isCycleConfirmed ? "排班已鎖定，無法自動排程" : "自動分配一般工作崗位 (CT/MR/US...)"}
-                                        >
-                                            <Wand2 size={14} />
-                                            <span className="hidden xl:inline">排崗位</span>
-                                        </button>
-
-                                        {/* Special Role Button */}
-                                        <button
-                                            type="button"
-                                            onClick={onSpecialRoleClick}
-                                            disabled={isProcessing || isCycleConfirmed}
-                                            className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-all flex items-center gap-1.5 shadow-sm ${(isProcessing || isCycleConfirmed)
-                                                ? 'bg-gray-50 text-gray-400 border-gray-200 cursor-not-allowed'
-                                                : 'bg-white text-indigo-600 border-indigo-200 hover:bg-indigo-50 hover:border-indigo-300'
-                                                } `}
-                                            title={isCycleConfirmed ? "排班已鎖定，無法自動分配" : "自動分配 開機/晚班 任務"}
-                                        >
-                                            <Sparkles size={14} className={isCycleConfirmed ? "text-gray-400" : "fill-indigo-100"} />
-                                            <span className="hidden xl:inline">排任務</span>
-                                        </button>
-                                    </>
-                                )}
-
-                            </>
-                        )}
-
-                        {/* Edit Button: Desktop Only (Mobile uses FAB) */}
-                        {!isMobile && (
-                            <button
-                                type="button"
-                                onClick={isEditMode ? handleComplete : () => setIsEditMode(true)}
-                                disabled={isProcessing}
-                                className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-all ${isEditMode
-                                    ? 'bg-teal-600 text-white border-teal-600 shadow-sm shadow-teal-200 hover:bg-teal-700'
-                                    : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
-                                    } ${(isProcessing) ? 'opacity-50 cursor-not-allowed' : ''}`}
-                            >
-                                {isProcessing ? (
-                                    <>
-                                        <Loader2 size={14} className="animate-spin inline mr-1" />
-                                        儲存中
-                                    </>
-                                ) : (
-                                    isEditMode ? '完成' : '編輯'
-                                )}
-                            </button>
-                        )}
                     </div>
                 </div>
             </div>
@@ -2098,35 +2261,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                             </div>
 
                             {/* Main/Assistant Shift Display */}
-                            <div className="px-6 py-3 bg-gradient-to-r from-yellow-50 to-amber-50 border-y border-yellow-200">
-                                <div className="flex flex-col sm:flex-row gap-3">
-                                    {(() => {
-                                        const dateStr = toLocalISOString(dailyDate);
-                                        const radiographerShifts = db.shifts;
-                                        const mainShift = radiographerShifts.find(s => 
-                                            s.date === dateStr && s.station?.includes('場控')
-                                        );
-                                        const assistantShift = radiographerShifts.find(s => 
-                                            s.date === dateStr && s.specialRoles?.includes('輔班')
-                                        );
-                                        const mainName = mainShift ? db.getUsers().find(u => u.id === mainShift.userId)?.name : '-';
-                                        const assistantName = assistantShift ? db.getUsers().find(u => u.id === assistantShift.userId)?.name : '-';
 
-                                        return (
-                                            <>
-                                                <div className="flex-1 flex items-center gap-2 bg-white/60 rounded px-3 py-2 border border-yellow-300/30">
-                                                    <span className="text-xs font-bold text-yellow-800">主班：</span>
-                                                    <span className="text-sm font-medium text-yellow-900">{mainName}</span>
-                                                </div>
-                                                <div className="flex-1 flex items-center gap-2 bg-white/60 rounded px-3 py-2 border border-yellow-300/30">
-                                                    <span className="text-xs font-bold text-yellow-800">輔班：</span>
-                                                    <span className="text-sm font-medium text-yellow-900">{assistantName}</span>
-                                                </div>
-                                            </>
-                                        );
-                                    })()}
-                                </div>
-                            </div>
 
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 p-4">
                                 {(() => {

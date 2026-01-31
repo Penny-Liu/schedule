@@ -1309,7 +1309,8 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                         cell.border = borderStyle;
                         if (isWeekend) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF5F5F5' } };
 
-                        const stationShifts = locShifts.filter(s => s.date === dateStr && (s.scheduled_station === station || s.station === station));
+                        // Modified: Strict check for scheduled_station only
+                        const stationShifts = locShifts.filter(s => s.date === dateStr && s.scheduled_station === station);
                         
                         if (stationShifts.length > 0) {
                             const contentParts = stationShifts.map(shift => {
