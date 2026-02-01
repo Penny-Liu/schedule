@@ -17,7 +17,7 @@ export const MOCK_USERS: User[] = [
   {
     id: 'user-001',
     name: '劉雅萍',
-    email: 'penny@example.com',
+    username: 'penny@example.com',
     role: UserRole.SCHEDULER,
     groupId: StaffGroup.GROUP_A,
     alias: '萍',
@@ -30,7 +30,7 @@ export const MOCK_USERS: User[] = [
   {
     id: 'user-admin',
     name: '系統管理員',
-    email: 'admin@example.com',
+    username: 'admin@example.com',
     role: UserRole.SYSTEM_ADMIN,
     groupId: StaffGroup.GROUP_A,
     alias: '管',
@@ -43,7 +43,7 @@ export const MOCK_USERS: User[] = [
   {
     id: 'user-002',
     name: '林小美',
-    email: 'mei@example.com',
+    username: 'mei@example.com',
     role: UserRole.EMPLOYEE,
     groupId: StaffGroup.GROUP_B,
     alias: '美',
@@ -53,7 +53,7 @@ export const MOCK_USERS: User[] = [
   {
     id: 'user-003',
     name: '陳大明',
-    email: 'ming@example.com',
+    username: 'ming@example.com',
     role: UserRole.SUPERVISOR,
     groupId: StaffGroup.GROUP_A,
     alias: '明',
@@ -66,7 +66,7 @@ export const MOCK_USERS: User[] = [
   {
     id: 'user-004',
     name: '王小花',
-    email: 'hua@example.com',
+    username: 'hua@example.com',
     role: UserRole.EMPLOYEE,
     groupId: StaffGroup.GROUP_B,
     alias: '花',
@@ -79,7 +79,7 @@ export const MOCK_USERS: User[] = [
   {
     id: 'user-005',
     name: '張志豪',
-    email: 'hao@example.com',
+    username: 'hao@example.com',
     role: UserRole.EMPLOYEE,
     groupId: StaffGroup.GROUP_A,
     alias: '豪',
@@ -92,18 +92,19 @@ export const MOCK_USERS: User[] = [
   {
     id: 'user-006',
     name: '李國強',
-    email: 'li@example.com',
+    username: 'li@example.com',
     role: UserRole.VIEWER,
     groupId: StaffGroup.GROUP_A,
     alias: '強',
     color: '#EF4444', // Red 500
     capabilities: ALL_SKILLS,
+    password: '8686',
     mustChangePassword: false
   },
   {
     id: 'user-007',
     name: '張美玲',
-    email: 'zhang@example.com',
+    username: 'zhang@example.com',
     role: UserRole.EMPLOYEE,
     groupId: StaffGroup.GROUP_B,
     alias: '玲',
@@ -114,7 +115,7 @@ export const MOCK_USERS: User[] = [
   {
     id: 'user-008',
     name: '陳志明',
-    email: 'chen@example.com',
+    username: 'chen@example.com',
     role: UserRole.EMPLOYEE,
     groupId: StaffGroup.GROUP_A,
     alias: '志',
@@ -125,7 +126,7 @@ export const MOCK_USERS: User[] = [
   {
     id: 'user-009',
     name: '黃秀英',
-    email: 'huang@example.com',
+    username: 'huang@example.com',
     role: UserRole.EMPLOYEE,
     groupId: StaffGroup.GROUP_B,
     alias: '英',
@@ -136,7 +137,7 @@ export const MOCK_USERS: User[] = [
   {
     id: 'user-010',
     name: '林建宏',
-    email: 'lin@example.com',
+    username: 'lin@example.com',
     role: UserRole.EMPLOYEE,
     groupId: StaffGroup.GROUP_A,
     alias: '宏',
@@ -147,7 +148,7 @@ export const MOCK_USERS: User[] = [
   {
     id: 'user-011',
     name: '吳淑芬',
-    email: 'wu@example.com',
+    username: 'wu@example.com',
     role: UserRole.EMPLOYEE,
     groupId: StaffGroup.GROUP_B,
     alias: '芬',
@@ -158,7 +159,7 @@ export const MOCK_USERS: User[] = [
   {
     id: 'user-012',
     name: '蔡明德',
-    email: 'tsai@example.com',
+    username: 'tsai@example.com',
     role: UserRole.EMPLOYEE,
     groupId: StaffGroup.GROUP_A,
     alias: '德',
@@ -169,7 +170,7 @@ export const MOCK_USERS: User[] = [
   {
     id: 'user-013',
     name: '楊雅雯',
-    email: 'yang@example.com',
+    username: 'yang@example.com',
     role: UserRole.EMPLOYEE,
     groupId: StaffGroup.GROUP_B,
     alias: '雯',
@@ -180,7 +181,7 @@ export const MOCK_USERS: User[] = [
   {
     id: 'user-014',
     name: '鄭志偉',
-    email: 'cheng@example.com',
+    username: 'cheng@example.com',
     role: UserRole.EMPLOYEE,
     groupId: StaffGroup.GROUP_A,
     alias: '偉',
@@ -191,7 +192,7 @@ export const MOCK_USERS: User[] = [
   {
     id: 'user-015',
     name: '謝欣怡',
-    email: 'hsieh@example.com',
+    username: 'hsieh@example.com',
     role: UserRole.EMPLOYEE,
     groupId: StaffGroup.GROUP_B,
     alias: '怡',

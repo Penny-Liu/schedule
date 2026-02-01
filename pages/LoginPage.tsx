@@ -33,12 +33,8 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
     const handleUserSelect = (userId: string) => {
         const user = users.find(u => u.id === userId);
         if (user) {
-            if (user.role === UserRole.VIEWER) {
-                // Direct login for viewer without password prompt (preset password 8686)
-                onLogin(user);
-                localStorage.setItem('last_user_id', user.id);
-                return;
-            }
+                // Removed direct login for viewer
+
             setSelectedUser(user);
             setPassword('');
             setError('');
@@ -55,11 +51,8 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
         e.preventDefault();
         if (selectedUser) {
             // Viewer can login directly (preset password 8686) without checking entered password
-            if (selectedUser.role === UserRole.VIEWER) {
-                onLogin(selectedUser);
-                localStorage.setItem('last_user_id', selectedUser.id);
-                return;
-            }
+            // Removed direct login for viewer
+
             const targetPassword = selectedUser.password || '1234';
             if (password === targetPassword) {
                 onLogin(selectedUser);
