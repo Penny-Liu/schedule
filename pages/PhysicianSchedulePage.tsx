@@ -33,56 +33,101 @@ const LOCATION_COLORS: Record<string, string> = {
 const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUser }) => {
     
     // --- Copy Text Generators ---
-    const generateBeitouCopyText = (date: Date, shifts: any[], doctors: Doctor[]) => {
+    const generateBeitouCopyText = (date: Date, shifts: any[], doctors: Doctor[], staffShifts: any[], users: any[]) => {
         const dateStr = `${propsToLocalISOString(date)} (${['日', '一', '二', '三', '四', '五', '六'][date.getDay()]})`;
         const dateKey = propsToLocalISOString(date);
         
+        // Helper to resolve Radiographer Name
+        const getName = (userId: string) => {
+            const u = users.find(user => user.id === userId);
+            if (!u) return '';
+             // If alias is purely English (e.g., "K"), use last 2 chars of name instead
+            if (u.alias && /^[A-Za-z]+$/.test(u.alias)) {
+                 return u.name.slice(-2);
+            }
+            return u.alias || u.name.slice(-2);
+        };
+        
+        // --- 1. Radiographers (Main/Assist/Support/Admin) ---
+        // Filter Staff Shifts for this date
+        const dayStaffShifts = staffShifts.filter(s => s.date === dateKey);
+        
+        const mainRads = dayStaffShifts.filter(s => s.station?.includes('場控')).map(s => getName(s.userId));
+        const assistRads = dayStaffShifts.filter(s => s.specialRoles?.includes('輔班')).map(s => getName(s.userId));
+        
+        // const supportRads = dayStaffShifts.filter(s => s.station?.includes('支援') || s.station?.includes('技術支援')).map(s => {
+        //     const name = getName(s.userId);
+        //     // Check for Late shift in specialRoles (or task if used there)
+        //     return s.specialRoles?.includes('Late') || s.specialRoles?.includes('晚班') ? `${name}(晚)` : name;
+        // });
+        
+        // const adminRads = dayStaffShifts.filter(s => s.station === '行政').map(s => getName(s.userId));
+
+        // --- 2. Doctors ---
         const getDocs = (stationName: string) => {
             return shifts
                 .filter(s => s.date === dateKey && s.location === '北投' && (s.scheduled_station === stationName || s.station === stationName))
                 .map(s => {
                     const d = doctors.find(doc => doc.id === s.doctorId);
-                    let name = d?.alias || d?.name?.charAt(0) || '?';
-                    // 如果有晚班任務標籤，加上 (晚)
-                    if (s.task === '晚班') {
-                        name += '(晚)';
-                    }
-                    return name;
+                    return d?.alias || d?.name || '?';
+                });
+        };
+        
+        const getGIDocs = () => {
+             return shifts
+                .filter(s => s.date === dateKey && s.location === '北投' && ((s.scheduled_station || '').includes('GI') || (s.station || '').includes('GI') || (s.scheduled_station || '').includes('腸胃') || (s.station || '').includes('腸胃')))
+                .map(s => {
+                    const d = doctors.find(doc => doc.id === s.doctorId);
+                    return d?.alias || d?.name || '?';
                 });
         };
 
-        const mainDocs = getDocs('主');
-        const assistDocs = getDocs('輔');
+        const getSupportDocs = () => {
+            return shifts
+                .filter(s => s.date === dateKey && s.location === '北投' && s.scheduled_station === '支援')
+                .map(s => {
+                    const d = doctors.find(doc => doc.id === s.doctorId);
+                    return d?.alias || d?.name || '?';
+                });
+        };
+
+        const getAdminDocs = () => {
+             return shifts
+                .filter(s => s.date === dateKey && s.location === '北投' && s.scheduled_station === '行政')
+                .map(s => {
+                    const d = doctors.find(doc => doc.id === s.doctorId);
+                    return d?.alias || d?.name || '?';
+                });
+        };
+
         const imgDocs = getDocs('影像');
         const expDocs = getDocs('解說');
-        const supDocs = getDocs('支援');
-        const giDocs = getDocs('GI');
+        const supDocs = getSupportDocs();
+        const adminDocs = getAdminDocs();
+        const giDocs = getGIDocs();
+
+        // --- 3. Stats ---
+        const manualStats = db.getDailyStats(dateKey); // { beitou_clients, beitou_mr, beitou_gi, ... }
+        const mrCount = manualStats?.beitou_mr || 0;
+        const giCount = manualStats?.beitou_gi || 0;
         
-        // 檢查崗位在行政的醫師
-        const adminDocs = shifts
-            .filter(s => s.date === dateKey && (s.station === '行政' || s.scheduled_station === '行政'))
-            .map(s => {
-                const d = doctors.find(doc => doc.id === s.doctorId);
-                return d?.alias || d?.name?.charAt(0) || '?';
-            });
-        
-        // 使用手動輸入的北投客戶數
-        const manualStats = db.getDailyStats(dateKey);
-        const radTotal = manualStats?.beitou_clients ?? '';
+        // Total Count: Refer to Beitou Clients (User Request)
+        const totalCount = manualStats?.beitou_clients || 0;
 
         const lines = [
             `${date.getMonth() + 1}/${date.getDate()} （${['日', '一', '二', '三', '四', '五', '六'][date.getDay()]}）`,
-            `影像：${imgDocs.join('/')}`,
-            `解說：${expDocs.join('/')}`,
-            `支援：${supDocs.join('/')}`,
-            `GI：${giDocs.join('/')}`,
-            adminDocs.length > 0 ? `行政：${adminDocs.join('/')}` : '',
-            `總人數 : ${radTotal}人`,
-            `MR：      人`,
-            `GI：     台`
+            `主/輔：${mainRads.join('/') || '無'}/${assistRads.join('/') || '無'}`,
+            `影像：${imgDocs.join('/') || '無'}`,
+            `解說：${expDocs.join('/') || '無'}`,
+            `支援：${supDocs.join('/') || '無'}`,
+            `GI：${giDocs.join('/') || '無'}`,
+            `行政：${adminDocs.join('/') || '無'}`,
+            `總人數 : ${totalCount}人`,
+            `MR：${mrCount} 人`,
+            `GI：${giCount} 台`
         ];
 
-        return lines.filter(l => l !== '').join('\n');
+        return lines.join('\n');
     };
 
     const generateDazhiCopyText = (date: Date, shifts: any[], doctors: Doctor[]) => {
@@ -171,11 +216,15 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
     // Permission Check
     // Can edit if Admin/Scheduler AND NOT Locked
     const canEdit = (currentUser.role === UserRole.SYSTEM_ADMIN || currentUser.role === UserRole.SCHEDULER) && !isLocked;
+    // Viewer can edit stats only
+    const canEditStats = (currentUser.role === UserRole.SYSTEM_ADMIN || currentUser.role === UserRole.SCHEDULER || currentUser.role === UserRole.VIEWER) && !isLocked;
     const canManageLock = currentUser.role === UserRole.SYSTEM_ADMIN || currentUser.role === UserRole.SCHEDULER;
     
     const [doctors, setDoctors] = useState<Doctor[]>(db.getDoctors());
     const [shifts, setShifts] = useState(db.getDoctorShifts());
     const [staffShifts, setStaffShifts] = useState(db.shifts); // New: For Radiologist Total Count
+    // Fetch all users for name resolution (radiographers)
+    const [users, setUsers] = useState<any[]>(db.getUsers());
 
     // Define User's Preferred Order and Defaults
     const PREFERRED_STATIONS = [
@@ -2091,25 +2140,167 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                 
                 {viewMode === 'station' && (
                      <div className="bg-white rounded-xl border border-gray-200 shadow-sm inline-block min-w-full">
-                        <table className="text-sm border-collapse w-auto">
-                            <thead className="relative z-50">
-                                <tr className="bg-slate-50 border-b border-gray-200">
-                                    <th className="p-3 text-center font-bold text-gray-600 w-32 sticky left-0 top-0 bg-slate-50 z-50 border-r border-gray-200 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">崗位</th>
+                        <table className="w-full border-collapse bg-white table-fixed">
+                            <thead className="sticky top-0 z-20 shadow-sm">
+                                <tr>
+                                    <th className={`sticky left-0 z-30 bg-slate-50/95 backdrop-blur border-b border-r border-slate-200 shadow-[4px_0_8px_rgba(0,0,0,0.02)] ${isMobile ? 'p-1 w-[85px] min-w-[85px]' : 'p-2 w-[120px] text-left'}`}>
+                                        <div className={`flex items-center font-bold text-xs text-slate-600 ${isMobile ? 'justify-center' : 'gap-2'}`}>
+                                            <LayoutGrid size={14} className="text-teal-600" />
+                                            {!isMobile && '工作崗位'}
+                                        </div>
+                                    </th>
                                     {dateRange.map(date => {
                                         const d = new Date(date);
+                                        const isToday = date === toLocalISOString(new Date());
                                         const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+                                        const dailyHolidays = db.getHolidays().filter(h => h.date === date);
+                                        const holiday = dailyHolidays.find(h => h.type === DateEventType.NATIONAL || h.type === DateEventType.CLOSED);
+                                        
                                         return (
-                                            <th key={date} className={`p-1 text-center border-r border-gray-100 min-w-[40px] sticky top-0 z-50 ${isWeekend ? 'text-red-500 bg-red-50' : 'text-gray-700 bg-slate-50'}`}>
-                                                <div className="font-bold text-sm">{d.getDate()}</div>
-                                                <div className="text-[10px] opacity-75">
-                                                    {['日', '一', '二', '三', '四', '五', '六'][d.getDay()]}
+                                            <th 
+                                                key={date} 
+                                                className={`border-b border-slate-200 py-1.5 min-w-[52px] text-center relative ${isToday ? 'bg-teal-100' : (holiday ? 'bg-red-50' : 'bg-white')}`}
+                                            >
+                                                <div className="flex flex-col items-center gap-0.5">
+                                                    <span className={`text-[10px] font-bold ${isToday ? 'text-teal-700' : (isWeekend || holiday ? 'text-red-500' : 'text-slate-400')}`}>
+                                                        {['日', '一', '二', '三', '四', '五', '六'][d.getDay()]}
+                                                    </span>
+                                                    <span className={`text-sm font-bold leading-none ${isToday ? 'text-teal-900' : (isWeekend || holiday ? 'text-red-600' : 'text-slate-800')}`}>
+                                                        {d.getDate()}
+                                                    </span>
+                                                    {holiday && (
+                                                        <span className={`text-[9px] px-1 rounded-sm leading-tight max-w-[45px] truncate mt-0.5 ${isToday ? 'bg-teal-200 text-teal-800 border border-teal-300' : 'bg-red-100 text-red-700 border border-red-200'}`}>
+                                                            {holiday.name}
+                                                        </span>
+                                                    )}
                                                 </div>
                                             </th>
                                         );
                                     })}
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-gray-100">
+                            <tbody className="divide-y divide-slate-100">
+                                {/* --- Manpower Stats Rows --- */}
+                                <tr className="bg-slate-50 border-t-2 border-slate-200">
+                                    <td className={`sticky left-0 z-10 bg-slate-50/95 backdrop-blur border-r border-slate-200 shadow-[4px_0_8px_rgba(0,0,0,0.02)] ${isMobile ? 'p-1 w-[85px] min-w-[85px]' : 'p-2'}`}>
+                                        <div className="text-[10px] font-bold text-slate-600 flex items-center justify-end pr-2">北投客戶數</div>
+                                    </td>
+                                    {dateRange.map(date => {
+                                        const stats = db.getDailyStats(date);
+                                        const isToday = date === toLocalISOString(new Date());
+                                        return (
+                                            <td key={date} className="p-0.5 border-r border-slate-100 text-center align-middle">
+                                                {canEditStats ? (
+                                                    <input 
+                                                        type="number"
+                                                        value={stats?.beitou_clients || 0}
+                                                        onChange={(e) => db.updateDailyStats(date, { beitou_clients: Number(e.target.value) })}
+                                                        className="w-full text-center text-xs font-bold bg-transparent outline-none focus:bg-white focus:ring-1 focus:ring-teal-500 rounded py-1 text-slate-700"
+                                                        placeholder="0"
+                                                    />
+                                                ) : (
+                                                    <span className="text-xs font-bold text-slate-700">{stats?.beitou_clients || 0}</span>
+                                                )}
+                                            </td>
+                                        );
+                                    })}
+                                </tr>
+                                <tr className="bg-slate-50">
+                                    <td className={`sticky left-0 z-10 bg-slate-50/95 backdrop-blur border-r border-slate-200 shadow-[4px_0_8px_rgba(0,0,0,0.02)] ${isMobile ? 'p-1 w-[85px] min-w-[85px]' : 'p-2'}`}>
+                                        <div className="text-[10px] font-bold text-slate-600 flex items-center justify-end pr-2">CTA</div>
+                                    </td>
+                                    {dateRange.map(date => {
+                                        const stats = db.getDailyStats(date);
+                                        const isToday = date === toLocalISOString(new Date());
+                                        return (
+                                            <td key={date} className="p-0.5 border-r border-slate-100 text-center align-middle">
+                                                {canEditStats ? (
+                                                    <input 
+                                                        type="number"
+                                                        value={stats?.beitou_cta || 0}
+                                                        onChange={(e) => db.updateDailyStats(date, { beitou_cta: Number(e.target.value) })}
+                                                        className="w-full text-center text-xs font-bold bg-transparent outline-none focus:bg-white focus:ring-1 focus:ring-teal-500 rounded py-1 text-slate-700"
+                                                        placeholder="0"
+                                                    />
+                                                ) : (
+                                                    <span className="text-xs font-bold text-slate-700">{stats?.beitou_cta || 0}</span>
+                                                )}
+                                            </td>
+                                        );
+                                    })}
+                                </tr>
+                                <tr className="bg-slate-50">
+                                    <td className={`sticky left-0 z-10 bg-slate-50/95 backdrop-blur border-r border-slate-200 shadow-[4px_0_8px_rgba(0,0,0,0.02)] ${isMobile ? 'p-1 w-[85px] min-w-[85px]' : 'p-2'}`}>
+                                        <div className="text-[10px] font-bold text-slate-600 flex items-center justify-end pr-2">大直客戶數</div>
+                                    </td>
+                                    {dateRange.map(date => {
+                                        const stats = db.getDailyStats(date);
+                                        const isToday = date === toLocalISOString(new Date());
+                                        return (
+                                            <td key={date} className="p-0.5 border-r border-slate-100 text-center align-middle">
+                                                {canEditStats ? (
+                                                    <input 
+                                                        type="number"
+                                                        value={stats?.dazhi_clients || 0}
+                                                        onChange={(e) => db.updateDailyStats(date, { dazhi_clients: Number(e.target.value) })}
+                                                        className="w-full text-center text-xs font-bold bg-transparent outline-none focus:bg-white focus:ring-1 focus:ring-teal-500 rounded py-1 text-slate-700"
+                                                        placeholder="0"
+                                                    />
+                                                ) : (
+                                                    <span className="text-xs font-bold text-slate-700">{stats?.dazhi_clients || 0}</span>
+                                                )}
+                                            </td>
+                                        );
+                                    })}
+                                </tr>
+                                <tr className="bg-slate-50">
+                                    <td className={`sticky left-0 z-10 bg-slate-50/95 backdrop-blur border-r border-slate-200 shadow-[4px_0_8px_rgba(0,0,0,0.02)] ${isMobile ? 'p-1 w-[85px] min-w-[85px]' : 'p-2'}`}>
+                                        <div className="text-[10px] font-bold text-slate-600 flex items-center justify-end pr-2">MR 數</div>
+                                    </td>
+                                    {dateRange.map(date => {
+                                        const stats = db.getDailyStats(date);
+                                        const isToday = date === toLocalISOString(new Date());
+                                        return (
+                                            <td key={date} className="p-0.5 border-r border-slate-100 text-center align-middle">
+                                                {canEditStats ? (
+                                                    <input 
+                                                        type="number"
+                                                        value={stats?.beitou_mr || 0}
+                                                        onChange={(e) => db.updateDailyStats(date, { beitou_mr: Number(e.target.value) })}
+                                                        className="w-full text-center text-xs font-bold bg-transparent outline-none focus:bg-white focus:ring-1 focus:ring-teal-500 rounded py-1 text-slate-700"
+                                                        placeholder="0"
+                                                    />
+                                                ) : (
+                                                    <span className="text-xs font-bold text-blue-600">{stats?.beitou_mr || 0}</span>
+                                                )}
+                                            </td>
+                                        );
+                                    })}
+                                </tr>
+                                <tr className="bg-slate-50 border-b border-slate-200">
+                                    <td className={`sticky left-0 z-10 bg-slate-50/95 backdrop-blur border-r border-slate-200 shadow-[4px_0_8px_rgba(0,0,0,0.02)] ${isMobile ? 'p-1 w-[85px] min-w-[85px]' : 'p-2'}`}>
+                                        <div className="text-[10px] font-bold text-slate-600 flex items-center justify-end pr-2">GI 數</div>
+                                    </td>
+                                    {dateRange.map(date => {
+                                        const stats = db.getDailyStats(date);
+                                        const isToday = date === toLocalISOString(new Date());
+                                        return (
+                                            <td key={date} className="p-0.5 border-r border-slate-100 text-center align-middle">
+                                                {canEditStats ? (
+                                                    <input 
+                                                        type="number"
+                                                        value={stats?.beitou_gi || 0}
+                                                        onChange={(e) => db.updateDailyStats(date, { beitou_gi: Number(e.target.value) })}
+                                                        className="w-full text-center text-xs font-bold bg-transparent outline-none focus:bg-white focus:ring-1 focus:ring-teal-500 rounded py-1 text-slate-700"
+                                                        placeholder="0"
+                                                    />
+                                                ) : (
+                                                    <span className="text-xs font-bold text-emerald-600">{stats?.beitou_gi || 0}</span>
+                                                )}
+                                            </td>
+                                        );
+                                    })}
+                                </tr>
                                 {LOCATIONS.map(location => {
                                     // Filter stations that belong to this location
                                     const locationStations = stations.filter(s => s.location === location);
@@ -2119,8 +2310,8 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                     return (
                                         <React.Fragment key={location}>
                                             {/* Location Header */}
-                                            <tr className="bg-gray-100 border-b border-gray-200">
-                                                <td colSpan={dateRange.length + 1} className="px-3 py-1.5 font-bold text-gray-700 bg-gray-100 sticky left-0 z-10 text-left border-y border-gray-300 shadow-[inset_0_2px_4px_rgba(0,0,0,0.05)]">
+                                            <tr className="bg-slate-100 border-b-2 border-slate-300">
+                                                <td colSpan={dateRange.length + 1} className="px-3 py-2 font-bold text-slate-800 bg-slate-200 sticky left-0 z-10 text-left border-y-2 border-slate-400 shadow-[inset_0_2px_4px_rgba(0,0,0,0.1)]">
                                                     <div className="flex items-center gap-2">
                                                         <span className={`w-2 h-2 rounded-full ${LOCATION_COLORS[location]?.split(' ')[0]}`}></span>
                                                         {location}區
@@ -2128,27 +2319,29 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                 </td>
                                             </tr>
 
+
                                             {/* Main/Assistant Shift Rows (only for Beitou) */}
                                             {location === '北投' && (
                                                 <>
                                                     {/* Main Shift (場控) */}
-                                                    <tr className="bg-yellow-50/50 border-b border-yellow-200">
-                                                        <td className="px-3 py-1.5 text-xs font-bold text-yellow-800 sticky left-0 bg-yellow-50/50 z-10 border-r border-yellow-200">
-                                                            主班
+                                                    <tr className="bg-amber-50/30 border-b border-amber-100 group hover:bg-amber-50/50 transition-colors">
+                                                        <td className={`sticky left-0 z-10 bg-amber-50/80 backdrop-blur border-r border-amber-200 shadow-[4px_0_8px_rgba(0,0,0,0.02)] ${isMobile ? 'p-1 w-[85px] min-w-[85px]' : 'p-2'}`}>
+                                                            <div className="text-xs font-bold text-amber-800 flex items-center justify-end pr-2">主班</div>
                                                         </td>
                                                         {dateRange.map(date => {
                                                             const radiographerShifts = db.shifts;
                                                             const mainShift = radiographerShifts.find(s => 
-                                                                s.date === date && s.station?.includes('場控')
+                                                                s.date === date && (s.station?.includes('場控') || s.station === '主')
                                                             );
                                                             const userName = mainShift 
                                                                 ? db.getUsers().find(u => u.id === mainShift.userId)?.name 
                                                                 : '-';
+                                                            const isToday = date === toLocalISOString(new Date());
                                                             
                                                             return (
                                                                 <td 
                                                                     key={date} 
-                                                                    className="p-1 border-r border-yellow-100 text-center bg-yellow-50/30 text-xs font-medium text-yellow-900"
+                                                                    className="p-1 border-r border-amber-50 text-center text-[11px] font-normal text-amber-900 whitespace-nowrap"
                                                                 >
                                                                     {userName}
                                                                 </td>
@@ -2157,23 +2350,24 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                     </tr>
 
                                                     {/* Assistant Shift (輔控) */}
-                                                    <tr className="bg-yellow-50/50 border-b border-yellow-200">
-                                                        <td className="px-3 py-1.5 text-xs font-bold text-yellow-800 sticky left-0 bg-yellow-50/50 z-10 border-r border-yellow-200">
-                                                            輔班
+                                                    <tr className="bg-amber-50/30 border-b border-amber-100 group hover:bg-amber-50/50 transition-colors">
+                                                        <td className={`sticky left-0 z-10 bg-amber-50/80 backdrop-blur border-r border-amber-200 shadow-[4px_0_8px_rgba(0,0,0,0.02)] ${isMobile ? 'p-1 w-[85px] min-w-[85px]' : 'p-2'}`}>
+                                                            <div className="text-xs font-bold text-amber-800 flex items-center justify-end pr-2">輔班</div>
                                                         </td>
                                                         {dateRange.map(date => {
                                                             const radiographerShifts = db.shifts;
                                                             const assistantShift = radiographerShifts.find(s => 
-                                                                s.date === date && s.specialRoles?.includes('輔班')
+                                                                s.date === date && (s.specialRoles?.includes('輔班') || s.station === '輔')
                                                             );
                                                             const userName = assistantShift 
                                                                 ? db.getUsers().find(u => u.id === assistantShift.userId)?.name 
                                                                 : '-';
+                                                            const isToday = date === toLocalISOString(new Date());
                                                             
                                                             return (
                                                                 <td 
                                                                     key={date} 
-                                                                    className="p-1 border-r border-yellow-100 text-center bg-yellow-50/30 text-xs font-medium text-yellow-900"
+                                                                    className="p-1 border-r border-amber-50 text-center text-[11px] font-normal text-amber-900 whitespace-nowrap"
                                                                 >
                                                                     {userName}
                                                                 </td>
@@ -2183,23 +2377,30 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                 </>
                                             )}
 
-                                            {locationStations.map(stationConfig => {
+                                            {(() => {
+                                                const PRESCRIBED_ORDER: Record<string, string[]> = {
+                                                    '北投': ['晚班', '解說', '影像', '遠班', '支援', 'GI', '麻醉', '耳鼻喉科', '眼科', '婦科', '行政'],
+                                                    '大直': ['解說', '遠班', 'GI', '麻醉', '耳鼻喉科', '眼科', '婦科'],
+                                                    '台中': ['影像', 'GI']
+                                                };
+                                                
+                                                const orderedStationNames = PRESCRIBED_ORDER[location] || [];
+                                                const locationStations = orderedStationNames.map(name => ({ name, location }));
+
+                                                return locationStations.map(stationConfig => {
                                                 const stationName = stationConfig.name;
                                                 return (
-                                                    <tr key={`${location}-${stationName}`} className="hover:bg-gray-50/80 transition-colors border-b border-gray-100">
+                                                    <tr key={`${location}-${stationName}`} className="group hover:bg-slate-50/50 transition-colors border-b border-slate-100">
                                                         {/* Station Name Header */}
-                                                        <th className="p-3 text-center font-medium text-gray-600 w-32 sticky left-0 bg-white z-[10] border-r border-gray-200 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
-                                                            <div className="flex flex-col items-center">
-                                                                <span className="text-sm font-bold text-gray-800">{stationName}</span>
+                                                        <td className={`sticky left-0 z-10 bg-white group-hover:bg-slate-50 backdrop-blur-sm border-r border-slate-200 shadow-[4px_0_8px_rgba(0,0,0,0.02)] ${isMobile ? 'p-1 w-[85px] min-w-[85px]' : 'p-2'}`}>
+                                                            <div className="flex flex-col items-end pr-2">
+                                                                <span className="text-xs font-bold text-slate-700">{stationName}</span>
                                                             </div>
-                                                        </th>
+                                                        </td>
 
                                                         {/* Date Cells */}
                                                         {dateRange.map(date => {
                                                             // NEW: Get ALL shifts for this station+location+date (support multiple doctors)
-                                                            // Check BOTH scheduled_station (for doctor schedules) and station (for tech assignments)
-                                                            // NEW: Get ALL shifts for this station+location+date (support multiple doctors)
-                                                            // Check BOTH scheduled_station (for doctor schedules) and station (for tech assignments)
                                                             const allRelevantShifts = [
                                                                 ...activeShifts,
                                                                 ...(simulatedShifts || [])
@@ -2212,7 +2413,6 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                                 // Logic: Show 'Explanation' doctors in 'Gyn' station if FamilyMed + Gyn Capable
                                                                 if (stationName === '婦科' && s.scheduled_station === '解說') {
                                                                      const doc = doctors.find(d => d.id === s.doctorId);
-                                                                     // Mod: Allow ANY doctor with Gyn capability
                                                                      return doc?.capabilities?.includes('婦科');
                                                                 }
                                                                 
@@ -2222,11 +2422,9 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                                 return false;
                                                             });
                                                             
-                                                            // Logic: Cross-site Remote/Imaging Fallback (Station View)
                                                             let displayShifts = [...currentShifts];
                                                             let suffix = '';
                                                             
-                                                            // Case A: Dazhi Remote empty -> Pull Beitou Remote
                                                             if (location === '大直' && ['遠班', '遠距', '遠'].includes(stationName) && displayShifts.length === 0) {
                                                                 const beitouRemoteShifts = allRelevantShifts.filter(s => s.date === date && s.location === '北投' && ['遠班', '遠距', '遠'].includes(s.scheduled_station));
                                                                 if (beitouRemoteShifts.length > 0) {
@@ -2235,7 +2433,6 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                                 }
                                                             }
                                                             
-                                                            // Case B: Beitou Remote empty -> Pull Dazhi Remote
                                                             if (location === '北投' && ['遠班', '遠距', '遠'].includes(stationName) && displayShifts.length === 0) {
                                                                 const dazhiRemoteShifts = allRelevantShifts.filter(s => s.date === date && s.location === '大直' && ['遠班', '遠距', '遠'].includes(s.scheduled_station));
                                                                  if (dazhiRemoteShifts.length > 0) {
@@ -2244,66 +2441,72 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                                 }
                                                             }
 
-                                                            const isWeekend = new Date(date).getDay() === 0 || new Date(date).getDay() === 6;
+                                                            const isToday = date === toLocalISOString(new Date());
 
-                                                            // Determine background color based on station type (lighter than personnel view)
+                                                            // Background color logic
                                                             const getStationBgColor = () => {
-                                                                if (stationName.includes('遠')) return 'bg-pink-50';
-                                                                if (stationName.includes('腸胃') || stationName.toLowerCase().includes('gi')) return 'bg-blue-50';
-                                                                if (stationName.includes('解說')) return 'bg-orange-50';
-                                                                if (stationName.includes('支援')) return 'bg-yellow-50';
+                                                                if (stationName.includes('遠')) return 'bg-pink-100/50';
+                                                                if (stationName.includes('腸胃') || stationName.toLowerCase().includes('gi')) return 'bg-blue-100/50';
+                                                                if (stationName.includes('解說')) return 'bg-orange-100/50';
+                                                                if (stationName.includes('支援')) return 'bg-yellow-100/50';
                                                                 if (stationName.includes('行政')) return 'bg-white';
-                                                                if (stationName.includes('眼') || stationName.includes('婦') || stationName.includes('耳')) return 'bg-amber-50/50';
-                                                                return 'bg-teal-50'; // Default for 影像, etc.
+                                                                if (stationName.includes('眼') || stationName.includes('婦') || stationName.includes('耳')) return 'bg-amber-100/50';
+                                                                return 'bg-teal-50/40'; 
                                                             };
 
                                                             return (
                                                                 <td 
                                                                     key={date} 
-                                                                    className={`p-1 border-r border-gray-100 group min-w-[40px] 
-                                                                        ${canEdit ? 'cursor-pointer' : 'cursor-not-allowed'}
+                                                                    className={`p-1 border-r border-slate-100 min-w-[52px] relative 
+                                                                        ${canEdit ? 'cursor-pointer hover:bg-slate-50' : 'cursor-not-allowed'}
                                                                         ${getStationBgColor()} 
-                                                                        ${selectedCell?.date === date && selectedCell?.doctorId === '' /* Just checks selection */ ? 'ring-2 ring-inset ring-blue-400' : ''}
+                                                                        ${selectedCell?.date === date && selectedCell?.doctorId === '' ? 'ring-2 ring-inset ring-blue-400' : ''}
                                                                     `}
                                                                     onClick={() => canEdit && handleStationCellClick(stationName, location, date)}
                                                                 >
                                                                     {displayShifts.length > 0 ? (
-                                                                        <div className="flex flex-col items-center justify-start h-full w-full gap-0.5 py-1 px-1">
+                                                                        <div className="flex flex-col items-center justify-center gap-0.5 py-1 px-0.5">
                                                                              {displayShifts.map((shift, index) => {
                                                                                 const doc = doctors.find(d => d.id === shift.doctorId);
                                                                                 const isSimulated = simulatedShifts?.some(ss => ss.id === shift.id);
-                                                                                return (
-                                                                                    <div key={shift.id} className={`w-full text-center p-1 rounded ${isSimulated ? 'bg-amber-50 border border-dashed border-amber-400 animate-pulse' : ''}`}>
-                                                                                        <div className={`text-xs leading-tight truncate ${isSimulated ? 'text-amber-800' : 'text-gray-900'}`} title={doc?.name}>
-                                                                                            {doc?.name || '?'}
-                                                                                            {suffix && <span className="text-[8px] text-red-600 ml-0.5">{suffix}</span>}
-                                                                                        </div>
+                                                                                 return (
+                                                                                     <div key={shift.id} className={`w-full text-center p-0.5 rounded ${isSimulated ? 'bg-amber-50 border border-dashed border-amber-400 animate-pulse' : ''}`}>
+                                                                                         <div className={`flex flex-col items-center ${isSimulated ? 'text-amber-800' : 'text-slate-800'}`} title={doc?.name}>
+                                                                                             <div className="text-[11px] font-normal leading-tight whitespace-nowrap">
+                                                                                                 {doc?.name || '?'}
+                                                                                             </div>
+                                                                                             {suffix && (
+                                                                                                 <div className="text-[9px] text-red-600 leading-none font-bold mt-0.5">
+                                                                                                     {suffix}
+                                                                                                 </div>
+                                                                                             )}
+                                                                                         </div>
                                                                                         {shift.workTime && (
-                                                                                            <div className="text-[9px] text-slate-500 leading-tight font-medium">
+                                                                                            <div className="text-[9px] text-slate-400 leading-tight font-medium">
                                                                                                  {shift.workTime.replace(/(\d{1,2}):\d{2}/g, (match, p1) => parseInt(p1) + '\'').replace(/\s/g, '')}
                                                                                             </div>
                                                                                         )}
                                                                                         {shift.task && (
-                                                                                            <div className={`text-[9px] leading-tight font-medium ${shift.task.includes('晚班') ? 'text-red-500 font-bold' : 'text-blue-600'}`}>
+                                                                                            <div className={`text-[9px] leading-tight font-bold ${shift.task.includes('晚班') ? 'text-red-500' : 'text-blue-500'}`}>
                                                                                                 {shift.task}
                                                                                             </div>
                                                                                         )}
                                                                                         {index < displayShifts.length - 1 && !isSimulated && (
-                                                                                            <div className="border-b border-gray-100 my-0.5"></div>
+                                                                                            <div className="border-b border-slate-100 my-0.5 opacity-50"></div>
                                                                                         )}
                                                                                     </div>
                                                                                 );
                                                                             })}
                                                                         </div>
                                                                     ) : (
-                                                                         <div className="w-full h-14 hover:bg-gray-100 transition-colors"></div>
+                                                                         <div className="w-full h-10"></div>
                                                                     )}
                                                                 </td>
                                                             );
                                                         })}
                                                     </tr>
                                                 );
-                                            })}
+                                            })})()}
                                         </React.Fragment>
                                     );
                                 })}
@@ -2482,7 +2685,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                         <span className="text-xs font-bold text-gray-500">北投區塊</span>
                                         <button
                                             onClick={() => {
-                                                const text = generateBeitouCopyText(currentDate, shifts, doctors);
+                                                const text = generateBeitouCopyText(currentDate, shifts, doctors, staffShifts, users);
                                                 navigator.clipboard.writeText(text);
                                             }}
                                             className="px-2 py-1 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded text-xs font-bold flex items-center gap-1 transition-colors"
@@ -2493,7 +2696,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                     <textarea
                                         readOnly
                                         className="w-full h-64 p-3 text-xs font-mono border border-gray-200 rounded-lg bg-slate-50 focus:ring-2 focus:ring-green-500 outline-none resize-none"
-                                        value={generateBeitouCopyText(currentDate, shifts, doctors)}
+                                        value={generateBeitouCopyText(currentDate, shifts, doctors, staffShifts, users)}
                                     />
                                 </div>
 
