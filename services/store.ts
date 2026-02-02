@@ -1217,7 +1217,10 @@ BMD :{{bmd}}
         const existing = this.settings.dailyStats[date] || {
             beitou_clients: 0,
             beitou_cta: 0,
-            dazhi_clients: 0
+            dazhi_clients: 0,
+            beitou_gi: 0,
+            beitou_mr: 0,
+            beitou_total: 0,
         };
 
         this.settings.dailyStats[date] = { ...existing, ...stats };
