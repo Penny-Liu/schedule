@@ -2924,6 +2924,9 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                     
                                                     // Exclude doctors who are OFF, on leave, or have no scheduled station
                                                     if (!s.scheduled_station || s.scheduled_station === 'X' || s.scheduled_station === 'OFF') return false;
+
+                                                    // Exclude Taichung doctors (As requested)
+                                                    if (s.location === '台中') return false;
                                                     
                                                     // Strict Location Filter:
                                                     // Only show if Location is '北投' (or empty) OR scheduled_station includes '遠'
