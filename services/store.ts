@@ -2025,6 +2025,7 @@ BMD :{{bmd}}
             });
 
             const allWorkingUsers = this.users.filter(user => {
+                if (user.isActive === false) return false; // Skip resigned users
                 const status = this.getUserStatusOnDate(user.id, dateStr);
                 if (status !== 'WORK') return false;
                 const existingShift = this.shifts.find(s => s.userId === user.id && s.date === dateStr);
@@ -2223,6 +2224,8 @@ BMD :{{bmd}}
                 const shuffledUsers = [...this.users].sort(() => Math.random() - 0.5);
 
                 const candidates = shuffledUsers.filter(u => {
+                    if (u.isActive === false) return false; // Skip resigned users
+                    
                     // a. Must be WORKING
                     const status = this.getUserStatusOnDate(u.id, dateStr);
                     if (status !== 'WORK') return false;
@@ -2317,6 +2320,185 @@ BMD :{{bmd}}
             }
         }
         this.notifyListeners();
+    }
+
+    // --- Data Archive & Cleanup ---
+
+    async archiveData(beforeDate: string) {
+        console.log(`[Store] Archiving data before ${beforeDate}...`);
+        
+        // Fetch Shifts
+        const { data: shifts, error: shiftsError } = await supabase
+            .from('shifts')
+            .select('*')
+            .lt('date', beforeDate)
+            .limit(10000); 
+
+        if (shiftsError) throw new Error('Failed to fetch shifts: ' + shiftsError.message);
+
+        // Fetch Doctor Shifts
+        const { data: doctorShifts, error: docShiftsError } = await supabase
+            .from('doctor_shifts')
+            .select('*')
+            .lt('date', beforeDate)
+            .limit(10000);
+
+        if (docShiftsError) throw new Error('Failed to fetch doctor shifts: ' + docShiftsError.message);
+
+        // Fetch Leaves
+        // Filter by end_date ensuring only fully past leaves are archived
+        const { data: leaves, error: leavesError } = await supabase
+            .from('leaves')
+            .select('*')
+            .lt('endDate', beforeDate)
+            .limit(5000);
+
+        if (leavesError) throw new Error('Failed to fetch leaves: ' + leavesError.message);
+
+        return {
+            metadata: {
+                archivedAt: new Date().toISOString(),
+                criteria: { beforeDate },
+                counts: {
+                    shifts: shifts?.length || 0,
+                    doctorShifts: doctorShifts?.length || 0,
+                    leaves: leaves?.length || 0
+                }
+            },
+            data: {
+                shifts: shifts || [],
+                doctorShifts: doctorShifts || [],
+                leaves: leaves || []
+            }
+        };
+    }
+
+    async purgeOldData(beforeDate: string) {
+        console.log(`[Store] PURGING data before ${beforeDate}...`);
+
+        // 1. Shifts
+        const { error: e1, count: c1 } = await supabase
+            .from('shifts')
+            .delete({ count: 'exact' })
+            .lt('date', beforeDate);
+        if (e1) throw new Error('Delete Shifts Error: ' + e1.message);
+
+        // 2. Doctor Shifts
+        const { error: e2, count: c2 } = await supabase
+            .from('doctor_shifts')
+            .delete({ count: 'exact' })
+            .lt('date', beforeDate);
+        if (e2) throw new Error('Delete Doctor Shifts Error: ' + e2.message);
+
+        // 3. Leaves
+        const { error: e3, count: c3 } = await supabase
+            .from('leaves')
+            .delete({ count: 'exact' })
+            .lt('endDate', beforeDate);
+        if (e3) throw new Error('Delete Leaves Error: ' + e3.message);
+
+        console.log(`[Store] Purge Complete. Removed ${c1} shifts, ${c2} doc shifts, ${c3} leaves.`);
+        
+        // Refresh local state to ensure consistency
+        await this.initializeData(true); 
+        this.notifyListeners();
+
+        return { shifts: c1 || 0, doctorShifts: c2 || 0, leaves: c3 || 0 };
+    }
+
+    async importData(jsonData: any) {
+        console.log('[Store] Importing data...');
+        const { data } = jsonData;
+        if (!data || (!data.shifts && !data.doctorShifts && !data.leaves)) {
+            throw new Error('Invalid backup file format.');
+        }
+
+        let importedCount = { shifts: 0, doctorShifts: 0, leaves: 0 };
+
+        // 1. Import Shifts
+        if (data.shifts && data.shifts.length > 0) {
+            const { error } = await supabase.from('shifts').upsert(data.shifts);
+            if (error) throw new Error('Import Shifts Error: ' + error.message);
+            importedCount.shifts = data.shifts.length;
+        }
+
+        // 2. Import Doctor Shifts
+        if (data.doctorShifts && data.doctorShifts.length > 0) {
+            const { error } = await supabase.from('doctor_shifts').upsert(data.doctorShifts);
+            if (error) throw new Error('Import Doctor Shifts Error: ' + error.message);
+            importedCount.doctorShifts = data.doctorShifts.length;
+        }
+
+        // 3. Import Leaves
+        if (data.leaves && data.leaves.length > 0) {
+            const { error } = await supabase.from('leaves').upsert(data.leaves);
+            if (error) throw new Error('Import Leaves Error: ' + error.message);
+            importedCount.leaves = data.leaves.length;
+        }
+
+        await this.initializeData(true);
+        this.notifyListeners();
+        return importedCount;
+    }
+    async cleanupTaichungDoctors() {
+        console.log('[Store] Cleaning up Taichung doctors references...');
+        
+        // 1. Identify Taichung Doctors
+        // Logic: Doctors who have '台中' in their location list
+        const taichungDoctorIds = this.doctors
+            .filter(d => d.locations && d.locations.includes('台中'))
+            .map(d => d.id);
+
+        if (taichungDoctorIds.length === 0) {
+            console.log('[Store] No Taichung doctors found.');
+            return { count: 0 };
+        }
+
+        console.log(`[Store] Found ${taichungDoctorIds.length} Taichung doctors. Cleaning stations...`);
+
+        // 2. Find shifts for these doctors that have a station assigned (that shouldn't be there)
+        // We want to clear 'station' and 'scheduled_station'
+        const shiftsToClean = this.doctorShifts.filter(s => 
+            taichungDoctorIds.includes(s.doctorId) && 
+            (s.station || s.scheduled_station)
+        );
+
+        if (shiftsToClean.length === 0) {
+             console.log('[Store] No incorrect station assignments found for Taichung doctors.');
+             return { count: 0 };
+        }
+
+        // 3. Update Local State
+        shiftsToClean.forEach(s => {
+            s.station = '';
+            s.scheduled_station = '';
+            // We might want to keep 'note' or 'workTime' if valid, but station should be empty
+        });
+
+        // 4. Update Database
+        // We can do a batch update or loop. Since this is a one-off/maintenance, a loop is fine or an 'in' query if feasible.
+        // But updates in Supabase usually need ID.
+        // Let's do a bulk ID operation if possible, or just individual updates (safer).
+        
+        // Optimization: Use Supabase 'in' operator to clear them all at once if we just want to set columns to null
+        const shiftIds = shiftsToClean.map(s => s.id);
+        
+        const { error } = await supabase
+            .from('doctor_shifts')
+            .update({ 
+                station: null, 
+                scheduled_station: null 
+            })
+            .in('id', shiftIds);
+
+        if (error) {
+            console.error('Failed to clean Taichung doctors:', error);
+            throw error;
+        }
+
+        console.log(`[Store] Successfully cleaned ${shiftIds.length} shifts for Taichung doctors.`);
+        this.notifyListeners();
+        return { count: shiftIds.length };
     }
 }
 

@@ -182,7 +182,27 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                     return d?.name || '';
                 }).join('、');
         };
-        const gynDocs = getSpecDocs('婦科');
+        let gynDocs = getSpecDocs('婦科');
+        
+        // Smart Fill: If Dazhi Gynecology is empty, check if any Explanation doctor on that day can cover it
+        if (!gynDocs) {
+            // User Request: Only consider Explanation doctors WORKING IN DAZHI
+            const expShifts = shifts.filter(s => 
+                s.date === dateKey && 
+                s.location === '大直' && // Added Location Check
+                (s.scheduled_station === '解說' || s.station === '解說')
+            );
+            
+            // Find first doctor who has '婦科' in capabilities
+            const capableDoc = expShifts
+                .map(s => doctors.find(d => d.id === s.doctorId))
+                .find(doc => doc?.capabilities?.includes('婦科'));
+
+            if (capableDoc) {
+                gynDocs = capableDoc.name;
+            }
+        }
+
         const entDocs = getSpecDocs('耳鼻喉科');
         const eyeDocs = getSpecDocs('眼科');
 

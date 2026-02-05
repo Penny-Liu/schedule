@@ -28,6 +28,8 @@ export interface User {
   password?: string; // User defined password
   mustChangePassword?: boolean; // New: Force password change on next login
   primaryStation?: string; // New: Identifies the user's "Home" station (e.g., '遠距')
+  isActive?: boolean; // New: Soft delete flag (true = active, false = resigned)
+  resignationDate?: string; // New: Date of resignation YYYY-MM-DD
   isRadiographer?: boolean; // New: Flag to indicate if user should appear in Radiographer Schedule
 }
 

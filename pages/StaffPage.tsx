@@ -52,6 +52,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
     learningCapabilities: string[];
     excludedCapabilities: string[]; // New
     isRadiographer: boolean; // New
+    isActive: boolean; // New
   }>({
     name: '',
     alias: '',
@@ -62,7 +63,8 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
     capabilities: [],
     learningCapabilities: [],
     excludedCapabilities: [], // New
-    isRadiographer: false // New
+    isRadiographer: false, // New
+    isActive: true // New
   });
 
   const resetForm = () => {
@@ -76,7 +78,8 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
       capabilities: [],
       learningCapabilities: [],
       excludedCapabilities: [],
-      isRadiographer: false
+      isRadiographer: false,
+      isActive: true
     });
     setEditingId(null);
   };
@@ -99,7 +102,8 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
         capabilities: formData.capabilities,
         learningCapabilities: formData.learningCapabilities,
         excludedCapabilities: formData.excludedCapabilities,
-        isRadiographer: formData.isRadiographer
+        isRadiographer: formData.isRadiographer,
+        isActive: formData.isActive
       });
     } else {
         // Create new user
@@ -115,6 +119,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
         learningCapabilities: formData.learningCapabilities,
         excludedCapabilities: formData.excludedCapabilities,
         isRadiographer: formData.isRadiographer,
+        isActive: formData.isActive,
         password: '1234',
         mustChangePassword: true
       };
@@ -138,7 +143,8 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
       capabilities: user.capabilities || [],
       learningCapabilities: user.learningCapabilities || [],
       excludedCapabilities: user.excludedCapabilities || [],
-      isRadiographer: user.isRadiographer || false
+      isRadiographer: user.isRadiographer || false,
+      isActive: user.isActive !== undefined ? user.isActive : true
     });
   };
 
@@ -323,6 +329,20 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                     是否為放射師 (顯示於排班總覽)
                  </label>
               </div>
+
+              <div className="flex items-center gap-2 mb-2 bg-gray-50 p-2 rounded border border-gray-100">
+                 <input
+                    type="checkbox"
+                    id="isActive"
+                    checked={formData.isActive}
+                    onChange={e => setFormData({ ...formData, isActive: e.target.checked })}
+                    className="w-4 h-4 text-teal-600 border-gray-300 rounded focus:ring-teal-500"
+                 />
+                 <label htmlFor="isActive" className={`text-xs font-bold cursor-pointer flex items-center gap-2 ${formData.isActive ? 'text-teal-700' : 'text-gray-500'}`}>
+                    {formData.isActive ? <Check size={14} /> : <X size={14} />}
+                    {formData.isActive ? '在職中 (Active)' : '已離職 (Resigned)'}
+                 </label>
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-semibold text-gray-500 mb-1 block">身份</label>
@@ -478,7 +498,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                 className={`bg-white p-4 rounded-xl border shadow-sm transition-all group flex flex-col gap-3 h-fit relative ${isEditingThisUser
                   ? 'border-teal-400 ring-2 ring-teal-100 shadow-md transform scale-[1.01]'
                   : 'border-gray-100 hover:shadow-md'
-                  }`}
+                  } ${user.isActive === false ? 'opacity-60 bg-gray-50 grayscale-[0.5]' : ''}`}
               >
                 {/* Action Buttons */}
                 <div className="absolute top-4 right-4 flex gap-1 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity z-10">
@@ -529,6 +549,12 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                       {user.role !== UserRole.SYSTEM_ADMIN && (
                         <span className="text-[10px] px-2 py-0.5 rounded font-bold border bg-orange-50 text-orange-700 border-orange-100 flex items-center gap-1">
                           {user.groupId} 組
+                        </span>
+                      )}
+                      
+                      {user.isActive === false && (
+                        <span className="text-[10px] px-2 py-0.5 rounded font-bold border bg-gray-100 text-gray-500 border-gray-200 flex items-center gap-1">
+                          已離職
                         </span>
                       )}
                     </div>

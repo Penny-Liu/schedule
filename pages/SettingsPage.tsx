@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { User, UserRole, RosterCycle, SYSTEM_OFF, StationDefault, Holiday, DateEventType, CycleAnchor } from '../types';
 import { db } from '../services/store';
-import { Plus, Trash2, Save, Settings, Calendar, AlertCircle, Users, Clock, Globe, X, RefreshCw, Key, UserCircle, ChevronDown, CalendarPlus } from 'lucide-react';
+import { Plus, Trash2, Save, Settings, Calendar, AlertCircle, Users, Clock, Globe, X, RefreshCw, Key, UserCircle, ChevronDown, CalendarPlus, FileSpreadsheet, Download, Upload, Hammer } from 'lucide-react';
 import ConfirmModal from '../components/ConfirmModal';
 
 interface SettingsPageProps {
@@ -41,6 +41,13 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
 
     // Template blocks state: [Block1, Block2, Block3]
     const [templateBlocks, setTemplateBlocks] = useState<string[]>(['', '', '']);
+
+    // Archive Date
+    const [archiveDate, setArchiveDate] = useState<string>(() => {
+        const d = new Date();
+        d.setFullYear(d.getFullYear() - 1);
+        return d.toISOString().slice(0, 10); // Default to 1 year ago
+    });
 
     // Helper to parse template into blocks
     const parseTemplate = (text: string) => {
@@ -303,6 +310,66 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
             setHolidays(db.getHolidays());
         }
         setConfirmState(null);
+    };
+
+    // Data Archive Handlers
+    const handleExportData = async () => {
+        if (!archiveDate) return;
+        try {
+            const result = await db.archiveData(archiveDate);
+            const jsonString = JSON.stringify(result, null, 2);
+            const blob = new Blob([jsonString], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `schedule_archive_${archiveDate}.json`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        } catch (e: any) {
+            alert('匯出失敗: ' + e.message);
+        }
+    };
+
+    const handlePurgeData = async () => {
+        if (!archiveDate) return;
+        const msg = `確定要清除 ${archiveDate} 之前的所有資料嗎？\n\n這些資料將永久刪除無法復原！\n\n請確認您已經下載備份。`;
+        if (confirm(msg)) {
+            if (confirm('最後警告：資料即將被刪除。確定繼續？')) {
+                try {
+                    const result = await db.purgeOldData(archiveDate);
+                    alert(`清除完成！\n已移除：\n排班: ${result.shifts}\n醫師排班: ${result.doctorShifts}\n假單: ${result.leaves}`);
+                } catch (e: any) {
+                    alert('清除失敗: ' + e.message);
+                }
+            }
+        }
+    };
+
+    const handleImportBackup = () => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.json';
+        input.onchange = async (e: any) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            if (!confirm(`確定要匯入 ${file.name} 嗎？\n這將會覆寫現有相同 ID 的資料。建議先備份目前資料。`)) return;
+
+            const reader = new FileReader();
+            reader.onload = async (ev) => {
+                try {
+                    const json = JSON.parse(ev.target?.result as string);
+                    const result = await db.importData(json);
+                    alert(`匯入成功！\n\n已更新/新增：\n排班: ${result.shifts}\n醫師排班: ${result.doctorShifts}\n假單: ${result.leaves}`);
+                } catch (err: any) {
+                    alert('匯入失敗: ' + err.message);
+                }
+            };
+            reader.readAsText(file);
+        };
+        input.click();
     };
 
     // Password Handler
@@ -628,6 +695,80 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
                                             強制重置該月
                                         </button>
                                     </div>
+                                </div>
+                            </div>
+                        </div>
+
+
+                        {/* Database Storage Management (Archive & Cleanup) */}
+                        <div className="bg-white rounded-xl shadow-[0_2px_12px_rgba(0,0,0,0.03)] border border-gray-100 overflow-hidden flex flex-col h-fit mt-6">
+                             <div className="px-6 py-4 border-b border-gray-100 bg-slate-50/50">
+                                <h3 className="font-bold text-gray-800 flex items-center gap-2">
+                                    <FileSpreadsheet size={16} className="text-slate-500" />
+                                    資料庫容量管理 (封存與清理)
+                                </h3>
+                            </div>
+                            <div className="p-6">
+                                <p className="text-sm text-gray-600 mb-4">
+                                    為了避免資料庫空間不足，建議定期將過期資料下載備份，並從資料庫中移除。
+                                </p>
+                                
+                                <div className="p-4 bg-slate-50 rounded-lg border border-slate-100 mb-4">
+                                    <label className="text-xs font-bold text-gray-500 mb-2 block">過期基準日 (清除此日期之前的資料)</label>
+                                    <input 
+                                        type="date" 
+                                        value={archiveDate}
+                                        onChange={(e) => setArchiveDate(e.target.value)}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm mb-4"
+                                    />
+                                    
+                                    <div className="flex gap-4">
+                                        <button
+                                            type="button"
+                                            onClick={handleExportData}
+                                            className="flex-1 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 font-bold py-2.5 rounded-lg transition-colors text-sm flex justify-center items-center gap-2 shadow-sm"
+                                        >
+                                            <Download size={16} /> 下載備份 (JSON)
+                                        </button>
+
+                                        <button
+                                            type="button"
+                                            onClick={handleImportBackup}
+                                            className="flex-1 bg-white border border-gray-300 hover:bg-emerald-50 text-emerald-700 font-bold py-2.5 rounded-lg transition-colors text-sm flex justify-center items-center gap-2 shadow-sm border-emerald-200"
+                                        >
+                                            <Upload size={16} /> 匯入備份
+                                        </button>
+                                        
+                                        <button
+                                            type="button"
+                                            onClick={handlePurgeData}
+                                            className="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-2.5 rounded-lg transition-colors text-sm flex justify-center items-center gap-2 shadow-sm shadow-red-200"
+                                        >
+                                            <Trash2 size={16} /> 清除舊資料
+                                        </button>
+                                    </div>
+
+                                    <div className="mt-6 pt-4 border-t border-gray-100">
+                                        <h4 className="text-xs font-bold text-gray-400 mb-2 uppercase tracking-wider">異常資料修復</h4>
+                                        <button
+                                            onClick={async () => {
+                                                if (confirm('確定要執行修復嗎？\n這將會清除所有「台中醫師」在資料庫中誤植的崗位名稱。\n\n正常情況下台中醫師不應有崗位設定。')) {
+                                                    try {
+                                                        const result = await db.cleanupTaichungDoctors();
+                                                        alert(`修復完成！共清除了 ${result.count} 筆誤植資料。`);
+                                                    } catch (e: any) {
+                                                        alert('修復失敗: ' + e.message);
+                                                    }
+                                                }
+                                            }}
+                                            className="w-full flex items-center justify-center gap-2 bg-amber-50 hover:bg-amber-100 text-amber-700 font-bold py-2 rounded-lg transition-colors border border-amber-200"
+                                        >
+                                            <Hammer size={16} /> 修復台中醫師崗位異常
+                                        </button>
+                                    </div>
+                                    <p className="text-xs text-center text-gray-400 mt-2">
+                                        ※ 請務必先下載備份，再執行清除。
+                                    </p>
                                 </div>
                             </div>
                         </div>

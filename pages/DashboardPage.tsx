@@ -71,17 +71,18 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
     const [scheduleRange, setScheduleRange] = useState({ start: '', end: '' });
 
     // Include all users including SYSTEM_ADMIN as requested
-    const [users, setUsers] = useState<User[]>(() => db.getUsers().filter(u => u.isRadiographer));
+    const [allRadiographers, setAllRadiographers] = useState<User[]>(db.getUsers().filter(u => u.isRadiographer));
     const holidays = db.getHolidays();
 
     const pendingLeaves = db.getLeaves().filter(l => l.status === LeaveStatus.PENDING);
     const [shifts, setShifts] = useState<Shift[]>(db.getShifts('', ''));
+    
+    
+    const [stationRequirements, setStationRequirements] = useState(db.getStationRequirements());
+    const [displayOrder, setDisplayOrder] = useState<string[]>(db.getStationDisplayOrder());
     const [isEditMode, setIsEditMode] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
     const [isExporting, setIsExporting] = useState(false);
-
-    // Local state for reordering to trigger re-renders
-    const [displayOrder, setDisplayOrder] = useState<string[]>(db.getStationDisplayOrder());
 
     // Get current selected cycle object
     const currentCycle = useMemo(() => {
@@ -139,7 +140,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
     // Subscribe to Store updates to ensure UI reflects data changes
     useEffect(() => {
         const unsubscribe = db.subscribe(() => {
-            setUsers(db.getUsers().filter(u => u.isRadiographer));
+            setAllRadiographers(db.getUsers().filter(u => u.isRadiographer));
             setShifts([...db.getShifts('', '')]);
             setDisplayOrder([...db.getStationDisplayOrder()]);
         });
@@ -288,6 +289,24 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
         return dates;
     }, [currentDate, selectedCycleId, currentCycle, isMobile, mobileOffset, viewMode]);
 
+    // Filter users: Active OR (Inactive but has shift in current view)
+    const users = useMemo(() => {
+        return allRadiographers.filter(u => {
+             // 1. If Active (default), always show
+             if (u.isActive !== false) return true;
+             
+             // 2. If Inactive, only show if they have a shift in the current dateRange
+             // Check against current shifts state
+             const hasShift = shifts.some(s => 
+                 s.userId === u.id && 
+                 s.station !== StationDefault.UNASSIGNED && 
+                 s.station !== SYSTEM_OFF &&
+                 dateRange.includes(s.date)
+             );
+             return hasShift;
+        });
+    }, [allRadiographers, shifts, dateRange]);
+
     // Auto-assign Remote Doctors logic
     useEffect(() => {
         const shifts = db.getDoctorShifts();
@@ -360,10 +379,10 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
         const newOrderIds = newUsers.map(u => u.id);
 
         // Optimistic UI Update
-        setUsers(newUsers);
+        setAllRadiographers(newUsers);
 
         db.updateUserDisplayOrder(newOrderIds).then(() => {
-            setUsers(db.getUsers().filter(u => u.isRadiographer));
+            setAllRadiographers(db.getUsers().filter(u => u.isRadiographer));
         });
     };
 
@@ -3403,7 +3422,15 @@ const DailyManpowerSummary: React.FC<{
             return alias;
         };
 
-        const imagingDocs = docShifts.filter(s => s.station === '影像').map(s => getDocAlias(s.doctorId));
+        const imagingDocs = docShifts
+            .filter(s => {
+                if (s.station !== '影像') return false;
+                const doc = doctors.find(d => d.id === s.doctorId);
+                // Exclude doctors who work in Taichung (per user request)
+                if (doc?.locations.includes('台中')) return false;
+                return true;
+            })
+            .map(s => getDocAlias(s.doctorId));
         
         // For Remote Header and Third Line Support, we need the suffix included
         // Pass the shift 's' directly to ensure we use the correct explanationTaskType for THAT shift
