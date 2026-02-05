@@ -281,7 +281,7 @@ const DoctorManagerPage: React.FC<DoctorManagerPageProps> = ({ currentUser }) =>
         switch (specialty) {
             case '家醫科': return 'bg-orange-100 text-orange-700 border-orange-200';
             case '腸胃科': return 'bg-blue-100 text-blue-700 border-blue-200';
-            case '放射科': return 'bg-teal-100 text-teal-700 border-teal-200';
+            case '影像醫學部': return 'bg-teal-100 text-teal-700 border-teal-200';
             case '一般名醫': return 'bg-purple-100 text-purple-700 border-purple-200';
             case '其他': return 'bg-gray-100 text-gray-700 border-gray-200';
             default: return 'bg-slate-50 text-slate-600 border-gray-200';
@@ -300,7 +300,7 @@ const DoctorManagerPage: React.FC<DoctorManagerPageProps> = ({ currentUser }) =>
             const specB = b.specialty || 'zz-none';
             if (specA !== specB) {
                  // Use predefined order if possible
-                 const order = db.settings.doctorSpecialties || ['家醫科', '腸胃科', '放射科', '一般名醫', '其他'];
+                 const order = db.settings.doctorSpecialties || ['家醫科', '腸胃科', '影像醫學部', '一般名醫', '其他'];
                  const idxA = order.indexOf(specA);
                  const idxB = order.indexOf(specB);
                  if (idxA !== -1 && idxB !== -1) return idxA - idxB;
@@ -366,7 +366,7 @@ const DoctorManagerPage: React.FC<DoctorManagerPageProps> = ({ currentUser }) =>
                                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 outline-none transition-all bg-white"
                                 >
                                     <option value="">-- 無 --</option>
-                                    {(db.settings.doctorSpecialties || ['家醫科', '腸胃科', '放射科', '一般名醫', '其他']).map(spec => (
+                                    {(db.settings.doctorSpecialties || ['家醫科', '腸胃科', '影像醫學部', '一般名醫', '其他']).map(spec => (
                                         <option key={spec} value={spec}>{spec}</option>
                                     ))}
                                 </select>

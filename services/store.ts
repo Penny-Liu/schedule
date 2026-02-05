@@ -33,7 +33,7 @@ class Store {
             { name: '耳鼻喉科', location: '台中' },
             { name: '婦科', location: '台中' }
         ], // Default values
-        doctorSpecialties: ['家醫科', '腸胃科', '放射科', '一般名醫', '其他'], // Default values
+        doctorSpecialties: ['家醫科', '腸胃科', '影像醫學部', '一般名醫', '其他'], // Default values
         defaultDoctorWorkTime: '08:30-17:30',
         doctorWorkTimeOptions: ['08:30-17:30', '08:00-12:00', '13:30-17:30']
     };
@@ -272,7 +272,7 @@ class Store {
 
             // Initialize default doctorSpecialties if missing
             if (!this.settings.doctorSpecialties) {
-                this.settings.doctorSpecialties = ['家醫科', '腸胃科', '放射科', '一般名醫', '其他'];
+                this.settings.doctorSpecialties = ['家醫科', '腸胃科', '影像醫學部', '一般名醫', '其他'];
             }
 
             // Initialize default lineCopyTemplate if missing
@@ -1672,7 +1672,7 @@ BMD :{{bmd}}
 
     async resortDoctorsBySpecialty() {
         // Use custom specialty order from settings
-        const specialtyOrder = this.settings.doctorSpecialties || ['放射科', '家醫科', '腸胃科', '其他'];
+        const specialtyOrder = this.settings.doctorSpecialties || ['影像醫學部', '家醫科', '腸胃科', '其他'];
         
         const getRank = (doc: Doctor) => {
             let rank = 999;

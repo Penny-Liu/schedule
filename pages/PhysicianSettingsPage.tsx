@@ -329,7 +329,7 @@ const PhysicianSettingsPage: React.FC<PhysicianSettingsPageProps> = ({ currentUs
                         <div>
                             <label className="text-xs font-bold text-gray-500 mb-1 block">醫師專科設定 (Doctor Specialties)</label>
                             <p className="text-[10px] text-gray-400 mb-3 bg-indigo-50 p-2 rounded text-indigo-700 border border-indigo-100">
-                                設定醫師的可選專科 (如：家醫科、腸胃科、放射科)。
+                                設定醫師的可選專科 (如：家醫科、腸胃科、影像醫學部)。
                             </p>
                             
                             <div className="flex gap-2 mb-4">

@@ -1089,7 +1089,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
 
                 // Find Radiologist range
                 const radioIndices = sortedDoctors
-                    .map((d, i) => d.specialty === '放射科' ? i : -1)
+                    .map((d, i) => d.specialty === '影像醫學部' ? i : -1)
                     .filter(i => i !== -1);
                 
                 if (radioIndices.length > 0) {

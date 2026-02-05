@@ -7,11 +7,7 @@ interface LoginPageProps {
     onLogin: (user: User) => void;
 }
 
-declare global {
-    interface Window {
-        Capacitor: any;
-    }
-}
+
 
 const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
     const users = db.getUsers();
@@ -83,160 +79,113 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
         }
     }
 
-    // --- Biometric Logic ---
-    const [isBiometricAvailable, setIsBiometricAvailable] = React.useState(false);
-
-    React.useEffect(() => {
-        const checkBiometric = async () => {
-            if (window.Capacitor) {
-                 try {
-                    const { NativeBiometric } = await import('@capgo/capacitor-native-biometric');
-                    const result = await NativeBiometric.isAvailable();
-                    if (result.isAvailable) {
-                        setIsBiometricAvailable(true);
-                    }
-                 } catch (e) {
-                     console.log('Biometric not available:', e);
-                 }
-            }
-        };
-        checkBiometric();
-    }, []);
-
-    const handleBiometricLogin = async () => {
-        const lastUserId = localStorage.getItem('last_user_id');
-        if (!lastUserId) {
-            setError('請先使用密碼登入一次，以啟用快速登入');
-            return;
-        }
-
-        try {
-            const { NativeBiometric } = await import('@capgo/capacitor-native-biometric');
-            await NativeBiometric.verifyIdentity({
-                reason: '使用 Face ID / Touch ID 登入排班系統',
-                title: '快速登入',
-                subtitle: '驗證您的身份',
-                description: '請使用 Face ID 或 Touch ID'
-            });
-
-            const user = users.find(u => u.id === lastUserId);
-            if (user) {
-                onLogin(user);
-            } else {
-                setError('找不到上一次的使用者紀錄');
-            }
-        } catch (e) {
-            console.error('Biometric failed:', e);
-            setError('驗證失敗');
-        }
-    };
-
     return (
-        <div className="min-h-screen flex items-center justify-center bg-[#f8fafc] p-4 font-sans relative overflow-hidden">
-            {/* Background Decoration */}
-            <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
-                <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-indigo-200/30 rounded-full blur-[120px] animate-pulse"></div>
-                <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-teal-200/30 rounded-full blur-[120px] animate-pulse" style={{ animationDelay: '2s' }}></div>
-            </div>
+        <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100 text-gray-800 p-4 lg:p-8 font-sans relative">
+            <main className="w-full max-w-6xl shadow-2xl rounded-2xl overflow-hidden grid grid-cols-1 lg:grid-cols-2 min-h-[700px] bg-white relative z-10">
 
-            <div className="bg-white/80 backdrop-blur-2xl rounded-[2.5rem] shadow-[0_20px_50px_-12px_rgba(0,0,0,0.1)] w-full max-w-6xl flex overflow-hidden border border-white/50 relative min-h-[580px] z-10 transition-all duration-700">
-                
-                {/* Global Info / Biometric (Top Right Absolute) */}
-                 {isBiometricAvailable && !selectedUser && (
-                    <div className="absolute top-8 right-8 z-30">
-                         <button 
-                            onClick={handleBiometricLogin}
-                            className="bg-white/90 hover:bg-white backdrop-blur-md text-slate-600 px-5 py-2.5 rounded-full text-sm font-bold shadow-sm border border-slate-100 flex items-center gap-2 transition-all hover:scale-105 hover:shadow-md group"
-                        >
-                            <div className="w-2 h-2 rounded-full bg-teal-500 animate-pulse group-hover:bg-teal-400"></div>
-                            快速登入
-                        </button>
-                    </div>
-                )}
-
-                {/* Back Button (Absolute) */}
-                {selectedUser && (
-                     <button
-                        onClick={handleBack}
-                        className="absolute top-8 left-8 z-30 flex items-center text-sm font-bold text-slate-500 hover:text-slate-800 transition-colors bg-white/80 px-4 py-2 rounded-full backdrop-blur-md border border-slate-100 shadow-sm hover:shadow-md"
-                    >
-                        <ChevronLeft size={18} className="mr-1" />
-                        返回選擇
-                    </button>
-                )}
-
-                {/* Split Layout */}
-                {!selectedUser ? (
-                    <div className="flex flex-col md:flex-row w-full animate-in fade-in duration-700">
-                        
-                        {/* Left Side: Physician & HR (Dark/Premium Theme) */}
-                        <div className="w-full md:w-1/2 bg-gradient-to-br from-[#1e1b4b] via-[#312e81] to-[#4338ca] p-10 lg:p-14 flex flex-col justify-center relative overflow-hidden group border-b md:border-b-0 md:border-r border-indigo-900/30">
-                           {/* Decoration */}
-                           <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-500/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3 pointer-events-none mix-blend-overlay"></div>
-                           <div className="absolute bottom-0 left-0 w-64 h-64 bg-purple-500/20 rounded-full blur-3xl translate-y-1/2 -translate-x-1/3 pointer-events-none mix-blend-overlay"></div>
-                           
-                           <div className="relative z-10 max-w-md mx-auto w-full">
-                                <div className="w-14 h-14 bg-white/10 backdrop-blur-sm rounded-2xl flex items-center justify-center text-indigo-100 mb-6 shadow-inner border border-white/10 group-hover:scale-110 transition-transform duration-500 group-hover:bg-white/20">
-                                    <Calendar size={28} />
+                {/* Left Side: Physician Portal (Dark/Navy) */}
+                <section className="relative pattern-geo text-white p-10 md:p-16 flex flex-col justify-center overflow-hidden border-b lg:border-b-0 lg:border-r border-slate-800">
+                    <div className="absolute inset-0 bg-navy-900/90 pointer-events-none"></div>
+                    <div className="absolute top-1/4 left-1/4 w-64 h-64 bg-blue-500/10 rounded-full blur-[100px] pointer-events-none"></div>
+                    
+                    <div className="relative z-10 w-full max-w-md mx-auto">
+                        <div className="mb-12">
+                            {/* Graphic Block */}
+                            <div className="relative w-20 h-20 mb-8 animate-float">
+                                <div className="absolute inset-2 bg-blue-500 rounded-2xl blur-xl opacity-40"></div>
+                                <div className="relative h-full w-full rounded-2xl glass-block flex flex-col items-center justify-center border-t border-l border-white/20 border-b border-r border-black/20">
+                                    <div className="w-12 h-1.5 bg-gradient-to-r from-blue-400 to-blue-600 rounded-full mb-2 shadow-[0_0_10px_rgba(59,130,246,0.5)]"></div>
+                                    <div className="grid grid-cols-2 gap-1.5">
+                                        <div className="w-4 h-1 bg-white/20 rounded-full"></div>
+                                        <div className="w-4 h-1 bg-white/20 rounded-full"></div>
+                                        <div className="w-4 h-1 bg-white/20 rounded-full"></div>
+                                        <div className="w-4 h-1 bg-white/40 rounded-full shadow-[0_0_5px_rgba(255,255,255,0.3)]"></div>
+                                    </div>
                                 </div>
-                                <h2 className="text-3xl font-bold text-white mb-2 tracking-tight">醫師排班與管理</h2>
-                                <p className="text-indigo-200 text-sm mb-8 leading-relaxed font-medium">
-                                    專為排班管理員 (HR) 與醫師設計。<br/>輕鬆管理班表，即時掌握人力調度。
-                                </p>
+                            </div>
+                            
+                            <h2 className="text-xs font-bold tracking-[0.2em] text-blue-400 uppercase mb-3">Medical Staff</h2>
+                            <h1 className="text-4xl font-bold tracking-tight mb-2 text-white drop-shadow-sm">Physician Portal</h1>
+                            <p className="text-slate-400 text-lg font-light tracking-wide">醫師排班與管理</p>
+                        </div>
 
-                                <div className="space-y-6">
-                                    <div className="relative group/select">
-                                        <select 
+                        <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-xl p-6 md:p-8 shadow-xl">
+                            <div className="space-y-6">
+                                <div>
+                                    <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 ml-1">Account Type</label>
+                                    <div className="relative group">
+                                        <select
                                             onChange={(e) => handleUserSelect(e.target.value)}
                                             value=""
-                                            className="w-full pl-5 pr-12 py-5 bg-white/5 hover:bg-white/10 border border-indigo-400/30 hover:border-indigo-300/50 rounded-2xl text-indigo-50 font-bold outline-none focus:ring-4 focus:ring-indigo-500/30 focus:border-indigo-400 transition-all appearance-none cursor-pointer backdrop-blur-md placeholder-indigo-300"
+                                            className="w-full appearance-none bg-navy-900/50 hover:bg-navy-800 border border-white/10 hover:border-blue-500/50 rounded-lg px-4 py-3.5 text-sm font-medium text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all duration-300 cursor-pointer"
                                         >
-                                            <option value="" disabled className="text-slate-400">請選擇帳號登入...</option>
-                                            <optgroup label="排班管理員 (HR)" className="text-slate-800 font-bold">
+                                            <option value="" disabled>Select account to login...</option>
+                                            <optgroup label="排班管理員 (HR)" className="text-slate-900 bg-white">
                                                 {physicianSideUsers.filter(u => u.role === UserRole.SCHEDULER).map(user => (
-                                                    <option key={user.id} value={user.id} className="text-slate-600 font-medium py-2">{user.name} ({user.alias || user.name[0]})</option>
+                                                    <option key={user.id} value={user.id}>{user.name} ({user.alias || user.name[0]})</option>
                                                 ))}
                                             </optgroup>
-                                             <optgroup label="瀏覽者 (Viewer)" className="text-slate-800 font-bold">
+                                            <optgroup label="瀏覽者 (Viewer)" className="text-slate-900 bg-white">
                                                 {physicianSideUsers.filter(u => u.role === UserRole.VIEWER).map(user => (
-                                                    <option key={user.id} value={user.id} className="text-slate-600 font-medium py-2">{user.name} ({user.alias || user.name[0]})</option>
+                                                    <option key={user.id} value={user.id}>{user.name} ({user.alias || user.name[0]})</option>
                                                 ))}
                                             </optgroup>
                                         </select>
-                                        <div className="absolute right-5 top-1/2 -translate-y-1/2 text-indigo-300 pointer-events-none transition-transform duration-300 group-hover/select:translate-x-1">
-                                            <ChevronLeft size={20} className="-rotate-180" />
+                                        <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500 group-hover:text-blue-400 transition-colors">
+                                            <ChevronLeft size={16} className="-rotate-90" />
                                         </div>
                                     </div>
-                                    <div className="flex gap-3 justify-start opacity-60">
-                                       <span className="text-[10px] font-bold text-indigo-200 px-3 py-1 bg-white/10 rounded-full border border-white/5">HR System</span>
-                                       <span className="text-[10px] font-bold text-indigo-200 px-3 py-1 bg-white/10 rounded-full border border-white/5">Viewer Mode</span>
+                                </div>
+                                <div>
+                                    <p className="text-xs text-slate-500 mb-3 font-medium ml-1">QUICK LOGIN</p>
+                                    <div className="flex flex-wrap gap-2">
+                                        <button className="px-4 py-1.5 rounded-full border border-white/10 bg-white/5 hover:bg-blue-600 hover:border-blue-500 hover:shadow-[0_0_15px_rgba(37,99,235,0.4)] text-xs font-medium text-slate-300 hover:text-white transition-all duration-300 hover:-translate-y-0.5 cursor-default">
+                                            HR System
+                                        </button>
+                                        <button className="px-4 py-1.5 rounded-full border border-white/10 bg-white/5 hover:bg-blue-600 hover:border-blue-500 hover:shadow-[0_0_15px_rgba(37,99,235,0.4)] text-xs font-medium text-slate-300 hover:text-white transition-all duration-300 hover:-translate-y-0.5 cursor-default">
+                                            Viewer Mode
+                                        </button>
                                     </div>
                                 </div>
-                           </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                {/* Right Side: Radiology Order (Light/Teal) */}
+                <section className="relative bg-slate-50 p-10 md:p-16 flex flex-col justify-center border-l border-gray-100 overflow-hidden">
+                    <div className="absolute bottom-1/4 right-1/4 w-64 h-64 bg-teal-400/5 rounded-full blur-[80px] pointer-events-none"></div>
+                    
+                    <div className="relative z-10 w-full max-w-md mx-auto">
+                        <div className="mb-12">
+                            {/* Graphic Sphere */}
+                             <div className="relative w-20 h-20 mb-8 animate-float-delayed">
+                                <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-12 h-2 bg-teal-600/20 rounded-[100%] blur-sm translate-y-6"></div>
+                                <div className="relative h-full w-full rounded-full glass-sphere flex items-center justify-center backdrop-blur-sm overflow-hidden border border-white/40">
+                                    <div className="absolute top-[15%] left-[15%] w-[25%] h-[15%] bg-white/60 rounded-[100%] blur-[2px] rotate-[-45deg]"></div>
+                                    <div className="relative z-10 w-10 h-10 flex items-center justify-center text-teal-600 drop-shadow-[0_0_5px_rgba(13,148,136,0.4)]">
+                                        <Activity size={24} strokeWidth={2.5} />
+                                    </div>
+                                    <div className="absolute bottom-[10%] left-[20%] right-[20%] h-[20%] bg-teal-400/10 rounded-[100%] blur-md"></div>
+                                </div>
+                            </div>
+
+                            <h2 className="text-xs font-bold tracking-[0.2em] text-teal-600 uppercase mb-3">Medical Imaging Dept</h2>
+                            <h1 className="text-4xl font-bold tracking-tight mb-2 text-slate-900">Medical Imaging Portal</h1>
+                            <p className="text-slate-500 text-lg font-light tracking-wide">影像醫學部排班系統</p>
                         </div>
 
-                        {/* Right Side: Radiographer (Clean/Medical Theme) */}
-                        <div className="w-full md:w-1/2 bg-gradient-to-br from-[#f0f9ff] via-[#e6fffa] to-[#ccfbf1] p-10 lg:p-14 flex flex-col justify-center relative overflow-hidden group">
-                            {/* Decoration */}
-                            <div className="absolute top-0 right-0 w-96 h-96 bg-teal-200/40 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3 pointer-events-none mix-blend-multiply"></div>
-                            
-                            <div className="relative z-10 max-w-md mx-auto w-full">
-                                <div className="w-14 h-14 bg-teal-100 rounded-2xl flex items-center justify-center text-teal-600 mb-6 shadow-sm group-hover:scale-110 transition-transform duration-500 group-hover:bg-teal-200/50">
-                                    <Activity size={28} />
-                                </div>
-                                <h2 className="text-3xl font-bold text-slate-800 mb-2 tracking-tight">放射科排班系統</h2>
-                                <p className="text-slate-500 text-sm mb-8 leading-relaxed font-medium">
-                                    放射師、部門主管及系統管理員入口。<br/>高效管理檢查排程，優化工作流程。
-                                </p>
-
-                                <div className="space-y-6">
-                                    <div className="relative group/select">
+                        <div className="bg-white rounded-xl p-6 md:p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 relative">
+                            <div className="space-y-6">
+                                <div>
+                                    <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 ml-1">Account Type</label>
+                                    <div className="relative group">
                                          <select 
                                             onChange={(e) => handleUserSelect(e.target.value)}
                                             value=""
-                                            className="w-full pl-5 pr-12 py-5 bg-white border border-slate-200 hover:border-teal-300 rounded-2xl text-slate-700 font-bold outline-none focus:ring-4 focus:ring-teal-100 focus:border-teal-400 transition-all appearance-none cursor-pointer shadow-sm hover:shadow-md"
+                                            className="w-full appearance-none bg-slate-50 hover:bg-white border border-slate-200 hover:border-teal-400 hover:shadow-[0_4px_20px_rgba(20,184,166,0.15)] rounded-lg px-4 py-3.5 text-sm font-medium text-slate-600 group-hover:text-teal-700 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-teal-200 cursor-pointer"
                                         >
-                                            <option value="" disabled>請選擇帳號登入...</option>
+                                            <option value="" disabled>Select account to login...</option>
                                             <optgroup label="系統管理與主管">
                                                  {radiographerSideUsers.filter(u => u.role === UserRole.SYSTEM_ADMIN || u.role === UserRole.SUPERVISOR).map(user => (
                                                     <option key={user.id} value={user.id}>
@@ -251,84 +200,108 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
                                                 ))}
                                             </optgroup>
                                         </select>
-                                        <div className="absolute right-5 top-1/2 -translate-y-1/2 text-teal-500 pointer-events-none transition-transform duration-300 group-hover/select:translate-x-1">
-                                            <ChevronLeft size={20} className="-rotate-180" />
+                                        <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 group-hover:text-teal-500 transition-colors">
+                                            <ChevronLeft size={16} className="-rotate-90" />
                                         </div>
                                     </div>
-                                    <div className="flex gap-3 justify-start opacity-70">
-                                       <span className="text-[10px] font-bold text-slate-400 px-3 py-1 bg-white rounded-full border border-slate-200 shadow-sm">Admin</span>
-                                       <span className="text-[10px] font-bold text-slate-400 px-3 py-1 bg-white rounded-full border border-slate-200 shadow-sm">Manager</span>
-                                       <span className="text-[10px] font-bold text-slate-400 px-3 py-1 bg-white rounded-full border border-slate-200 shadow-sm">Staff</span>
+                                </div>
+                                <div>
+                                    <p className="text-xs text-slate-400 mb-3 font-medium ml-1">QUICK LOGIN</p>
+                                    <div className="flex flex-wrap gap-2">
+                                        <button className="px-4 py-1.5 rounded-full border border-slate-200 bg-white hover:border-teal-500 hover:text-white hover:bg-teal-500 hover:shadow-[0_2px_10px_rgba(20,184,166,0.3)] text-xs font-medium text-slate-500 transition-all duration-300 hover:-translate-y-0.5 cursor-default">
+                                            Admin
+                                        </button>
+                                        <button className="px-4 py-1.5 rounded-full border border-slate-200 bg-white hover:border-teal-500 hover:text-white hover:bg-teal-500 hover:shadow-[0_2px_10px_rgba(20,184,166,0.3)] text-xs font-medium text-slate-500 transition-all duration-300 hover:-translate-y-0.5 cursor-default">
+                                            Manager
+                                        </button>
+                                        <button className="px-4 py-1.5 rounded-full border border-slate-200 bg-white hover:border-teal-500 hover:text-white hover:bg-teal-500 hover:shadow-[0_2px_10px_rgba(20,184,166,0.3)] text-xs font-medium text-slate-500 transition-all duration-300 hover:-translate-y-0.5 cursor-default">
+                                            Staff
+                                        </button>
                                     </div>
                                 </div>
                             </div>
                         </div>
-
+                        
+                        <div className="absolute top-8 right-8">
+                            <button className="flex items-center gap-2 px-4 py-2 bg-white/80 backdrop-blur-sm border border-slate-200 rounded-full shadow-sm hover:shadow-md hover:border-teal-200 transition-all text-xs font-semibold text-slate-600 group">
+                                <span className="relative flex h-2 w-2">
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-teal-400 opacity-75"></span>
+                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-teal-500"></span>
+                                </span>
+                                System Status
+                            </button>
+                        </div>
                     </div>
-                ) : (
-                    // Login Form Overlay (Centered)
-                    <div className="flex-1 flex flex-col items-center justify-center p-8 animate-in zoom-in-95 duration-500 bg-white/60 backdrop-blur-xl w-full h-full absolute top-0 left-0 z-20">
-                         <div className="text-center mb-10 transform transition-all hover:scale-105 duration-500">
-                                <div
-                                    className="w-28 h-28 rounded-3xl flex items-center justify-center text-white font-bold text-4xl shadow-2xl ring-8 ring-white/50 mx-auto mb-6 relative overflow-hidden"
-                                    style={{ backgroundColor: selectedUser.color || '#9CA3AF' }}
-                                >
-                                    <div className="absolute inset-0 bg-black/10 mix-blend-overlay"></div>
-                                    <div className="relative z-10">{selectedUser.alias || selectedUser.name.charAt(0)}</div>
-                                    
-                                    <div className="absolute -bottom-1 -right-1 p-2 bg-white rounded-tl-2xl shadow-lg">
-                                        {getRoleIcon(selectedUser.role)}
-                                    </div>
-                                </div>
-                                <h2 className="text-3xl font-extrabold text-slate-800 mt-6 tracking-tight">{selectedUser.name}</h2>
-                                <div className="flex items-center justify-center gap-2 mt-2">
-                                    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-widest bg-slate-100 px-3 py-1 rounded-full border border-slate-200">
-                                        {getRoleLabel(selectedUser.role)}
-                                    </span>
-                                </div>
-                         </div>
+                </section>
 
-                         <form onSubmit={handleSubmit} className="w-full max-w-sm space-y-6 bg-white p-8 rounded-3xl shadow-xl border border-slate-100">
-                                <div className="text-left">
-                                    <label className="text-xs font-bold text-slate-400 ml-1 mb-1.5 block uppercase tracking-wider">Password</label>
+                {/* Password Overlay (When Selected) */}
+                {selectedUser && (
+                     <div className="absolute inset-0 z-50 bg-white/60 backdrop-blur-xl flex flex-col items-center justify-center p-8 animate-in fade-in zoom-in-95 duration-300">
+                         <button
+                            onClick={handleBack}
+                            className="absolute top-8 left-8 flex items-center text-sm font-bold text-slate-500 hover:text-slate-800 transition-colors bg-white px-4 py-2 rounded-full border border-slate-200 shadow-sm hover:shadow-md"
+                        >
+                            <ChevronLeft size={18} className="mr-1" />
+                            返回選擇
+                        </button>
+
+                         <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl border border-white/50 p-10 transform transition-all animate-in slide-in-from-bottom-4">
+                             <div className="text-center mb-8">
+                                    <div
+                                        className="w-24 h-24 rounded-2xl flex items-center justify-center text-white font-bold text-4xl shadow-lg mx-auto mb-6 relative overflow-hidden"
+                                        style={{ backgroundColor: selectedUser.color || '#9CA3AF' }}
+                                    >
+                                        <div className="absolute inset-0 bg-black/10 mix-blend-overlay"></div>
+                                        <div className="relative z-10">{selectedUser.alias || selectedUser.name.charAt(0)}</div>
+                                    </div>
+                                    <h2 className="text-2xl font-bold text-slate-800">{selectedUser.name}</h2>
+                                    <div className="inline-flex items-center gap-1 mt-2 px-3 py-1 bg-slate-100 rounded-full text-xs font-bold text-slate-500">
+                                        {getRoleIcon(selectedUser.role)} {getRoleLabel(selectedUser.role)}
+                                    </div>
+                             </div>
+
+                             <form onSubmit={handleSubmit} className="space-y-6">
+                                <div className="space-y-2">
+                                    <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Password</label>
                                     <div className="relative group">
-                                        <Lock size={20} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-teal-500 transition-colors" />
+                                        <Lock size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-teal-500 transition-colors" />
                                         <input
                                             type="password"
                                             value={password}
                                             onChange={(e) => setPassword(e.target.value)}
-                                            className="w-full pl-12 pr-4 py-4 rounded-xl border border-slate-200 focus:ring-4 focus:ring-teal-50 focus:border-teal-400 outline-none transition-all bg-slate-50 focus:bg-white font-bold text-slate-800 placeholder-slate-300 text-lg"
-                                            placeholder="請輸入密碼..."
+                                            className="w-full pl-11 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-teal-100 focus:border-teal-400 outline-none transition-all font-bold text-slate-800 placeholder-slate-300"
+                                            placeholder="輸入密碼..."
                                             autoFocus
                                         />
                                     </div>
                                 </div>
 
                                 {error && (
-                                    <div className="bg-red-50 text-red-500 text-sm font-bold p-4 rounded-xl text-center animate-pulse border border-red-100 flex items-center justify-center gap-2">
-                                        <Shield size={16} />
-                                        {error}
+                                    <div className="bg-red-50 text-red-500 text-sm font-bold p-3 rounded-lg text-center animate-pulse border border-red-100 flex items-center justify-center gap-2">
+                                        <Shield size={14} /> {error}
                                     </div>
                                 )}
 
                                 <button
                                     type="submit"
-                                    className="w-full flex items-center justify-center gap-2 bg-slate-900 hover:bg-slate-800 text-white font-bold py-4 px-6 rounded-xl transition-all shadow-xl shadow-slate-200 hover:shadow-2xl hover:-translate-y-0.5 active:scale-[0.98] mt-4 text-lg"
+                                    className="w-full flex items-center justify-center gap-2 bg-slate-900 hover:bg-slate-800 text-white font-bold py-3.5 rounded-xl transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5 active:scale-[0.98]"
                                 >
-                                    <LogIn size={20} />
+                                    <LogIn size={18} />
                                     登入系統
                                 </button>
-                         </form>
-                    </div>
+                             </form>
+                         </div>
+                     </div>
                 )}
-            </div>
-            
-            {/* Copyright Footer */}
-            <div className="fixed bottom-6 text-center w-full pointer-events-none">
-                <span className="text-[10px] text-slate-400 font-medium bg-white/60 px-4 py-2 rounded-full backdrop-blur-md shadow-sm border border-white/20">
-                    © 2026 Penny Liu. All rights reserved. • Build 2.0
-                </span>
-            </div>
+            </main>
+
+            <footer className="mt-8">
+                <div className="flex items-center gap-2 text-xs font-medium text-gray-400">
+                    <span>© 2026 Penny Liu. All rights reserved.</span>
+                    <span className="w-1 h-1 rounded-full bg-gray-300"></span>
+                    <span>Build 2.0</span>
+                </div>
+            </footer>
         </div>
     );
 };
