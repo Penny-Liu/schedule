@@ -2440,66 +2440,7 @@ BMD :{{bmd}}
         this.notifyListeners();
         return importedCount;
     }
-    async cleanupTaichungDoctors() {
-        console.log('[Store] Cleaning up Taichung doctors references...');
-        
-        // 1. Identify Taichung Doctors
-        // Logic: Doctors who have '台中' in their location list
-        const taichungDoctorIds = this.doctors
-            .filter(d => d.locations && d.locations.includes('台中'))
-            .map(d => d.id);
 
-        if (taichungDoctorIds.length === 0) {
-            console.log('[Store] No Taichung doctors found.');
-            return { count: 0 };
-        }
-
-        console.log(`[Store] Found ${taichungDoctorIds.length} Taichung doctors. Cleaning stations...`);
-
-        // 2. Find shifts for these doctors that have a station assigned (that shouldn't be there)
-        // We want to clear 'station' and 'scheduled_station'
-        const shiftsToClean = this.doctorShifts.filter(s => 
-            taichungDoctorIds.includes(s.doctorId) && 
-            (s.station || s.scheduled_station)
-        );
-
-        if (shiftsToClean.length === 0) {
-             console.log('[Store] No incorrect station assignments found for Taichung doctors.');
-             return { count: 0 };
-        }
-
-        // 3. Update Local State
-        shiftsToClean.forEach(s => {
-            s.station = '';
-            s.scheduled_station = '';
-            // We might want to keep 'note' or 'workTime' if valid, but station should be empty
-        });
-
-        // 4. Update Database
-        // We can do a batch update or loop. Since this is a one-off/maintenance, a loop is fine or an 'in' query if feasible.
-        // But updates in Supabase usually need ID.
-        // Let's do a bulk ID operation if possible, or just individual updates (safer).
-        
-        // Optimization: Use Supabase 'in' operator to clear them all at once if we just want to set columns to null
-        const shiftIds = shiftsToClean.map(s => s.id);
-        
-        const { error } = await supabase
-            .from('doctor_shifts')
-            .update({ 
-                station: '', 
-                scheduled_station: '' 
-            })
-            .in('id', shiftIds);
-
-        if (error) {
-            console.error('Failed to clean Taichung doctors:', error);
-            throw error;
-        }
-
-        console.log(`[Store] Successfully cleaned ${shiftIds.length} shifts for Taichung doctors.`);
-        this.notifyListeners();
-        return { count: shiftIds.length };
-    }
 }
 
 export const db = new Store();

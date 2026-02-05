@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { User, UserRole, RosterCycle, SYSTEM_OFF, StationDefault, Holiday, DateEventType, CycleAnchor } from '../types';
 import { db } from '../services/store';
-import { Plus, Trash2, Save, Settings, Calendar, AlertCircle, Users, Clock, Globe, X, RefreshCw, Key, UserCircle, ChevronDown, CalendarPlus, FileSpreadsheet, Download, Upload, Hammer } from 'lucide-react';
+import { Plus, Trash2, Save, Settings, Calendar, AlertCircle, Users, Clock, Globe, X, RefreshCw, Key, UserCircle, ChevronDown, CalendarPlus, FileSpreadsheet, Download, Upload } from 'lucide-react';
 import ConfirmModal from '../components/ConfirmModal';
 
 interface SettingsPageProps {
@@ -748,24 +748,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
                                         </button>
                                     </div>
 
-                                    <div className="mt-6 pt-4 border-t border-gray-100">
-                                        <h4 className="text-xs font-bold text-gray-400 mb-2 uppercase tracking-wider">異常資料修復</h4>
-                                        <button
-                                            onClick={async () => {
-                                                if (confirm('確定要執行修復嗎？\n這將會清除所有「台中醫師」在資料庫中誤植的崗位名稱。\n\n正常情況下台中醫師不應有崗位設定。')) {
-                                                    try {
-                                                        const result = await db.cleanupTaichungDoctors();
-                                                        alert(`修復完成！共清除了 ${result.count} 筆誤植資料。`);
-                                                    } catch (e: any) {
-                                                        alert('修復失敗: ' + e.message);
-                                                    }
-                                                }
-                                            }}
-                                            className="w-full flex items-center justify-center gap-2 bg-amber-50 hover:bg-amber-100 text-amber-700 font-bold py-2 rounded-lg transition-colors border border-amber-200"
-                                        >
-                                            <Hammer size={16} /> 修復台中醫師崗位異常
-                                        </button>
-                                    </div>
+
                                     <p className="text-xs text-center text-gray-400 mt-2">
                                         ※ 請務必先下載備份，再執行清除。
                                     </p>
