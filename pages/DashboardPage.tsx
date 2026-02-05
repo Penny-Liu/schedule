@@ -1966,8 +1966,10 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
             <div className="flex-none bg-white border-b border-slate-200 shadow-sm z-10">
                 <div className="flex flex-col xl:flex-row items-center justify-between px-4 py-2 gap-y-2 gap-x-4">
                     
-                    {/* LEFT GROUP: Title & Date Navigation */}
+                    {/* LEFT GROUP: Title + View Toggles */}
                     <div className="flex items-center gap-4 w-full xl:w-auto justify-between xl:justify-start">
+                        
+                        {/* Title (Moved to Far Left) */}
                         <h2 className="text-lg font-bold text-slate-800 tracking-tight flex items-center gap-2 whitespace-nowrap">
                             {!isMobile && getCycleTitle()}
                             {isCycleConfirmed && (
@@ -1977,8 +1979,53 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                             )}
                         </h2>
 
+                        {/* View Toggles (Restored here) */}
+                        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
+                            <div className="flex bg-slate-100 p-0.5 rounded-lg border border-slate-200 shrink-0">
+                                    <button
+                                    type="button"
+                                    onClick={() => setViewMode('user')}
+                                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold transition-all ${viewMode === 'user' ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                                >
+                                    {!isMobile && <Users size={14} />} <span>{isMobile ? '人員' : '人員視角'}</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setViewMode('station')}
+                                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold transition-all ${viewMode === 'station' ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                                >
+                                    {!isMobile && <LayoutList size={14} />} <span>{isMobile ? '崗位' : '崗位視角'}</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setViewMode('daily');
+                                        setDailyDate(new Date());
+                                        if (isMobile) db.initializeData(true);
+                                    }}
+                                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold transition-all ${viewMode === 'daily' ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                                >
+                                    {!isMobile && <Activity size={14} />} <span>{isMobile ? '今日' : '今日崗位'}</span>
+                                </button>
+                                {isMobile && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setViewMode('personal')}
+                                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold transition-all ${viewMode === 'personal' ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                                    >
+                                        <span>個人</span>
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+
+                    {/* RIGHT GROUP: Date Navigation + Action Buttons */}
+                    <div className="flex items-center gap-4 w-full xl:w-auto justify-between xl:justify-end">
+                        
                         {/* Date Navigation */}
-                         <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2">
                             {/* Mobile Nav */}
                             {isMobile && (selectedCycleId === 'rolling' || viewMode === 'user' || viewMode === 'station') && (
                                 <button type="button" onClick={() => setMobileOffset(prev => prev - 1)} className="p-1 bg-white rounded shadow-sm text-slate-600 border border-slate-200 active:scale-95">
@@ -1986,7 +2033,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                 </button>
                             )}
 
-                             {/* Cycle Selector */}
+                                {/* Cycle Selector */}
                             {(!isMobile || viewMode === 'personal') && (
                                 <div className={`flex items-center bg-slate-50 hover:bg-slate-100 rounded-md px-2 py-1 transition-colors border border-slate-200 ${isMobile ? 'max-w-[140px]' : ''}`}>
                                     <select
@@ -2009,7 +2056,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                 </span>
                             )}
 
-                             {/* Mobile Right Nav */}
+                                {/* Mobile Right Nav */}
                             {isMobile && (selectedCycleId === 'rolling' || viewMode === 'user' || viewMode === 'station') && (
                                 <button type="button" onClick={() => setMobileOffset(prev => prev + 1)} className="p-1 bg-white rounded shadow-sm text-slate-600 border border-slate-200 active:scale-95">
                                     <ChevronRight size={16} />
@@ -2024,7 +2071,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                     </button>
                                     <div className="relative group px-2 text-xs font-bold text-slate-700 cursor-pointer hover:text-slate-900 flex items-center gap-1">
                                         {currentDate.toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })} 起
-                                         <ChevronDown size={10} className="text-slate-400" />
+                                            <ChevronDown size={10} className="text-slate-400" />
                                         <input type="date" className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10" onChange={handleDateJump} />
                                     </div>
                                     <button type="button" onClick={() => handleNavigate('next')} className="p-1 hover:bg-slate-50 rounded text-slate-500">
@@ -2032,8 +2079,8 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                     </button>
                                 </div>
                             )}
-                             
-                             {/* Desktop Date Range Display */}
+                                
+                                {/* Desktop Date Range Display */}
                             {!isMobile && selectedCycleId !== 'rolling' && (
                                 <div className="flex items-center gap-1.5 px-2 py-1 bg-indigo-50 text-indigo-700 rounded-md text-xs font-bold border border-indigo-100">
                                     <CalendarIcon size={12} />
@@ -2041,56 +2088,11 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                 </div>
                             )}
                         </div>
-                    </div>
 
-
-                    {/* RIGHT GROUP: Toolbar (View Toggles + Actions) */}
-                    <div className="flex items-center gap-2 w-full xl:w-auto justify-between xl:justify-end overflow-x-auto no-scrollbar">
-                        
-                        {/* View Toggles */}
-                        <div className="flex bg-slate-100 p-0.5 rounded-lg border border-slate-200 shrink-0">
-                             <button
-                                type="button"
-                                onClick={() => setViewMode('user')}
-                                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold transition-all ${viewMode === 'user' ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                            >
-                                {!isMobile && <Users size={14} />} <span>{isMobile ? '人員' : '人員視角'}</span>
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setViewMode('station')}
-                                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold transition-all ${viewMode === 'station' ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                            >
-                                {!isMobile && <LayoutList size={14} />} <span>{isMobile ? '崗位' : '崗位視角'}</span>
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    setViewMode('daily');
-                                    setDailyDate(new Date());
-                                    if (isMobile) db.initializeData(true);
-                                }}
-                                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold transition-all ${viewMode === 'daily' ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                            >
-                                {!isMobile && <Activity size={14} />} <span>{isMobile ? '今日' : '今日崗位'}</span>
-                            </button>
-                            {isMobile && (
-                                <button
-                                    type="button"
-                                    onClick={() => setViewMode('personal')}
-                                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold transition-all ${viewMode === 'personal' ? 'bg-white text-teal-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                                >
-                                    <span>個人</span>
-                                </button>
-                            )}
-                        </div>
-
-                        {!isMobile && <div className="h-4 w-px bg-slate-200 mx-1 shrink-0"></div>}
-
-                        {/* Action Buttons */}
+                            {/* Action Buttons (Moved Here) */}
                         <div className="flex items-center gap-2 shrink-0">
-                           {/* Lock Button */}
-                             {!isMobile && (currentUser.role === UserRole.SUPERVISOR || currentUser.role === UserRole.SYSTEM_ADMIN) && selectedCycleId !== 'rolling' && (
+                            {/* Lock Button */}
+                                {!isMobile && (currentUser.role === UserRole.SUPERVISOR || currentUser.role === UserRole.SYSTEM_ADMIN) && selectedCycleId !== 'rolling' && (
                                 <button
                                     type="button"
                                     onClick={() => setIsConfirmCycleOpen(true)}
@@ -2106,24 +2108,24 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                 </button>
                             )}
 
-                             {/* Exports */}
-                             {!isMobile && (
-                                <>
-                                    <button onClick={handleExportExcel} disabled={isExporting} className="px-2.5 py-1 rounded-md text-xs font-bold border border-green-200 bg-green-50 text-green-700 hover:bg-green-100 flex items-center gap-1.5 shadow-sm transition-all disabled:opacity-50">
-                                         {isExporting ? <Loader2 size={12} className="animate-spin" /> : <FileSpreadsheet size={12} />}
-                                        <span className="hidden xl:inline">Excel</span>
-                                    </button>
-                                    <button onClick={handleExportPDF} disabled={isExporting} className="px-2.5 py-1 rounded-md text-xs font-bold border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 flex items-center gap-1.5 shadow-sm transition-all">
-                                        <Download size={12} />
-                                        <span className="hidden xl:inline">PDF</span>
-                                    </button>
-                                </>
+                                {/* Exports */}
+                                {!isMobile && (
+                                <button onClick={handleExportExcel} disabled={isExporting} className="px-2.5 py-1 rounded-md text-xs font-bold border border-green-200 bg-green-50 text-green-700 hover:bg-green-100 flex items-center gap-1.5 shadow-sm transition-all disabled:opacity-50">
+                                        {isExporting ? <Loader2 size={12} className="animate-spin" /> : <FileSpreadsheet size={12} />}
+                                    <span className="hidden xl:inline">Excel</span>
+                                </button>
+                            )}
+                            {!isMobile && (
+                                <button onClick={handleExportPDF} disabled={isExporting} className="px-2.5 py-1 rounded-md text-xs font-bold border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 flex items-center gap-1.5 shadow-sm transition-all">
+                                    <Download size={12} />
+                                    <span className="hidden xl:inline">PDF</span>
+                                </button>
                             )}
                             
                             {/* Auto Schedule Buttons */}
                             {(currentUser.role === UserRole.SUPERVISOR || currentUser.role === UserRole.SYSTEM_ADMIN) && !isMobile && (
                                 <>
-                                     <button
+                                        <button
                                         type="button"
                                         onClick={onAutoScheduleClick}
                                         disabled={isProcessing || isCycleConfirmed}
@@ -2134,7 +2136,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                     >
                                         <Wand2 size={12} /> <span className="hidden lg:inline">自動</span>
                                     </button>
-                                     <button
+                                        <button
                                         onClick={onSpecialRoleClick}
                                         disabled={isProcessing || isCycleConfirmed}
                                         className={`px-2.5 py-1 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm ${(isProcessing || isCycleConfirmed)
@@ -2147,7 +2149,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                 </>
                             )}
 
-                             {/* Edit Button */}
+                                {/* Edit Button */}
                             {!isMobile && (
                                 <button
                                     type="button"
@@ -2159,7 +2161,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                         } ${(isProcessing) ? 'opacity-50 cursor-not-allowed' : ''}`}
                                 >
                                     {isProcessing ? (
-                                       <Loader2 size={12} className="animate-spin" />
+                                        <Loader2 size={12} className="animate-spin" />
                                     ) : (
                                         isEditMode ? '完成' : '編輯'
                                     )}
