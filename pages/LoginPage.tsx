@@ -84,14 +84,14 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
             <main className="w-full max-w-6xl shadow-2xl rounded-2xl overflow-hidden grid grid-cols-1 lg:grid-cols-2 min-h-[700px] bg-white relative z-10">
 
                 {/* Left Side: Physician Portal (Dark/Navy) */}
-                <section className="relative pattern-geo text-white p-10 md:p-16 flex flex-col justify-center overflow-hidden border-b lg:border-b-0 lg:border-r border-slate-800">
+                <section className="relative pattern-geo text-white p-6 md:p-16 flex flex-col justify-center overflow-hidden border-b lg:border-b-0 lg:border-r border-slate-800">
                     <div className="absolute inset-0 bg-navy-900/90 pointer-events-none"></div>
                     <div className="absolute top-1/4 left-1/4 w-64 h-64 bg-blue-500/10 rounded-full blur-[100px] pointer-events-none"></div>
                     
                     <div className="relative z-10 w-full max-w-md mx-auto">
-                        <div className="mb-12">
+                        <div className="mb-8 md:mb-12">
                             {/* Graphic Block */}
-                            <div className="relative w-20 h-20 mb-8 animate-float">
+                            <div className="relative w-20 h-20 mb-8 animate-float hidden md:block">
                                 <div className="absolute inset-2 bg-blue-500 rounded-2xl blur-xl opacity-40"></div>
                                 <div className="relative h-full w-full rounded-2xl glass-block flex flex-col items-center justify-center border-t border-l border-white/20 border-b border-r border-black/20">
                                     <div className="w-12 h-1.5 bg-gradient-to-r from-blue-400 to-blue-600 rounded-full mb-2 shadow-[0_0_10px_rgba(59,130,246,0.5)]"></div>
@@ -153,13 +153,13 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
                 </section>
 
                 {/* Right Side: Radiology Order (Light/Teal) */}
-                <section className="relative bg-slate-50 p-10 md:p-16 flex flex-col justify-center border-l border-gray-100 overflow-hidden">
+                <section className="relative bg-slate-50 p-6 md:p-16 flex flex-col justify-center border-l border-gray-100 overflow-hidden">
                     <div className="absolute bottom-1/4 right-1/4 w-64 h-64 bg-teal-400/5 rounded-full blur-[80px] pointer-events-none"></div>
                     
                     <div className="relative z-10 w-full max-w-md mx-auto">
-                        <div className="mb-12">
+                        <div className="mb-8 md:mb-12">
                             {/* Graphic Sphere */}
-                             <div className="relative w-20 h-20 mb-8 animate-float-delayed">
+                             <div className="relative w-20 h-20 mb-8 animate-float-delayed hidden md:block">
                                 <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-12 h-2 bg-teal-600/20 rounded-[100%] blur-sm translate-y-6"></div>
                                 <div className="relative h-full w-full rounded-full glass-sphere flex items-center justify-center backdrop-blur-sm overflow-hidden border border-white/40">
                                     <div className="absolute top-[15%] left-[15%] w-[25%] h-[15%] bg-white/60 rounded-[100%] blur-[2px] rotate-[-45deg]"></div>

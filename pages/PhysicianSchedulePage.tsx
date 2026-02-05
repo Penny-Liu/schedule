@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { db } from '../services/store';
 import { Doctor, UserRole, DoctorStationConfig, DateEventType, DoctorShift } from '../types';
-import { ChevronLeft, ChevronRight, Download, Lock, RefreshCw, Save, Unlock, User, UserPlus, X, Calendar as CalendarIcon, Clock, Filter, Sliders, ArrowUpDown, Wand2, BarChart2, Check, AlertCircle, Plus, LayoutGrid, List as ListIcon, Trash2, Briefcase, FileText, MapPin, FileSpreadsheet } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Download, Lock, RefreshCw, Save, Unlock, User, UserPlus, X, Calendar as CalendarIcon, Clock, Filter, Sliders, ArrowUpDown, Wand2, BarChart2, Check, AlertCircle, Plus, LayoutGrid, List as ListIcon, Trash2, Briefcase, FileText, MapPin, FileSpreadsheet, CalendarClock } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import ConfirmModal from '../components/ConfirmModal';
@@ -305,7 +305,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
         const month = currentDate.getMonth();
         
         // Mobile weekly view for Personnel perspective
-        if (isMobile && viewMode === 'personnel') {
+        if (isMobile && (viewMode === 'personnel' || viewMode === 'station')) {
             const dates = [];
             for (let i = 0; i < 7; i++) {
                 const d = new Date(currentDate);
@@ -1672,31 +1672,31 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                     </div>
                 </div>
             )}
-            <div className="bg-white border-b border-gray-200 px-4 py-2 flex flex-wrap items-center justify-between gap-y-2 shrink-0 shadow-sm z-30 sticky top-0">
+            <div className="bg-white border-b border-gray-200 px-2 md:px-4 py-2 flex flex-wrap items-center justify-between gap-y-2 shrink-0 shadow-sm z-30 sticky top-0">
                 <div className="flex items-center gap-2">
                     <div className="flex items-center gap-2 text-teal-700 bg-teal-50 px-2 py-1 rounded-lg border border-teal-100">
-                        <User className="h-5 w-5" />
-                        <h1 className="text-lg font-bold">醫師排班表</h1>
+                        <CalendarClock className="h-5 w-5" />
+                        <h1 className="text-lg font-bold hidden md:block">醫師排班表</h1>
                     </div>
                     
                     <div className="flex items-center bg-slate-100 rounded-lg p-1 border border-slate-200">
                         <button 
                             onClick={() => setViewMode('personnel')}
-                            className={`px-3 py-1.5 rounded-md text-sm font-bold transition-all ${viewMode === 'personnel' ? 'bg-white text-teal-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                            className={`px-2 md:px-3 py-1 md:py-1.5 rounded-md text-xs md:text-sm font-bold transition-all ${viewMode === 'personnel' ? 'bg-white text-teal-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
                         >
-                            人員視角
+                            人員
                         </button>
                         <button 
                             onClick={() => setViewMode('station')}
-                            className={`px-3 py-1.5 rounded-md text-sm font-bold transition-all ${viewMode === 'station' ? 'bg-white text-teal-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                            className={`px-2 md:px-3 py-1 md:py-1.5 rounded-md text-xs md:text-sm font-bold transition-all ${viewMode === 'station' ? 'bg-white text-teal-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
                         >
-                            崗位視角
+                            崗位
                         </button>
                          <button 
                             onClick={() => setViewMode('daily')}
-                            className={`px-3 py-1.5 rounded-md text-sm font-bold transition-all ${viewMode === 'daily' ? 'bg-white text-teal-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                            className={`px-2 md:px-3 py-1 md:py-1.5 rounded-md text-xs md:text-sm font-bold transition-all ${viewMode === 'daily' ? 'bg-white text-teal-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
                         >
-                            每日視角
+                            每日
                         </button>
                         {canEdit && (
                             <button 
@@ -1716,7 +1716,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                 const newDate = new Date(currentDate);
                                 if (viewMode === 'daily') {
                                     newDate.setDate(newDate.getDate() - 1);
-                                } else if (isMobile && viewMode === 'personnel') {
+                                } else if (isMobile && (viewMode === 'personnel' || viewMode === 'station')) {
                                     newDate.setDate(newDate.getDate() - 7);
                                 } else {
                                     newDate.setDate(1); // Set to 1st to avoid month overflow
@@ -1729,7 +1729,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                             <ChevronLeft size={20} />
                         </button>
                         <span className="px-4 font-mono font-bold text-gray-700 min-w-[100px] text-center">
-                           {viewMode === 'daily' || (isMobile && viewMode === 'personnel')
+                           {viewMode === 'daily' || (isMobile && (viewMode === 'personnel' || viewMode === 'station'))
                                 ? `${toLocalISOString(currentDate)} (${['日', '一', '二', '三', '四', '五', '六'][currentDate.getDay()]})`
                                 : `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`
                            }
@@ -1739,7 +1739,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                 const newDate = new Date(currentDate);
                                 if (viewMode === 'daily') {
                                     newDate.setDate(newDate.getDate() + 1);
-                                } else if (isMobile && viewMode === 'personnel') {
+                                } else if (isMobile && (viewMode === 'personnel' || viewMode === 'station')) {
                                     newDate.setDate(newDate.getDate() + 7);
                                 } else {
                                     newDate.setDate(1); // Set to 1st to avoid month overflow
@@ -1757,7 +1757,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                         onClick={() => setCurrentDate(new Date())}
                         className="px-2 py-1 bg-slate-100 text-slate-600 rounded-lg text-xs font-bold hover:bg-slate-200 transition-colors border border-slate-200"
                     >
-                        {viewMode === 'daily' || (isMobile && viewMode === 'personnel') ? '今天' : '本月'}
+                        {viewMode === 'daily' || (isMobile && (viewMode === 'personnel' || viewMode === 'station')) ? '今天' : '本月'}
                     </button>
 
                     {/* View Specific Actions */}

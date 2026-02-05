@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../services/store';
 import { UserRole } from '../types';
 import type { Doctor, FixedShift, WeekdaySetting } from '../types';
-import { Users, Trash2, Plus, Save, Square, CheckSquare, Pencil, AlertCircle, Clock } from 'lucide-react';
+import { Users, Trash2, Plus, Save, Square, CheckSquare, Pencil, AlertCircle, Clock, Stethoscope } from 'lucide-react';
 import ConfirmModal from '../components/ConfirmModal';
 
 interface DoctorManagerPageProps {
@@ -314,10 +314,10 @@ const DoctorManagerPage: React.FC<DoctorManagerPageProps> = ({ currentUser }) =>
     }, [doctors]);
 
     return (
-        <div className="flex h-full bg-slate-50 relative overflow-hidden">
+        <div className="flex flex-col md:flex-row h-full bg-slate-50 relative overflow-y-auto md:overflow-hidden">
              {/* Left Panel: Form */}
-             <div className="w-96 bg-white border-r border-gray-200 flex flex-col z-20 shadow-lg">
-                <div className="p-6 border-b border-gray-100 bg-gray-50">
+             <div className="w-full md:w-96 bg-white border-r border-gray-200 flex flex-col z-20 shadow-lg order-last md:order-first shrink-0 md:h-full h-auto">
+                <div className="p-6 border-b border-gray-100 bg-gray-50 shrink-0">
                     <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">
                         {editingId ? <Pencil size={20} className="text-teal-600"/> : <Plus size={20} className="text-teal-600"/>}
                         {editingId ? '編輯醫師資料' : '新增醫師'}
@@ -688,12 +688,12 @@ const DoctorManagerPage: React.FC<DoctorManagerPageProps> = ({ currentUser }) =>
              </div>
 
              {/* Right Panel: List (Changed from Grid to Table) */}
-             <div className="flex-1 overflow-y-auto p-6 md:p-8">
-                <div className="max-w-6xl mx-auto">
-                    <div className="flex justify-between items-center mb-6">
+             <div className="flex-1 overflow-visible md:overflow-y-auto p-6 md:p-8 order-first md:order-last h-auto md:h-full">
+                <div className="max-w-6xl mx-auto flex flex-col">
+                    <div className="flex justify-between items-center order-last md:order-first mt-4 md:mt-0 mb-6">
                         <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-3">
                             <div className="p-2 bg-white rounded-lg shadow-sm border border-gray-100">
-                                <Users className="text-teal-600" size={24} />
+                                <Stethoscope className="text-teal-600" size={24} />
                             </div>
                             醫師與崗位管理
                         </h1>

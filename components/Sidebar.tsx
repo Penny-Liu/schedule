@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Users, FileText, LogOut, LayoutDashboard, Settings, Menu, BarChart3, Stethoscope } from 'lucide-react';
+import { Users, FileText, LogOut, LayoutDashboard, Settings, Menu, BarChart3, Stethoscope, CalendarClock, Sliders } from 'lucide-react';
 import { User, UserRole } from '../types';
 
 interface SidebarProps {
@@ -43,19 +43,19 @@ const Sidebar: React.FC<SidebarProps> = ({ currentUser, onNavigate, currentPage,
     {
       id: 'physician_schedule',
       label: '醫師排班',
-      icon: Users, // Using same icon, or maybe Calendar
+      icon: CalendarClock,
       roles: [UserRole.SYSTEM_ADMIN, UserRole.SUPERVISOR, UserRole.SCHEDULER, UserRole.VIEWER]
     },
     {
       id: 'doctors',
       label: '醫師管理',
-      icon: Users, // Using same icon as Staff for now
+      icon: Stethoscope,
       roles: [UserRole.SYSTEM_ADMIN, UserRole.SCHEDULER]
     },
     {
       id: 'physician_settings',
       label: '醫師排班設定',
-      icon: Stethoscope,
+      icon: Sliders,
       roles: [UserRole.SYSTEM_ADMIN, UserRole.SCHEDULER]
     },
     {
@@ -79,7 +79,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentUser, onNavigate, currentPage,
   return (
     <div className="w-full bg-white border-b border-gray-200 min-h-16 flex items-center justify-between px-4 sticky top-0 z-50 shadow-sm pt-[env(safe-area-inset-top)]">
       {/* Left: Logo & Brand */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 shrink-0">
         <div className="w-8 h-8 bg-gradient-to-br from-teal-400 to-teal-600 rounded-lg flex items-center justify-center text-white font-bold text-lg shadow-sm shadow-teal-200">
           影
         </div>
@@ -89,7 +89,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentUser, onNavigate, currentPage,
       </div>
 
       {/* Center: Navigation Items */}
-      <div className="flex items-center gap-1 md:gap-2">
+      <div className="flex items-center gap-1 md:gap-2 flex-1 overflow-x-auto no-scrollbar mx-2">
         {navItems.filter(item => item.roles.includes(currentUser.role)).map((item) => {
           const Icon = item.icon;
           const isActive = currentPage === item.id;
@@ -113,7 +113,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentUser, onNavigate, currentPage,
       </div>
 
       {/* Right: User Profile & Logout */}
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-2 md:gap-4 shrink-0">
         <div className="flex items-center gap-2 pl-4 border-l border-gray-100">
           <div
             className="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-xs shadow-sm ring-2 ring-white"
@@ -130,7 +130,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentUser, onNavigate, currentPage,
         </div>
         <button
           onClick={onLogout}
-          className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+          className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors shrink-0"
           title="登出"
         >
           <LogOut size={18} />
