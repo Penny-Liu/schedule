@@ -2486,8 +2486,8 @@ BMD :{{bmd}}
         const { error } = await supabase
             .from('doctor_shifts')
             .update({ 
-                station: null, 
-                scheduled_station: null 
+                station: '', 
+                scheduled_station: '' 
             })
             .in('id', shiftIds);
 
