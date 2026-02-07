@@ -1425,8 +1425,19 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
     };
 
     // Updated: Use displayUsers to hide Part-Time from Off list
+    // Also exclude Resigned users (OFF due to resignation)
     const getOffStaff = (dateStr: string) => {
-        const offUsers = displayUsers.filter(user => db.getUserStatusOnDate(user.id, dateStr) === 'OFF');
+        const offUsers = displayUsers.filter(user => {
+            const status = db.getUserStatusOnDate(user.id, dateStr);
+            if (status !== 'OFF') return false;
+            
+            // Exclude if OFF due to resignation
+            if (user.isActive === false && user.resignationDate && dateStr > user.resignationDate) {
+                return false;
+            }
+            return true;
+        });
+        
         return offUsers.map(u => {
             const s = shifts.find(shift => shift.userId === u.id && shift.date === dateStr);
             return {
@@ -2447,7 +2458,17 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                             {/* Off Staff Summary */}
                             <div className="px-6 py-3 bg-slate-50 border-t border-slate-200 text-xs text-slate-500 flex flex-wrap gap-2 items-center">
                                 <span className="font-bold">今日休假:</span>
-                                {displayUsers.filter(u => getDayShift(u.id, toLocalISOString(dailyDate)).isOff).map(u => (
+                                {displayUsers.filter(u => {
+                                    const status = getDayShift(u.id, toLocalISOString(dailyDate));
+                                    if (!status.isOff) return false;
+                                    
+                                    // Exclude if OFF due to resignation
+                                    const dateStr = toLocalISOString(dailyDate);
+                                    if (u.isActive === false && u.resignationDate && dateStr > u.resignationDate) {
+                                        return false;
+                                    }
+                                    return true;
+                                }).map(u => (
                                     <span key={u.id} className="bg-white border border-slate-200 px-1.5 py-0.5 rounded text-slate-400">
                                         {u.name}
                                     </span>
