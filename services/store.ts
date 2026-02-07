@@ -1175,9 +1175,12 @@ BMD :{{bmd}}
             return 'OFF';
         }
 
-        const baseStatus = this.calculateBaseStatus(dateStr, user.groupId);
-        if (baseStatus === SYSTEM_OFF) {
-            return 'OFF';
+        // Part-Time users allow ignoring Group Cycle logic
+        if (!user.isPartTime) {
+            const baseStatus = this.calculateBaseStatus(dateStr, user.groupId);
+            if (baseStatus === SYSTEM_OFF) {
+                return 'OFF';
+            }
         }
 
         const approvedLeave = this.leaves.find(l =>

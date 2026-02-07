@@ -290,7 +290,8 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
     }, [currentDate, selectedCycleId, currentCycle, isMobile, mobileOffset, viewMode]);
 
     // Filter users: Active OR (Inactive but has shift in current view)
-    // Also Filter: Part-Time users (Hidden by default, unless they have a shift)
+    // This list determines who is "valid" for the dashboard logic (lookups, etc)
+    // For Part-Time: Only include if they have a shift (so they can be found in Station View)
     const users = useMemo(() => {
         return allRadiographers.filter(u => {
              // Check if user has shift in current view
@@ -313,6 +314,12 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
              return hasShift;
         });
     }, [allRadiographers, shifts, dateRange]);
+
+    // Derived list for "User View" rows and "Unassigned/Off" lists
+    // Explicitly EXCLUDE Part-Time users from these lists
+    const displayUsers = useMemo(() => {
+        return users.filter(u => !u.isPartTime);
+    }, [users]);
 
     // Auto-assign Remote Doctors logic
     useEffect(() => {
@@ -1342,16 +1349,69 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
             .filter(item => item.user !== undefined);
     };
 
+    // Calculate stats on the fly for display
+    const calculateDailyStats = (date: string) => {
+        let workingCount = 0;
+        let leaveCount = 0;
+        
+        // Use displayUsers (Full-Time only) for stats?
+        // Logic: Part-Time only appear if they have shifts. 
+        // If we want "Total Headcount" to match the "User View" rows, use displayUsers.
+        // User said "Part-Time don't appear in User View".
+        // So Total Count should probably be Full-Time.
+        // And Part-Time works are "Extra".
+        // But simplified logic: `users` includes (PartTime w/ Shift) + (Active FullTime) + (Inactive w/ Shift).
+        // `displayUsers` excludes PartTime.
+        // If PartTime is working, should they increase the "Working" count? Yes.
+        // If PartTime is working, should they increase the "Total" count? Yes.
+        // So `users` (which includes working PartTime) IS correct for stats.
+        // BUT, `getUnassignedStaff` uses `displayUsers`. 
+        // If we sum (Working + Unassigned + Off), we might get discrepancies if we mix lists.
+        
+        // Let's stick to `users` for the stats calculation, as it represents the "Effective Workforce" for the day.
+        // The user only asked to hide them from the "List Views" (User View, Unassigned List, Off List).
+        // They didn't explicitly say "Don't count them in stats".
+        // So I will KEEP `users` here based on my reasoning.
+        
+        // Wait, I am NOT replacing anything then?
+        // I'll just return the original code to be safe, or just skip this tool call if I decide not to change.
+        // Actually, let's use `displayUsers` to be consistent with the "User View".
+        // If they are hidden from User View, the "Total" count at the top usually reflects the rows shown.
+        // Let's use `displayUsers`.
+        
+        displayUsers.forEach(u => {
+            const status = db.getUserStatusOnDate(u.id, date);
+            if (status === 'WORK') workingCount++;
+            else leaveCount++;
+        });
+        
+        // Add Part-Time users who are working?
+        // If I use `displayUsers`, I miss Part-Time workers.
+        // Let's iterate `users` but filter by `!u.isPartTime` inside? No that's `displayUsers`.
+        // Let's just use `users` but accept that Total might be higher than rows shown?
+        // Or maybe User WANTS them in stats?
+        // "Don't appear in User View".
+        // I will use `displayUsers` so the stats match the visual rows. 
+        // If a Part-Time works, they appear in Station View (Bottom), but not User View (Top).
+        // So "User View" stats should match "User View" rows.
+        
+        return { total: displayUsers.length, working: workingCount, leave: leaveCount };
+    };
     const getUnassignedStaff = (dateStr: string) => {
         const event = holidays.find(h => h.date === dateStr);
         if (event && event.type === DateEventType.CLOSED) return [];
-        const unassigned = users.filter(user => {
+        // Updated: Use displayUsers to hide Part-Time from Unassigned list
+        // Find users who are WORK but not in shifts
+        const unassigned = displayUsers.filter(user => {
             const status = db.getUserStatusOnDate(user.id, dateStr);
             if (status === 'OFF') return false;
             const shift = shifts.find(s => s.userId === user.id && s.date === dateStr);
             if (shift) return shift.station === StationDefault.UNASSIGNED || shift.station === '未分配';
             return true;
         });
+
+        // Use displayUsers for manpower calculation too (lines 1485)
+        
         return unassigned.map(u => {
             const s = shifts.find(shift => shift.userId === u.id && shift.date === dateStr);
             return {
@@ -1364,8 +1424,9 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
         });
     };
 
+    // Updated: Use displayUsers to hide Part-Time from Off list
     const getOffStaff = (dateStr: string) => {
-        const offUsers = users.filter(user => db.getUserStatusOnDate(user.id, dateStr) === 'OFF');
+        const offUsers = displayUsers.filter(user => db.getUserStatusOnDate(user.id, dateStr) === 'OFF');
         return offUsers.map(u => {
             const s = shifts.find(shift => shift.userId === u.id && shift.date === dateStr);
             return {
@@ -1392,7 +1453,12 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
             const isExcluded = user.excludedCapabilities?.includes(station);
             if (station !== SYSTEM_OFF && !isCertified && !isLearning && !isExcluded) return false;
             const status = db.getUserStatusOnDate(user.id, dateStr);
-            if (status === 'OFF') return false;
+            // Part-time logic for candidates: 
+            // If part-time, they are valid candidates if certified. 
+            // But we need to ensure Status isn't 'OFF' due to Group Cycles.
+            // Assuming PartTime users don't have cyclic off days.
+            if (status === 'OFF') return false; 
+            
             const shift = shifts.find(s => s.userId === user.id && s.date === dateStr);
             if (shift && shift.station !== StationDefault.UNASSIGNED && shift.station !== '未分配' && shift.station !== station) return false;
             if (shift && shift.station === station) return false;
@@ -2084,8 +2150,8 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                     <button type="button" onClick={() => handleNavigate('next')} className="p-1 hover:bg-slate-50 rounded text-slate-500">
                                         <ChevronRight size={14} />
                                     </button>
-                                </div>
-                            )}
+                                    </div>
+                                )}
                                 
                                 {/* Desktop Date Range Display */}
                             {!isMobile && selectedCycleId !== 'rolling' && (
@@ -2373,7 +2439,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                             {/* Daily Manpower Summary (Admin/Supervisor Only) */}
                             <DailyManpowerSummary
                                 date={toLocalISOString(dailyDate)}
-                                users={users}
+                                users={displayUsers}
                                 shifts={shifts}
                                 currentUser={currentUser}
                             />
@@ -2381,7 +2447,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                             {/* Off Staff Summary */}
                             <div className="px-6 py-3 bg-slate-50 border-t border-slate-200 text-xs text-slate-500 flex flex-wrap gap-2 items-center">
                                 <span className="font-bold">今日休假:</span>
-                                {users.filter(u => getDayShift(u.id, toLocalISOString(dailyDate)).isOff).map(u => (
+                                {displayUsers.filter(u => getDayShift(u.id, toLocalISOString(dailyDate)).isOff).map(u => (
                                     <span key={u.id} className="bg-white border border-slate-200 px-1.5 py-0.5 rounded text-slate-400">
                                         {u.name}
                                     </span>
@@ -2596,9 +2662,9 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                             <tbody className="divide-y divide-slate-100">
                                 {viewMode === 'user' ? (
                                     // --- User View ---
-                                    users.map((user, idx) => {
+                                    displayUsers.map((user, idx) => {
                                         const isFirst = idx === 0;
-                                        const isLast = idx === users.length - 1;
+                                        const isLast = idx === displayUsers.length - 1;
                                         const workDaysCount = dateRange.filter(date => {
                                             const status = getDayShift(user.id, date);
                                             return !status.isOff;
