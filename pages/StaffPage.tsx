@@ -52,7 +52,9 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
     learningCapabilities: string[];
     excludedCapabilities: string[]; // New
     isRadiographer: boolean; // New
+    isPartTime: boolean; // New
     isActive: boolean; // New
+    resignationDate: string; // New
   }>({
     name: '',
     alias: '',
@@ -64,7 +66,9 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
     learningCapabilities: [],
     excludedCapabilities: [], // New
     isRadiographer: false, // New
-    isActive: true // New
+    isPartTime: false, // New
+    isActive: true, // New
+    resignationDate: '' // New
   });
 
   const resetForm = () => {
@@ -79,7 +83,9 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
       learningCapabilities: [],
       excludedCapabilities: [],
       isRadiographer: false,
-      isActive: true
+      isActive: true,
+      isPartTime: false,
+      resignationDate: ''
     });
     setEditingId(null);
   };
@@ -103,7 +109,9 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
         learningCapabilities: formData.learningCapabilities,
         excludedCapabilities: formData.excludedCapabilities,
         isRadiographer: formData.isRadiographer,
-        isActive: formData.isActive
+        isPartTime: formData.isPartTime,
+        isActive: formData.isActive,
+        resignationDate: formData.resignationDate
       });
     } else {
         // Create new user
@@ -119,7 +127,9 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
         learningCapabilities: formData.learningCapabilities,
         excludedCapabilities: formData.excludedCapabilities,
         isRadiographer: formData.isRadiographer,
+        isPartTime: formData.isPartTime,
         isActive: formData.isActive,
+        resignationDate: formData.resignationDate,
         password: '1234',
         mustChangePassword: true
       };
@@ -144,7 +154,9 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
       learningCapabilities: user.learningCapabilities || [],
       excludedCapabilities: user.excludedCapabilities || [],
       isRadiographer: user.isRadiographer || false,
-      isActive: user.isActive !== undefined ? user.isActive : true
+      isPartTime: user.isPartTime || false,
+      isActive: user.isActive !== undefined ? user.isActive : true,
+      resignationDate: user.resignationDate || ''
     });
   };
 
@@ -264,7 +276,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         {/* Form Section (Sticky) */}
         <div className="xl:col-span-1">
-          <div className={`bg-white p-5 rounded-xl shadow-[0_2px_12px_rgba(0,0,0,0.03)] border sticky top-4 transition-all duration-300 ${editingId ? 'border-teal-400 ring-1 ring-teal-100' : 'border-gray-100'}`}>
+          <div className={`bg-white p-5 rounded-xl shadow-[0_2px_12px_rgba(0,0,0,0.03)] border sticky top-4 transition-all duration-300 max-h-[calc(100vh-2rem)] overflow-y-auto custom-scrollbar ${editingId ? 'border-teal-400 ring-1 ring-teal-100' : 'border-gray-100'}`}>
             <div className="flex justify-between items-center mb-4">
               <h3 className={`text-sm font-bold flex items-center gap-2 ${editingId ? 'text-teal-700' : 'text-gray-800'}`}>
                 <span className={`w-1 h-4 rounded-full ${editingId ? 'bg-teal-600' : 'bg-gray-400'}`}></span>
@@ -317,17 +329,35 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                   placeholder="請輸入登入帳號"
                 />
               </div>
-              <div className="flex items-center gap-2 mb-2">
-                 <input
-                    type="checkbox"
-                    id="isRadiographer"
-                    checked={formData.isRadiographer}
-                    onChange={e => setFormData({ ...formData, isRadiographer: e.target.checked })}
-                    className="w-4 h-4 text-teal-600 border-gray-300 rounded focus:ring-teal-500"
-                 />
-                 <label htmlFor="isRadiographer" className="text-xs font-bold text-gray-700 cursor-pointer">
-                    是否為放射師 (顯示於排班總覽)
-                 </label>
+
+              <div className="flex flex-col gap-2 mb-2 p-3 bg-gray-50 rounded-lg border border-gray-100">
+                  <div className="flex items-center gap-2">
+                     <input
+                        type="checkbox"
+                        id="isRadiographer"
+                        checked={formData.isRadiographer}
+                        onChange={e => setFormData({ ...formData, isRadiographer: e.target.checked })}
+                        className="w-4 h-4 text-teal-600 border-gray-300 rounded focus:ring-teal-500"
+                     />
+                     <label htmlFor="isRadiographer" className="text-xs font-bold text-gray-700 cursor-pointer">
+                        是否為放射師 (顯示於排班總覽)
+                     </label>
+                  </div>
+                  
+                  {/* Part-time option - Indented to show relationship but separate click target */}
+                  <div className="flex items-center gap-2 ml-6">
+                     <input
+                        type="checkbox"
+                        id="isPartTime"
+                        checked={formData.isPartTime}
+                        onChange={e => setFormData({ ...formData, isPartTime: e.target.checked })}
+                        disabled={!formData.isRadiographer} // Only relevant if radiographer
+                        className={`w-4 h-4 text-teal-600 border-gray-300 rounded focus:ring-teal-500 ${!formData.isRadiographer ? 'opacity-50 cursor-not-allowed' : ''}`}
+                     />
+                     <label htmlFor="isPartTime" className={`text-xs font-bold cursor-pointer ${!formData.isRadiographer ? 'text-gray-400' : 'text-gray-700'}`}>
+                        兼職放射師 (總覽隱藏，崗位顯示)
+                     </label>
+                  </div>
               </div>
 
               <div className="flex items-center gap-2 mb-2 bg-gray-50 p-2 rounded border border-gray-100">
@@ -343,6 +373,18 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                     {formData.isActive ? '在職中 (Active)' : '已離職 (Resigned)'}
                  </label>
               </div>
+
+              {!formData.isActive && (
+                <div className="bg-red-50 p-3 rounded-lg border border-red-100 mb-2">
+                  <label className="text-xs font-bold text-red-700 mb-1 block">離職日期 (此日期後不排班)</label>
+                  <input
+                    type="date"
+                    value={formData.resignationDate}
+                    onChange={e => setFormData({ ...formData, resignationDate: e.target.value })}
+                    className="w-full px-3 py-2 border border-red-200 rounded-lg text-sm focus:ring-2 focus:ring-red-500 outline-none"
+                  />
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-semibold text-gray-500 mb-1 block">身份</label>

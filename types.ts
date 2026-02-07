@@ -31,6 +31,7 @@ export interface User {
   isActive?: boolean; // New: Soft delete flag (true = active, false = resigned)
   resignationDate?: string; // New: Date of resignation YYYY-MM-DD
   isRadiographer?: boolean; // New: Flag to indicate if user should appear in Radiographer Schedule
+  isPartTime?: boolean; // New: Flag for part-time radiographers (hidden in main view)
 }
 
 // Updated Station Defaults: MR moved before US

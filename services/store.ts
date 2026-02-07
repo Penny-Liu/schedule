@@ -1144,6 +1144,18 @@ BMD :{{bmd}}
         const user = this.users.find(u => u.id === userId);
         if (!user) return 'OFF';
 
+        // Check Resignation Date
+        if (user.isActive === false && user.resignationDate) {
+            if (dateStr > user.resignationDate) {
+                return 'OFF';
+            }
+        } else if (user.isActive === false && !user.resignationDate) {
+             // If resigned but no date... assume effective immediately? 
+             // Or maybe they are just "Inactive" generally. 
+             // Logic in Dashboard allows them if they have shifts.
+             // But for NEW assignments, they should be OFF.
+        }
+
         const shift = this.shifts.find(s => s.userId === userId && s.date === dateStr);
         // Explicit override: If assigned to OFF, it's OFF.
         if (shift && shift.station === SYSTEM_OFF) {

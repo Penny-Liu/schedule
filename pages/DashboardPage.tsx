@@ -290,19 +290,26 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
     }, [currentDate, selectedCycleId, currentCycle, isMobile, mobileOffset, viewMode]);
 
     // Filter users: Active OR (Inactive but has shift in current view)
+    // Also Filter: Part-Time users (Hidden by default, unless they have a shift)
     const users = useMemo(() => {
         return allRadiographers.filter(u => {
-             // 1. If Active (default), always show
-             if (u.isActive !== false) return true;
-             
-             // 2. If Inactive, only show if they have a shift in the current dateRange
-             // Check against current shifts state
+             // Check if user has shift in current view
              const hasShift = shifts.some(s => 
                  s.userId === u.id && 
-                 s.station !== StationDefault.UNASSIGNED && 
-                 s.station !== SYSTEM_OFF &&
-                 dateRange.includes(s.date)
+                 dateRange.includes(s.date) &&
+                 (
+                    (s.station !== StationDefault.UNASSIGNED && s.station !== SYSTEM_OFF) ||
+                    (s.specialRoles && s.specialRoles.length > 0)
+                 )
              );
+
+             // 1. If Part-Time, only show if has shift
+             if (u.isPartTime) return hasShift;
+
+             // 2. If Active (default), always show
+             if (u.isActive !== false) return true;
+             
+             // 3. If Inactive, only show if has shift
              return hasShift;
         });
     }, [allRadiographers, shifts, dateRange]);
