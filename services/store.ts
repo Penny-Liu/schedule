@@ -1175,8 +1175,32 @@ BMD :{{bmd}}
             return 'OFF';
         }
 
-        // Part-Time users allow ignoring Group Cycle logic
+        // Part-Time users skip Group Cycle logic entirely
         if (!user.isPartTime) {
+            // --- Group D: Rolling Rotation (Sun off, Mon-Sat rotate by fixed index) ---
+            if (user.groupId === StaffGroup.GROUP_D) {
+                const d = new Date(dateStr + 'T00:00:00');
+                // Sunday is always OFF
+                if (d.getDay() === 0) return 'OFF';
+
+                // Count non-Sunday days from cycle start to (but not including) dateStr
+                const refStr = this.settings.cycleStartDate || '2024-01-01';
+                const ref = new Date(refStr + 'T00:00:00');
+                let nonSundayCount = 0;
+                const cur = new Date(ref);
+                while (cur < d) {
+                    if (cur.getDay() !== 0) nonSundayCount++;
+                    cur.setDate(cur.getDate() + 1);
+                }
+
+                // Fixed index: groupIndex 0-3 for 4-person D group
+                const myIndex = user.groupIndex ?? 0;
+                const groupSize = 4; // D group is fixed at 4
+                if (nonSundayCount % groupSize === myIndex) return 'OFF';
+                return 'WORK';
+            }
+
+            // --- Groups A/B/C: existing 6-day cycle logic ---
             const baseStatus = this.calculateBaseStatus(dateStr, user.groupId);
             if (baseStatus === SYSTEM_OFF) {
                 return 'OFF';

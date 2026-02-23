@@ -55,6 +55,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
     isPartTime: boolean; // New
     isActive: boolean; // New
     resignationDate: string; // New
+    groupIndex: number; // For Group D rotation order
   }>({
     name: '',
     alias: '',
@@ -68,7 +69,8 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
     isRadiographer: false, // New
     isPartTime: false, // New
     isActive: true, // New
-    resignationDate: '' // New
+    resignationDate: '', // New
+    groupIndex: 0
   });
 
   const resetForm = () => {
@@ -85,7 +87,8 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
       isRadiographer: false,
       isActive: true,
       isPartTime: false,
-      resignationDate: ''
+      resignationDate: '',
+      groupIndex: 0
     });
     setEditingId(null);
   };
@@ -111,7 +114,8 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
         isRadiographer: formData.isRadiographer,
         isPartTime: formData.isPartTime,
         isActive: formData.isActive,
-        resignationDate: formData.resignationDate
+        resignationDate: formData.resignationDate,
+        groupIndex: formData.groupId === StaffGroup.GROUP_D ? formData.groupIndex : undefined
       });
     } else {
         // Create new user
@@ -130,6 +134,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
         isPartTime: formData.isPartTime,
         isActive: formData.isActive,
         resignationDate: formData.resignationDate,
+        groupIndex: formData.groupId === StaffGroup.GROUP_D ? formData.groupIndex : undefined,
         password: '1234',
         mustChangePassword: true
       };
@@ -156,7 +161,8 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
       isRadiographer: user.isRadiographer || false,
       isPartTime: user.isPartTime || false,
       isActive: user.isActive !== undefined ? user.isActive : true,
-      resignationDate: user.resignationDate || ''
+      resignationDate: user.resignationDate || '',
+      groupIndex: user.groupIndex ?? 0
     });
   };
 
@@ -410,10 +416,30 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                       onChange={e => setFormData({ ...formData, groupId: e.target.value as StaffGroup })}
                       className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-teal-500 outline-none text-sm shadow-sm bg-white cursor-pointer"
                     >
-                      <option value={StaffGroup.GROUP_A}>A 組</option>
-                      <option value={StaffGroup.GROUP_B}>B 組</option>
-                      <option value={StaffGroup.GROUP_C}>C 組</option>
+                      <option value={StaffGroup.GROUP_A}>A 組 (6天循環)</option>
+                      <option value={StaffGroup.GROUP_B}>B 組 (6天循環)</option>
+                      <option value={StaffGroup.GROUP_C}>C 組 (6天循環)</option>
+                      <option value={StaffGroup.GROUP_D}>D 組 (週日固定休，週一至六滾動輪休)</option>
                     </select>
+                  </div>
+                )}
+                {/* Group D index selector */}
+                {formData.groupId === StaffGroup.GROUP_D && (formData.role === UserRole.EMPLOYEE || formData.role === UserRole.SUPERVISOR || formData.role === UserRole.SYSTEM_ADMIN) && (
+                  <div>
+                    <label className="text-xs font-semibold text-gray-500 mb-1 block">
+                      D組輪休順序 (Index 0–3)
+                    </label>
+                    <select
+                      value={formData.groupIndex}
+                      onChange={e => setFormData({ ...formData, groupIndex: Number(e.target.value) })}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-teal-500 outline-none text-sm shadow-sm bg-white cursor-pointer"
+                    >
+                      <option value={0}>0（第1位休）</option>
+                      <option value={1}>1（第2位休）</option>
+                      <option value={2}>2（第3位休）</option>
+                      <option value={3}>3（第4位休）</option>
+                    </select>
+                    <p className="text-[10px] text-gray-400 mt-1">每4天中的第幾天輪到這個人休息，4人各設不同數字 (0-3)</p>
                   </div>
                 )}
               </div>

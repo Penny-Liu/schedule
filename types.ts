@@ -10,7 +10,8 @@ export enum UserRole {
 export enum StaffGroup {
   GROUP_A = 'A',
   GROUP_B = 'B',
-  GROUP_C = 'C'
+  GROUP_C = 'C',
+  GROUP_D = 'D'  // Rolling rotation: Sun always off, Mon-Sat rotate by index
 }
 
 export interface User {
@@ -32,6 +33,7 @@ export interface User {
   resignationDate?: string; // New: Date of resignation YYYY-MM-DD
   isRadiographer?: boolean; // New: Flag to indicate if user should appear in Radiographer Schedule
   isPartTime?: boolean; // New: Flag for part-time radiographers (hidden in main view)
+  groupIndex?: number; // New: Fixed rotation index for Group D (0-based, determines rest day order)
 }
 
 // Updated Station Defaults: MR moved before US
