@@ -1206,14 +1206,16 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
         }
 
         // No override record: Fallback to calculated status
-        const autoStation = db.calculateBaseStatus(dateStr, users.find(u => u.id === userId)?.groupId || '');
         const event = holidays.find(h => h.date === dateStr);
         const isClosed = event?.type === DateEventType.CLOSED;
 
         if (isClosed) return { station: null, specialRoles: [], isOff: true };
         const user = users.find(u => u.id === userId);
         if (!user) return { station: null, specialRoles: [], isOff: false };
-        if (autoStation === SYSTEM_OFF) return { station: null, specialRoles: [], isOff: true };
+
+        // Use getUserStatusOnDate for ALL group logic (A/B/C cycle + Group D rolling rotation)
+        const status = db.getUserStatusOnDate(userId, dateStr);
+        if (status === 'OFF') return { station: null, specialRoles: [], isOff: true };
 
         // Default: Unassigned work day
         return { station: null, specialRoles: [], isOff: false };

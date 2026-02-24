@@ -557,7 +557,14 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
 
         {/* User List */}
         <div className="xl:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4 auto-rows-min pb-20">
-          {users.map(user => {
+          {users.filter(user => {
+            // Hide resigned users once their resignation date is effective
+            if (user.isActive === false) {
+              if (!user.resignationDate) return false; // No date = already resigned
+              return new Date().toISOString().slice(0, 10) <= user.resignationDate; // Still show before effective date
+            }
+            return true;
+          }).map(user => {
             const isEditingThisUser = editingId === user.id;
 
             return (

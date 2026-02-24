@@ -1181,7 +1181,9 @@ BMD :{{bmd}}
             if (user.groupId === StaffGroup.GROUP_D) {
                 const d = new Date(dateStr + 'T00:00:00');
                 // Sunday is always OFF
-                if (d.getDay() === 0) return 'OFF';
+                if (d.getDay() === 0) {
+                    return 'OFF';
+                }
 
                 // Count non-Sunday days from cycle start to (but not including) dateStr
                 const refStr = this.settings.cycleStartDate || '2024-01-01';
@@ -1195,9 +1197,9 @@ BMD :{{bmd}}
 
                 // Fixed index: groupIndex 0-3 for 4-person D group
                 const myIndex = user.groupIndex ?? 0;
-                const groupSize = 4; // D group is fixed at 4
-                if (nonSundayCount % groupSize === myIndex) return 'OFF';
-                return 'WORK';
+                const groupSize = 4;
+                const result = nonSundayCount % groupSize === myIndex ? 'OFF' : 'WORK';
+                return result;
             }
 
             // --- Groups A/B/C: existing 6-day cycle logic ---
