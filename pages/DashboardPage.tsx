@@ -304,8 +304,10 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                  )
              );
 
-             // 1. If Part-Time, only show if has shift
-             if (u.isPartTime) return hasShift;
+             // 1. If Part-Time and still active → always include so they can be assigned to stations
+             //    (displayUsers will still exclude them from User View rows)
+             //    If resigned (isActive=false), only show if they have a shift (same as inactive rule)
+             if (u.isPartTime) return u.isActive !== false || hasShift;
 
              // 2. If Active (default), always show
              if (u.isActive !== false) return true;
