@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import type { User, Shift } from '../types';
+import type { User, Shift, DoctorShift } from '../types';
 import { UserRole, SYSTEM_OFF, SPECIAL_ROLES, LeaveRequest, LeaveStatus, LeaveType, StationDefault, DateEventType } from '../types';
 import { db } from '../services/store';
 import { ChevronLeft, ChevronRight, Briefcase, Moon, Sun, Monitor, Activity, Calendar as CalendarIcon, Filter, Wand2, Users, LayoutList, Star, AlertCircle, Plus, X, Download, BarChart2, Sparkles, ChevronDown, ChevronUp, GripVertical, BookOpen, Lock, Unlock, CheckCircle, Loader2, User as UserIcon, Key, Settings, Trash2, Check, AlertTriangle, Copy, FileSpreadsheet } from 'lucide-react';
@@ -76,6 +76,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
 
     const pendingLeaves = db.getLeaves().filter(l => l.status === LeaveStatus.PENDING);
     const [shifts, setShifts] = useState<Shift[]>(db.getShifts('', ''));
+    const [doctorShifts, setDoctorShifts] = useState(db.getDoctorShifts());
     
     
     const [stationRequirements, setStationRequirements] = useState(db.getStationRequirements());
@@ -143,7 +144,10 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
             setAllRadiographers(db.getUsers().filter(u => u.isRadiographer));
             setShifts([...db.getShifts('', '')]);
             setDisplayOrder([...db.getStationDisplayOrder()]);
+            setDoctorShifts([...db.getDoctorShifts()]);
         });
+        // Always refresh doctor_shifts on mount (bypass initializeData's isLoaded cache)
+        db.refreshDoctorShifts();
         return () => unsubscribe();
     }, []);
 
@@ -2456,6 +2460,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                 date={toLocalISOString(dailyDate)}
                                 users={displayUsers}
                                 shifts={shifts}
+                                doctorShifts={doctorShifts}
                                 currentUser={currentUser}
                             />
 
@@ -3387,8 +3392,9 @@ const DailyManpowerSummary: React.FC<{
     date: string;
     users: User[];
     shifts: Shift[];
+    doctorShifts: DoctorShift[];
     currentUser: User;
-}> = ({ date, users, shifts, currentUser }) => {
+}> = ({ date, users, shifts, doctorShifts, currentUser }) => {
     // Permission Check: Admin or Supervisor only
     const canAccess = currentUser.role === UserRole.SYSTEM_ADMIN || currentUser.role === UserRole.SUPERVISOR;
     if (!canAccess) return null;
@@ -3438,6 +3444,9 @@ const DailyManpowerSummary: React.FC<{
         
         const support: string[] = []; // 支援
         const dazhi: string[] = []; // 大直 assigned
+        const dazhiShort: string[] = []; // 大直 - 後2字
+        const remote_short: string[] = []; // 遠健 - 後2字
+        const beitou: Array<{ name: string; station: string }> = []; // 北投 (all others)
 
         let remoteCount = 0;
         let beitouCount = 0;
@@ -3464,9 +3473,11 @@ const DailyManpowerSummary: React.FC<{
             if (s.station.includes('大直')) {
                 dazhiCount++;
                 dazhi.push(name);
+                dazhiShort.push(u ? u.name.slice(-2) : name);
             } else if (s.station.includes('遠距') || s.station.includes('遠班')) {
                 remoteCount++;
                 remote.push(name);
+                remote_short.push(u ? u.name.slice(-2) : name);
             } else if (isLearning) {
                 // Learning doesn't count towards Beitou manpower
                 learning.push(`${name}(${modality})`);
@@ -3474,6 +3485,7 @@ const DailyManpowerSummary: React.FC<{
                 // Admin doesn't count towards Beitou manpower
             } else {
                 beitouCount++; // Default to Beitou for others
+                beitou.push({ name: u ? u.name.slice(-2) : name, station: s.station });
             }
 
             // Categories (Exclude Learning from main lists)
@@ -3497,7 +3509,10 @@ const DailyManpowerSummary: React.FC<{
             remote,
             remoteCount,
             dazhi,
-            dazhiCount
+            dazhiShort,
+            remote_short,
+            dazhiCount,
+            beitou
         };
     }, [shifts, date, users]);
 
@@ -3508,7 +3523,7 @@ const DailyManpowerSummary: React.FC<{
         const dateStr = `${d.getMonth() + 1}/${d.getDate()}(${dayNames[d.getDay()]})`;
 
         // --- Fetch Doctor Info ---
-        const docShifts = db.getDoctorShifts().filter(s => s.date === date);
+        const docShifts = doctorShifts.filter(s => s.date === date);
         const doctors = db.getDoctors();
         const getDocAlias = (id: string) => {
             const doc = doctors.find(d => d.id === id);
@@ -3528,9 +3543,8 @@ const DailyManpowerSummary: React.FC<{
         const imagingDocs = docShifts
             .filter(s => {
                 if (s.station !== '影像') return false;
-                const doc = doctors.find(d => d.id === s.doctorId);
-                // Exclude doctors who work in Taichung (per user request)
-                if (doc?.locations.includes('台中')) return false;
+                // Exclude if this specific shift is at Taichung location
+                if (s.location === '台中') return false;
                 return true;
             })
             .map(s => getDocAlias(s.doctorId));
@@ -3730,8 +3744,37 @@ BMD :{{bmd}}
             }
         }
 
-        return { full: finalText, section1, section2, section3 };
-    }, [date, shifts, manpower, users, stats]);
+        // --- Section 4: 工作量 (by location) ---
+        const d4 = new Date(date + 'T00:00:00');
+        const workloadDateStr = `${d4.getMonth() + 1}/${d4.getDate()}工作量`;
+        const stationPriority = (station: string): number => {
+            if (station.includes('場控')) return 0;
+            if (station.includes('MR')) return 1;
+            if (station.includes('US')) return 2;
+            if (station.includes('CT')) return 3;
+            if (station.includes('BMD') || station.includes('DX')) return 4;
+            if (station.includes('支援')) return 5;
+            if (station === '行政') return 6;
+            return 7;
+        };
+        const sortedBeitou = [...manpower.beitou].sort((a, b) => stationPriority(a.station) - stationPriority(b.station));
+        const beitouLines = sortedBeitou.map(({ name }) => `${name}：`).join('\n');
+        const dazhiLines = manpower.dazhiShort.map(n => `${n}：`).join('\n');
+        const remoteLines = manpower.remote_short.map(n => `${n}：`).join('\n');
+        const section4Parts: string[] = [workloadDateStr];
+        if (manpower.beitou.length > 0) {
+            section4Parts.push(`北投\n${beitouLines}`);
+        }
+        if (manpower.dazhi.length > 0) {
+            section4Parts.push(`大直\n${dazhiLines}`);
+        }
+        if (manpower.remote.length > 0) {
+            section4Parts.push(`遠健\n${remoteLines}`);
+        }
+        const section4 = section4Parts.join('\n\n');
+
+        return { full: finalText, section1, section2, section3, section4 };
+    }, [date, shifts, manpower, users, stats, doctorShifts]);
 
     const handleCopy = (text: string) => {
         navigator.clipboard.writeText(text).catch(err => {
@@ -3748,6 +3791,7 @@ BMD :{{bmd}}
                     今日崗位總覽 (管理員專用)
                 </h3>
              </div>
+
 
              {/* Daily Events & Memos */}
              {dailyEvents.length > 0 && (
@@ -3816,6 +3860,22 @@ BMD :{{bmd}}
                         className="w-full h-16 text-sm font-mono text-gray-700 bg-transparent outline-none resize-none"
                         readOnly
                         value={copyText.section3}
+                     />
+                </div>
+
+                 {/* Section 4: 工作量 by location */}
+                 <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                    <div className="flex justify-between items-center mb-2">
+                         <div className="text-xs text-gray-500 font-medium">區塊 4：工作量</div>
+                         <button type="button" onClick={() => handleCopy(copyText.section4)} className="text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 px-2 py-1 rounded flex items-center gap-1">
+                            <Copy size={12} /> 複製
+                         </button>
+                    </div>
+                     <textarea 
+                        className="w-full text-sm font-mono text-gray-700 bg-transparent outline-none resize-none"
+                        style={{ minHeight: `${Math.max(6, (manpower.beitou.length + manpower.dazhi.length + manpower.remote.length) * 1.5 + 6) * 1.5}rem` }}
+                        readOnly
+                        value={copyText.section4}
                      />
                 </div>
              </div>

@@ -228,7 +228,15 @@ class Store {
                  await this.seedMockDoctors();
             }
 
-            const { data: doctorShiftsData } = await supabase.from('doctor_shifts').select('*');
+            const today = new Date();
+            const sixMonthsAgo = new Date(today.getFullYear(), today.getMonth() - 6, 1).toISOString().split('T')[0];
+            const sixMonthsAhead = new Date(today.getFullYear(), today.getMonth() + 6, 28).toISOString().split('T')[0];
+            const { data: doctorShiftsData } = await supabase
+                .from('doctor_shifts')
+                .select('*')
+                .gte('date', sixMonthsAgo)
+                .lte('date', sixMonthsAhead)
+                .limit(10000);
             if (doctorShiftsData) {
                 this.doctorShifts = doctorShiftsData.map((s: any) => ({
                     ...s,
@@ -1440,6 +1448,31 @@ BMD :{{bmd}}
 
     getDoctorShifts() {
         return this.doctorShifts;
+    }
+
+    async refreshDoctorShifts() {
+        const today = new Date();
+        const sixMonthsAgo = new Date(today.getFullYear(), today.getMonth() - 6, 1).toISOString().split('T')[0];
+        const sixMonthsAhead = new Date(today.getFullYear(), today.getMonth() + 6, 28).toISOString().split('T')[0];
+        const { data } = await supabase
+            .from('doctor_shifts')
+            .select('*')
+            .gte('date', sixMonthsAgo)
+            .lte('date', sixMonthsAhead)
+            .limit(10000);
+        if (data) {
+            this.doctorShifts = data.map((s: any) => ({
+                ...s,
+                doctorId: s.doctor_id || s.doctorId,
+                explanationTaskType: s.explanation_task_type || s.explanationTaskType,
+                workTime: s.work_time || s.workTime,
+                note: s.note,
+                location: s.location,
+                task: s.task,
+                scheduled_station: s.scheduled_station
+            }));
+            this.notifyListeners();
+        }
     }
     
     getDoctorShift(doctorId: string, date: string) {
