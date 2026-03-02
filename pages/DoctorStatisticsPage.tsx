@@ -13,35 +13,10 @@ const DoctorStatisticsPage: React.FC<DoctorStatisticsPageProps> = ({ currentUser
   const [savingId, setSavingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Initialize selectedMonth based on the most common cycle or current date
+  // Initialize selectedMonth strictly to current YYYY-MM
   const [selectedMonth, setSelectedMonth] = useState<string>(() => {
     const today = new Date();
-    const currentYYYYMM = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
-    
-    // Check if there are saved cycles that include today's date
-    const todayStr = currentYYYYMM + `-${String(today.getDate()).padStart(2, '0')}`;
-    const monthCounts: Record<string, number> = {};
-    
-    doctors.forEach(doc => {
-      if (doc.personalCycles) {
-        Object.entries(doc.personalCycles).forEach(([monthKey, cycle]) => {
-          if (cycle.startDate <= todayStr && cycle.endDate >= todayStr) {
-            monthCounts[monthKey] = (monthCounts[monthKey] || 0) + 1;
-          }
-        });
-      }
-    });
-
-    let bestMonth = currentYYYYMM;
-    let maxCount = 0;
-    Object.entries(monthCounts).forEach(([monthKey, count]) => {
-      if (count > maxCount) {
-        maxCount = count;
-        bestMonth = monthKey;
-      }
-    });
-
-    return bestMonth;
+    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
   });
 
   // Calculate default start and end dates for a given YYYY-MM strictly for that month
