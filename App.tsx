@@ -86,6 +86,8 @@ const App: React.FC = () => {
     setCurrentUser(user);
     if (user.role === UserRole.SCHEDULER || user.role === UserRole.VIEWER) {
       setCurrentPage('physician_schedule');
+    } else if (user.role === UserRole.FINANCE) {
+      setCurrentPage('doctor_statistics');
     } else {
       setCurrentPage('dashboard');
     }

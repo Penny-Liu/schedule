@@ -236,8 +236,8 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
     // Permission Check
     // Can edit if Admin/Scheduler AND NOT Locked
     const canEdit = (currentUser.role === UserRole.SYSTEM_ADMIN || currentUser.role === UserRole.SCHEDULER) && !isLocked;
-    // Viewer can edit stats only
-    const canEditStats = (currentUser.role === UserRole.SYSTEM_ADMIN || currentUser.role === UserRole.SCHEDULER || currentUser.role === UserRole.VIEWER) && !isLocked;
+    // Viewer and Finance can see stats only
+    const canEditStats = (currentUser.role === UserRole.SYSTEM_ADMIN || currentUser.role === UserRole.SCHEDULER || currentUser.role === UserRole.VIEWER || currentUser.role === UserRole.FINANCE) && !isLocked;
     const canManageLock = currentUser.role === UserRole.SYSTEM_ADMIN || currentUser.role === UserRole.SCHEDULER;
     
     const [doctors, setDoctors] = useState<Doctor[]>(db.getDoctors());
@@ -289,7 +289,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
     const [selectedCell, setSelectedCell] = useState<{ doctorId: string, date: string } | null>(null);
     const [editData, setEditData] = useState<{ station: string, workTime: string, note: string, location: string, task: string }>({ station: '', workTime: '', note: '', location: '', task: '' });
     const [viewMode, setViewMode] = useState<'personnel' | 'station' | 'daily' | 'statistics'>(() => {
-        return currentUser.role === UserRole.VIEWER ? 'daily' : 'personnel';
+        return (currentUser.role === UserRole.VIEWER || currentUser.role === UserRole.FINANCE) ? 'daily' : 'personnel';
     });
     const [isQuickExcludeMode, setIsQuickExcludeMode] = useState(false);
     const [isReorderMode, setIsReorderMode] = useState(false);
@@ -798,7 +798,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                       const rawText = raw.content || '';
                                       if (rawText.includes('北') || raw.rawShift.location === '北') data.cell.styles.fillColor = [220, 235, 255];
                                       if (rawText.includes('直') || raw.rawShift.location === '直') data.cell.styles.fillColor = [240, 220, 200];
-                                      if (rawText.includes('中') || raw.rawShift.location === '中') data.cell.styles.fillColor = [255, 235, 235]; // Redder light shade
+                                       if (rawText.includes('中') || raw.rawShift.location === '中') data.cell.styles.fillColor = [255, 248, 186]; // Yellow for 台中
                                       
                                       if (raw.rawShift.task && raw.rawShift.task.includes('晚班')) {
                                           data.cell.styles.textColor = [220, 0, 0];
@@ -1697,28 +1697,28 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                     <div className="flex items-center bg-slate-100 rounded-lg p-1 border border-slate-200">
                         <button 
                             onClick={() => setViewMode('personnel')}
-                            className={`px-2 md:px-3 py-1 md:py-1.5 rounded-md text-xs md:text-sm font-bold transition-all ${viewMode === 'personnel' ? 'bg-white text-teal-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                            className={`px-2 md:px-3 py-1 rounded-md text-xs font-bold transition-all ${viewMode === 'personnel' ? 'bg-white text-teal-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
                         >
                             人員
                         </button>
                         <button 
                             onClick={() => setViewMode('station')}
-                            className={`px-2 md:px-3 py-1 md:py-1.5 rounded-md text-xs md:text-sm font-bold transition-all ${viewMode === 'station' ? 'bg-white text-teal-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                            className={`px-2 md:px-3 py-1 rounded-md text-xs font-bold transition-all ${viewMode === 'station' ? 'bg-white text-teal-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
                         >
                             崗位
                         </button>
                          <button 
                             onClick={() => setViewMode('daily')}
-                            className={`px-2 md:px-3 py-1 md:py-1.5 rounded-md text-xs md:text-sm font-bold transition-all ${viewMode === 'daily' ? 'bg-white text-teal-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                            className={`px-2 md:px-3 py-1 rounded-md text-xs font-bold transition-all ${viewMode === 'daily' ? 'bg-white text-teal-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
                         >
                             每日
                         </button>
                         {canEdit && (
                             <button 
                                 onClick={() => setViewMode('statistics')}
-                                className={`px-3 py-1.5 rounded-md text-sm font-bold transition-all flex items-center gap-1 ${viewMode === 'statistics' ? 'bg-white text-teal-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                                className={`px-2 md:px-3 py-1 rounded-md text-xs font-bold transition-all flex items-center gap-1 ${viewMode === 'statistics' ? 'bg-white text-teal-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
                             >
-                                <BarChart2 size={14} /> 統計報表
+                                <BarChart2 size={13} /> 統計報表
                             </button>
                         )}
                     </div>
@@ -2188,7 +2188,8 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                                 <span className="text-slate-400 text-lg font-bold select-none">×</span>
                                                             </div>
                                                         ) : (
-                                                            <div className="h-full w-full flex flex-col items-center justify-center p-0.5 space-y-0.5">
+                                                            <div className="h-full w-full flex flex-col items-center justify-center p-0 overflow-hidden">
+                                                            <div className="flex flex-col items-center justify-center space-y-0.5 w-full" style={{ transform: 'scale(0.9)', transformOrigin: 'center center' }}>
                                                                 {(() => {
                                                                     // Check if this doctor has both 婦科 and 解說 on this date
                                                                     const allShiftsForDate = db.getDoctorShifts().filter(
@@ -2237,6 +2238,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                                     }
                                                                     return null;
                                                                  })()}
+                                                            </div>
                                                             </div>
                                                         )
                                                     ) : (

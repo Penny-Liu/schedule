@@ -402,6 +402,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                     <option value={UserRole.EMPLOYEE}>放射師</option>
                     <option value={UserRole.SCHEDULER}>HR / 排班管理員</option>
                     <option value={UserRole.VIEWER}>瀏覽者 (Viewer)</option>
+                    <option value={UserRole.FINANCE}>財會</option>
                     <option value={UserRole.SUPERVISOR}>部門主管</option>
                     {currentUser.role === UserRole.SYSTEM_ADMIN && (
                       <option value={UserRole.SYSTEM_ADMIN}>系統管理員</option>
@@ -616,10 +617,17 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                           : (user.role === UserRole.SYSTEM_ADMIN
                             ? 'bg-gray-800 text-white border-gray-900'
                             : (user.role === UserRole.SCHEDULER 
-                                ? 'bg-teal-50 text-teal-700 border-teal-100' 
-                                : 'bg-blue-50 text-blue-700 border-blue-100'))
+                                ? 'bg-teal-50 text-teal-700 border-teal-100'
+                                : (user.role === UserRole.VIEWER || user.role === UserRole.FINANCE
+                                    ? 'bg-amber-50 text-amber-700 border-amber-100'
+                                    : 'bg-blue-50 text-blue-700 border-blue-100')))
                         }`}>
-                        {user.role === UserRole.SUPERVISOR ? '主管' : (user.role === UserRole.SYSTEM_ADMIN ? '系統管理員' : (user.role === UserRole.SCHEDULER ? 'HR / 排班' : '放射師'))}
+                        {user.role === UserRole.SUPERVISOR ? '主管' 
+                          : (user.role === UserRole.SYSTEM_ADMIN ? '系統管理員' 
+                          : (user.role === UserRole.SCHEDULER ? 'HR / 排班' 
+                          : (user.role === UserRole.VIEWER ? '瀏覽者'
+                          : (user.role === UserRole.FINANCE ? '財會' 
+                          : '放射師'))))}
                       </span>
                       {user.role !== UserRole.SYSTEM_ADMIN && (
                         <span className="text-[10px] px-2 py-0.5 rounded font-bold border bg-orange-50 text-orange-700 border-orange-100 flex items-center gap-1">

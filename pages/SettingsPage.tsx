@@ -87,6 +87,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
     const isSupervisorOrAdmin = currentUser.role === UserRole.SUPERVISOR || currentUser.role === UserRole.SYSTEM_ADMIN;
     const canManageDates = isSupervisorOrAdmin || currentUser.role === UserRole.SCHEDULER;
     const isSystemAdmin = currentUser.role === UserRole.SYSTEM_ADMIN;
+    const isFinanceOnly = currentUser.role === UserRole.FINANCE;
 
     // Calculate duration helper
     const cycleDuration = useMemo(() => {
@@ -406,6 +407,8 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
             case DateEventType.NATIONAL: return '國定假日';
             case DateEventType.MEETING: return '備忘'; // Unify Legacy Meeting as Memo
             case DateEventType.NOTE: return '備忘';
+            case DateEventType.RADIOGRAPHER_NOTE: return '放射師備註';
+            case DateEventType.DOCTOR_NOTE: return '醫師備註';
             case DateEventType.CLOSED: return '休診';
             default: return type;
         }
@@ -416,6 +419,8 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
             case DateEventType.NATIONAL: return 'text-red-600 bg-red-100';
             case DateEventType.MEETING: return 'text-blue-600 bg-blue-100'; // Unify Legacy Meeting as Blue
             case DateEventType.NOTE: return 'text-blue-600 bg-blue-100';
+            case DateEventType.RADIOGRAPHER_NOTE: return 'text-teal-600 bg-teal-100 border-teal-200';
+            case DateEventType.DOCTOR_NOTE: return 'text-purple-600 bg-purple-100 border-purple-200';
             case DateEventType.CLOSED: return 'text-gray-600 bg-gray-200 border-gray-300';
             default: return 'text-gray-600 bg-gray-100';
         }
@@ -425,6 +430,75 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
 
     // Filter out stations that shouldn't have quantity settings (OFF and UNASSIGNED)
     const displayStations = stations.filter(s => s !== SYSTEM_OFF && s !== StationDefault.UNASSIGNED);
+
+    if (isFinanceOnly) {
+        return (
+            <div className="p-6 max-w-lg mx-auto">
+                <div className="mb-6 flex items-center gap-3">
+                    <div className="p-2.5 bg-white border border-gray-200 rounded-xl shadow-sm">
+                        <Settings className="text-teal-600" size={24} />
+                    </div>
+                    <div>
+                        <h2 className="text-xl font-bold text-gray-800">個人設定</h2>
+                        <p className="text-sm text-gray-500">您僅可修改個人密碼</p>
+                    </div>
+                </div>
+                <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                    <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
+                        <h3 className="font-bold text-gray-800 flex items-center gap-2">
+                            <UserCircle size={16} className="text-teal-600" />
+                            修改密碼
+                        </h3>
+                    </div>
+                    <div className="p-6">
+                        <form onSubmit={handleChangePassword} className="space-y-4">
+                            <div>
+                                <label className="text-xs font-semibold text-gray-500 mb-1 block">舊密碼</label>
+                                <input
+                                    type="password"
+                                    value={passwordData.old}
+                                    onChange={(e) => setPasswordData({ ...passwordData, old: e.target.value })}
+                                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 outline-none"
+                                    placeholder="請輸入目前密碼"
+                                    required
+                                />
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="text-xs font-semibold text-gray-500 mb-1 block">新密碼</label>
+                                    <input
+                                        type="password"
+                                        value={passwordData.new}
+                                        onChange={(e) => setPasswordData({ ...passwordData, new: e.target.value })}
+                                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 outline-none"
+                                        placeholder="請輸入新密碼"
+                                        required
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-xs font-semibold text-gray-500 mb-1 block">確認新密碼</label>
+                                    <input
+                                        type="password"
+                                        value={passwordData.confirm}
+                                        onChange={(e) => setPasswordData({ ...passwordData, confirm: e.target.value })}
+                                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 outline-none"
+                                        placeholder="再次輸入新密碼"
+                                        required
+                                    />
+                                </div>
+                            </div>
+                            <button
+                                type="submit"
+                                className="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-2.5 rounded-lg transition-colors text-sm flex justify-center items-center gap-2 shadow-sm shadow-teal-200"
+                            >
+                                <Key size={16} /> 修改密碼
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="p-6 max-w-7xl mx-auto h-screen overflow-y-auto">
@@ -1049,7 +1123,11 @@ BMD :{{bmd}}
                                             className="flex-1 px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 outline-none cursor-pointer bg-white"
                                         >
                                             <option value={DateEventType.NATIONAL}>國定假日 (紅字)</option>
-                                            <option value={DateEventType.NOTE}>備忘 (藍字)</option>
+                                            <option value={DateEventType.NOTE}>全院備忘 (藍字)</option>
+                                            {isSupervisorOrAdmin && (
+                                                <option value={DateEventType.RADIOGRAPHER_NOTE}>放射師備註 (綠字)</option>
+                                            )}
+                                            <option value={DateEventType.DOCTOR_NOTE}>醫師備註 (紫字)</option>
                                             <option value={DateEventType.CLOSED}>休診 (全員預設休假)</option>
                                         </select>
                                         <button type="submit" className="bg-gray-800 text-white px-6 rounded-lg hover:bg-gray-700 flex items-center justify-center">
@@ -1145,8 +1223,8 @@ BMD :{{bmd}}
 
 
                             <div className="p-2 overflow-y-auto max-h-[250px]">
-                                {holidays.length > 0 ? (
-                                    holidays.map(h => (
+                                {holidays.filter(h => !(currentUser.role === UserRole.SCHEDULER && h.type === DateEventType.RADIOGRAPHER_NOTE)).length > 0 ? (
+                                    holidays.filter(h => !(currentUser.role === UserRole.SCHEDULER && h.type === DateEventType.RADIOGRAPHER_NOTE)).map(h => (
                                         <div key={h.id || `${h.date}-${h.name}`} className="flex justify-between items-center p-3 hover:bg-gray-50 rounded-lg text-sm group">
                                             <div className="flex items-center gap-3">
                                                 <div className="font-mono text-gray-500 font-bold bg-gray-100 px-2 py-0.5 rounded text-xs">{h.date}</div>

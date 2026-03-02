@@ -17,7 +17,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
 
     // Split users by role
     const physicianSideUsers = users.filter(u => 
-        u.role === UserRole.SCHEDULER || u.role === UserRole.VIEWER
+        u.role === UserRole.SCHEDULER || u.role === UserRole.VIEWER || u.role === UserRole.FINANCE
     );
 
     const radiographerSideUsers = users.filter(u => 
@@ -65,6 +65,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
             case UserRole.SYSTEM_ADMIN: return '管理員';
             case UserRole.SCHEDULER: return '排班管理';
             case UserRole.VIEWER: return '瀏覽者';
+            case UserRole.FINANCE: return '財會';
             default: return '放射師';
         }
     };
@@ -75,6 +76,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
             case UserRole.SYSTEM_ADMIN: return <Shield size={14} className="text-gray-700" />;
             case UserRole.SCHEDULER: return <Calendar size={14} className="text-blue-500" />;
             case UserRole.VIEWER: return <Eye size={14} className="text-green-500" />;
+            case UserRole.FINANCE: return <Eye size={14} className="text-amber-500" />;
             default: return <Activity size={14} className="text-teal-500" />;
         }
     }
@@ -127,6 +129,11 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
                                             </optgroup>
                                             <optgroup label="瀏覽者 (Viewer)" className="text-slate-900 bg-white">
                                                 {physicianSideUsers.filter(u => u.role === UserRole.VIEWER).map(user => (
+                                                    <option key={user.id} value={user.id}>{user.name} ({user.alias || user.name[0]})</option>
+                                                ))}
+                                            </optgroup>
+                                            <optgroup label="財會" className="text-slate-900 bg-white">
+                                                {physicianSideUsers.filter(u => u.role === UserRole.FINANCE).map(user => (
                                                     <option key={user.id} value={user.id}>{user.name} ({user.alias || user.name[0]})</option>
                                                 ))}
                                             </optgroup>

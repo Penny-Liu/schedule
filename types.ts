@@ -5,6 +5,7 @@ export enum UserRole {
   SYSTEM_ADMIN = 'SYSTEM_ADMIN', // 系統管理員
   SCHEDULER = 'SCHEDULER', // 排班管理員 (HR/醫師排班)
   VIEWER = 'VIEWER', // 瀏覽者 (僅查看)
+  FINANCE = 'FINANCE', // 財會 (僅查看醫師排班/工作統計/個人設定)
 }
 
 export enum StaffGroup {

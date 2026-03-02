@@ -44,7 +44,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentUser, onNavigate, currentPage,
       id: 'physician_schedule',
       label: '醫師排班',
       icon: CalendarClock,
-      roles: [UserRole.SYSTEM_ADMIN, UserRole.SUPERVISOR, UserRole.SCHEDULER, UserRole.VIEWER]
+      roles: [UserRole.SYSTEM_ADMIN, UserRole.SUPERVISOR, UserRole.SCHEDULER, UserRole.VIEWER, UserRole.FINANCE]
     },
     {
       id: 'doctors',
@@ -56,7 +56,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentUser, onNavigate, currentPage,
       id: 'doctor_statistics',
       label: '醫師工作統計',
       icon: BarChart3,
-      roles: [UserRole.SYSTEM_ADMIN, UserRole.SCHEDULER, UserRole.VIEWER]
+      roles: [UserRole.SYSTEM_ADMIN, UserRole.SCHEDULER, UserRole.VIEWER, UserRole.FINANCE]
     },
     {
       id: 'physician_settings',
@@ -68,7 +68,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentUser, onNavigate, currentPage,
       id: 'settings',
       label: '系統與個人設定',
       icon: Settings,
-      roles: [UserRole.SUPERVISOR, UserRole.SYSTEM_ADMIN, UserRole.EMPLOYEE, UserRole.SCHEDULER]
+      roles: [UserRole.SUPERVISOR, UserRole.SYSTEM_ADMIN, UserRole.EMPLOYEE, UserRole.SCHEDULER, UserRole.FINANCE]
     },
   ];
 
@@ -78,6 +78,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentUser, onNavigate, currentPage,
       case UserRole.SYSTEM_ADMIN: return '系統管理員';
       case UserRole.SCHEDULER: return '排班管理員';
       case UserRole.VIEWER: return '瀏覽者';
+      case UserRole.FINANCE: return '財會';
       default: return '放射師';
     }
   };
@@ -89,7 +90,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentUser, onNavigate, currentPage,
         <div className="w-8 h-8 bg-gradient-to-br from-teal-400 to-teal-600 rounded-lg flex items-center justify-center text-white font-bold text-lg shadow-sm shadow-teal-200">
           影
         </div>
-        <h1 className="text-lg font-bold text-gray-800 tracking-wide hidden lg:block">
+        <h1 className="text-sm font-bold text-gray-800 tracking-wide hidden lg:block">
             影像醫學部 <span className="text-[10px] text-gray-400 font-normal">v1.2</span>
         </h1>
       </div>
@@ -103,12 +104,12 @@ const Sidebar: React.FC<SidebarProps> = ({ currentUser, onNavigate, currentPage,
             <button
               key={item.id}
               onClick={() => onNavigate(item.id)}
-              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${isActive
+              className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${isActive
                 ? 'bg-teal-50 text-teal-700 shadow-sm ring-1 ring-teal-100'
                 : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                 }`}
             >
-              <Icon size={18} className={`transition-colors ${isActive ? 'text-teal-600' : 'text-gray-400'}`} />
+              <Icon size={15} className={`transition-colors ${isActive ? 'text-teal-600' : 'text-gray-400'}`} />
               <span className="hidden lg:inline">{item.label}</span>
               {item.id === 'leave' && hasPendingLeaves && (
                 <span className="w-2 h-2 bg-red-500 rounded-full ml-1 animate-pulse" />
