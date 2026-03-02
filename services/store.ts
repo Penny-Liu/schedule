@@ -214,6 +214,7 @@ class Store {
                     monthlyTargetShifts: d.monthly_target_shifts, // Map snake_case to camelCase
                     displayOrder: d.display_order, // Map snake_case to camelCase
                     fixedShifts: d.fixed_shifts || [], // Map snake_case to camelCase
+                    personalCycles: d.personal_cycles,
                     weekdaySettings: (d.weekday_settings || []).map((s: any) => ({
                         dayOfWeek: s.dayOfWeek,
                         workTime: s.workTime,
@@ -1307,7 +1308,8 @@ BMD :{{bmd}}
                 is_part_time: isPartTime,
                 monthly_target_shifts: monthlyTargetShifts,
                 fixed_shifts: [],
-                weekday_settings: weekdaySettings
+                weekday_settings: weekdaySettings,
+                personal_cycles: newDoctor.personalCycles
             });
             if (error) throw error;
             return { success: true, id: newDoctor.id };
@@ -1344,7 +1346,8 @@ BMD :{{bmd}}
                 monthly_target_shifts: doctor.monthlyTargetShifts,
                 display_order: doctor.displayOrder,
                 fixed_shifts: doctor.fixedShifts,
-                weekday_settings: doctor.weekdaySettings
+                weekday_settings: doctor.weekdaySettings,
+                personal_cycles: doctor.personalCycles
             }).eq('id', doctor.id);
             if(error) throw error;
          } catch(error: any) {

@@ -85,6 +85,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
     } | null>(null);
 
     const isSupervisorOrAdmin = currentUser.role === UserRole.SUPERVISOR || currentUser.role === UserRole.SYSTEM_ADMIN;
+    const canManageDates = isSupervisorOrAdmin || currentUser.role === UserRole.SCHEDULER;
     const isSystemAdmin = currentUser.role === UserRole.SYSTEM_ADMIN;
 
     // Calculate duration helper
@@ -1001,12 +1002,16 @@ BMD :{{bmd}}
                                 )}
                             </div>
                         </div>
+                    </>
+                )}
 
+                {canManageDates && (
+                    <>
                         {/* Holiday / Event Management */}
                         <div className="bg-white rounded-xl shadow-[0_2px_12px_rgba(0,0,0,0.03)] border border-gray-100 overflow-hidden flex flex-col h-fit">
                             <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center">
                                 <h3 className="font-bold text-gray-800 flex items-center gap-2">
-                                    特殊日期設定 (主管專用)
+                                    特殊日期設定 (主管與排班專用)
                                     <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full">{holidays.length}</span>
                                 </h3>
                                 <button
@@ -1164,7 +1169,11 @@ BMD :{{bmd}}
                                 )}
                             </div>
                         </div>
+                    </>
+                )}
 
+                {isSupervisorOrAdmin && (
+                    <>
                         {/* Station Management - SYSTEM ADMIN ONLY */}
                         {isSystemAdmin && (
                             <div className="bg-white rounded-xl shadow-[0_2px_12px_rgba(0,0,0,0.03)] border border-gray-100 overflow-hidden flex flex-col h-fit xl:col-span-2">

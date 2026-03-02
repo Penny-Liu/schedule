@@ -53,6 +53,12 @@ const Sidebar: React.FC<SidebarProps> = ({ currentUser, onNavigate, currentPage,
       roles: [UserRole.SYSTEM_ADMIN, UserRole.SCHEDULER]
     },
     {
+      id: 'doctor_statistics',
+      label: '醫師工作統計',
+      icon: BarChart3,
+      roles: [UserRole.SYSTEM_ADMIN, UserRole.SCHEDULER, UserRole.VIEWER]
+    },
+    {
       id: 'physician_settings',
       label: '醫師排班設定',
       icon: Sliders,

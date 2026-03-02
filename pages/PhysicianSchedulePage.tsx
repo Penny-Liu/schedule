@@ -1997,32 +1997,31 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                         setMemoModal({ date, content: doctorNote?.name || '' });
                                                     }
                                                 }}
-                                                className={`p-1 text-center border-r border-slate-100 min-w-[40px] sticky top-0 z-50 cursor-pointer hover:bg-slate-100 transition-colors ${isToday ? 'bg-teal-50' : (isHoliday || isWeekend ? 'bg-red-50' : 'bg-white')} border-b border-slate-200`}
+                                                className={`px-0.5 py-0.5 text-center border-r border-slate-100 min-w-[40px] sticky top-0 z-50 cursor-pointer hover:bg-slate-100 transition-colors ${isToday ? 'bg-teal-50' : (isHoliday || isWeekend ? 'bg-red-50' : 'bg-white')} border-b border-slate-200`}
                                             >
-                                                <div className={`font-bold text-sm ${isToday ? 'text-teal-600' : (isHoliday || isWeekend ? 'text-red-500' : 'text-slate-800')}`}>{d.getDate()}</div>
-                                                <div className={`text-[10px] opacity-75 ${isToday ? 'text-teal-600' : (isHoliday || isWeekend ? 'text-red-500' : 'text-slate-700')}`}>
+                                                <div className={`font-bold text-xs leading-tight ${isToday ? 'text-teal-600' : (isHoliday || isWeekend ? 'text-red-500' : 'text-slate-800')}`}>{d.getDate()}</div>
+                                                <div className={`text-[9px] opacity-75 leading-tight ${isToday ? 'text-teal-600' : (isHoliday || isWeekend ? 'text-red-500' : 'text-slate-700')}`}>
                                                     {['日', '一', '二', '三', '四', '五', '六'][d.getDay()]}
                                                 </div>
-                                                <div className="flex flex-col items-center gap-0.5 mt-0.5">
-                                                    {holiday && (
-                                                        <div className="text-[10px] font-bold text-red-600 whitespace-nowrap overflow-hidden text-ellipsis max-w-[40px]" title={holiday.name}>
-                                                            {holiday.name}
-                                                        </div>
-                                                    )}
-                                                    {note && (
-                                                        <div className="text-[9px] font-medium text-blue-600 whitespace-nowrap overflow-hidden text-ellipsis max-w-[40px]" title={note.name}>
-                                                            {note.name}
-                                                        </div>
-                                                    )}
-                                                    {doctorNote && (
-                                                        <div className="text-[10px] bg-purple-100 text-purple-700 px-1 rounded font-bold shadow-sm whitespace-nowrap overflow-hidden text-ellipsis max-w-[40px]" title={doctorNote.name}>
-                                                            📝 {doctorNote.name}
-                                                        </div>
-                                                    )}
-                                                    {!doctorNote && canEdit && (
-                                                        <div className="opacity-0 group-hover:opacity-100 text-[8px] text-gray-300">+備忘</div>
-                                                    )}
-                                                </div>
+                                                {(holiday || note || doctorNote) && (
+                                                    <div className="flex flex-col items-center">
+                                                        {holiday && (
+                                                            <div className="text-[8px] font-bold text-red-600 whitespace-nowrap overflow-hidden text-ellipsis max-w-[40px]" title={holiday.name}>
+                                                                {holiday.name}
+                                                            </div>
+                                                        )}
+                                                        {note && (
+                                                            <div className="text-[8px] font-medium text-blue-600 whitespace-nowrap overflow-hidden text-ellipsis max-w-[40px]" title={note.name}>
+                                                                {note.name}
+                                                            </div>
+                                                        )}
+                                                        {doctorNote && (
+                                                            <div className="text-[9px] bg-purple-100 text-purple-700 px-0.5 rounded font-bold shadow-sm whitespace-nowrap overflow-hidden text-ellipsis max-w-[40px]" title={doctorNote.name}>
+                                                                📝 {doctorNote.name}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )}
                                             </th>
                                         );
                                     })}
@@ -2070,9 +2069,55 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                 </div>
                                                 <div className="flex flex-col">
                                                     <span>{doc.name}</span>
-                                                    <span className="text-[10px] text-slate-400 font-normal">
-                                                        {(isSimulationMode ? [...activeShifts, ...(simulatedShifts || [])] : shifts).filter(s => s.doctorId === doc.id && dateRange.includes(s.date) && s.scheduled_station && s.scheduled_station !== 'X').length} 天
-                                                    </span>
+                                                    {(() => {
+                                                        // Find the personalCycle entry that covers today
+                                                        const todayStr = toLocalISOString(new Date());
+                                                        const NON_WORK = ['', '未分配', 'Unassigned', '休假', 'SystemOff', 'X'];
+                                                        const allShifts = isSimulationMode ? [...activeShifts, ...(simulatedShifts || [])] : shifts;
+
+                                                        let activeCycle: { startDate: string; endDate: string } | null = null;
+                                                        if (doc.personalCycles) {
+                                                            for (const cycle of Object.values(doc.personalCycles)) {
+                                                                if (cycle.startDate <= todayStr && cycle.endDate >= todayStr) {
+                                                                    activeCycle = cycle;
+                                                                    break;
+                                                                }
+                                                            }
+                                                        }
+
+                                                        // Format as M/D
+                                                        const fmtDate = (s: string) => {
+                                                            const [, m, d] = s.split('-');
+                                                            return `${parseInt(m)}/${parseInt(d)}`;
+                                                        };
+
+                                                        if (activeCycle) {
+                                                            const cycleShifts = allShifts.filter(s =>
+                                                                s.doctorId === doc.id &&
+                                                                s.date >= activeCycle!.startDate &&
+                                                                s.date <= activeCycle!.endDate &&
+                                                                !!s.scheduled_station &&
+                                                                !NON_WORK.includes(s.scheduled_station)
+                                                            ).length;
+                                                            return (
+                                                                <span className="text-[10px] text-slate-400 font-normal leading-tight">
+                                                                    {fmtDate(activeCycle.startDate)}~{fmtDate(activeCycle.endDate)} · {cycleShifts}天
+                                                                </span>
+                                                            );
+                                                        }
+                                                        // Fallback: current month count in dateRange
+                                                        const monthCount = allShifts.filter(s =>
+                                                            s.doctorId === doc.id &&
+                                                            dateRange.includes(s.date) &&
+                                                            !!s.scheduled_station &&
+                                                            !NON_WORK.includes(s.scheduled_station)
+                                                        ).length;
+                                                        return (
+                                                            <span className="text-[10px] text-slate-400 font-normal">
+                                                                {monthCount} 天
+                                                            </span>
+                                                        );
+                                                    })()}
                                                 </div>
                                             </div>
                                         </td>

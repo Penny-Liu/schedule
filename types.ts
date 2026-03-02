@@ -167,6 +167,7 @@ export interface Doctor {
     displayOrder?: number; // New: Custom display order (lower number = higher priority)
     fixedShifts?: FixedShift[]; // New: Fixed weekly shifts
     weekdaySettings?: WeekdaySetting[]; // New: Weekday-specific work hours and memos
+    personalCycles?: Record<string, { startDate: string; endDate: string; memo: string; }>; // New: Monthly work cycles (e.g., '2026-03': {...})
 }
 
 export interface FixedShift {

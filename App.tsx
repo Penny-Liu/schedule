@@ -14,6 +14,7 @@ import { Loader2 } from 'lucide-react';
 import ChangePasswordPage from './pages/ChangePasswordPage';
 import PhysicianSchedulePage from './pages/PhysicianSchedulePage';
 import PhysicianSettingsPage from './pages/PhysicianSettingsPage';
+import DoctorStatisticsPage from './pages/DoctorStatisticsPage';
 
 
 
@@ -167,8 +168,9 @@ const App: React.FC = () => {
       case 'settings':
         return <SettingsPage currentUser={currentUser} />;
       case 'doctors':
-      case 'doctors':
         return <DoctorManagerPage currentUser={currentUser} />;
+      case 'doctor_statistics':
+        return <DoctorStatisticsPage currentUser={currentUser} />;
       case 'physician_settings':
           return <PhysicianSettingsPage currentUser={currentUser} />;
       case 'physician_schedule':

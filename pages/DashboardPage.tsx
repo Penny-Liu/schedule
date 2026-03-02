@@ -1758,7 +1758,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
             />
 
             {/* Mobile Floating Action Button (FAB) for Edit/Save */}
-            {isMobile && (currentUser.role === UserRole.SUPERVISOR || currentUser.role === UserRole.SYSTEM_ADMIN) && (
+            {isMobile && (currentUser.role === UserRole.SUPERVISOR || currentUser.role === UserRole.SYSTEM_ADMIN || currentUser.role === UserRole.SCHEDULER) && (
                 <button
                     onClick={isEditMode ? handleComplete : () => setIsEditMode(true)}
                     disabled={isProcessing}
@@ -2241,8 +2241,8 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                 </>
                             )}
 
-                                {/* Edit Button */}
-                            {!isMobile && (
+                            {/* Edit Button */}
+                            {(currentUser.role === UserRole.SYSTEM_ADMIN || currentUser.role === UserRole.SUPERVISOR || currentUser.role === UserRole.SCHEDULER) && !isMobile && (
                                 <button
                                     type="button"
                                     onClick={isEditMode ? handleComplete : () => setIsEditMode(true)}
@@ -3395,10 +3395,6 @@ const DailyManpowerSummary: React.FC<{
     doctorShifts: DoctorShift[];
     currentUser: User;
 }> = ({ date, users, shifts, doctorShifts, currentUser }) => {
-    // Permission Check: Admin or Supervisor only
-    const canAccess = currentUser.role === UserRole.SYSTEM_ADMIN || currentUser.role === UserRole.SUPERVISOR;
-    if (!canAccess) return null;
-
     // Fetch Stats directly from Store (Read-Only here)
     const stats = db.getDailyStats(date) || {
         beitou_clients: 0,
@@ -3788,7 +3784,7 @@ BMD :{{bmd}}
              <div className="flex justify-between items-center mb-4">
                 <h3 className="text-lg font-bold flex items-center gap-2">
                     <Briefcase className="w-5 h-5 text-blue-600" />
-                    今日崗位總覽 (管理員專用)
+                    今日崗位總覽
                 </h3>
              </div>
 
