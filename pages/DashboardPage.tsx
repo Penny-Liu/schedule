@@ -90,6 +90,24 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
         return cycles.find(c => c.id === selectedCycleId);
     }, [selectedCycleId, cycles]);
 
+    // Key for personalCycles lookup: YYYY-MM of cycle start, or current rolling month
+    const cycleMonthKey = useMemo(() => {
+        if (selectedCycleId === 'rolling') {
+            const today = new Date();
+            return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+        }
+        return currentCycle ? currentCycle.startDate.slice(0, 7) : null;
+    }, [selectedCycleId, currentCycle]);
+
+    // Helper: build date array between two ISO dates
+    const buildPersonalDateRange = (startDate: string, endDate: string): string[] => {
+        const dates: string[] = [];
+        for (let d = new Date(startDate); d <= new Date(endDate); d.setDate(d.getDate() + 1)) {
+            dates.push(toLocalISOString(d));
+        }
+        return dates;
+    };
+
     const isCycleConfirmed = currentCycle?.isConfirmed || false;
 
     const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
@@ -2695,10 +2713,19 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                     displayUsers.map((user, idx) => {
                                         const isFirst = idx === 0;
                                         const isLast = idx === displayUsers.length - 1;
-                                        const workDaysCount = dateRange.filter(date => {
+                                        // Use personalCycles override if present for current cycle month
+                                        const personalCycleData = cycleMonthKey ? user.personalCycles?.[cycleMonthKey] : undefined;
+                                        const effectiveDateRange = (personalCycleData && currentCycle)
+                                            ? buildPersonalDateRange(personalCycleData.startDate, personalCycleData.endDate)
+                                            : dateRange;
+                                        const workDaysCount = effectiveDateRange.filter(date => {
                                             const status = getDayShift(user.id, date);
                                             return !status.isOff;
                                         }).length;
+                                        const isPersonalCycleCustomized = !!(personalCycleData && currentCycle && (
+                                            personalCycleData.startDate !== currentCycle.startDate ||
+                                            personalCycleData.endDate !== currentCycle.endDate
+                                        ));
                                         const userCapableStations = allStationsSorted.filter(s =>
                                             user.capabilities?.includes(s) ||
                                             user.learningCapabilities?.includes(s) ||
@@ -2753,7 +2780,10 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                 </td>
                                                 {/* Sticky Count Column-Adjust Offset for Mobile */}
                                                 <td className={`sticky z-10 bg-white group-hover: bg-slate-50 border-r border-slate-200 p-0 text-center shadow-[4px_0_8px_rgba(0, 0, 0, 0.02)] ${isMobile ? 'left-[50px]' : 'left-[120px]'} `}>
-                                                    <div className="text-[10px] font-bold text-slate-600 bg-slate-100 mx-1.5 py-0.5 rounded border border-slate-200">
+                                                    <div
+                                                        className={`text-[10px] font-bold mx-1.5 py-0.5 rounded border ${isPersonalCycleCustomized ? 'text-amber-700 bg-amber-50 border-amber-300' : 'text-slate-600 bg-slate-100 border-slate-200'}`}
+                                                        title={isPersonalCycleCustomized && personalCycleData ? `自訂週期: ${personalCycleData.startDate} ~ ${personalCycleData.endDate}` : undefined}
+                                                    >
                                                         {workDaysCount}
                                                     </div>
                                                 </td>
