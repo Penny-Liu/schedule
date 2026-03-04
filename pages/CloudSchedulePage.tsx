@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { User, UserRole, ReportAssistant, CloudScheduleEntry, Doctor } from '../types';
 import { db } from '../services/store';
-import { Cloud, ChevronLeft, ChevronRight, Plus, Pencil, Trash2, Check, X, UserCheck, Save, AlertCircle } from 'lucide-react';
+import { Cloud, ChevronLeft, ChevronRight, Plus, Pencil, Trash2, Check, X, UserCheck, Save, AlertCircle, Loader2 } from 'lucide-react';
 
 interface CloudSchedulePageProps {
     currentUser: User;
@@ -91,25 +91,37 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
         return { assistantIds: [], proofreaderUserId: undefined };
     };
 
-    const setAssistant = (date: string, doctorId: string, assistantId: string) => {
+    const setAssistant = async (date: string, doctorId: string, assistantId: string) => {
         if (!isEditing) return;
         const key = `${date}_${doctorId}`;
         const current = getEntry(date, doctorId);
         const newIds = assistantId ? [assistantId] : [];
-        setDirtyEntries(prev => ({ ...prev, [key]: { ...current, assistantIds: newIds } }));
+        const updated = { ...current, assistantIds: newIds };
+        
+        // Update local dirty state first for UI responsiveness
+        setDirtyEntries(prev => ({ ...prev, [key]: updated }));
+        
+        // Auto-save
+        await saveEntry(date, doctorId, updated);
     };
 
-    const setProofreader = (date: string, doctorId: string, userId: string) => {
+    const setProofreader = async (date: string, doctorId: string, userId: string) => {
         if (!isEditing) return;
         const key = `${date}_${doctorId}`;
         const current = getEntry(date, doctorId);
         const value = userId === '' ? undefined : userId;
-        setDirtyEntries(prev => ({ ...prev, [key]: { ...current, proofreaderUserId: value } }));
+        const updated = { ...current, proofreaderUserId: value };
+        
+        // Update local dirty state
+        setDirtyEntries(prev => ({ ...prev, [key]: updated }));
+        
+        // Auto-save
+        await saveEntry(date, doctorId, updated);
     };
 
-    const saveEntry = async (date: string, doctorId: string) => {
+    const saveEntry = async (date: string, doctorId: string, overrideEntry?: any) => {
         const key = `${date}_${doctorId}`;
-        const current = getEntry(date, doctorId);
+        const current = overrideEntry || getEntry(date, doctorId);
         setSavingKeys(prev => new Set(prev).add(key));
         try {
             const payload = { 
@@ -121,8 +133,9 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
             console.log('[CloudSchedulePage] Attempting saveEntry:', payload);
             await db.upsertCloudScheduleEntry(payload);
             setDirtyEntries(prev => { const n = { ...prev }; delete n[key]; return n; });
-            showToast(`已儲存`);
+            // showToast(`已儲存`); // Don't show toast for every auto-save to avoid spam
         } catch (e: any) {
+            console.error('[CloudSchedulePage] Save Error:', e);
             showToast(`儲存失敗: ${e.message || e.toString()}`);
         } finally {
             setSavingKeys(prev => { const n = new Set(prev); n.delete(key); return n; });
@@ -335,16 +348,12 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
                                                                 <div className={`text-[11px] font-bold leading-tight w-full text-center whitespace-normal break-words ${isRemoteTask ? 'text-pink-700' : isSupportTask ? 'text-yellow-700' : isImagingTask ? 'text-sky-700' : 'text-slate-600'}`}>
                                                                     {docShift.scheduled_station}
                                                                 </div>
-                                                                
-                                                                {isDirty && (
-                                                                     <button 
-                                                                        onClick={() => saveEntry(date, doc.id)} 
-                                                                        disabled={isSaving}
-                                                                        className="absolute top-0 right-0 text-[7px] bg-sky-500 text-white px-1 py-0 rounded shadow-sm hover:bg-sky-600 disabled:opacity-50 flex items-center shrink-0 z-10"
-                                                                     >
-                                                                        {isSaving ? '...' : <Save size={8} />}
-                                                                    </button>
-                                                                )}
+                                                                                                                                {isSaving && (
+                                                                      <div className="absolute top-0 right-1 flex items-center gap-1 z-20">
+                                                                          <span className="text-[8px] text-sky-600 animate-pulse font-bold">Saving...</span>
+                                                                          <Loader2 size={8} className="animate-spin text-sky-500" />
+                                                                      </div>
+                                                                 )}
 
                                                                 {/* Assistant Select */}
                                                                 <div className="w-full mt-0.5">
