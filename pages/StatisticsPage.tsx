@@ -36,26 +36,47 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
     // 只統計有勾選為放射師的人員
     const users = db.getUsers().filter(u => u.isRadiographer === true);
     const shifts = db.getShifts('', '');
-    const holidays = db.getHolidays();
 
-    // Determine Date Range
+    // ── Default dates for a month: prefer roster cycle that starts (or overlaps) this month ──
+    const getDefaultDatesForMonth = (yearMonth: string) => {
+        const [year, month] = yearMonth.split('-').map(Number);
+        const monthStart = `${yearMonth}-01`;
+        const lastDay = new Date(year, month, 0);
+        const monthEnd = `${lastDay.getFullYear()}-${String(lastDay.getMonth() + 1).padStart(2, '0')}-${String(lastDay.getDate()).padStart(2, '0')}`;
+
+        // Prefer cycle that starts this month; fallback to one that overlaps
+        const startsThis = cycles.find(c => c.startDate.startsWith(yearMonth));
+        if (startsThis) return { startDate: startsThis.startDate, endDate: startsThis.endDate };
+
+        const overlapping = cycles.find(c => c.startDate <= monthEnd && c.endDate >= monthStart);
+        if (overlapping) return { startDate: overlapping.startDate, endDate: overlapping.endDate };
+
+        // Final fallback: calendar month
+        return { startDate: monthStart, endDate: monthEnd };
+    };
+
+    // ── Determine which YYYY-MM key corresponds to the selected cycle ──
+    const cycleMonthKey = useMemo(() => {
+        if (selectedCycleId === 'rolling') {
+            return `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
+        }
+        const cycle = cycles.find(c => c.id === selectedCycleId);
+        return cycle ? cycle.startDate.slice(0, 7) : null;
+    }, [selectedCycleId, currentDate, cycles]);
+
+    // ── Determine Date Range (for header display / default) ──
     const dateRange = useMemo(() => {
         if (selectedCycleId !== 'rolling') {
             const cycle = cycles.find(c => c.id === selectedCycleId);
             if (cycle) {
-                const dates = [];
-                const start = new Date(cycle.startDate);
-                const end = new Date(cycle.endDate);
-                if (start <= end) {
-                    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-                        dates.push(d.toISOString().split('T')[0]);
-                    }
-                    return dates;
+                const dates: string[] = [];
+                for (let d = new Date(cycle.startDate); d <= new Date(cycle.endDate); d.setDate(d.getDate() + 1)) {
+                    dates.push(d.toISOString().split('T')[0]);
                 }
+                return dates;
             }
         }
-        // Default: Current month if rolling (or a fixed 30 days)
-        const dates = [];
+        const dates: string[] = [];
         const start = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
         const end = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
         for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
@@ -64,7 +85,23 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
         return dates;
     }, [currentDate, selectedCycleId, cycles]);
 
-    // --- Calculations ---
+    // ── Helper: build date array for a range ──
+    const buildDateRange = (startDate: string, endDate: string) => {
+        const dates: string[] = [];
+        for (let d = new Date(startDate); d <= new Date(endDate); d.setDate(d.getDate() + 1)) {
+            dates.push(d.toISOString().split('T')[0]);
+        }
+        return dates;
+    };
+
+    // ── Format date range for remarks (e.g. "3/8-4/6") ──
+    const formatRangeShort = (startDate: string, endDate: string) => {
+        const [, sm, sd] = startDate.split('-');
+        const [, em, ed] = endDate.split('-');
+        return `${parseInt(sm)}/${parseInt(sd)}-${parseInt(em)}/${parseInt(ed)}`;
+    };
+
+    // ── Calculations ──
     const statsData = useMemo(() => {
         return users.map(user => {
             const stats = {
@@ -75,6 +112,7 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
                 beitou: 0,
                 dazhi: 0,
                 off: 0,
+                remarks: '',
                 floorControl: 0,
                 assist: 0,
                 opening: 0,
@@ -85,34 +123,34 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
                 mr: 0,
                 us: 0,
                 techSupport: 0,
-                remarks: ''
             };
 
-            dateRange.forEach(dateStr => {
-                const status = db.getUserStatusOnDate(user.id, dateStr);
-                if (status === 'OFF') {
-                    stats.off++;
-                    return;
+            // Determine effective date range for this user
+            let effectiveRange = dateRange;
+            if (cycleMonthKey) {
+                const saved = user.personalCycles?.[cycleMonthKey];
+                const defaults = getDefaultDatesForMonth(cycleMonthKey);
+                if (saved && (saved.startDate !== defaults.startDate || saved.endDate !== defaults.endDate)) {
+                    effectiveRange = buildDateRange(saved.startDate, saved.endDate);
+                    stats.remarks = formatRangeShort(saved.startDate, saved.endDate);
                 }
+            }
+
+            effectiveRange.forEach(dateStr => {
+                const status = db.getUserStatusOnDate(user.id, dateStr);
+                if (status === 'OFF') { stats.off++; return; }
 
                 let station = StationDefault.UNASSIGNED as string;
                 let roles: string[] = [];
 
                 const manualShift = shifts.find(s => s.userId === user.id && s.date === dateStr);
-                if (manualShift) {
-                    station = manualShift.station;
-                    roles = manualShift.specialRoles || [];
-                }
+                if (manualShift) { station = manualShift.station; roles = manualShift.specialRoles || []; }
 
                 stats.totalWork++;
 
-                if (station.includes('遠')) {
-                    stats.remote++;
-                } else if (station.includes('大直')) {
-                    stats.dazhi++;
-                } else {
-                    stats.beitou++;
-                }
+                if (station.includes('遠')) stats.remote++;
+                else if (station.includes('大直')) stats.dazhi++;
+                else stats.beitou++;
 
                 if (station.includes('場控')) stats.floorControl++;
                 if (station.includes('BMD') || station.includes('DX')) stats.bmd++;
@@ -128,28 +166,14 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
             });
 
             stats.onSite = stats.totalWork - stats.remote;
-
             return stats;
         });
-    }, [users, dateRange, shifts]);
+    }, [users, dateRange, shifts, cycleMonthKey]);
 
-    // --- Personal Cycle Helpers ---
-    const getDefaultDatesForMonth = (yearMonth: string) => {
-        const [year, month] = yearMonth.split('-').map(Number);
-        const start = new Date(year, month - 1, 1);
-        const end = new Date(year, month, 0);
-        return {
-            startDate: `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`,
-            endDate: `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, '0')}-${String(end.getDate()).padStart(2, '0')}`
-        };
-    };
-
+    // ── Personal Cycle helpers ──
     const calculateDays = (startDate?: string, endDate?: string) => {
         if (!startDate || !endDate) return 0;
-        const start = new Date(startDate);
-        const end = new Date(endDate);
-        if (isNaN(start.getTime()) || isNaN(end.getTime())) return 0;
-        const diffDays = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+        const diffDays = Math.ceil((new Date(endDate).getTime() - new Date(startDate).getTime()) / (1000 * 60 * 60 * 24)) + 1;
         return diffDays > 0 ? diffDays : 0;
     };
 
@@ -157,17 +181,8 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
         setRadiographers(prev => prev.map(u => {
             if (u.id === userId) {
                 const currentCycles = u.personalCycles || {};
-                const currentMonthData = currentCycles[selectedMonth] || {
-                    ...getDefaultDatesForMonth(selectedMonth),
-                    memo: ''
-                };
-                return {
-                    ...u,
-                    personalCycles: {
-                        ...currentCycles,
-                        [selectedMonth]: { ...currentMonthData, [field]: value }
-                    }
-                };
+                const currentMonthData = currentCycles[selectedMonth] || { ...getDefaultDatesForMonth(selectedMonth), memo: '' };
+                return { ...u, personalCycles: { ...currentCycles, [selectedMonth]: { ...currentMonthData, [field]: value } } };
             }
             return u;
         }));
@@ -187,21 +202,19 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
 
     const handlePrevMonth = () => {
         const [year, month] = selectedMonth.split('-').map(Number);
-        let prevYear = year;
-        let prevMonth = month - 1;
-        if (prevMonth === 0) { prevMonth = 12; prevYear--; }
-        setSelectedMonth(`${prevYear}-${String(prevMonth).padStart(2, '0')}`);
+        let py = year, pm = month - 1;
+        if (pm === 0) { pm = 12; py--; }
+        setSelectedMonth(`${py}-${String(pm).padStart(2, '0')}`);
     };
 
     const handleNextMonth = () => {
         const [year, month] = selectedMonth.split('-').map(Number);
-        let nextYear = year;
-        let nextMonth = month + 1;
-        if (nextMonth === 13) { nextMonth = 1; nextYear++; }
-        setSelectedMonth(`${nextYear}-${String(nextMonth).padStart(2, '0')}`);
+        let ny = year, nm = month + 1;
+        if (nm === 13) { nm = 1; ny++; }
+        setSelectedMonth(`${ny}-${String(nm).padStart(2, '0')}`);
     };
 
-    // --- Export Logic (Excel) ---
+    // ── Export Excel ──
     const handleExport = () => {
         try {
             const excelData = statsData.map(row => ({
@@ -212,6 +225,7 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
                 "北投天數": row.beitou,
                 "大直天數": row.dazhi,
                 "休假": row.off,
+                "備註": row.remarks,
                 "場控": row.floorControl,
                 "輔班": row.assist,
                 "BMD/DX": row.bmd,
@@ -222,24 +236,21 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
                 "開機": row.opening,
                 "晚班": row.late,
                 "排班": row.scheduler,
-                "備註": row.remarks
             }));
 
             const ws = utils.json_to_sheet(excelData);
             const wscols = [
-                { wch: 10 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 8 },
-                { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 8 },
-                { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 10 }, { wch: 8 },
-                { wch: 8 }, { wch: 8 }, { wch: 20 },
+                { wch: 10 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 8 },
+                { wch: 12 }, // 備註
+                { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 8 },
+                { wch: 10 }, { wch: 8 }, { wch: 8 }, { wch: 8 },
             ];
             ws['!cols'] = wscols;
 
             const wb = utils.book_new();
             utils.book_append_sheet(wb, ws, "工作統計");
-
             const fileName = `工作統計_${selectedCycleId === 'rolling' ? currentDate.toISOString().slice(0, 7) : '週期報表'}.xlsx`;
             writeFile(wb, fileName);
-
         } catch (e) {
             console.error("Excel export failed", e);
             alert('匯出 Excel 失敗，請稍後再試');
@@ -261,9 +272,7 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
             <div className="flex-none px-6 py-4 bg-white border-b border-slate-200 shadow-sm z-10">
                 <div className="flex justify-between items-center">
                     <div className="flex items-center gap-4">
-                        <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
-                            <BarChart3 size={20} />
-                        </div>
+                        <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg"><BarChart3 size={20} /></div>
                         <div>
                             <h2 className="text-xl font-bold text-slate-800">工作狀況統計</h2>
                             <p className="text-xs text-slate-500 font-medium">
@@ -296,7 +305,6 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
 
                         {activeTab === 'stats' && (
                             <>
-                                {/* Cycle Selector */}
                                 <div className="flex items-center bg-slate-50 hover:bg-slate-100 rounded-lg px-2 py-1.5 transition-colors border border-slate-200">
                                     <Filter size={14} className="text-slate-500 mr-2" />
                                     <select
@@ -305,9 +313,7 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
                                         className="text-sm bg-transparent border-none focus:ring-0 text-slate-700 font-medium cursor-pointer py-0 pl-0 pr-8"
                                     >
                                         {cycles.length === 0 && <option value="rolling">當前月份</option>}
-                                        {cycles.map(c => (
-                                            <option key={c.id} value={c.id}>{c.name}</option>
-                                        ))}
+                                        {cycles.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                                         {cycles.length > 0 && <option value="rolling">自訂月份 (Rolling)</option>}
                                     </select>
                                 </div>
@@ -332,17 +338,11 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
 
                         {activeTab === 'cycles' && (
                             <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-xl shadow-sm border border-gray-200">
-                                <button
-                                    onClick={handlePrevMonth}
-                                    className="p-1 text-gray-400 hover:text-teal-600 hover:bg-teal-50 rounded transition-colors"
-                                >
+                                <button onClick={handlePrevMonth} className="p-1 text-gray-400 hover:text-teal-600 hover:bg-teal-50 rounded transition-colors">
                                     <ChevronLeft size={18} />
                                 </button>
                                 <div className="font-bold text-gray-700 min-w-[100px] text-center">{displayMonthStr}</div>
-                                <button
-                                    onClick={handleNextMonth}
-                                    className="p-1 text-gray-400 hover:text-teal-600 hover:bg-teal-50 rounded transition-colors"
-                                >
+                                <button onClick={handleNextMonth} className="p-1 text-gray-400 hover:text-teal-600 hover:bg-teal-50 rounded transition-colors">
                                     <ChevronRight size={18} />
                                 </button>
                             </div>
@@ -354,7 +354,7 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
             {/* Body */}
             <div className="flex-1 overflow-auto p-6">
 
-                {/* Stats Tab */}
+                {/* ── Stats Tab ── */}
                 {activeTab === 'stats' && (
                     <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden" id="stats-table">
                         <div className="overflow-x-auto">
@@ -367,7 +367,8 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
                                         <th className="px-2 py-3 text-center text-fuchsia-600">遠班</th>
                                         <th className="px-2 py-3 text-center">北投天數</th>
                                         <th className="px-2 py-3 text-center text-blue-600">大直天數</th>
-                                        <th className="px-2 py-3 text-center text-red-500 border-r border-slate-100">休假</th>
+                                        <th className="px-2 py-3 text-center text-red-500">休假</th>
+                                        <th className="px-2 py-3 text-center text-amber-600 border-r border-slate-100">備註</th>
                                         <th className="px-2 py-3 text-center bg-red-50/30 text-red-800">場控</th>
                                         <th className="px-2 py-3 text-center bg-emerald-50/30 text-emerald-700">輔班</th>
                                         <th className="px-2 py-3 text-center">BMD/DX</th>
@@ -378,7 +379,6 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
                                         <th className="px-2 py-3 text-center bg-blue-50/30 text-blue-700">開機</th>
                                         <th className="px-2 py-3 text-center bg-amber-50/30 text-amber-700">晚班</th>
                                         <th className="px-2 py-3 text-center bg-red-50/30 text-red-700">排班</th>
-                                        <th className="px-4 py-3 text-left">備註</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-100">
@@ -390,7 +390,8 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
                                             <td className="px-2 py-2.5 text-center text-slate-500">{row.remote || '-'}</td>
                                             <td className="px-2 py-2.5 text-center text-slate-600">{row.beitou}</td>
                                             <td className="px-2 py-2.5 text-center text-blue-600">{row.dazhi || '-'}</td>
-                                            <td className="px-2 py-2.5 text-center text-red-400 border-r border-slate-100 bg-red-50/5">{row.off}</td>
+                                            <td className="px-2 py-2.5 text-center text-red-400 bg-red-50/5">{row.off}</td>
+                                            <td className="px-2 py-2.5 text-center text-amber-600 border-r border-slate-100 text-xs font-semibold">{row.remarks || '-'}</td>
                                             <td className="px-2 py-2.5 text-center text-slate-600">{row.floorControl || '-'}</td>
                                             <td className="px-2 py-2.5 text-center text-emerald-600 font-bold">{row.assist || '-'}</td>
                                             <td className="px-2 py-2.5 text-center text-slate-500">{row.bmd || '-'}</td>
@@ -401,7 +402,6 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
                                             <td className="px-2 py-2.5 text-center text-blue-600 font-medium">{row.opening || '-'}</td>
                                             <td className="px-2 py-2.5 text-center text-amber-600 font-medium">{row.late || '-'}</td>
                                             <td className="px-2 py-2.5 text-center text-red-600 font-medium">{row.scheduler || '-'}</td>
-                                            <td className="px-4 py-2.5 text-xs text-slate-400 italic">{row.remarks}</td>
                                         </tr>
                                     ))}
                                 </tbody>
@@ -410,11 +410,11 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
                     </div>
                 )}
 
-                {/* Personal Cycles Tab */}
+                {/* ── Personal Cycles Tab ── */}
                 {activeTab === 'cycles' && isSupervisorOrAdmin && (
                     <div className="max-w-6xl mx-auto flex flex-col gap-4">
                         <p className="text-sm text-gray-500">
-                            設定每位放射師在選定月份的工作週期起訖日期與備忘，未微調者預設為整個月。
+                            設定每位放射師在選定月份的工作週期起訖日期與備忘。預設使用該月份對應的排班週期；有微調的人員會以琥珀色標示。
                         </p>
 
                         {saveError && (
@@ -431,7 +431,7 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
                                         <tr className="bg-slate-50 border-b border-gray-200 text-xs text-gray-500 uppercase tracking-wider">
                                             <th className="px-6 py-4 font-bold w-[18%]">放射師姓名</th>
                                             <th className="px-6 py-4 font-bold w-[35%]">本月週期範圍</th>
-                                            <th className="px-6 py-4 font-bold w-[22%]">備註</th>
+                                            <th className="px-6 py-4 font-bold w-[22%]">備忘</th>
                                             <th className="px-6 py-4 font-bold text-center w-[12%]">當期天數</th>
                                             <th className="px-6 py-4 font-bold text-center w-[13%]">操作</th>
                                         </tr>
@@ -445,8 +445,8 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
                                             </tr>
                                         ) : (
                                             radiographers.map(user => {
-                                                const savedCycle = user.personalCycles?.[selectedMonth];
                                                 const defaultDates = getDefaultDatesForMonth(selectedMonth);
+                                                const savedCycle = user.personalCycles?.[selectedMonth];
                                                 const currentMonthData = savedCycle || { ...defaultDates, memo: '' };
                                                 const isCustomized = !!savedCycle && (
                                                     savedCycle.startDate !== defaultDates.startDate ||
@@ -498,7 +498,7 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
                                                                 <FileText size={13} className="absolute left-2.5 top-2.5 text-gray-400" />
                                                                 <input
                                                                     type="text"
-                                                                    placeholder="備註..."
+                                                                    placeholder="備忘..."
                                                                     value={currentMonthData.memo}
                                                                     onChange={(e) => handleCycleChange(user.id, 'memo', e.target.value)}
                                                                     className="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-teal-500 outline-none"
@@ -506,7 +506,7 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
                                                             </div>
                                                         </td>
                                                         <td className="px-6 py-4 text-center">
-                                                            <span className="inline-flex items-center justify-center min-w-[3rem] px-2 py-1 bg-blue-50 text-blue-700 font-bold rounded-lg border border-blue-100">
+                                                            <span className={`inline-flex items-center justify-center min-w-[3rem] px-2 py-1 font-bold rounded-lg border text-sm ${isCustomized ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-blue-50 text-blue-700 border-blue-100'}`}>
                                                                 {currentDays} 天
                                                             </span>
                                                         </td>
