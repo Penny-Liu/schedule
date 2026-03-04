@@ -120,7 +120,7 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
     const handleAddAssistant = async () => {
         if (!newName.trim()) return;
         const assistant: ReportAssistant = {
-            id: crypto.randomUUID(),
+            id: generateUUID(),
             name: newName.trim(),
             color: newColor,
             isActive: true,
