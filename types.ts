@@ -35,6 +35,7 @@ export interface User {
   isRadiographer?: boolean; // New: Flag to indicate if user should appear in Radiographer Schedule
   isPartTime?: boolean; // New: Flag for part-time radiographers (hidden in main view)
   groupIndex?: number; // New: Fixed rotation index for Group D (0-based, determines rest day order)
+  personalCycles?: Record<string, { startDate: string; endDate: string; memo: string }>; // Per-month cycle adjustments
 }
 
 // Updated Station Defaults: MR moved before US
