@@ -49,7 +49,7 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
 
     const radiologists = useMemo(() => {
         return doctors
-            .filter(d => d.specialty === '放射科')
+            .filter(d => d.specialty === '放射科' || d.specialty === '影像醫學部')
             .sort((a, b) => (a.displayOrder || 999) - (b.displayOrder || 999));
     }, [doctors]);
 

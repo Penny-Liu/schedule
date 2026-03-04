@@ -2583,15 +2583,32 @@ BMD :{{bmd}}
         }
         this.notifyListeners();
         try {
-            const { error } = await supabase.from('cloud_schedule_entries').upsert({
+            const { data, error } = await supabase.from('cloud_schedule_entries').upsert({
                 date: entry.date,
                 doctor_id: entry.doctorId,
                 assistant_ids: entry.assistantIds,
                 proofreader_user_id: entry.proofreaderUserId ?? null
-            }, { onConflict: 'date, doctor_id' });
-            if (error) throw error;
+            }, { onConflict: 'date, doctor_id' }).select();
+            
+            if (error) {
+                console.error('[Store] upsertCloudScheduleEntry Supabase Error:', error);
+                throw error;
+            }
+            
+            console.log('[Store] upsertCloudScheduleEntry Success:', data);
+            
+            // Update local ID if we got one back
+            if (data && data[0]) {
+                const saved = data[0];
+                this.cloudScheduleEntries = this.cloudScheduleEntries.map(e => 
+                    (e.date === saved.date && e.doctorId === saved.doctor_id) 
+                    ? { ...e, id: saved.id } 
+                    : e
+                );
+                this.notifyListeners();
+            }
         } catch (e: any) { 
-            console.error('[Store] upsertCloudScheduleEntry failed', e); 
+            console.error('[Store] upsertCloudScheduleEntry Catch Error:', e); 
             throw e; 
         }
     }
