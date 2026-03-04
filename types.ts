@@ -38,6 +38,22 @@ export interface User {
   personalCycles?: Record<string, { startDate: string; endDate: string; memo: string }>; // Per-month cycle adjustments
 }
 
+// ── 影像雲班表 ──────────────────────────
+export interface ReportAssistant {
+  id: string;
+  name: string;
+  color?: string;
+  isActive?: boolean;
+}
+
+export interface CloudScheduleEntry {
+  id?: string;
+  date: string;            // YYYY-MM-DD
+  assistantIds: string[];  // IDs of ReportAssistants on duty
+  proofreaderUserId?: string; // isRadiographer User.id
+}
+
+
 // Updated Station Defaults: MR moved before US
 export enum StationDefault {
   MR1_5T = 'MR1.5T',

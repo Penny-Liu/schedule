@@ -1,5 +1,5 @@
 
-import { User, Shift, LeaveRequest, SystemSettings, StationDefault, SYSTEM_OFF, RosterCycle, DateEventType, Holiday, LeaveStatus, LeaveType, StaffGroup, SPECIAL_ROLES, CycleAnchor, DailyManpowerStats, Doctor, WeekdaySetting, DoctorShift } from '../types';
+import { User, Shift, LeaveRequest, SystemSettings, StationDefault, SYSTEM_OFF, RosterCycle, DateEventType, Holiday, LeaveStatus, LeaveType, StaffGroup, SPECIAL_ROLES, CycleAnchor, DailyManpowerStats, Doctor, WeekdaySetting, DoctorShift, ReportAssistant, CloudScheduleEntry } from '../types';
 import { MOCK_USERS, MOCK_LEAVES, MOCK_DOCTORS } from './mockData';
 import { supabase } from './supabaseClient';
 
@@ -39,6 +39,8 @@ class Store {
     };
     doctors: Doctor[] = [];
     doctorShifts: DoctorShift[] = [];
+    reportAssistants: ReportAssistant[] = [];
+    cloudScheduleEntries: CloudScheduleEntry[] = [];
     currentUser: User | null = null;
     isLoaded: boolean = false;
     connectionStatus: { type: 'Supabase' | 'Mock'; details?: string } = { type: 'Supabase' }; // Default assumption
@@ -307,6 +309,9 @@ BMD :{{bmd}}
 
 三線支援：{{third_line_support}}`;
             }
+
+            // Load cloud schedule data (影像雲班表)
+            await this.loadCloudScheduleData();
 
             this.isLoaded = true;
             console.log('Data initialized successfully');
@@ -2516,6 +2521,97 @@ BMD :{{bmd}}
         await this.initializeData(true);
         this.notifyListeners();
         return importedCount;
+    }
+
+    // ── 影像雲班表 ────────────────────────────────────────
+    getReportAssistants(): ReportAssistant[] {
+        return this.reportAssistants;
+    }
+
+    async addReportAssistant(assistant: ReportAssistant) {
+        this.reportAssistants = [...this.reportAssistants, assistant];
+        this.notifyListeners();
+        try {
+            const { error } = await supabase.from('report_assistants').insert({
+                id: assistant.id,
+                name: assistant.name,
+                color: assistant.color,
+                is_active: assistant.isActive ?? true
+            });
+            if (error) throw error;
+        } catch (e) { console.error('[Store] addReportAssistant failed', e); }
+    }
+
+    async updateReportAssistant(assistant: ReportAssistant) {
+        this.reportAssistants = this.reportAssistants.map(a => a.id === assistant.id ? assistant : a);
+        this.notifyListeners();
+        try {
+            const { error } = await supabase.from('report_assistants').update({
+                name: assistant.name,
+                color: assistant.color,
+                is_active: assistant.isActive ?? true
+            }).eq('id', assistant.id);
+            if (error) throw error;
+        } catch (e) { console.error('[Store] updateReportAssistant failed', e); }
+    }
+
+    async deleteReportAssistant(id: string) {
+        this.reportAssistants = this.reportAssistants.filter(a => a.id !== id);
+        this.notifyListeners();
+        try {
+            await supabase.from('report_assistants').delete().eq('id', id);
+        } catch (e) { console.error('[Store] deleteReportAssistant failed', e); }
+    }
+
+    getCloudScheduleEntries(): CloudScheduleEntry[] {
+        return this.cloudScheduleEntries;
+    }
+
+    getCloudScheduleEntry(date: string): CloudScheduleEntry | undefined {
+        return this.cloudScheduleEntries.find(e => e.date === date);
+    }
+
+    async upsertCloudScheduleEntry(entry: CloudScheduleEntry) {
+        const exists = this.cloudScheduleEntries.find(e => e.date === entry.date);
+        if (exists) {
+            this.cloudScheduleEntries = this.cloudScheduleEntries.map(e => e.date === entry.date ? { ...e, ...entry } : e);
+        } else {
+            this.cloudScheduleEntries = [...this.cloudScheduleEntries, entry];
+        }
+        this.notifyListeners();
+        try {
+            const { error } = await supabase.from('cloud_schedule_entries').upsert({
+                date: entry.date,
+                assistant_ids: entry.assistantIds,
+                proofreader_user_id: entry.proofreaderUserId ?? null
+            }, { onConflict: 'date' });
+            if (error) throw error;
+        } catch (e) { console.error('[Store] upsertCloudScheduleEntry failed', e); }
+    }
+
+    private async loadCloudScheduleData() {
+        try {
+            const [assistantsRes, entriesRes] = await Promise.all([
+                supabase.from('report_assistants').select('*').order('name'),
+                supabase.from('cloud_schedule_entries').select('*')
+            ]);
+            if (assistantsRes.data) {
+                this.reportAssistants = assistantsRes.data.map((a: any) => ({
+                    id: a.id,
+                    name: a.name,
+                    color: a.color,
+                    isActive: a.is_active
+                }));
+            }
+            if (entriesRes.data) {
+                this.cloudScheduleEntries = entriesRes.data.map((e: any) => ({
+                    id: e.id,
+                    date: e.date,
+                    assistantIds: e.assistant_ids || [],
+                    proofreaderUserId: e.proofreader_user_id
+                }));
+            }
+        } catch (e) { console.warn('[Store] loadCloudScheduleData failed (tables may not exist yet)', e); }
     }
 
 }

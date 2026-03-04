@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Users, FileText, LogOut, LayoutDashboard, Settings, Menu, BarChart3, Stethoscope, CalendarClock, Sliders } from 'lucide-react';
+import { Users, FileText, LogOut, LayoutDashboard, Settings, Menu, BarChart3, Stethoscope, CalendarClock, Sliders, Cloud } from 'lucide-react';
 import { User, UserRole } from '../types';
 
 interface SidebarProps {
@@ -32,6 +32,12 @@ const Sidebar: React.FC<SidebarProps> = ({ currentUser, onNavigate, currentPage,
       id: 'leave',
       label: '請假管理',
       icon: FileText,
+      roles: [UserRole.SUPERVISOR, UserRole.EMPLOYEE, UserRole.SYSTEM_ADMIN]
+    },
+    {
+      id: 'cloud_schedule',
+      label: '影像雲班表',
+      icon: Cloud,
       roles: [UserRole.SUPERVISOR, UserRole.EMPLOYEE, UserRole.SYSTEM_ADMIN]
     },
     {
