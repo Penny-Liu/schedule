@@ -99,12 +99,14 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
         const current = getEntry(date, doctorId);
         setSavingKeys(prev => new Set(prev).add(key));
         try {
-            await db.upsertCloudScheduleEntry({ 
+            const payload = { 
                 date, 
                 doctorId,
                 assistantIds: current.assistantIds, 
                 proofreaderUserId: current.proofreaderUserId 
-            });
+            };
+            console.log('[CloudSchedulePage] Attempting saveEntry:', payload);
+            await db.upsertCloudScheduleEntry(payload);
             setDirtyEntries(prev => { const n = { ...prev }; delete n[key]; return n; });
             showToast(`已儲存`);
         } catch (e: any) {
