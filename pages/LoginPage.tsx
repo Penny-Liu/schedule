@@ -14,13 +14,15 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
     const [selectedUser, setSelectedUser] = useState<User | null>(null);
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
+    const todayStr = new Date().toISOString().split('T')[0];
+    const activeUsers = users.filter(u => u.isActive !== false && (!u.resignationDate || u.resignationDate > todayStr));
 
     // Split users by role
-    const physicianSideUsers = users.filter(u => 
+    const physicianSideUsers = activeUsers.filter(u => 
         u.role === UserRole.SCHEDULER || u.role === UserRole.VIEWER || u.role === UserRole.FINANCE
     );
 
-    const radiographerSideUsers = users.filter(u => 
+    const radiographerSideUsers = activeUsers.filter(u => 
         u.role === UserRole.EMPLOYEE || 
         u.role === UserRole.SUPERVISOR || 
         u.role === UserRole.SYSTEM_ADMIN

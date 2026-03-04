@@ -36,6 +36,7 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
     // 只統計有勾選為放射師的人員
     const users = db.getUsers().filter(u => u.isRadiographer === true);
     const shifts = db.getShifts('', '');
+    const cloudSchedule = db.getCloudScheduleEntries();
 
     // ── Default dates for a month: prefer roster cycle that starts (or overlaps) this month ──
     const getDefaultDatesForMonth = (yearMonth: string) => {
@@ -123,6 +124,7 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
                 mr: 0,
                 us: 0,
                 techSupport: 0,
+                proofreader: 0,
             };
 
             // Determine effective date range for this user
@@ -163,12 +165,15 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
                 if (roles.includes(SPECIAL_ROLES.OPENING)) stats.opening++;
                 if (roles.includes(SPECIAL_ROLES.LATE)) stats.late++;
                 if (roles.includes(SPECIAL_ROLES.SCHEDULER)) stats.scheduler++;
+
+                const cloudShifts = cloudSchedule.filter(cs => cs.date === dateStr && cs.proofreaderUserId === user.id);
+                stats.proofreader += cloudShifts.length;
             });
 
             stats.onSite = stats.totalWork - stats.remote;
             return stats;
         });
-    }, [users, dateRange, shifts, cycleMonthKey]);
+    }, [users, dateRange, shifts, cloudSchedule, cycleMonthKey]);
 
     // ── Personal Cycle helpers ──
     const calculateDays = (startDate?: string, endDate?: string) => {
@@ -236,6 +241,7 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
                 "開機": row.opening,
                 "晚班": row.late,
                 "排班": row.scheduler,
+                "校對": row.proofreader,
             }));
 
             const ws = utils.json_to_sheet(excelData);
@@ -243,7 +249,7 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
                 { wch: 10 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 8 },
                 { wch: 12 }, // 備註
                 { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 8 },
-                { wch: 10 }, { wch: 8 }, { wch: 8 }, { wch: 8 },
+                { wch: 10 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 8 },
             ];
             ws['!cols'] = wscols;
 
@@ -379,6 +385,7 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
                                         <th className="px-2 py-3 text-center bg-blue-50/30 text-blue-700">開機</th>
                                         <th className="px-2 py-3 text-center bg-amber-50/30 text-amber-700">晚班</th>
                                         <th className="px-2 py-3 text-center bg-red-50/30 text-red-700">排班</th>
+                                        <th className="px-2 py-3 text-center bg-purple-50/30 text-purple-700">校對</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-100">
@@ -402,6 +409,7 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
                                             <td className="px-2 py-2.5 text-center text-blue-600 font-medium">{row.opening || '-'}</td>
                                             <td className="px-2 py-2.5 text-center text-amber-600 font-medium">{row.late || '-'}</td>
                                             <td className="px-2 py-2.5 text-center text-red-600 font-medium">{row.scheduler || '-'}</td>
+                                            <td className="px-2 py-2.5 text-center text-purple-600 font-medium">{row.proofreader || '-'}</td>
                                         </tr>
                                     ))}
                                 </tbody>

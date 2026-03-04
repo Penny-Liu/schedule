@@ -49,6 +49,7 @@ export interface ReportAssistant {
 export interface CloudScheduleEntry {
   id?: string;
   date: string;            // YYYY-MM-DD
+  doctorId: string;        // ID of the radiologist (影像醫學部醫師)
   assistantIds: string[];  // IDs of ReportAssistants on duty
   proofreaderUserId?: string; // isRadiographer User.id
 }

@@ -1,6 +1,5 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
-import { User, UserRole, ReportAssistant, CloudScheduleEntry } from '../types';
+import { User, UserRole, ReportAssistant, CloudScheduleEntry, Doctor } from '../types';
 import { db } from '../services/store';
 import { Cloud, ChevronLeft, ChevronRight, Plus, Pencil, Trash2, Check, X, UserCheck, Save, AlertCircle } from 'lucide-react';
 
@@ -16,11 +15,16 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
     const [currentDate, setCurrentDate] = useState(new Date());
     const [assistants, setAssistants] = useState<ReportAssistant[]>(() => db.getReportAssistants());
     const [entries, setEntries] = useState<CloudScheduleEntry[]>(() => db.getCloudScheduleEntries());
+    const [doctors, setDoctors] = useState<Doctor[]>(() => db.getDoctors());
+    const [shifts, setShifts] = useState(() => db.doctorShifts);
 
-    // Local dirty tracking: date -> partial entry
+    // Local dirty tracking: key (date_doctorId) -> partial entry
     const [dirtyEntries, setDirtyEntries] = useState<Record<string, { assistantIds: string[]; proofreaderUserId?: string }>>({});
-    const [savingDates, setSavingDates] = useState<Set<string>>(new Set());
+    const [savingKeys, setSavingKeys] = useState<Set<string>>(new Set());
     const [toast, setToast] = useState<string | null>(null);
+
+    // Edit Mode Toggle
+    const [isEditing, setIsEditing] = useState(false);
 
     // Manage assistants panel
     const [showManagePanel, setShowManagePanel] = useState(false);
@@ -30,11 +34,19 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
 
     const radiographers = db.getUsers().filter(u => u.isRadiographer && u.isActive !== false);
 
+    const radiologists = useMemo(() => {
+        return doctors
+            .filter(d => d.specialty === '放射科')
+            .sort((a, b) => (a.displayOrder || 999) - (b.displayOrder || 999));
+    }, [doctors]);
+
     // Subscribe store
     useEffect(() => {
         const unsub = db.subscribe(() => {
             setAssistants([...db.getReportAssistants()]);
             setEntries([...db.getCloudScheduleEntries()]);
+            setDoctors([...db.getDoctors()]);
+            setShifts([...db.doctorShifts]);
         });
         return unsub;
     }, []);
@@ -56,42 +68,49 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
         return days;
     }, [currentDate]);
 
-    // Get effective entry for a date (dirty overrides persisted)
-    const getEntry = (date: string) => {
-        const dirty = dirtyEntries[date];
-        const persisted = entries.find(e => e.date === date);
+    // Get effective entry for a date + doctor (dirty overrides persisted)
+    const getEntry = (date: string, doctorId: string) => {
+        const key = `${date}_${doctorId}`;
+        const dirty = dirtyEntries[key];
+        const persisted = entries.find(e => e.date === date && e.doctorId === doctorId);
         if (dirty) return { assistantIds: dirty.assistantIds, proofreaderUserId: dirty.proofreaderUserId };
         if (persisted) return { assistantIds: persisted.assistantIds, proofreaderUserId: persisted.proofreaderUserId };
         return { assistantIds: [], proofreaderUserId: undefined };
     };
 
-    const toggleAssistantOnDate = (date: string, assistantId: string) => {
-        if (!isEditor) return;
-        const current = getEntry(date);
-        const newIds = current.assistantIds.includes(assistantId)
-            ? current.assistantIds.filter(id => id !== assistantId)
-            : [...current.assistantIds, assistantId];
-        setDirtyEntries(prev => ({ ...prev, [date]: { ...current, assistantIds: newIds } }));
+    const setAssistant = (date: string, doctorId: string, assistantId: string) => {
+        if (!isEditing) return;
+        const key = `${date}_${doctorId}`;
+        const current = getEntry(date, doctorId);
+        const newIds = assistantId ? [assistantId] : [];
+        setDirtyEntries(prev => ({ ...prev, [key]: { ...current, assistantIds: newIds } }));
     };
 
-    const setProofreader = (date: string, userId: string) => {
-        if (!isEditor) return;
-        const current = getEntry(date);
+    const setProofreader = (date: string, doctorId: string, userId: string) => {
+        if (!isEditing) return;
+        const key = `${date}_${doctorId}`;
+        const current = getEntry(date, doctorId);
         const value = userId === '' ? undefined : userId;
-        setDirtyEntries(prev => ({ ...prev, [date]: { ...current, proofreaderUserId: value } }));
+        setDirtyEntries(prev => ({ ...prev, [key]: { ...current, proofreaderUserId: value } }));
     };
 
-    const saveDate = async (date: string) => {
-        const current = getEntry(date);
-        setSavingDates(prev => new Set(prev).add(date));
+    const saveEntry = async (date: string, doctorId: string) => {
+        const key = `${date}_${doctorId}`;
+        const current = getEntry(date, doctorId);
+        setSavingKeys(prev => new Set(prev).add(key));
         try {
-            await db.upsertCloudScheduleEntry({ date, assistantIds: current.assistantIds, proofreaderUserId: current.proofreaderUserId });
-            setDirtyEntries(prev => { const n = { ...prev }; delete n[date]; return n; });
-            showToast(`${date} 已儲存`);
-        } catch (e) {
-            showToast('儲存失敗');
+            await db.upsertCloudScheduleEntry({ 
+                date, 
+                doctorId,
+                assistantIds: current.assistantIds, 
+                proofreaderUserId: current.proofreaderUserId 
+            });
+            setDirtyEntries(prev => { const n = { ...prev }; delete n[key]; return n; });
+            showToast(`已儲存`);
+        } catch (e: any) {
+            showToast(`儲存失敗: ${e.message || e.toString()}`);
         } finally {
-            setSavingDates(prev => { const n = new Set(prev); n.delete(date); return n; });
+            setSavingKeys(prev => { const n = new Set(prev); n.delete(key); return n; });
         }
     };
 
@@ -130,6 +149,15 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
     const monthLabel = currentDate.toLocaleDateString('zh-TW', { year: 'numeric', month: 'long' });
     const todayStr = new Date().toISOString().split('T')[0];
 
+    // Export Placeholder
+    const exportToExcel = () => {
+        showToast('準備匯出 Excel...');
+    };
+
+    const exportToPDF = () => {
+        showToast('準備匯出 PDF...');
+    };
+
     return (
         <div className="h-full flex flex-col bg-slate-50 overflow-hidden">
             {/* Toast */}
@@ -146,7 +174,7 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
                         <div className="p-2 bg-sky-50 text-sky-600 rounded-lg"><Cloud size={20} /></div>
                         <div>
                             <h2 className="text-xl font-bold text-slate-800">影像雲班表</h2>
-                            <p className="text-xs text-slate-400">報告助理排班 · 放射師校對</p>
+                            <p className="text-xs text-slate-400">影像醫學部醫師 · 報告助理指定</p>
                         </div>
                     </div>
 
@@ -162,15 +190,36 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
                                 className="p-1 text-slate-400 hover:text-sky-600 rounded transition-colors">
                                 <ChevronRight size={16} />
                             </button>
+                            <button onClick={() => setCurrentDate(new Date())} className="px-2 py-1 bg-slate-100 text-slate-600 rounded-lg text-xs font-bold hover:bg-slate-200 ml-1">
+                                本月
+                            </button>
+                        </div>
+
+                        {/* Export Buttons */}
+                        <div className="flex items-center gap-2 border-l border-slate-200 pl-3">
+                            <button onClick={exportToExcel} className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold bg-green-50 text-green-700 hover:bg-green-100 border border-green-200 transition-colors">
+                                匯出 Excel
+                            </button>
+                            <button onClick={exportToPDF} className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 transition-colors">
+                                匯出 PDF
+                            </button>
                         </div>
 
                         {isEditor && (
-                            <button
-                                onClick={() => setShowManagePanel(v => !v)}
-                                className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-sm font-bold border transition-all ${showManagePanel ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white border-slate-200 text-slate-700 hover:bg-indigo-50 hover:border-indigo-300'}`}
-                            >
-                                <UserCheck size={15} /> 管理助理
-                            </button>
+                            <div className="flex items-center gap-2 border-l border-slate-200 pl-3">
+                                <button
+                                    onClick={() => setIsEditing(!isEditing)}
+                                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-bold border transition-all ${isEditing ? 'bg-sky-600 text-white border-sky-600 shadow-md animate-pulse' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}
+                                >
+                                    <Pencil size={15} /> {isEditing ? '完成' : '編輯模式'}
+                                </button>
+                                <button
+                                    onClick={() => setShowManagePanel(v => !v)}
+                                    className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-sm font-bold border transition-all ${showManagePanel ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white border-slate-200 text-slate-700 hover:bg-indigo-50 hover:border-indigo-300'}`}
+                                >
+                                    <UserCheck size={15} /> 管理助理
+                                </button>
+                            </div>
                         )}
                     </div>
                 </div>
@@ -178,112 +227,160 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
 
             <div className="flex-1 flex overflow-hidden">
                 {/* Main Schedule Table */}
-                <div className="flex-1 overflow-auto p-4">
+                <div className="flex-1 overflow-auto p-4 md:p-6">
                     {activeAssistants.length === 0 ? (
                         <div className="flex flex-col items-center justify-center h-64 text-slate-400 gap-4">
                             <AlertCircle size={40} className="text-slate-300" />
                             <p className="text-sm font-medium">尚無報告助理，請先點「管理助理」新增</p>
                         </div>
                     ) : (
-                        <div className="space-y-6">
-                            {monthDates.map(date => {
-                                const entry = getEntry(date);
-                                const isDirty = !!dirtyEntries[date];
-                                const isSaving = savingDates.has(date);
-                                const isToday = date === todayStr;
-                                const d = new Date(date);
-                                const weekDays = ['日', '一', '二', '三', '四', '五', '六'];
-                                const isWeekend = d.getDay() === 0 || d.getDay() === 6;
-                                const proofreader = radiographers.find(u => u.id === entry.proofreaderUserId);
+                        <div className="bg-white rounded-xl border border-gray-200 shadow-sm inline-block min-w-full pb-20 overflow-x-hidden">
+                            <table className="border-collapse w-full table-fixed text-[10px]">
+                                <thead className="relative z-50">
+                                    <tr className="bg-slate-50 border-b border-slate-200">
+                                        <th className="p-1 text-center font-bold text-slate-600 min-w-[70px] sticky left-0 top-0 bg-slate-50 z-50 border-r border-slate-200 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
+                                            醫師
+                                        </th>
+                                        {monthDates.map(date => {
+                                            const d = new Date(date);
+                                            const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+                                            const isToday = date === todayStr;
 
-                                return (
-                                    <div
-                                        key={date}
-                                        className={`bg-white rounded-2xl border shadow-sm overflow-hidden transition-all ${isToday ? 'border-sky-300 shadow-sky-100' : (isDirty ? 'border-amber-300' : 'border-slate-200')}`}
-                                    >
-                                        {/* Day Header */}
-                                        <div className={`px-4 py-3 flex items-center justify-between ${isToday ? 'bg-sky-50' : (isWeekend ? 'bg-slate-50' : 'bg-white')} border-b border-inherit`}>
-                                            <div className="flex items-center gap-3">
-                                                <div className={`w-10 h-10 rounded-xl flex flex-col items-center justify-center font-bold shadow-sm ${isToday ? 'bg-sky-500 text-white' : (isWeekend ? 'bg-slate-200 text-slate-600' : 'bg-slate-100 text-slate-700')}`}>
-                                                    <span className="text-[9px] leading-none">{weekDays[d.getDay()]}</span>
-                                                    <span className="text-base leading-none">{d.getDate()}</span>
-                                                </div>
-                                                {isDirty && <span className="text-[10px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">未儲存</span>}
-                                            </div>
-
-                                            {isEditor && (
-                                                <button
-                                                    onClick={() => saveDate(date)}
-                                                    disabled={!isDirty || isSaving}
-                                                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${isDirty ? 'bg-sky-600 text-white hover:bg-sky-700 shadow-sm' : 'bg-slate-100 text-slate-400 cursor-not-allowed'}`}
+                                            return (
+                                                <th 
+                                                    key={date} 
+                                                    className={`px-0 py-1 text-center border-r border-slate-100 min-w-[45px] sticky top-0 z-40 ${isToday ? 'bg-teal-50' : (isWeekend ? 'bg-red-50' : 'bg-white')} border-b border-slate-200`}
                                                 >
-                                                    <Save size={12} /> {isSaving ? '儲存中...' : '儲存'}
-                                                </button>
-                                            )}
-                                        </div>
-
-                                        <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            {/* Report Assistants */}
-                                            <div>
-                                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-3">報告助理</p>
-                                                <div className="flex flex-wrap gap-2">
-                                                    {activeAssistants.map(asst => {
-                                                        const isOn = entry.assistantIds.includes(asst.id);
-                                                        return (
-                                                            <button
-                                                                key={asst.id}
-                                                                onClick={() => toggleAssistantOnDate(date, asst.id)}
-                                                                disabled={!isEditor}
-                                                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-bold border transition-all ${isOn
-                                                                    ? 'text-white shadow-sm scale-105'
-                                                                    : 'bg-white text-slate-500 border-slate-200 hover:border-slate-400'
-                                                                } ${!isEditor ? 'cursor-default' : 'cursor-pointer active:scale-95'}`}
-                                                                style={isOn ? { backgroundColor: asst.color || '#6366f1', borderColor: asst.color || '#6366f1' } : {}}
-                                                            >
-                                                                {isOn && <Check size={12} />}
-                                                                {asst.name}
-                                                            </button>
-                                                        );
-                                                    })}
-                                                </div>
-                                            </div>
-
-                                            {/* Proofreader */}
-                                            <div>
-                                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-3">放射師校對</p>
-                                                {isEditor ? (
-                                                    <select
-                                                        value={entry.proofreaderUserId || ''}
-                                                        onChange={e => setProofreader(date, e.target.value)}
-                                                        className="w-full max-w-[200px] text-sm border border-slate-200 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-sky-500 outline-none bg-white font-medium text-slate-700"
-                                                    >
-                                                        <option value="">— 未指定 —</option>
-                                                        {radiographers.map(u => (
-                                                            <option key={u.id} value={u.id}>{u.name}</option>
-                                                        ))}
-                                                    </select>
-                                                ) : (
-                                                    <div className={`flex items-center gap-2 ${proofreader ? '' : 'text-slate-400'}`}>
-                                                        {proofreader ? (
-                                                            <>
-                                                                <div
-                                                                    className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-sm"
-                                                                    style={{ backgroundColor: proofreader.color || '#9CA3AF' }}
-                                                                >
-                                                                    {proofreader.alias || proofreader.name[0]}
-                                                                </div>
-                                                                <span className="font-bold text-slate-700">{proofreader.name}</span>
-                                                            </>
-                                                        ) : (
-                                                            <span className="text-sm italic">未指定</span>
-                                                        )}
+                                                    <div className={`font-bold text-[11px] leading-tight ${isToday ? 'text-teal-600' : (isWeekend ? 'text-red-500' : 'text-slate-800')}`}>{d.getDate()}</div>
+                                                    <div className={`text-[10px] opacity-75 leading-tight ${isToday ? 'text-teal-600' : (isWeekend ? 'text-red-500' : 'text-slate-700')}`}>
+                                                        {['日', '一', '二', '三', '四', '五', '六'][d.getDay()]}
                                                     </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    </div>
-                                );
-                            })}
+                                                </th>
+                                            );
+                                        })}
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100">
+                                    {radiologists.map(doc => (
+                                        <tr key={doc.id} className="group hover:bg-slate-50/50 transition-colors">
+                                            {/* Sticky Doctor Col */}
+                                            <td className="p-0 border-r border-slate-200 sticky left-0 bg-white z-30 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] align-middle text-center">
+                                                <div className="p-1 font-bold text-slate-800 flex flex-col items-center justify-center gap-1 w-full">
+                                                    <div className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-500 mx-auto">
+                                                        {doc.alias || doc.name.charAt(0)}
+                                                    </div>
+                                                    <span className="text-[11px] truncate">{doc.alias || doc.name}</span>
+                                                </div>
+                                            </td>
+
+                                            {/* Days Cols */}
+                                            {monthDates.map(date => {
+                                                const d = new Date(date);
+                                                const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+                                                const key = `${date}_${doc.id}`;
+                                                
+                                                // Find if doctor is scheduled today and location is Beitou
+                                                const docShift = shifts.find(s => s.date === date && s.doctorId === doc.id);
+                                                const isBeitou = docShift?.location === '北投';
+                                                
+                                                // Check background tint
+                                                const isImagingTask = docShift?.task?.includes('影像') || docShift?.scheduled_station?.includes('影像');
+                                                const isSupportTask = docShift?.task?.includes('支援') || docShift?.scheduled_station?.includes('支援');
+                                                const isRemoteTask = docShift?.task?.includes('遠') || docShift?.scheduled_station?.includes('遠') || docShift?.task?.toLowerCase().includes('remote') || docShift?.scheduled_station?.toLowerCase().includes('remote');
+                                                
+                                                let bgColor = isWeekend ? 'bg-slate-50' : 'bg-white';
+                                                
+                                                if (docShift) {
+                                                    // Priority coloring
+                                                    if (isRemoteTask) bgColor = 'bg-pink-100';
+                                                    else if (isSupportTask) bgColor = 'bg-yellow-100';
+                                                    else if (isImagingTask) bgColor = 'bg-sky-50';
+                                                }
+
+                                                const isEditable = isBeitou || isRemoteTask;
+
+                                                // State data mapped
+                                                const entry = getEntry(date, doc.id);
+                                                const isDirty = !!dirtyEntries[key];
+                                                const isSaving = savingKeys.has(key);
+                                                const proofreader = radiographers.find(u => u.id === entry.proofreaderUserId);
+
+                                                return (
+                                                    <td key={date} className={`p-1 align-top border-r border-slate-100 ${bgColor} relative group transition-colors hover:bg-slate-50`}>
+                                                        {!docShift ? (
+                                                            <div className="h-full w-full min-h-[50px] flex items-center justify-center text-[10px] text-slate-300">沒班</div>
+                                                        ) : !isEditable ? (
+                                                            <div className="h-full w-full min-h-[50px] flex flex-col items-center justify-center text-[10px] leading-tight">
+                                                                <span className="text-slate-400 truncate w-full text-center">{docShift.location}</span>
+                                                                <span className="text-slate-500 font-bold truncate w-full text-center">{docShift.scheduled_station}</span>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="flex flex-col min-h-[50px] gap-1 items-center justify-center relative w-full pt-1">
+                                                                {/* Task Hint */}
+                                                                <div className={`text-[11px] font-bold leading-tight w-full text-center whitespace-normal break-words ${isRemoteTask ? 'text-pink-700' : isSupportTask ? 'text-yellow-700' : isImagingTask ? 'text-sky-700' : 'text-slate-600'}`}>
+                                                                    {docShift.scheduled_station}
+                                                                </div>
+                                                                
+                                                                {isDirty && (
+                                                                     <button 
+                                                                        onClick={() => saveEntry(date, doc.id)} 
+                                                                        disabled={isSaving}
+                                                                        className="absolute top-0 right-0 text-[7px] bg-sky-500 text-white px-1 py-0 rounded shadow-sm hover:bg-sky-600 disabled:opacity-50 flex items-center shrink-0 z-10"
+                                                                     >
+                                                                        {isSaving ? '...' : <Save size={8} />}
+                                                                    </button>
+                                                                )}
+
+                                                                {/* Assistant Select */}
+                                                                <div className="w-full mt-0.5">
+                                                                    {isEditing ? (
+                                                                        <select
+                                                                            value={entry.assistantIds[0] || ''}
+                                                                            onChange={e => setAssistant(date, doc.id, e.target.value)}
+                                                                            className={`w-full text-[10px] border rounded-[3px] p-0 outline-none font-bold h-5 leading-tight text-center ${entry.assistantIds.length > 0 ? 'border-sky-400 bg-sky-50 text-sky-700' : 'border-slate-300 bg-white text-slate-500'}`}
+                                                                        >
+                                                                            <option value="">--</option>
+                                                                            {activeAssistants.map(asst => (
+                                                                                <option key={asst.id} value={asst.id}>{asst.name}</option>
+                                                                            ))}
+                                                                        </select>
+                                                                    ) : (
+                                                                        <div className="text-[11px] font-bold text-sky-700 w-full text-center whitespace-normal break-words">
+                                                                            {entry.assistantIds.length > 0 ? (
+                                                                                activeAssistants.find(a => a.id === entry.assistantIds[0])?.name || '-'
+                                                                            ) : '-'}
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+
+                                                                {/* Proofreader Select */}
+                                                                <div className="mt-auto pt-0.5 w-full">
+                                                                    {isEditing ? (
+                                                                        <select
+                                                                            value={entry.proofreaderUserId || ''}
+                                                                            onChange={e => setProofreader(date, doc.id, e.target.value)}
+                                                                            className={`w-full text-[10px] border rounded-[3px] p-0 outline-none font-bold h-5 leading-tight text-center ${entry.proofreaderUserId ? 'border-indigo-400 bg-indigo-50 text-indigo-700' : 'border-slate-300 bg-white text-slate-500'}`}
+                                                                        >
+                                                                            <option value="">--</option>
+                                                                            {radiographers.map(u => (
+                                                                                <option key={u.id} value={u.id}>{u.name}</option>
+                                                                            ))}
+                                                                        </select>
+                                                                    ) : (
+                                                                        <div className="text-[11px] font-bold text-indigo-700 w-full text-center whitespace-normal break-words">
+                                                                            {proofreader ? proofreader.name : '-'}
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </td>
+                                                );
+                                            })}
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
                         </div>
                     )}
                 </div>

@@ -107,6 +107,9 @@ class Store {
         try {
             console.log('Fetching data from Supabase...');
 
+            // Load Cloud Schedule Data early
+            await this.loadCloudScheduleData();
+
             const [usersRes, shiftsRes, leavesRes, settingsRes] = await Promise.all([
                 supabase.from('users').select('*'),
                 this.fetchAllShifts(),
@@ -2567,14 +2570,14 @@ BMD :{{bmd}}
         return this.cloudScheduleEntries;
     }
 
-    getCloudScheduleEntry(date: string): CloudScheduleEntry | undefined {
-        return this.cloudScheduleEntries.find(e => e.date === date);
+    getCloudScheduleEntry(date: string, doctorId: string): CloudScheduleEntry | undefined {
+        return this.cloudScheduleEntries.find(e => e.date === date && e.doctorId === doctorId);
     }
 
     async upsertCloudScheduleEntry(entry: CloudScheduleEntry) {
-        const exists = this.cloudScheduleEntries.find(e => e.date === entry.date);
+        const exists = this.cloudScheduleEntries.find(e => e.date === entry.date && e.doctorId === entry.doctorId);
         if (exists) {
-            this.cloudScheduleEntries = this.cloudScheduleEntries.map(e => e.date === entry.date ? { ...e, ...entry } : e);
+            this.cloudScheduleEntries = this.cloudScheduleEntries.map(e => (e.date === entry.date && e.doctorId === entry.doctorId) ? { ...e, ...entry } : e);
         } else {
             this.cloudScheduleEntries = [...this.cloudScheduleEntries, entry];
         }
@@ -2582,11 +2585,15 @@ BMD :{{bmd}}
         try {
             const { error } = await supabase.from('cloud_schedule_entries').upsert({
                 date: entry.date,
+                doctor_id: entry.doctorId,
                 assistant_ids: entry.assistantIds,
                 proofreader_user_id: entry.proofreaderUserId ?? null
-            }, { onConflict: 'date' });
+            }, { onConflict: 'date, doctor_id' });
             if (error) throw error;
-        } catch (e) { console.error('[Store] upsertCloudScheduleEntry failed', e); }
+        } catch (e: any) { 
+            console.error('[Store] upsertCloudScheduleEntry failed', e); 
+            throw e; 
+        }
     }
 
     private async loadCloudScheduleData() {
@@ -2595,6 +2602,9 @@ BMD :{{bmd}}
                 supabase.from('report_assistants').select('*').order('name'),
                 supabase.from('cloud_schedule_entries').select('*')
             ]);
+            
+            if (assistantsRes.error) console.error('[Store] report_assistants fetch error:', assistantsRes.error);
+            if (entriesRes.error) console.error('[Store] cloud_schedule_entries fetch error:', entriesRes.error);
             if (assistantsRes.data) {
                 this.reportAssistants = assistantsRes.data.map((a: any) => ({
                     id: a.id,
@@ -2607,9 +2617,11 @@ BMD :{{bmd}}
                 this.cloudScheduleEntries = entriesRes.data.map((e: any) => ({
                     id: e.id,
                     date: e.date,
+                    doctorId: e.doctor_id,
                     assistantIds: e.assistant_ids || [],
                     proofreaderUserId: e.proofreader_user_id
                 }));
+                console.log(`[Store] Loaded ${this.cloudScheduleEntries.length} cloud schedule entries.`);
             }
         } catch (e) { console.warn('[Store] loadCloudScheduleData failed (tables may not exist yet)', e); }
     }
