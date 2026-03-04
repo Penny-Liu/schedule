@@ -56,7 +56,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentUser, onNavigate, currentPage,
       id: 'doctor_statistics',
       label: '醫師工作統計',
       icon: BarChart3,
-      roles: [UserRole.SYSTEM_ADMIN, UserRole.SCHEDULER, UserRole.VIEWER, UserRole.FINANCE]
+      roles: [UserRole.SYSTEM_ADMIN, UserRole.SCHEDULER, UserRole.FINANCE]
     },
     {
       id: 'physician_settings',
