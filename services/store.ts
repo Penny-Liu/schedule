@@ -164,17 +164,20 @@ class Store {
             if (usersRes.data && usersRes.data.length > 0) {
                 console.log(`[Store] Successfully loaded ${usersRes.data.length} users from Supabase.`);
                 this.users = usersRes.data.map((u: any) => {
-                    const permissions = (u.permissions !== null && u.permissions !== undefined) 
-                        ? u.permissions 
-                        : getPermissionsByRole(u.role);
+                    const mappedUser = { ...u };
+                    this.mapFromDbFields(mappedUser);
+                    
+                    const permissions = (mappedUser.permissions !== null && mappedUser.permissions !== undefined) 
+                        ? mappedUser.permissions 
+                        : getPermissionsByRole(mappedUser.role);
                     
                     // Debug: Log permissions for critical roles
-                    if (u.role === UserRole.SCHEDULER || u.role === UserRole.SYSTEM_ADMIN) {
-                        console.log(`[Store] User ${u.name} (${u.role}) permissions:`, permissions);
+                    if (mappedUser.role === UserRole.SCHEDULER || mappedUser.role === UserRole.SYSTEM_ADMIN) {
+                        console.log(`[Store] User ${mappedUser.name} (${mappedUser.role}) permissions:`, permissions);
                     }
 
                     return {
-                        ...u,
+                        ...mappedUser,
                         permissions
                     };
                 });
@@ -194,27 +197,25 @@ class Store {
                 // Deduplicate shifts: Prioritize valid IDs and content
                 const uniqueShiftsMap = new Map();
                 shiftsRes.data.forEach(s => {
-                    const key = `${s.userId}-${s.date}`;
+                    const mappedShift = { ...s };
+                    this.mapFromDbFields(mappedShift);
+                    
+                    const key = `${mappedShift.userId}-${mappedShift.date}`;
                     const existing = uniqueShiftsMap.get(key);
 
                     if (!existing) {
-                        uniqueShiftsMap.set(key, s);
+                        uniqueShiftsMap.set(key, mappedShift);
                     } else {
-                        // Conflict Resolution Strategy:
-                        // 1. Prefer Good IDs (no spaces) over Bad IDs
+                        // ... existing logic ...
                         const isExistingIdBad = existing.id.includes(' ');
-                        const isNewIdBad = s.id.includes(' ');
-
-                        // If existing is bad and new is good => Replace
+                        const isNewIdBad = mappedShift.id.includes(' ');
                         if (isExistingIdBad && !isNewIdBad) {
-                            uniqueShiftsMap.set(key, s);
+                            uniqueShiftsMap.set(key, mappedShift);
                             return;
                         }
-
-                        // If both are good (or both bad), Prefer Content over Empty/Unassigned
                         if (existing.station === 'Unassigned' || existing.station === '未分配' || !existing.station) {
-                            if (s.station && s.station !== 'Unassigned' && s.station !== '未分配') {
-                                uniqueShiftsMap.set(key, s);
+                            if (mappedShift.station && mappedShift.station !== 'Unassigned' && mappedShift.station !== '未分配') {
+                                uniqueShiftsMap.set(key, mappedShift);
                             }
                         }
                     }
@@ -222,7 +223,11 @@ class Store {
                 this.shifts = Array.from(uniqueShiftsMap.values());
             }
             if (leavesRes.data && leavesRes.data.length > 0) {
-                this.leaves = leavesRes.data;
+                this.leaves = leavesRes.data.map(l => {
+                    const mapped = { ...l };
+                    this.mapFromDbFields(mapped);
+                    return mapped;
+                });
             } else {
                 console.log('Database empty (leaves), seeding init data...');
                 this.leaves = MOCK_LEAVES;
@@ -666,12 +671,51 @@ BMD :{{bmd}}
             'personalCycles': 'personal_cycles',
             'primaryStation': 'primary_station',
             'learningCapabilities': 'learning_capabilities',
-            'excludedCapabilities': 'excluded_capabilities'
+            'excludedCapabilities': 'excluded_capabilities',
+            'specialRoles': 'special_roles',
+            'userId': 'userId', // Already mixed in DB, but let's be safe
+            'targetUserId': 'target_user_id',
+            'returnDate': 'return_date',
+            'approverId': 'approver_id',
+            'processedAt': 'processed_at',
+            'roleToSwap': 'role_to_swap',
+            'targetApproval': 'target_approval'
         };
         Object.keys(mapping).forEach(key => {
             if (key in obj) {
                 obj[mapping[key]] = obj[key];
                 delete obj[key];
+            }
+        });
+    }
+
+    private mapFromDbFields(obj: any) {
+        const mapping: Record<string, string> = {
+            'is_radiographer': 'isRadiographer',
+            'is_part_time': 'isPartTime',
+            'is_active': 'isActive',
+            'resignation_date': 'resignationDate',
+            'group_index': 'groupIndex',
+            'group_id': 'groupId',
+            'must_change_password': 'mustChangePassword',
+            'avatar_url': 'avatarUrl',
+            'personal_cycles': 'personalCycles',
+            'primary_station': 'primaryStation',
+            'learning_capabilities': 'learningCapabilities',
+            'excluded_capabilities': 'excludedCapabilities',
+            'special_roles': 'specialRoles',
+            'target_user_id': 'targetUserId',
+            'return_date': 'returnDate',
+            'approver_id': 'approverId',
+            'processed_at': 'processedAt',
+            'role_to_swap': 'roleToSwap',
+            'target_approval': 'targetApproval'
+        };
+        Object.keys(mapping).forEach(key => {
+            if (key in obj) {
+                obj[mapping[key]] = obj[key];
+                // Keep the old key too for backward compatibility if needed? 
+                // No, better to be clean
             }
         });
     }

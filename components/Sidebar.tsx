@@ -101,7 +101,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentUser, onNavigate, currentPage,
           影
         </div>
         <h1 className="text-sm font-bold text-gray-800 tracking-wide hidden lg:block">
-            影像醫學部 <span className="text-[10px] text-gray-400 font-normal">v1.3</span>
+            影像醫學部 <span className="text-[10px] text-gray-400 font-normal">v1.4</span>
         </h1>
       </div>
 
