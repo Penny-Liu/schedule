@@ -15,6 +15,35 @@ export enum StaffGroup {
   GROUP_D = 'D'  // Rolling rotation: Sun always off, Mon-Sat rotate by index
 }
 
+// ── 權限常量 ──────────────────────────
+export const PERMISSIONS = {
+  VIEW_CLOUD_SCHEDULE: 'view_cloud_schedule',
+  EDIT_CLOUD_SCHEDULE: 'edit_cloud_schedule',
+  VIEW_STAFF: 'staff_view',
+  EDIT_STAFF: 'staff_edit',
+  VIEW_PHYSICIAN: 'physician_view',
+  EDIT_PHYSICIAN: 'physician_edit',
+  VIEW_STATS: 'stats_view',
+  VIEW_DOCTOR_STATS: 'doctor_stats_view',
+  EDIT_DOCTOR_STATS: 'doctor_stats_edit',
+  MANAGE_DOCTORS: 'doctors_manage',
+  EDIT_SETTINGS: 'settings_edit',
+};
+
+export const PERMISSION_LABELS: Record<string, string> = {
+  [PERMISSIONS.VIEW_CLOUD_SCHEDULE]: '查看雲班表',
+  [PERMISSIONS.EDIT_CLOUD_SCHEDULE]: '編輯雲班表',
+  [PERMISSIONS.VIEW_STAFF]: '查看人員管理',
+  [PERMISSIONS.EDIT_STAFF]: '編輯人員管理',
+  [PERMISSIONS.VIEW_PHYSICIAN]: '查看醫師排班',
+  [PERMISSIONS.EDIT_PHYSICIAN]: '編輯醫師排班',
+  [PERMISSIONS.VIEW_STATS]: '查看工作統計',
+  [PERMISSIONS.VIEW_DOCTOR_STATS]: '查看醫師統計',
+  [PERMISSIONS.EDIT_DOCTOR_STATS]: '編輯醫師統計',
+  [PERMISSIONS.MANAGE_DOCTORS]: '管理醫師名單',
+  [PERMISSIONS.EDIT_SETTINGS]: '系統設定權限',
+};
+
 export interface User {
   id: string;
   name: string;
@@ -36,6 +65,7 @@ export interface User {
   isPartTime?: boolean; // New: Flag for part-time radiographers (hidden in main view)
   groupIndex?: number; // New: Fixed rotation index for Group D (0-based, determines rest day order)
   personalCycles?: Record<string, { startDate: string; endDate: string; memo: string }>; // Per-month cycle adjustments
+  permissions?: string[]; // Fine-grained permissions
 }
 
 // ── 影像雲班表 ──────────────────────────

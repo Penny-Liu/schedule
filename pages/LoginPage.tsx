@@ -15,7 +15,11 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const todayStr = new Date().toISOString().split('T')[0];
-    const activeUsers = users.filter(u => u.isActive !== false && (!u.resignationDate || u.resignationDate > todayStr));
+    const activeUsers = users.filter(u => 
+        u.isActive !== false && 
+        u.isPartTime !== true && // Part-time staff cannot login
+        (!u.resignationDate || u.resignationDate > todayStr)
+    );
 
     // Split users by role
     const physicianSideUsers = activeUsers.filter(u => 

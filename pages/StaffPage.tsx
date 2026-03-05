@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { User, UserRole, StaffGroup, SYSTEM_OFF, StationDefault, SPECIAL_ROLES } from '../types';
+import { User, UserRole, StaffGroup, SYSTEM_OFF, StationDefault, SPECIAL_ROLES, PERMISSIONS, PERMISSION_LABELS } from '../types';
 import { db } from '../services/store';
 import { Mail, Shield, Users, Trash2, Plus, Check, CheckSquare, Square, Pencil, X, Save, Palette, AlertCircle, Star, BookOpen, Key } from 'lucide-react';
 import ConfirmModal from '../components/ConfirmModal';
@@ -56,6 +56,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
     isActive: boolean; // New
     resignationDate: string; // New
     groupIndex: number; // For Group D rotation order
+    permissions: string[];
   }>({
     name: '',
     alias: '',
@@ -70,7 +71,8 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
     isPartTime: false, // New
     isActive: true, // New
     resignationDate: '', // New
-    groupIndex: 0
+    groupIndex: 0,
+    permissions: []
   });
 
   const resetForm = () => {
@@ -88,7 +90,8 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
       isActive: true,
       isPartTime: false,
       resignationDate: '',
-      groupIndex: 0
+      groupIndex: 0,
+      permissions: []
     });
     setEditingId(null);
   };
@@ -115,7 +118,8 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
         isPartTime: formData.isPartTime,
         isActive: formData.isActive,
         resignationDate: formData.resignationDate,
-        groupIndex: formData.groupId === StaffGroup.GROUP_D ? formData.groupIndex : undefined
+        groupIndex: formData.groupId === StaffGroup.GROUP_D ? formData.groupIndex : undefined,
+        permissions: formData.permissions
       });
     } else {
         // Create new user
@@ -136,7 +140,8 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
         resignationDate: formData.resignationDate,
         groupIndex: formData.groupId === StaffGroup.GROUP_D ? formData.groupIndex : undefined,
         password: '1234',
-        mustChangePassword: true
+        mustChangePassword: true,
+        permissions: formData.permissions
       };
       db.addUser(u);
     }
@@ -162,7 +167,8 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
       isPartTime: user.isPartTime || false,
       isActive: user.isActive !== undefined ? user.isActive : true,
       resignationDate: user.resignationDate || '',
-      groupIndex: user.groupIndex ?? 0
+      groupIndex: user.groupIndex ?? 0,
+      permissions: user.permissions || []
     });
   };
 
@@ -245,8 +251,8 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
     }
   };
 
-  // Only Supervisor, Admin, and Scheduler can access
-  if (currentUser.role !== UserRole.SUPERVISOR && currentUser.role !== UserRole.SYSTEM_ADMIN && currentUser.role !== UserRole.SCHEDULER) {
+  // Only those with VIEW_STAFF permission can access
+  if (!currentUser.permissions?.includes(PERMISSIONS.VIEW_STAFF) && currentUser.role !== UserRole.SYSTEM_ADMIN) {
     return <div className="p-8 text-center text-gray-500">權限不足。</div>;
   }
 
@@ -280,9 +286,10 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        {/* Form Section (Sticky) */}
-        <div className="xl:col-span-1">
-          <div className={`bg-white p-5 rounded-xl shadow-[0_2px_12px_rgba(0,0,0,0.03)] border sticky top-4 transition-all duration-300 max-h-[calc(100vh-2rem)] overflow-y-auto custom-scrollbar ${editingId ? 'border-teal-400 ring-1 ring-teal-100' : 'border-gray-100'}`}>
+        {/* Form Section (Sticky) - Only show if has EDIT_STAFF permission */}
+        {currentUser.permissions?.includes(PERMISSIONS.EDIT_STAFF) && (
+          <div className="xl:col-span-1">
+            <div className={`bg-white p-5 rounded-xl shadow-[0_2px_12px_rgba(0,0,0,0.03)] border sticky top-4 transition-all duration-300 max-h-[calc(100vh-2rem)] overflow-y-auto custom-scrollbar ${editingId ? 'border-teal-400 ring-1 ring-teal-100' : 'border-gray-100'}`}>
             <div className="flex justify-between items-center mb-4">
               <h3 className={`text-sm font-bold flex items-center gap-2 ${editingId ? 'text-teal-700' : 'text-gray-800'}`}>
                 <span className={`w-1 h-4 rounded-full ${editingId ? 'bg-teal-600' : 'bg-gray-400'}`}></span>
@@ -519,6 +526,36 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                 </div>
               )}
 
+                <div>
+                  <div className="flex justify-between items-center mb-2">
+                    <label className="text-xs font-semibold text-gray-500 block">功能權限控管</label>
+                  </div>
+                  <div className="bg-gray-50 rounded-lg p-3 border border-gray-100 space-y-2 max-h-48 overflow-y-auto custom-scrollbar">
+                     {Object.entries(PERMISSIONS).map(([key, value]) => (
+                        <div key={value} className="flex items-center gap-2">
+                          <input 
+                            type="checkbox" 
+                            id={`perm_${value}`}
+                            checked={formData.permissions.includes(value)}
+                            onChange={(e) => {
+                               const checked = e.target.checked;
+                               setFormData(prev => ({
+                                  ...prev,
+                                  permissions: checked 
+                                    ? [...prev.permissions, value]
+                                    : prev.permissions.filter(p => p !== value)
+                               }));
+                            }}
+                            className="w-3.5 h-3.5 text-teal-600 border-gray-300 rounded focus:ring-teal-500"
+                          />
+                          <label htmlFor={`perm_${value}`} className="text-xs text-gray-700 cursor-pointer">
+                            {PERMISSION_LABELS[value] || key}
+                          </label>
+                        </div>
+                     ))}
+                  </div>
+                </div>
+
               <div className="pt-2 flex flex-col gap-2">
                 <div className="flex gap-2">
                   {editingId && (
@@ -555,9 +592,10 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
             </form>
           </div>
         </div>
+        )}
 
         {/* User List */}
-        <div className="xl:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4 auto-rows-min pb-20">
+        <div className={`${currentUser.permissions?.includes(PERMISSIONS.EDIT_STAFF) ? 'xl:col-span-2' : 'xl:col-span-3'} grid grid-cols-1 md:grid-cols-2 gap-4 auto-rows-min pb-20`}>
           {users.filter(user => {
             // Hide resigned users once their resignation date is effective
             if (user.isActive === false) {
@@ -576,25 +614,27 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                   : 'border-gray-100 hover:shadow-md'
                   } ${user.isActive === false ? 'opacity-60 bg-gray-50 grayscale-[0.5]' : ''}`}
               >
-                {/* Action Buttons */}
-                <div className="absolute top-4 right-4 flex gap-1 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                  <button
-                    type="button"
-                    onClick={(e) => handleEditClick(e, user)}
-                    className="p-1.5 text-gray-400 hover:text-teal-600 hover:bg-teal-50 rounded-lg transition-colors"
-                    title="編輯"
-                  >
-                    <Pencil size={16} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={(e) => handleDeleteClick(e, user.id)}
-                    className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                    title="移除人員"
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </div>
+                {/* Action Buttons - Only show if has EDIT_STAFF permission */}
+                {currentUser.permissions?.includes(PERMISSIONS.EDIT_STAFF) && (
+                  <div className="absolute top-4 right-4 flex gap-1 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                    <button
+                      type="button"
+                      onClick={(e) => handleEditClick(e, user)}
+                      className="p-1.5 text-gray-400 hover:text-teal-600 hover:bg-teal-50 rounded-lg transition-colors"
+                      title="編輯"
+                    >
+                      <Pencil size={16} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => handleDeleteClick(e, user.id)}
+                      className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                      title="移除人員"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                )}
 
                 <div className="flex items-start gap-4">
                   {/* Colored Avatar */}

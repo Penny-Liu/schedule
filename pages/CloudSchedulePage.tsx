@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { User, UserRole, ReportAssistant, CloudScheduleEntry, Doctor } from '../types';
+import { User, UserRole, ReportAssistant, CloudScheduleEntry, Doctor, PERMISSIONS } from '../types';
 import { db } from '../services/store';
 import { Cloud, ChevronLeft, ChevronRight, Plus, Pencil, Trash2, Check, X, UserCheck, Save, AlertCircle, Loader2 } from 'lucide-react';
 
@@ -23,9 +23,10 @@ const generateUUID = () => {
 const PALETTE = ['#6366f1', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316', '#84cc16'];
 
 const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) => {
-    const isEditor = currentUser.role === UserRole.SUPERVISOR || currentUser.role === UserRole.SYSTEM_ADMIN;
+    const isEditor = currentUser.permissions?.includes(PERMISSIONS.EDIT_CLOUD_SCHEDULE) || currentUser.role === UserRole.SYSTEM_ADMIN;
 
     const [currentDate, setCurrentDate] = useState(new Date());
+    const [viewMode, setViewMode] = useState<'month' | 'week'>(window.innerWidth < 768 ? 'week' : 'month');
     const [assistants, setAssistants] = useState<ReportAssistant[]>(() => db.getReportAssistants());
     const [entries, setEntries] = useState<CloudScheduleEntry[]>(() => db.getCloudScheduleEntries());
     const [doctors, setDoctors] = useState<Doctor[]>(() => db.getDoctors());
@@ -55,13 +56,25 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
 
     // Subscribe store
     useEffect(() => {
+        const handleResize = () => {
+            if (window.innerWidth < 768) {
+                setViewMode('week');
+            } else {
+                setViewMode('month');
+            }
+        };
+        window.addEventListener('resize', handleResize);
+
         const unsub = db.subscribe(() => {
             setAssistants([...db.getReportAssistants()]);
             setEntries([...db.getCloudScheduleEntries()]);
             setDoctors([...db.getDoctors()]);
             setShifts([...db.doctorShifts]);
         });
-        return unsub;
+        return () => {
+            window.removeEventListener('resize', handleResize);
+            unsub();
+        };
     }, []);
 
     const showToast = (msg: string) => {
@@ -69,17 +82,29 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
         setTimeout(() => setToast(null), 3000);
     };
 
-    // Build month date array
-    const monthDates = useMemo(() => {
+    // Build month date array or week array
+    const visibleDates = useMemo(() => {
         const year = currentDate.getFullYear();
         const month = currentDate.getMonth();
-        const days: string[] = [];
         const daysInMonth = new Date(year, month + 1, 0).getDate();
-        for (let d = 1; d <= daysInMonth; d++) {
-            days.push(`${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`);
+
+        if (viewMode === 'month') {
+            const days: string[] = [];
+            for (let d = 1; d <= daysInMonth; d++) {
+                days.push(`${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`);
+            }
+            return days;
+        } else {
+            // Week View: 7 days starting from currentDate
+            const days: string[] = [];
+            const temp = new Date(currentDate);
+            for (let i = 0; i < 7; i++) {
+                days.push(temp.toISOString().split('T')[0]);
+                temp.setDate(temp.getDate() + 1);
+            }
+            return days;
         }
-        return days;
-    }, [currentDate]);
+    }, [currentDate, viewMode]);
 
     // Get effective entry for a date + doctor (dirty overrides persisted)
     const getEntry = (date: string, doctorId: string) => {
@@ -174,7 +199,10 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
 
     const activeAssistants = assistants.filter(a => a.isActive !== false);
 
-    const monthLabel = currentDate.toLocaleDateString('zh-TW', { year: 'numeric', month: 'long' });
+    const dateLabel = viewMode === 'month' 
+        ? currentDate.toLocaleDateString('zh-TW', { year: 'numeric', month: 'long' })
+        : `${visibleDates[0]?.split('-')[2]}日 - ${visibleDates[visibleDates.length-1]?.split('-')[2]}日 (${currentDate.toLocaleDateString('zh-TW', { month: 'short' })})`;
+
     const todayStr = new Date().toISOString().split('T')[0];
 
     // Export Placeholder
@@ -207,19 +235,45 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
                     </div>
 
                     <div className="flex items-center gap-3">
-                        {/* Month nav */}
+                        {/* Month/Week nav */}
                         <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-xl shadow-sm px-2 py-1">
-                            <button onClick={() => setCurrentDate(d => { const n = new Date(d); n.setMonth(n.getMonth() - 1); return n; })}
+                            <button onClick={() => setCurrentDate(d => { 
+                                const n = new Date(d); 
+                                if (viewMode === 'month') n.setMonth(n.getMonth() - 1);
+                                else n.setDate(n.getDate() - 7);
+                                return n; 
+                            })}
                                 className="p-1 text-slate-400 hover:text-sky-600 rounded transition-colors">
                                 <ChevronLeft size={16} />
                             </button>
-                            <span className="font-bold text-slate-700 text-sm min-w-[100px] text-center">{monthLabel}</span>
-                            <button onClick={() => setCurrentDate(d => { const n = new Date(d); n.setMonth(n.getMonth() + 1); return n; })}
+                            <span className="font-bold text-slate-700 text-sm min-w-[100px] text-center">{dateLabel}</span>
+                            <button onClick={() => setCurrentDate(d => { 
+                                const n = new Date(d); 
+                                if (viewMode === 'month') n.setMonth(n.getMonth() + 1);
+                                else n.setDate(n.getDate() + 7);
+                                return n; 
+                            })}
                                 className="p-1 text-slate-400 hover:text-sky-600 rounded transition-colors">
                                 <ChevronRight size={16} />
                             </button>
                             <button onClick={() => setCurrentDate(new Date())} className="px-2 py-1 bg-slate-100 text-slate-600 rounded-lg text-xs font-bold hover:bg-slate-200 ml-1">
-                                本月
+                                今日
+                            </button>
+                        </div>
+
+                        {/* View Mode Toggle */}
+                        <div className="hidden md:flex items-center bg-slate-100 p-1 rounded-xl">
+                            <button 
+                                onClick={() => setViewMode('month')}
+                                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${viewMode === 'month' ? 'bg-white text-sky-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                            >
+                                月
+                            </button>
+                            <button 
+                                onClick={() => setViewMode('week')}
+                                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${viewMode === 'week' ? 'bg-white text-sky-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                            >
+                                7天
                             </button>
                         </div>
 
@@ -266,10 +320,10 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
                             <table className="border-collapse w-full table-fixed text-[10px]">
                                 <thead className="relative z-50">
                                     <tr className="bg-slate-50 border-b border-slate-200">
-                                        <th className="p-1 text-center font-bold text-slate-600 min-w-[70px] sticky left-0 top-0 bg-slate-50 z-50 border-r border-slate-200 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
+                                        <th className="p-1 text-center font-bold text-slate-600 min-w-[70px] md:min-w-[80px] sticky left-0 top-0 bg-slate-50 z-50 border-r border-slate-200 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
                                             醫師
                                         </th>
-                                        {monthDates.map(date => {
+                                        {visibleDates.map(date => {
                                             const d = new Date(date);
                                             const isWeekend = d.getDay() === 0 || d.getDay() === 6;
                                             const isToday = date === todayStr;
@@ -277,7 +331,7 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
                                             return (
                                                 <th 
                                                     key={date} 
-                                                    className={`px-0 py-1 text-center border-r border-slate-100 min-w-[45px] sticky top-0 z-40 ${isToday ? 'bg-teal-50' : (isWeekend ? 'bg-red-50' : 'bg-white')} border-b border-slate-200`}
+                                                    className={`px-0 py-1 text-center border-r border-slate-100 min-w-[45px] md:min-w-[70px] sticky top-0 z-40 ${isToday ? 'bg-teal-50' : (isWeekend ? 'bg-red-50' : 'bg-white')} border-b border-slate-200`}
                                                 >
                                                     <div className={`font-bold text-[11px] leading-tight ${isToday ? 'text-teal-600' : (isWeekend ? 'text-red-500' : 'text-slate-800')}`}>{d.getDate()}</div>
                                                     <div className={`text-[10px] opacity-75 leading-tight ${isToday ? 'text-teal-600' : (isWeekend ? 'text-red-500' : 'text-slate-700')}`}>
@@ -302,7 +356,7 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
                                             </td>
 
                                             {/* Days Cols */}
-                                            {monthDates.map(date => {
+                                            {visibleDates.map(date => {
                                                 const d = new Date(date);
                                                 const isWeekend = d.getDay() === 0 || d.getDay() === 6;
                                                 const key = `${date}_${doc.id}`;

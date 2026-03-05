@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Users, FileText, LogOut, LayoutDashboard, Settings, Menu, BarChart3, Stethoscope, CalendarClock, Sliders, Cloud } from 'lucide-react';
-import { User, UserRole } from '../types';
+import { User, UserRole, PERMISSIONS } from '../types';
 
 interface SidebarProps {
   currentUser: User;
@@ -20,61 +20,65 @@ const Sidebar: React.FC<SidebarProps> = ({ currentUser, onNavigate, currentPage,
       id: 'dashboard',
       label: '排班總覽',
       icon: LayoutDashboard,
-      roles: [UserRole.SUPERVISOR, UserRole.EMPLOYEE, UserRole.SYSTEM_ADMIN]
+      permission: null,
+      isRadiographerOnly: true
     },
     {
       id: 'statistics',
       label: '工作統計',
       icon: BarChart3,
-      roles: [UserRole.SUPERVISOR, UserRole.SYSTEM_ADMIN]
+      permission: PERMISSIONS.VIEW_STATS,
+      isRadiographerOnly: true
     },
     {
       id: 'leave',
       label: '請假管理',
       icon: FileText,
-      roles: [UserRole.SUPERVISOR, UserRole.EMPLOYEE, UserRole.SYSTEM_ADMIN]
+      permission: null,
+      isRadiographerOnly: true
     },
     {
       id: 'cloud_schedule',
       label: '影像雲班表',
       icon: Cloud,
-      roles: [UserRole.SUPERVISOR, UserRole.EMPLOYEE, UserRole.SYSTEM_ADMIN]
+      permission: PERMISSIONS.VIEW_CLOUD_SCHEDULE
     },
     {
       id: 'staff',
       label: '人員管理',
       icon: Users,
-      roles: [UserRole.SUPERVISOR, UserRole.SYSTEM_ADMIN]
+      permission: PERMISSIONS.VIEW_STAFF
     },
     {
       id: 'physician_schedule',
       label: '醫師排班',
       icon: CalendarClock,
-      roles: [UserRole.SYSTEM_ADMIN, UserRole.SUPERVISOR, UserRole.SCHEDULER, UserRole.VIEWER, UserRole.FINANCE]
+      permission: PERMISSIONS.VIEW_PHYSICIAN
     },
     {
       id: 'doctors',
       label: '醫師管理',
       icon: Stethoscope,
-      roles: [UserRole.SYSTEM_ADMIN, UserRole.SCHEDULER]
+      permission: PERMISSIONS.MANAGE_DOCTORS
     },
     {
       id: 'doctor_statistics',
       label: '醫師工作統計',
       icon: BarChart3,
-      roles: [UserRole.SYSTEM_ADMIN, UserRole.SCHEDULER, UserRole.FINANCE]
+      permission: PERMISSIONS.VIEW_DOCTOR_STATS
     },
     {
       id: 'physician_settings',
       label: '醫師排班設定',
       icon: Sliders,
-      roles: [UserRole.SYSTEM_ADMIN, UserRole.SCHEDULER]
+      permission: PERMISSIONS.EDIT_PHYSICIAN
     },
     {
       id: 'settings',
       label: '系統與個人設定',
       icon: Settings,
-      roles: [UserRole.SUPERVISOR, UserRole.SYSTEM_ADMIN, UserRole.EMPLOYEE, UserRole.SCHEDULER, UserRole.FINANCE]
+      permission: null,
+      hideForRoles: [UserRole.VIEWER] // Public accounts cannot change settings
     },
   ];
 
@@ -101,9 +105,18 @@ const Sidebar: React.FC<SidebarProps> = ({ currentUser, onNavigate, currentPage,
         </h1>
       </div>
 
-      {/* Center: Navigation Items */}
       <div className="flex items-center gap-1 md:gap-2 flex-1 overflow-x-auto no-scrollbar mx-2">
-        {navItems.filter(item => item.roles.includes(currentUser.role)).map((item) => {
+        {navItems.filter(item => {
+           // 1. Check if it's a radiographer-only feature
+           if ('isRadiographerOnly' in item && item.isRadiographerOnly && !currentUser.isRadiographer) return false;
+           
+           // 2. Check Role-based exclusion (e.g., Viewer hide settings)
+           if ('hideForRoles' in item && item.hideForRoles && (item.hideForRoles as UserRole[]).includes(currentUser.role)) return false;
+
+           // 3. Check permissions
+           if (!item.permission) return true;
+           return currentUser.permissions?.includes(item.permission);
+        }).map((item) => {
           const Icon = item.icon;
           const isActive = currentPage === item.id;
           return (

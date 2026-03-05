@@ -1,9 +1,54 @@
 
-import { User, Shift, LeaveRequest, SystemSettings, StationDefault, SYSTEM_OFF, RosterCycle, DateEventType, Holiday, LeaveStatus, LeaveType, StaffGroup, SPECIAL_ROLES, CycleAnchor, DailyManpowerStats, Doctor, WeekdaySetting, DoctorShift, ReportAssistant, CloudScheduleEntry } from '../types';
+import { User, Shift, LeaveRequest, SystemSettings, StationDefault, SYSTEM_OFF, RosterCycle, DateEventType, Holiday, LeaveStatus, LeaveType, StaffGroup, SPECIAL_ROLES, CycleAnchor, DailyManpowerStats, Doctor, WeekdaySetting, DoctorShift, ReportAssistant, CloudScheduleEntry, UserRole, PERMISSIONS } from '../types';
 import { MOCK_USERS, MOCK_LEAVES, MOCK_DOCTORS } from './mockData';
 import { supabase } from './supabaseClient';
 
 const SCHEDULE_STORAGE_KEY = 'radiology_schedule_data';
+
+// Helper: Get permissions by role for backward compatibility
+const getPermissionsByRole = (role: UserRole): string[] => {
+    switch (role) {
+        case UserRole.SYSTEM_ADMIN:
+            return Object.values(PERMISSIONS);
+        case UserRole.SUPERVISOR:
+            return [
+                PERMISSIONS.VIEW_CLOUD_SCHEDULE,
+                PERMISSIONS.EDIT_CLOUD_SCHEDULE,
+                PERMISSIONS.VIEW_STAFF,
+                PERMISSIONS.EDIT_STAFF,
+                PERMISSIONS.VIEW_PHYSICIAN,
+                PERMISSIONS.EDIT_PHYSICIAN,
+                PERMISSIONS.VIEW_STATS,
+                PERMISSIONS.VIEW_DOCTOR_STATS,
+                PERMISSIONS.EDIT_DOCTOR_STATS,
+                PERMISSIONS.MANAGE_DOCTORS,
+                PERMISSIONS.EDIT_SETTINGS
+            ];
+        case UserRole.SCHEDULER:
+            return [
+                PERMISSIONS.VIEW_CLOUD_SCHEDULE,
+                PERMISSIONS.VIEW_PHYSICIAN,
+                PERMISSIONS.EDIT_PHYSICIAN,
+                PERMISSIONS.MANAGE_DOCTORS,
+                PERMISSIONS.VIEW_DOCTOR_STATS
+            ];
+        case UserRole.FINANCE:
+            return [
+                PERMISSIONS.VIEW_PHYSICIAN,
+                PERMISSIONS.VIEW_DOCTOR_STATS
+            ];
+        case UserRole.VIEWER:
+            return [
+                PERMISSIONS.VIEW_CLOUD_SCHEDULE,
+                PERMISSIONS.VIEW_PHYSICIAN
+            ];
+        default: // EMPLOYEE
+            return [
+                PERMISSIONS.VIEW_CLOUD_SCHEDULE,
+                PERMISSIONS.VIEW_PHYSICIAN
+            ];
+    }
+};
 
 // Helper: Get Local ISO String YYYY-MM-DD
 const toLocalISOString = (date: Date) => {
@@ -123,7 +168,12 @@ class Store {
 
             if (usersRes.data && usersRes.data.length > 0) {
                 console.log(`[Store] Successfully loaded ${usersRes.data.length} users from Supabase.`);
-                this.users = usersRes.data;
+                this.users = usersRes.data.map((u: any) => ({
+                    ...u,
+                    permissions: (u.permissions && u.permissions.length > 0) 
+                        ? u.permissions 
+                        : getPermissionsByRole(u.role)
+                }));
                 this.connectionStatus = { type: 'Supabase', details: 'Connected and loaded users' };
             } else {
                 console.warn('[Store] Users table appears empty or fetch failed. Falling back to MOCK data.');
@@ -588,8 +638,12 @@ BMD :{{bmd}}
     }
 
     async addUser(user: User) {
-        this.users.push(user);
-        await supabase.from('users').insert(user);
+        const userToSave = {
+            ...user,
+            permissions: user.permissions || getPermissionsByRole(user.role)
+        };
+        this.users.push(userToSave);
+        await supabase.from('users').insert(userToSave);
     }
 
     async updateUser(id: string, updates: Partial<User>) {
