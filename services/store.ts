@@ -50,13 +50,7 @@ const getPermissionsByRole = (role: UserRole): string[] => {
     }
 };
 
-// Helper: Get Local ISO String YYYY-MM-DD
-const toLocalISOString = (date: Date) => {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-};
+import { toLocalISOString, countNonSundayDays } from './utils';
 
 class Store {
     users: User[] = [];
@@ -364,7 +358,7 @@ BMD :{{bmd}}
             }
 
             // Load cloud schedule data (影像雲班表)
-            await this.loadCloudScheduleData();
+            // (移除重複的 await this.loadCloudScheduleData())
 
             this.isLoaded = true;
             console.log('Data initialized successfully');
@@ -534,7 +528,6 @@ BMD :{{bmd}}
         if (!this.settings.stationRequirements) this.settings.stationRequirements = {};
         if (!this.settings.cycleStartDate) this.settings.cycleStartDate = '2024-01-01';
         if (!this.settings.stationDisplayOrder) this.settings.stationDisplayOrder = [];
-        if (!this.settings.stationDisplayOrder) this.settings.stationDisplayOrder = [];
         if (!this.settings.cycleAnchors) this.settings.cycleAnchors = [];
         if (!this.settings.holidays) {
             this.settings.holidays = [];
@@ -648,7 +641,15 @@ BMD :{{bmd}}
 
     async updateUser(id: string, updates: Partial<User>) {
         this.users = this.users.map(u => u.id === id ? { ...u, ...updates } : u);
-        await supabase.from('users').update(updates).eq('id', id);
+        
+        // 處理 DB 駝峰式 (camelCase) 轉蛇形 (snake_case)
+        const dbUpdates: any = { ...updates };
+        if ('personalCycles' in dbUpdates) {
+            dbUpdates.personal_cycles = dbUpdates.personalCycles;
+            delete dbUpdates.personalCycles;
+        }
+
+        await supabase.from('users').update(dbUpdates).eq('id', id);
     }
 
     async deleteUser(id: string) {
@@ -948,20 +949,9 @@ BMD :{{bmd}}
                 let requestorShift = this.shifts.find(s => s.userId === leave.userId && s.date === dateStr);
                 let targetShift = this.shifts.find(s => s.userId === leave.targetUserId && s.date === dateStr);
 
-                // Fetch from DB to be absolutely sure (Optional but recommended for stability)
-                const { data: dbShifts } = await supabase
-                    .from('shifts')
-                    .select('*')
-                    .in('userId', [leave.userId, leave.targetUserId!])
-                    .eq('date', dateStr);
+                // We rely on local state since applyLeaveToShifts runs after initializeData
+                // and local updates keep it fresh. Removing the per-date DB fetch to improve performance.
 
-                if (dbShifts) {
-                    const dbReq = dbShifts.find(s => s.userId === leave.userId);
-                    const dbTarget = dbShifts.find(s => s.userId === leave.targetUserId);
-                    // Use DB data if available, falling back to local
-                    if (dbReq) requestorShift = dbReq;
-                    if (dbTarget) targetShift = dbTarget;
-                }
 
                 if (requestorShift && leave.targetUserId) {
                     const rolesToSwap = requestorShift.specialRoles.filter(r =>
@@ -1259,12 +1249,7 @@ BMD :{{bmd}}
                 // Count non-Sunday days from cycle start to (but not including) dateStr
                 const refStr = this.settings.cycleStartDate || '2024-01-01';
                 const ref = new Date(refStr + 'T00:00:00');
-                let nonSundayCount = 0;
-                const cur = new Date(ref);
-                while (cur < d) {
-                    if (cur.getDay() !== 0) nonSundayCount++;
-                    cur.setDate(cur.getDate() + 1);
-                }
+                const nonSundayCount = countNonSundayDays(ref, d);
 
                 // Fixed index: groupIndex 0-3 for 4-person D group
                 const myIndex = user.groupIndex ?? 0;
@@ -1580,6 +1565,11 @@ BMD :{{bmd}}
         // Auto-pair Gynecology + Explanation
         await this.autoPairGynecologyWithExplanation(doctorId, date, station);
         
+        // **影像雲同步**: 若站別確實有異動，清除雲班表該醫師當日的助理與校對
+        if (shift && shift.station !== station) {
+            await this.clearCloudScheduleHelpers(date, doctorId);
+        }
+
         this.notifyListeners();
     }
 
@@ -1597,6 +1587,11 @@ BMD :{{bmd}}
             if (task !== undefined) shift.task = task;
 
             try {
+                // **影像雲同步**: 若排定站別確實有異動，清除雲班表該醫師當日的助理與校對
+                if (shift.scheduled_station !== scheduledStation) {
+                    await this.clearCloudScheduleHelpers(date, doctorId);
+                }
+
                 const { error } = await supabase.from('doctor_shifts')
                     .update({ 
                         scheduled_station: scheduledStation, 
@@ -1661,6 +1656,8 @@ BMD :{{bmd}}
         if (shift) {
             this.doctorShifts = this.doctorShifts.filter(s => s.id !== shift.id);
             await supabase.from('doctor_shifts').delete().eq('id', shift.id);
+            // **影像雲同步**: 醫師完全被移除，直接刪除影像雲班表的該日記號
+            await this.deleteCloudScheduleEntry(date, doctorId);
             this.notifyListeners();
         }
     }
@@ -2664,6 +2661,53 @@ BMD :{{bmd}}
         } catch (e: any) { 
             console.error('[Store] upsertCloudScheduleEntry Catch Error:', e); 
             throw e; 
+        }
+    }
+
+    // ── 影像雲班表輔助：醫師異動時自動清除助理與校對 ──────────
+
+    /** 當醫師改班，將原本安排的助理和校對清除 */
+    private async clearCloudScheduleHelpers(date: string, doctorId: string) {
+        const existingEntry = this.cloudScheduleEntries.find(e => e.date === date && e.doctorId === doctorId);
+        if (existingEntry) {
+            const updatedEntry = { ...existingEntry, assistantIds: [], proofreaderUserId: undefined };
+            
+            // 更新本地
+            this.cloudScheduleEntries = this.cloudScheduleEntries.map(e => 
+                (e.date === date && e.doctorId === doctorId) ? updatedEntry : e
+            );
+            this.notifyListeners();
+
+            // 若原本資料庫已有紀錄，直接更新為空
+            if (existingEntry.id) {
+                try {
+                    await supabase.from('cloud_schedule_entries').update({
+                        assistant_ids: [],
+                        proofreader_user_id: null
+                    }).eq('id', existingEntry.id);
+                } catch (e) {
+                    console.error('[Store] clearCloudScheduleHelpers fail:', e);
+                }
+            }
+        }
+    }
+
+    /** 當醫師取消排班，將影像雲班表完全刪除 */
+    private async deleteCloudScheduleEntry(date: string, doctorId: string) {
+        const existingEntry = this.cloudScheduleEntries.find(e => e.date === date && e.doctorId === doctorId);
+        if (existingEntry) {
+            this.cloudScheduleEntries = this.cloudScheduleEntries.filter(e => 
+                !(e.date === date && e.doctorId === doctorId)
+            );
+            this.notifyListeners();
+            
+            if (existingEntry.id) {
+                try {
+                    await supabase.from('cloud_schedule_entries').delete().eq('id', existingEntry.id);
+                } catch (e) {
+                    console.error('[Store] deleteCloudScheduleEntry fail:', e);
+                }
+            }
         }
     }
 

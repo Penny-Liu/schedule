@@ -11,14 +11,9 @@ import { supabase } from '../services/supabaseClient';
 interface PhysicianSchedulePageProps {
     currentUser: any;
 }
+import { toLocalISOString } from '../services/utils';
 
-// Helper: Get Local ISO String YYYY-MM-DD
-const toLocalISOString = (date: Date) => {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-};
+
 // Alias for internal use if needed
 const propsToLocalISOString = toLocalISOString;
 
@@ -2070,19 +2065,14 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                 <div className="flex flex-col">
                                                     <span>{doc.name}</span>
                                                     {(() => {
-                                                        // Find the personalCycle entry that covers today
-                                                        const todayStr = toLocalISOString(new Date());
+                                                        // Find the personalCycle entry for the currently viewed month
+                                                        const currentMonthStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
                                                         const NON_WORK = ['', '未分配', 'Unassigned', '休假', 'SystemOff', 'X'];
                                                         const allShifts = isSimulationMode ? [...activeShifts, ...(simulatedShifts || [])] : shifts;
 
                                                         let activeCycle: { startDate: string; endDate: string } | null = null;
-                                                        if (doc.personalCycles) {
-                                                            for (const cycle of Object.values(doc.personalCycles)) {
-                                                                if (cycle.startDate <= todayStr && cycle.endDate >= todayStr) {
-                                                                    activeCycle = cycle;
-                                                                    break;
-                                                                }
-                                                            }
+                                                        if (doc.personalCycles && doc.personalCycles[currentMonthStr]) {
+                                                            activeCycle = doc.personalCycles[currentMonthStr];
                                                         }
 
                                                         // Format as M/D

@@ -8,6 +8,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import ExcelJS from 'exceljs';
 import ConfirmModal from '../components/ConfirmModal';
+import { toLocalISOString } from '../services/utils';
 
 interface DashboardPageProps {
     currentUser: User;
@@ -15,14 +16,6 @@ interface DashboardPageProps {
 
 type ViewMode = 'user' | 'station' | 'daily' | 'personal';
 
-
-// Helper: Get Local ISO String YYYY-MM-DD
-const toLocalISOString = (date: Date) => {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-};
 
 const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
     const [currentDate, setCurrentDate] = useState(new Date());

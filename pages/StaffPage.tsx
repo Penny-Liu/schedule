@@ -124,7 +124,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
     } else {
         // Create new user
       const u: User = {
-        id: Math.random().toString(36).substr(2, 9),
+        id: crypto.randomUUID(),
         name: formData.name,
         alias: finalAlias,
         username: formData.username,
@@ -183,12 +183,18 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
     }
   };
 
-  const handleResetPassword = () => {
-    if (editingId) {
-      if (window.confirm('確定要將此使用者的密碼重置為預設值 (1234) 嗎？')) {
-        db.resetPassword(editingId);
-        alert('密碼已重置為 1234。');
-      }
+  // Reset Password Modal State
+  const [resetTargetId, setResetTargetId] = useState<string | null>(null);
+
+  const handleResetPasswordClick = () => {
+    if (editingId) setResetTargetId(editingId);
+  };
+
+  const confirmResetPassword = () => {
+    if (resetTargetId) {
+      db.resetPassword(resetTargetId);
+      // alert('密碼已重置為 1234。'); // 用 custom toast 或直接靜默處理，這裡先依靠 UI 刷新
+      setResetTargetId(null);
     }
   };
 
@@ -269,6 +275,16 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
         title="刪除人員確認"
         message="確定要移除此人員嗎？此動作無法復原，該人員的相關排班紀錄可能會遺失。"
         confirmText="確認刪除"
+        confirmColor="red"
+      />
+      
+      <ConfirmModal
+        isOpen={!!resetTargetId}
+        onClose={() => setResetTargetId(null)}
+        onConfirm={confirmResetPassword}
+        title="重置密碼確認"
+        message="確定要將此使用者的密碼重置為預設值 (1234) 嗎？"
+        confirmText="確認重置"
         confirmColor="red"
       />
 
@@ -582,7 +598,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                 {editingId && currentUser.role === UserRole.SYSTEM_ADMIN && (
                   <button
                     type="button"
-                    onClick={handleResetPassword}
+                    onClick={handleResetPasswordClick}
                     className="w-full border border-gray-300 hover:bg-gray-50 text-gray-600 font-medium py-2 rounded-lg transition-colors text-xs flex items-center justify-center gap-1"
                   >
                     <Key size={12} /> 重置密碼 (預設1234)
