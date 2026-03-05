@@ -228,7 +228,7 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
                 <div className="flex justify-between items-center gap-4">
                     <div className="flex items-center gap-3">
                         <div className="p-2 bg-sky-50 text-sky-600 rounded-lg"><Cloud size={20} /></div>
-                        <div>
+                        <div className="hidden md:block">
                             <h2 className="text-xl font-bold text-slate-800">影像雲班表</h2>
                             <p className="text-xs text-slate-400">影像醫學部醫師 · 報告助理指定</p>
                         </div>
@@ -261,8 +261,8 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
                             </button>
                         </div>
 
-                        {/* View Mode Toggle */}
-                        <div className="hidden md:flex items-center bg-slate-100 p-1 rounded-xl">
+                        {/* View Mode Toggle - Only on Mobile */}
+                        <div className="flex md:hidden items-center bg-slate-100 p-1 rounded-xl">
                             <button 
                                 onClick={() => setViewMode('month')}
                                 className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${viewMode === 'month' ? 'bg-white text-sky-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
@@ -351,7 +351,8 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
                                                     <div className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-500 mx-auto">
                                                         {doc.alias || doc.name.charAt(0)}
                                                     </div>
-                                                    <span className="text-[11px] truncate">{doc.alias || doc.name}</span>
+                                                    <span className="text-[11px] truncate hidden md:inline">{doc.name}</span>
+                                                    <span className="text-[11px] truncate md:hidden">{doc.alias || doc.name}</span>
                                                 </div>
                                             </td>
 
