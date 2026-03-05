@@ -352,87 +352,86 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
             doc.setFont(fontName);
             doc.setFontSize(14);
             doc.setTextColor(0, 0, 0);
-            const pageWidth = doc.internal.pageSize.width;
-            doc.text(titleText, pageWidth / 2, 10, { align: 'center' });
+            const pageWidth = doc.internal.pageSize.width; // 210mm for A4 portrait
+            doc.text(titleText, pageWidth / 2, 8, { align: 'center' });
 
-            // ---- Build header columns ----
-            const headerRow = [{ content: '' }].concat(
-                monthDates.map(date => {
-                    const d = new Date(date);
-                    return { content: `${d.getDate()}\n${weekDays[d.getDay()]}` };
-                })
-            );
+            const margin = 5;
+            const labelColWidth = 12;
+            const avail = pageWidth - margin * 2 - labelColWidth;
+            // A4 portrait height = 297mm, two tables share it equally (~130mm each after title)
+            // Each table has (rows.length + 1(header)) rows, aim for good font size
 
-            // ---- Build body rows ----
-            const bodyRows = rows.map(row => {
-                return [{ content: row.label }].concat(
-                    monthDates.map(date => ({ content: row.getter(date) }))
+            const buildTable = (dates: string[], startY: number) => {
+                const dateCols = dates.length; // 15 or 16
+                const dateColWidth = avail / dateCols;
+
+                const headerRow = [{ content: '' }].concat(
+                    dates.map(date => {
+                        const d = new Date(date);
+                        const isWknd = d.getDay() === 0 || d.getDay() === 6;
+                        return { content: `${d.getDate()}\n${weekDays[d.getDay()]}`, styles: { textColor: isWknd ? [200, 50, 50] : [255, 255, 255] } };
+                    })
                 );
-            });
 
-            // ---- Column widths ----
-            const labelColWidth = 10;
-            const dateColWidth = (pageWidth - 14 - labelColWidth) / monthDates.length;
+                const bodyRows = rows.map(row =>
+                    [{ content: row.label }].concat(
+                        dates.map(date => ({ content: row.getter(date) }))
+                    )
+                );
 
-            autoTable(doc, {
-                head: [headerRow],
-                body: bodyRows,
-                startY: 14,
-                margin: { left: 7, right: 7 },
-                tableLineWidth: 0.2,
-                styles: {
-                    font: fontName,
-                    fontSize: 6,
-                    cellPadding: 0.5,
-                    valign: 'middle',
-                    halign: 'center',
-                    lineWidth: 0.15,
-                    lineColor: [180, 180, 180],
-                    overflow: 'linebreak',
-                },
-                headStyles: {
-                    fillColor: [60, 60, 60],
-                    textColor: [255, 255, 255],
-                    fontStyle: 'bold',
-                    fontSize: 7,
-                    minCellHeight: 6,
-                },
-                columnStyles: {
-                    0: { cellWidth: labelColWidth, fontStyle: 'bold', fillColor: [240, 240, 240] },
-                    ...Object.fromEntries(monthDates.map((_, i) => [i + 1, { cellWidth: dateColWidth }]))
-                },
-                didParseCell: function(data: any) {
-                    // Color weekends in header
-                    if (data.section === 'head' && data.column.index > 0) {
-                        const date = monthDates[data.column.index - 1];
-                        const d = new Date(date);
-                        if (d.getDay() === 0 || d.getDay() === 6) {
-                            data.cell.styles.textColor = [200, 50, 50];
-                        }
-                    }
-                    // Row background colors
-                    if (data.section === 'body' && data.column.index === 0) {
-                        const rowIdx = data.row.index;
-                        if (rowIdx < rows.length) {
-                            data.cell.styles.fillColor = rows[rowIdx].color;
-                        }
-                    }
-                    if (data.section === 'body' && data.column.index > 0) {
-                        const rowIdx = data.row.index;
-                        const date = monthDates[data.column.index - 1];
-                        const d = new Date(date);
-                        if (rowIdx < rows.length) {
-                            data.cell.styles.fillColor = rows[rowIdx].color;
-                        }
-                        // Lighten weekends
-                        if (d.getDay() === 0 || d.getDay() === 6) {
-                            if (data.cell.styles.fillColor.join(',') === '255,255,255') {
-                                data.cell.styles.fillColor = [248, 248, 248];
+                autoTable(doc, {
+                    head: [headerRow],
+                    body: bodyRows,
+                    startY,
+                    margin: { left: margin, right: margin },
+                    tableLineWidth: 0.3,
+                    styles: {
+                        font: fontName,
+                        fontSize: 8,
+                        cellPadding: 1.2,
+                        valign: 'middle',
+                        halign: 'center',
+                        lineWidth: 0.2,
+                        lineColor: [160, 160, 160],
+                        overflow: 'linebreak',
+                    },
+                    headStyles: {
+                        fillColor: [50, 50, 50],
+                        textColor: [255, 255, 255],
+                        fontStyle: 'bold',
+                        fontSize: 9,
+                        minCellHeight: 7,
+                    },
+                    columnStyles: {
+                        0: { cellWidth: labelColWidth, fontStyle: 'bold', fillColor: [235, 235, 235] },
+                        ...Object.fromEntries(dates.map((_, i) => [i + 1, { cellWidth: dateColWidth }]))
+                    },
+                    didParseCell: function (data: any) {
+                        if (data.section === 'body') {
+                            const rowIdx = data.row.index;
+                            if (rowIdx < rows.length) {
+                                data.cell.styles.fillColor = rows[rowIdx].color;
+                            }
+                            if (data.column.index > 0) {
+                                const date = dates[data.column.index - 1];
+                                const dow = new Date(date).getDay();
+                                if ((dow === 0 || dow === 6) && data.cell.styles.fillColor?.join?.(',') === '255,255,255') {
+                                    data.cell.styles.fillColor = [248, 248, 248];
+                                }
                             }
                         }
-                    }
-                },
-            });
+                    },
+                });
+            };
+
+            // Split dates: first half 1-15, second half 16-end
+            const firstHalf = monthDates.slice(0, 15);
+            const secondHalf = monthDates.slice(15);
+
+            buildTable(firstHalf, 12);
+            // @ts-ignore
+            const firstTableEndY = (doc as any).lastAutoTable?.finalY ?? 145;
+            buildTable(secondHalf, firstTableEndY + 4);
 
             doc.save(`${titleText}.pdf`);
             showToast('已完成匯出 PDF');
