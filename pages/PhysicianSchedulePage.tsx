@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { db } from '../services/store';
-import { Doctor, UserRole, DoctorStationConfig, DateEventType, DoctorShift } from '../types';
+import { Doctor, UserRole, DoctorStationConfig, DateEventType, DoctorShift, PERMISSIONS } from '../types';
 import { ChevronLeft, ChevronRight, Download, Lock, RefreshCw, Save, Unlock, User, UserPlus, X, Calendar as CalendarIcon, Clock, Filter, Sliders, ArrowUpDown, Wand2, BarChart2, Check, AlertCircle, Plus, LayoutGrid, List as ListIcon, Trash2, Briefcase, FileText, MapPin, FileSpreadsheet, CalendarClock } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -11,7 +11,7 @@ import { supabase } from '../services/supabaseClient';
 interface PhysicianSchedulePageProps {
     currentUser: any;
 }
-import { toLocalISOString } from '../services/utils';
+import { toLocalISOString, generateUUID } from '../services/utils';
 
 
 // Alias for internal use if needed
@@ -230,10 +230,10 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
     
     // Permission Check
     // Can edit if Admin/Scheduler AND NOT Locked
-    const canEdit = (currentUser.role === UserRole.SYSTEM_ADMIN || currentUser.role === UserRole.SCHEDULER) && !isLocked;
+    const canEdit = (currentUser.permissions?.includes(PERMISSIONS.EDIT_PHYSICIAN) || currentUser.role === UserRole.SYSTEM_ADMIN) && !isLocked;
     // Viewer and Finance can see stats only
-    const canEditStats = (currentUser.role === UserRole.SYSTEM_ADMIN || currentUser.role === UserRole.SCHEDULER || currentUser.role === UserRole.VIEWER || currentUser.role === UserRole.FINANCE) && !isLocked;
-    const canManageLock = currentUser.role === UserRole.SYSTEM_ADMIN || currentUser.role === UserRole.SCHEDULER;
+    const canEditStats = (currentUser.permissions?.includes(PERMISSIONS.VIEW_DOCTOR_STATS) || currentUser.role === UserRole.SYSTEM_ADMIN || currentUser.role === UserRole.VIEWER || currentUser.role === UserRole.FINANCE) && !isLocked;
+    const canManageLock = currentUser.role === UserRole.SYSTEM_ADMIN || currentUser.permissions?.includes(PERMISSIONS.EDIT_SETTINGS);
     
     const [doctors, setDoctors] = useState<Doctor[]>(db.getDoctors());
     const [shifts, setShifts] = useState(db.getDoctorShifts());
@@ -451,7 +451,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
     };
 
     const handleStationCellClick = (station: string, location: string, date: string) => {
-        if (currentUser.role !== UserRole.SYSTEM_ADMIN && currentUser.role !== UserRole.SUPERVISOR && currentUser.role !== UserRole.SCHEDULER) return;
+        if (currentUser.role !== UserRole.SYSTEM_ADMIN && !currentUser.permissions?.includes(PERMISSIONS.EDIT_PHYSICIAN)) return;
         setAssignModal({ station, location, date });
     };
 
@@ -472,7 +472,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
             }
 
             const newSimShift: DoctorShift = {
-                id: existingShift?.id || crypto.randomUUID(),
+                id: existingShift?.id || generateUUID(),
                 doctorId: doctorId,
                 date: assignModal.date,
                 station: assignModal.station === '晚班' ? (existingShift?.scheduled_station || '影像') : assignModal.station,
@@ -507,7 +507,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
     };
 
     const handleCellClick = async (doctorId: string, date: string) => {
-        if (currentUser.role !== UserRole.SYSTEM_ADMIN && currentUser.role !== UserRole.SUPERVISOR && currentUser.role !== UserRole.SCHEDULER) return;
+        if (currentUser.role !== UserRole.SYSTEM_ADMIN && !currentUser.permissions?.includes(PERMISSIONS.EDIT_PHYSICIAN)) return;
         
         const contextShifts = isSimulationMode ? (simulatedShifts || []) : activeShifts;
         const shift = contextShifts.find(s => s.doctorId === doctorId && s.date === date);
@@ -517,7 +517,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                  const updated = [...(simulatedShifts || [])].filter(s => !(s.doctorId === doctorId && s.date === date));
                  if (!(shift && shift.scheduled_station === 'X')) {
                      updated.push({
-                         id: shift?.id || crypto.randomUUID(),
+                         id: shift?.id || generateUUID(),
                          doctorId,
                          date,
                          station: 'X',
@@ -543,7 +543,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
              if (isSimulationMode) {
                  const updated = [...(simulatedShifts || [])].filter(s => !(s.doctorId === doctorId && s.date === date));
                  updated.push({
-                     id: shift?.id || crypto.randomUUID(),
+                     id: shift?.id || generateUUID(),
                      doctorId,
                      date,
                      station: quickAssignData.station,
@@ -596,7 +596,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
             const updated = [...(simulatedShifts || [])].filter(s => !(s.doctorId === selectedCell.doctorId && s.date === selectedCell.date));
             if (editData.station) {
                 updated.push({
-                    id: crypto.randomUUID(),
+                    id: generateUUID(),
                     doctorId: selectedCell.doctorId,
                     date: selectedCell.date,
                     station: editData.station,

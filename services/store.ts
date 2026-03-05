@@ -7,7 +7,7 @@ import { generateUUID } from './utils';
 const SCHEDULE_STORAGE_KEY = 'radiology_schedule_data';
 
 // Helper: Get permissions by role for backward compatibility
-const getPermissionsByRole = (role: UserRole): string[] => {
+export const getPermissionsByRole = (role: UserRole): string[] => {
     switch (role) {
         case UserRole.SYSTEM_ADMIN:
             return Object.values(PERMISSIONS);
@@ -165,7 +165,7 @@ class Store {
                 console.log(`[Store] Successfully loaded ${usersRes.data.length} users from Supabase.`);
                 this.users = usersRes.data.map((u: any) => ({
                     ...u,
-                    permissions: (u.permissions && u.permissions.length > 0) 
+                    permissions: (u.permissions !== null && u.permissions !== undefined) 
                         ? u.permissions 
                         : getPermissionsByRole(u.role)
                 }));
@@ -2722,12 +2722,15 @@ BMD :{{bmd}}
             if (assistantsRes.error) console.error('[Store] report_assistants fetch error:', assistantsRes.error);
             if (entriesRes.error) console.error('[Store] cloud_schedule_entries fetch error:', entriesRes.error);
             if (assistantsRes.data) {
+                console.log(`[Store] Loaded ${assistantsRes.data.length} assistants from DB.`);
                 this.reportAssistants = assistantsRes.data.map((a: any) => ({
                     id: a.id,
                     name: a.name,
                     color: a.color,
                     isActive: a.is_active
                 }));
+            } else {
+                console.warn('[Store] No assistant data returned from DB.');
             }
             if (entriesRes.data) {
                 this.cloudScheduleEntries = entriesRes.data.map((e: any) => ({

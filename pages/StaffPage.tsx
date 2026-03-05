@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { User, UserRole, StaffGroup, SYSTEM_OFF, StationDefault, SPECIAL_ROLES, PERMISSIONS, PERMISSION_LABELS } from '../types';
-import { db } from '../services/store';
+import { db, getPermissionsByRole } from '../services/store';
 import { Mail, Shield, Users, Trash2, Plus, Check, CheckSquare, Square, Pencil, X, Save, Palette, AlertCircle, Star, BookOpen, Key } from 'lucide-react';
 import ConfirmModal from '../components/ConfirmModal';
 import { generateUUID } from '../services/utils';
@@ -419,7 +419,14 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                   <label className="text-xs font-semibold text-gray-500 mb-1 block">身份</label>
                   <select
                     value={formData.role}
-                    onChange={e => setFormData({ ...formData, role: e.target.value as UserRole })}
+                    onChange={e => {
+                        const newRole = e.target.value as UserRole;
+                        setFormData({ 
+                            ...formData, 
+                            role: newRole,
+                            permissions: getPermissionsByRole(newRole)
+                        });
+                    }}
                     className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-teal-500 outline-none text-sm shadow-sm bg-white cursor-pointer"
                   >
                     <option value={UserRole.EMPLOYEE}>放射師</option>

@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { User, UserRole, ReportAssistant, CloudScheduleEntry, Doctor, PERMISSIONS } from '../types';
+import { generateUUID } from '../services/utils';
 import { db } from '../services/store';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -9,19 +10,6 @@ import { Cloud, ChevronLeft, ChevronRight, Plus, Pencil, Trash2, Check, X, UserC
 interface CloudSchedulePageProps {
     currentUser: User;
 }
-
-// Helper for UUID generation compatibility
-const generateUUID = () => {
-    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-        return crypto.randomUUID();
-    }
-    // Fallback for older browsers or insecure contexts
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-        const r = Math.random() * 16 | 0;
-        const v = c === 'x' ? r : (r & 0x3 | 0x8);
-        return v.toString(16);
-    });
-};
 
 const PALETTE = ['#6366f1', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316', '#84cc16'];
 
