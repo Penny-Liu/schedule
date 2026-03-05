@@ -386,7 +386,7 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
                     tableLineWidth: 0.3,
                     styles: {
                         font: fontName,
-                        fontSize: 8,
+                        fontSize: 11,
                         cellPadding: 0.8,
                         valign: 'middle',
                         halign: 'center',
@@ -398,7 +398,7 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
                         fillColor: [50, 50, 50],
                         textColor: [255, 255, 255],
                         fontStyle: 'bold',
-                        fontSize: 9,
+                        fontSize: 12,
                         minCellHeight: 5,
                     },
                     columnStyles: {
