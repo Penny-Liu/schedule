@@ -275,7 +275,7 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
                 { label: '解說', color: [255, 255, 255], getter: (date) => getDocs(date, '北投', '解說') },
 
                 // 台中 (台中地點所有编組)
-                { label: '台中', color: [255, 247, 237], getter: (date) => {
+                { label: '台中', color: [255, 255, 255], getter: (date) => {
                     return shifts
                         .filter(s => s.date === date && s.location === '台中')
                         .map(s => radiologists.find(d => d.id === s.doctorId)?.name || '')
@@ -451,7 +451,7 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
 
             const rowDefs = [
                 { label: '解說', color: 'FFFFFFFF', getter: (d: string) => getDocs(d, '北投', '解說') },
-                { label: '台中', color: 'FFFFF7ED', getter: (d: string) => shifts.filter(s => s.date === d && s.location === '台中').map(s => radiologists.find(r => r.id === s.doctorId)?.name || '').filter(Boolean).join('\n') },
+                { label: '台中', color: 'FFFFFFFF', getter: (d: string) => shifts.filter(s => s.date === d && s.location === '台中').map(s => radiologists.find(r => r.id === s.doctorId)?.name || '').filter(Boolean).join('\n') },
                 { label: '行政', color: 'FFFFFFFF', getter: (d: string) => getDocs(d, '北投', '行政') },
                 { label: '台積電', color: 'FFFFF9C4', getter: (d: string) => { const f = getDocs(d, '台積電', ''); if (f) return f; return TSMC_DEFAULT[new Date(d).getDay()] || ''; } },
                 { label: '大直', color: 'FFFAF5FF', getter: (d: string) => shifts.filter(s => s.date === d && s.location === '大直').map(s => radiologists.find(r => r.id === s.doctorId)?.name || '').filter(Boolean).join('\n') },
@@ -715,8 +715,10 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
                                                 let bgColor = isWeekend ? 'bg-slate-50' : 'bg-white';
                                                 
                                                 if (docShift) {
+                                                    const isTaichung = docShift.location === '台中';
                                                     // Priority coloring
-                                                    if (isRemoteTask) bgColor = 'bg-pink-100';
+                                                    if (isTaichung) bgColor = 'bg-white';
+                                                    else if (isRemoteTask) bgColor = 'bg-pink-100';
                                                     else if (isSupportTask) bgColor = 'bg-yellow-100';
                                                     else if (isImagingTask) bgColor = 'bg-sky-50';
                                                 }
