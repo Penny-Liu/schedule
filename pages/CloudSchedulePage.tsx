@@ -357,13 +357,11 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
             doc.text(titleText, pageWidth / 2, 8, { align: 'center' });
 
             const margin = 5;
-            const labelColWidth = 12;
+            const labelColWidth = 17; // wide enough for 3 Chinese chars without wrapping
             const avail = pageWidth - margin * 2 - labelColWidth;
-            // A4 portrait height = 297mm, two tables share it equally (~130mm each after title)
-            // Each table has (rows.length + 1(header)) rows, aim for good font size
 
             const buildTable = (dates: string[], startY: number) => {
-                const dateCols = dates.length; // 15 or 16
+                const dateCols = dates.length;
                 const dateColWidth = avail / dateCols;
 
                 const headerRow = [{ content: '' }].concat(
@@ -388,8 +386,8 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
                     tableLineWidth: 0.3,
                     styles: {
                         font: fontName,
-                        fontSize: 10,
-                        cellPadding: 1.2,
+                        fontSize: 8,
+                        cellPadding: 0.8,
                         valign: 'middle',
                         halign: 'center',
                         lineWidth: 0.2,
@@ -400,8 +398,8 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
                         fillColor: [50, 50, 50],
                         textColor: [255, 255, 255],
                         fontStyle: 'bold',
-                        fontSize: 11,
-                        minCellHeight: 7,
+                        fontSize: 9,
+                        minCellHeight: 5,
                     },
                     columnStyles: {
                         0: { cellWidth: labelColWidth, fontStyle: 'bold', fillColor: [235, 235, 235] },
@@ -515,7 +513,7 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
                         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: row.color } };
                         cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
                     });
-                    dataRow.height = 24;
+                    // No fixed height - let ExcelJS auto-adjust based on content
                 });
 
                 // Column widths
