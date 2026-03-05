@@ -3,6 +3,7 @@ import { User, UserRole, ReportAssistant, CloudScheduleEntry, Doctor, PERMISSION
 import { db } from '../services/store';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import ExcelJS from 'exceljs';
 import { Cloud, ChevronLeft, ChevronRight, Plus, Pencil, Trash2, Check, X, UserCheck, Save, AlertCircle, Loader2 } from 'lucide-react';
 
 interface CloudSchedulePageProps {
@@ -387,7 +388,7 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
                     tableLineWidth: 0.3,
                     styles: {
                         font: fontName,
-                        fontSize: 8,
+                        fontSize: 10,
                         cellPadding: 1.2,
                         valign: 'middle',
                         halign: 'center',
@@ -399,7 +400,7 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
                         fillColor: [50, 50, 50],
                         textColor: [255, 255, 255],
                         fontStyle: 'bold',
-                        fontSize: 9,
+                        fontSize: 11,
                         minCellHeight: 7,
                     },
                     columnStyles: {
@@ -438,6 +439,116 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
         } catch (e: any) {
             console.error('PDF Export Error:', e);
             showToast('匹出失敗：' + (e.message || e));
+        }
+    };
+
+    // --- Excel Export Implementation ---
+    const exportToExcel = async () => {
+        try {
+            showToast('正在產生 Excel...');
+
+            const year = currentDate.getFullYear();
+            const month = currentDate.getMonth();
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+            const monthDates: string[] = [];
+            for (let d = 1; d <= daysInMonth; d++) {
+                monthDates.push(`${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`);
+            }
+            const weekDays = ['日', '一', '二', '三', '四', '五', '六'];
+            const TSMC_DEFAULT: Record<number, string> = { 1: '沈', 2: '陳', 3: '陳', 4: '謝', 5: '謝', 6: '沈', 0: '' };
+
+            const getDocs = (date: string, location: string, station: string): string =>
+                shifts
+                    .filter(s => s.date === date && (location === 'any' || s.location === location) && (s.scheduled_station === station || s.station === station))
+                    .map(s => radiologists.find(d => d.id === s.doctorId)?.name || '')
+                    .filter(Boolean).join('\n');
+
+            const rowDefs = [
+                { label: '解說', color: 'FFFFFFFF', getter: (d: string) => getDocs(d, '北投', '解說') },
+                { label: '台中', color: 'FFFFF7ED', getter: (d: string) => shifts.filter(s => s.date === d && s.location === '台中').map(s => radiologists.find(r => r.id === s.doctorId)?.name || '').filter(Boolean).join('\n') },
+                { label: '行政', color: 'FFFFFFFF', getter: (d: string) => getDocs(d, '北投', '行政') },
+                { label: '台積電', color: 'FFFFF9C4', getter: (d: string) => { const f = getDocs(d, '台積電', ''); if (f) return f; return TSMC_DEFAULT[new Date(d).getDay()] || ''; } },
+                { label: '大直', color: 'FFFAF5FF', getter: (d: string) => shifts.filter(s => s.date === d && s.location === '大直').map(s => radiologists.find(r => r.id === s.doctorId)?.name || '').filter(Boolean).join('\n') },
+                { label: '影像', color: 'FFEFF6FF', getter: (d: string) => getDocs(d, '北投', '影像') },
+                { label: '報告助理', color: 'FFF0FDF5', getter: (d: string) => { const el = entries.filter(e => e.date === d && e.assistantIds.length > 0); return el.flatMap(e => { const da = radiologists.find(r => r.id === e.doctorId)?.alias || radiologists.find(r => r.id === e.doctorId)?.name || ''; return e.assistantIds.map(aid => { const an = assistants.find(a => a.id === aid)?.name || ''; return an ? `${da}-${an}` : ''; }).filter(Boolean); }).join('\n'); } },
+                { label: '報告核對', color: 'FFF0FDF5', getter: (d: string) => { const el = entries.filter(e => e.date === d && e.proofreaderUserId); return el.map(e => { const da = radiologists.find(r => r.id === e.doctorId)?.alias || radiologists.find(r => r.id === e.doctorId)?.name || ''; const ra = radiographers.find(u => u.id === e.proofreaderUserId)?.alias || radiographers.find(u => u.id === e.proofreaderUserId)?.name || ''; return ra ? `${da}-${ra}` : ''; }).filter(Boolean).join('\n'); } },
+            ];
+
+            const wb = new ExcelJS.Workbook();
+            const ws = wb.addWorksheet('影像雲班表');
+
+            const titleText = `${year}${String(month + 1).padStart(2, '0')}影像雲班表`;
+            const firstHalf = monthDates.slice(0, 15);
+            const secondHalf = monthDates.slice(15);
+
+            const writeHalf = (dates: string[], startRow: number) => {
+                // Header row
+                const hdrRow = ws.getRow(startRow);
+                hdrRow.getCell(1).value = '';
+                dates.forEach((date, i) => {
+                    const d = new Date(date);
+                    const isWknd = d.getDay() === 0 || d.getDay() === 6;
+                    const cell = hdrRow.getCell(i + 2);
+                    cell.value = `${d.getDate()}\n${weekDays[d.getDay()]}`;
+                    cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+                    cell.font = { bold: true, size: 11, color: { argb: isWknd ? 'FFC83232' : 'FFFFFFFF' } };
+                    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF323232' } };
+                    cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+                });
+                hdrRow.height = 20;
+
+                // Data rows
+                rowDefs.forEach((row, ri) => {
+                    const dataRow = ws.getRow(startRow + 1 + ri);
+                    const labelCell = dataRow.getCell(1);
+                    labelCell.value = row.label;
+                    labelCell.font = { bold: true, size: 10 };
+                    labelCell.alignment = { horizontal: 'center', vertical: 'middle' };
+                    labelCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEBEBEB' } };
+                    labelCell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+
+                    dates.forEach((date, i) => {
+                        const cell = dataRow.getCell(i + 2);
+                        cell.value = row.getter(date);
+                        cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+                        cell.font = { size: 10 };
+                        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: row.color } };
+                        cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+                    });
+                    dataRow.height = 24;
+                });
+
+                // Column widths
+                ws.getColumn(1).width = 8;
+                dates.forEach((_, i) => { ws.getColumn(i + 2).width = 10; });
+            };
+
+            // Title
+            ws.mergeCells(1, 1, 1, firstHalf.length + 1);
+            const titleCell = ws.getCell(1, 1);
+            titleCell.value = titleText;
+            titleCell.font = { bold: true, size: 14 };
+            titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+            ws.getRow(1).height = 22;
+
+            writeHalf(firstHalf, 2);
+            // Blank row between halves
+            const blankRowIdx = 2 + 1 + rowDefs.length; // header + data + 1 blank
+            ws.getRow(blankRowIdx).height = 4;
+            writeHalf(secondHalf, blankRowIdx + 1);
+
+            const buffer = await wb.xlsx.writeBuffer();
+            const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${titleText}.xlsx`;
+            a.click();
+            URL.revokeObjectURL(url);
+            showToast('已完成匯出 Excel');
+        } catch (e: any) {
+            console.error('Excel Export Error:', e);
+            showToast('Excel 匹出失敗：' + (e.message || e));
         }
     };
 
@@ -506,6 +617,9 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
 
                         {/* Export Buttons */}
                         <div className="flex items-center gap-2 border-l border-slate-200 pl-3">
+                            <button onClick={exportToExcel} className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold bg-green-50 text-green-700 hover:bg-green-100 border border-green-200 transition-colors">
+                                匯出 Excel
+                            </button>
                             <button onClick={exportToPDF} className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 transition-colors">
                                 匯出 PDF
                             </button>
