@@ -634,21 +634,41 @@ BMD :{{bmd}}
     async addUser(user: User) {
         const userToSave = {
             ...user,
-            permissions: user.permissions || getPermissionsByRole(user.role)
+            permissions: user.permissions !== undefined ? user.permissions : getPermissionsByRole(user.role)
         };
+        // 轉換為 DB 格式
+        const dbUser: any = { ...userToSave };
+        this.mapToDbFields(dbUser);
+
         this.users.push(userToSave);
-        await supabase.from('users').insert(userToSave);
+        await supabase.from('users').insert(dbUser);
+    }
+
+    private mapToDbFields(obj: any) {
+        const mapping: Record<string, string> = {
+            'isRadiographer': 'is_radiographer',
+            'isPartTime': 'is_part_time',
+            'isActive': 'is_active',
+            'resignationDate': 'resignation_date',
+            'groupIndex': 'group_index',
+            'mustChangePassword': 'must_change_password',
+            'avatarUrl': 'avatar_url',
+            'personalCycles': 'personal_cycles',
+            'primaryStation': 'primary_station'
+        };
+        Object.keys(mapping).forEach(key => {
+            if (key in obj) {
+                obj[mapping[key]] = obj[key];
+                delete obj[key];
+            }
+        });
     }
 
     async updateUser(id: string, updates: Partial<User>) {
         this.users = this.users.map(u => u.id === id ? { ...u, ...updates } : u);
         
-        // 處理 DB 駝峰式 (camelCase) 轉蛇形 (snake_case)
         const dbUpdates: any = { ...updates };
-        if ('personalCycles' in dbUpdates) {
-            dbUpdates.personal_cycles = dbUpdates.personalCycles;
-            delete dbUpdates.personalCycles;
-        }
+        this.mapToDbFields(dbUpdates);
 
         await supabase.from('users').update(dbUpdates).eq('id', id);
     }
@@ -2715,9 +2735,16 @@ BMD :{{bmd}}
     private async loadCloudScheduleData() {
         try {
             const [assistantsRes, entriesRes] = await Promise.all([
-                supabase.from('report_assistants').select('*').order('name'),
+                supabase.from('report_assistants').select('*'), // 移除排序以防欄位錯誤
                 supabase.from('cloud_schedule_entries').select('*')
             ]);
+            
+            console.log('[DEBUG] assistantsRes raw:', { 
+                status: assistantsRes.status, 
+                statusText: assistantsRes.statusText,
+                data: assistantsRes.data,
+                error: assistantsRes.error 
+            });
             
             if (assistantsRes.error) console.error('[Store] report_assistants fetch error:', assistantsRes.error);
             if (entriesRes.error) console.error('[Store] cloud_schedule_entries fetch error:', entriesRes.error);

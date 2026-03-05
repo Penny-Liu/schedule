@@ -634,10 +634,27 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
             <div className="flex-1 flex overflow-hidden">
                 {/* Main Schedule Table */}
                 <div className="flex-1 overflow-auto p-4 md:p-6">
-                    {activeAssistants.length === 0 ? (
+                    {(!assistants || assistants.length === 0) ? (
                         <div className="flex flex-col items-center justify-center h-64 text-slate-400 gap-4">
-                            <AlertCircle size={40} className="text-slate-300" />
-                            <p className="text-sm font-medium">尚無報告助理，請先點「管理助理」新增</p>
+                            <div className="p-3 bg-slate-100 rounded-full">
+                                <UserCheck size={32} className="text-slate-300" />
+                            </div>
+                            <div className="text-center">
+                                <p className="text-lg font-medium text-slate-600">目前沒有報告助理資料</p>
+                                <p className="text-sm text-slate-400 mt-1 max-w-xs px-4">
+                                    如果您在資料庫中已有資料，請檢查 Supabase RLS 權限或確認資料已正確同步。
+                                    (目前從資料庫載入 0 筆)
+                                </p>
+                            </div>
+                            {isEditor && (
+                                <button 
+                                    onClick={() => {/* 開啟新增助理彈窗 */}}
+                                    className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors flex items-center gap-2"
+                                >
+                                    <Plus size={18} />
+                                    新增第一位助理
+                                </button>
+                            )}
                         </div>
                     ) : (
                         <div className="bg-white rounded-xl border border-gray-200 shadow-sm inline-block min-w-full pb-20 overflow-x-hidden">
