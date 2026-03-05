@@ -317,28 +317,33 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
                 // 影像 (北投影像)
                 { label: '影像', color: [239, 246, 255], getter: (date) => getDocs(date, '北投', '影像') },
 
-                // 報告助理打 (雲班表助理資料)
+                // 報告助理打 (雲班表助理資料) - 格式: 醫師代稱-助理名稱
                 { label: '報告助理', color: [240, 253, 250], getter: (date) => {
-                    const entryList = entries.filter(e => e.date === date);
-                    const names: string[] = [];
+                    const entryList = entries.filter(e => e.date === date && e.assistantIds.length > 0);
+                    const lines: string[] = [];
                     entryList.forEach(e => {
+                        const doc = radiologists.find(d => d.id === e.doctorId);
+                        const docAlias = doc?.alias || doc?.name || '';
                         e.assistantIds.forEach(aid => {
-                            const name = assistants.find(a => a.id === aid)?.name || '';
-                            if (name) names.push(name);
+                            const asstName = assistants.find(a => a.id === aid)?.name || '';
+                            if (asstName) lines.push(`${docAlias}-${asstName}`);
                         });
                     });
-                    return names.join('\n');
+                    return lines.join('\n');
                 }},
 
-                // 報告核對 (放射師核對)
+                // 報告核對 - 格式: 醫師代稱-放射師代稱
                 { label: '報告核對', color: [240, 253, 250], getter: (date) => {
                     const entryList = entries.filter(e => e.date === date && e.proofreaderUserId);
-                    const names: string[] = [];
+                    const lines: string[] = [];
                     entryList.forEach(e => {
-                        const name = radiographers.find(u => u.id === e.proofreaderUserId)?.name || '';
-                        if (name && !names.includes(name)) names.push(name);
+                        const doc = radiologists.find(d => d.id === e.doctorId);
+                        const docAlias = doc?.alias || doc?.name || '';
+                        const rad = radiographers.find(u => u.id === e.proofreaderUserId);
+                        const radAlias = rad?.alias || rad?.name || '';
+                        if (radAlias) lines.push(`${docAlias}-${radAlias}`);
                     });
-                    return names.join('\n');
+                    return lines.join('\n');
                 }},
             ];
 
