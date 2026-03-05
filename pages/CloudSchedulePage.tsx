@@ -1,6 +1,8 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { User, UserRole, ReportAssistant, CloudScheduleEntry, Doctor, PERMISSIONS } from '../types';
 import { db } from '../services/store';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import { Cloud, ChevronLeft, ChevronRight, Plus, Pencil, Trash2, Check, X, UserCheck, Save, AlertCircle, Loader2 } from 'lucide-react';
 
 interface CloudSchedulePageProps {
@@ -205,13 +207,234 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
 
     const todayStr = new Date().toISOString().split('T')[0];
 
-    // Export Placeholder
-    const exportToExcel = () => {
-        showToast('準備匯出 Excel...');
-    };
+    // --- PDF Export Implementation ---
+    const exportToPDF = async () => {
+        try {
+            showToast('正在產生 PDF...');
 
-    const exportToPDF = () => {
-        showToast('準備匯出 PDF...');
+            // ---- Build month date array (always full month for PDF) ----
+            const year = currentDate.getFullYear();
+            const month = currentDate.getMonth();
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+            const monthDates: string[] = [];
+            for (let d = 1; d <= daysInMonth; d++) {
+                monthDates.push(`${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`);
+            }
+
+            // ---- Load jsPDF + font ----
+            const doc = new jsPDF('l', 'mm', 'a4');
+            let fontName = 'helvetica';
+
+            try {
+                const pathsToTry = ['/schedule/fonts/jf-openhuninn-2.1.ttf', '/fonts/jf-openhuninn-2.1.ttf'];
+                let response: Response | null = null;
+                for (const path of pathsToTry) {
+                    try {
+                        const res = await fetch(path);
+                        if (res.ok && !(res.headers.get('content-type') || '').includes('text/html')) {
+                            response = res;
+                            break;
+                        }
+                    } catch { /* continue */ }
+                }
+                if (response) {
+                    const blob = await response.blob();
+                    const reader = new FileReader();
+                    await new Promise((resolve, reject) => {
+                        reader.onloadend = () => {
+                            const b64 = (reader.result as string).split('base64,')[1];
+                            if (b64) {
+                                doc.addFileToVFS('jf-openhuninn-2.1.ttf', b64);
+                                doc.addFont('jf-openhuninn-2.1.ttf', 'OpenHuninn', 'normal');
+                                doc.addFont('jf-openhuninn-2.1.ttf', 'OpenHuninn', 'bold');
+                                doc.setFont('OpenHuninn');
+                                fontName = 'OpenHuninn';
+                                resolve(true);
+                            } else { reject('invalid b64'); }
+                        };
+                        reader.onerror = reject;
+                        reader.readAsDataURL(blob);
+                    });
+                }
+            } catch (e) {
+                console.warn('Font load failed, using fallback', e);
+            }
+
+            // ---- Constants ----
+            const weekDays = ['日', '一', '二', '三', '四', '五', '六'];
+            // 臺積電 周天規則：週一(一)、周六(六) => 沈， 周二(二)、周三(三) => 陳， 周四(四)、周五(五) => 謝
+            const TSMC_DEFAULT: Record<number, string> = {
+                1: '沈', 2: '陳', 3: '陳', 4: '謝', 5: '謝', 6: '沈', 0: ''
+            };
+
+            // ---- Helper: get doctors for a station+location on a date ----
+            const getDocs = (date: string, location: string, station: string): string => {
+                return shifts
+                    .filter(s => s.date === date &&
+                        (location === 'any' || s.location === location) &&
+                        (s.scheduled_station === station || s.station === station))
+                    .map(s => radiologists.find(d => d.id === s.doctorId)?.name || '')
+                    .filter(Boolean)
+                    .join('\n');
+            };
+
+            // ---- Build table rows ----
+            type RowDef = { label: string; color: [number, number, number]; getter: (date: string) => string };
+
+            const rows: RowDef[] = [
+                // 解說 (北投解說班)
+                { label: '解說', color: [255, 255, 255], getter: (date) => getDocs(date, '北投', '解說') },
+
+                // 台中 (台中地點所有编組)
+                { label: '台中', color: [255, 247, 237], getter: (date) => {
+                    return shifts
+                        .filter(s => s.date === date && s.location === '台中')
+                        .map(s => radiologists.find(d => d.id === s.doctorId)?.name || '')
+                        .filter(Boolean).join('\n');
+                }},
+
+                // 行政
+                { label: '行政', color: [255, 255, 255], getter: (date) => getDocs(date, '北投', '行政') },
+
+                // 台積電
+                { label: '台積電', color: [255, 249, 196], getter: (date) => {
+                    // First check if any shift has location='台積電'
+                    const fromSchedule = getDocs(date, '台積電', '');
+                    if (fromSchedule) return fromSchedule;
+                    // Default rule by day of week
+                    const dow = new Date(date).getDay();
+                    return TSMC_DEFAULT[dow] || '';
+                }},
+
+                // 大直 (影像 + 遠班)
+                { label: '大直', color: [250, 245, 255], getter: (date) => {
+                    return shifts
+                        .filter(s => s.date === date && s.location === '大直')
+                        .map(s => radiologists.find(d => d.id === s.doctorId)?.name || '')
+                        .filter(Boolean).join('\n');
+                }},
+
+                // 影像 (北投影像)
+                { label: '影像', color: [239, 246, 255], getter: (date) => getDocs(date, '北投', '影像') },
+
+                // 報告助理打 (雲班表助理資料)
+                { label: '報告助理', color: [240, 253, 250], getter: (date) => {
+                    const entryList = entries.filter(e => e.date === date);
+                    const names: string[] = [];
+                    entryList.forEach(e => {
+                        e.assistantIds.forEach(aid => {
+                            const name = assistants.find(a => a.id === aid)?.name || '';
+                            if (name) names.push(name);
+                        });
+                    });
+                    return names.join('\n');
+                }},
+
+                // 報告核對 (放射師核對)
+                { label: '報告核對', color: [240, 253, 250], getter: (date) => {
+                    const entryList = entries.filter(e => e.date === date && e.proofreaderUserId);
+                    const names: string[] = [];
+                    entryList.forEach(e => {
+                        const name = radiographers.find(u => u.id === e.proofreaderUserId)?.name || '';
+                        if (name && !names.includes(name)) names.push(name);
+                    });
+                    return names.join('\n');
+                }},
+            ];
+
+            // ---- Title ----
+            const titleText = `${year}${String(month + 1).padStart(2, '0')}影像雲班表`;
+            doc.setFont(fontName);
+            doc.setFontSize(14);
+            doc.setTextColor(0, 0, 0);
+            const pageWidth = doc.internal.pageSize.width;
+            doc.text(titleText, pageWidth / 2, 10, { align: 'center' });
+
+            // ---- Build header columns ----
+            const headerRow = [{ content: '' }].concat(
+                monthDates.map(date => {
+                    const d = new Date(date);
+                    return { content: `${d.getDate()}\n${weekDays[d.getDay()]}` };
+                })
+            );
+
+            // ---- Build body rows ----
+            const bodyRows = rows.map(row => {
+                return [{ content: row.label }].concat(
+                    monthDates.map(date => ({ content: row.getter(date) }))
+                );
+            });
+
+            // ---- Column widths ----
+            const labelColWidth = 10;
+            const dateColWidth = (pageWidth - 14 - labelColWidth) / monthDates.length;
+
+            autoTable(doc, {
+                head: [headerRow],
+                body: bodyRows,
+                startY: 14,
+                margin: { left: 7, right: 7 },
+                tableLineWidth: 0.2,
+                styles: {
+                    font: fontName,
+                    fontSize: 6,
+                    cellPadding: 0.5,
+                    valign: 'middle',
+                    halign: 'center',
+                    lineWidth: 0.15,
+                    lineColor: [180, 180, 180],
+                    overflow: 'linebreak',
+                },
+                headStyles: {
+                    fillColor: [60, 60, 60],
+                    textColor: [255, 255, 255],
+                    fontStyle: 'bold',
+                    fontSize: 7,
+                    minCellHeight: 6,
+                },
+                columnStyles: {
+                    0: { cellWidth: labelColWidth, fontStyle: 'bold', fillColor: [240, 240, 240] },
+                    ...Object.fromEntries(monthDates.map((_, i) => [i + 1, { cellWidth: dateColWidth }]))
+                },
+                didParseCell: function(data: any) {
+                    // Color weekends in header
+                    if (data.section === 'head' && data.column.index > 0) {
+                        const date = monthDates[data.column.index - 1];
+                        const d = new Date(date);
+                        if (d.getDay() === 0 || d.getDay() === 6) {
+                            data.cell.styles.textColor = [200, 50, 50];
+                        }
+                    }
+                    // Row background colors
+                    if (data.section === 'body' && data.column.index === 0) {
+                        const rowIdx = data.row.index;
+                        if (rowIdx < rows.length) {
+                            data.cell.styles.fillColor = rows[rowIdx].color;
+                        }
+                    }
+                    if (data.section === 'body' && data.column.index > 0) {
+                        const rowIdx = data.row.index;
+                        const date = monthDates[data.column.index - 1];
+                        const d = new Date(date);
+                        if (rowIdx < rows.length) {
+                            data.cell.styles.fillColor = rows[rowIdx].color;
+                        }
+                        // Lighten weekends
+                        if (d.getDay() === 0 || d.getDay() === 6) {
+                            if (data.cell.styles.fillColor.join(',') === '255,255,255') {
+                                data.cell.styles.fillColor = [248, 248, 248];
+                            }
+                        }
+                    }
+                },
+            });
+
+            doc.save(`${titleText}.pdf`);
+            showToast('已完成匯出 PDF');
+        } catch (e: any) {
+            console.error('PDF Export Error:', e);
+            showToast('匹出失敗：' + (e.message || e));
+        }
     };
 
     return (
@@ -279,9 +502,6 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
 
                         {/* Export Buttons */}
                         <div className="flex items-center gap-2 border-l border-slate-200 pl-3">
-                            <button onClick={exportToExcel} className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold bg-green-50 text-green-700 hover:bg-green-100 border border-green-200 transition-colors">
-                                匯出 Excel
-                            </button>
                             <button onClick={exportToPDF} className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 transition-colors">
                                 匯出 PDF
                             </button>
