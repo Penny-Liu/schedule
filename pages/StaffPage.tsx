@@ -4,6 +4,7 @@ import { User, UserRole, StaffGroup, SYSTEM_OFF, StationDefault, SPECIAL_ROLES, 
 import { db } from '../services/store';
 import { Mail, Shield, Users, Trash2, Plus, Check, CheckSquare, Square, Pencil, X, Save, Palette, AlertCircle, Star, BookOpen, Key } from 'lucide-react';
 import ConfirmModal from '../components/ConfirmModal';
+import { generateUUID } from '../services/utils';
 
 interface StaffPageProps {
   currentUser: User;
@@ -122,9 +123,8 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
         permissions: formData.permissions
       });
     } else {
-        // Create new user
       const u: User = {
-        id: crypto.randomUUID(),
+        id: generateUUID(),
         name: formData.name,
         alias: finalAlias,
         username: formData.username,

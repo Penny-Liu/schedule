@@ -2,6 +2,7 @@
 import { User, Shift, LeaveRequest, SystemSettings, StationDefault, SYSTEM_OFF, RosterCycle, DateEventType, Holiday, LeaveStatus, LeaveType, StaffGroup, SPECIAL_ROLES, CycleAnchor, DailyManpowerStats, Doctor, WeekdaySetting, DoctorShift, ReportAssistant, CloudScheduleEntry, UserRole, PERMISSIONS } from '../types';
 import { MOCK_USERS, MOCK_LEAVES, MOCK_DOCTORS } from './mockData';
 import { supabase } from './supabaseClient';
+import { generateUUID } from './utils';
 
 const SCHEDULE_STORAGE_KEY = 'radiology_schedule_data';
 
@@ -732,7 +733,7 @@ BMD :{{bmd}}
             } else {
                 // Case: New -> Insert
                 // Generate a proper UUID for the DB
-                const newId = crypto.randomUUID();
+                const newId = generateUUID();
                 targetId = newId;
 
                 const { error: insertError } = await supabase
@@ -1337,7 +1338,7 @@ BMD :{{bmd}}
     }
 
     async addDoctor(name: string, alias?: string, capabilities: string[] = [], locations: string[] = [], excludedDays: number[] = [], excludedAutoScheduleLocations: string[] = [], isPartTime: boolean = false, specialty?: string, monthlyTargetShifts?: number, weekdaySettings: WeekdaySetting[] = []): Promise<{ success: boolean; error?: string; id?: string }> {
-        const newDoctor: Doctor = { id: crypto.randomUUID(), name, alias: alias || name[0], capabilities, locations, excludedDays, excludedAutoScheduleLocations, specialty, isPartTime, monthlyTargetShifts, fixedShifts: [], weekdaySettings };
+        const newDoctor: Doctor = { id: generateUUID(), name, alias: alias || name[0], capabilities, locations, excludedDays, excludedAutoScheduleLocations, specialty, isPartTime, monthlyTargetShifts, fixedShifts: [], weekdaySettings };
         this.doctors.push(newDoctor); // Optimistic update
         this.notifyListeners();
         
@@ -1546,7 +1547,7 @@ BMD :{{bmd}}
                     .eq('id', shift.id);
             } catch(e) { console.warn('Supabase update failed, using local'); }
         } else {
-            shift = { id: crypto.randomUUID(), doctorId, date, station, workTime, note, location, task };
+            shift = { id: generateUUID(), doctorId, date, station, workTime, note, location, task };
             this.doctorShifts.push(shift);
             try {
                 await supabase.from('doctor_shifts').insert({ 
@@ -1617,7 +1618,7 @@ BMD :{{bmd}}
             // Let's assume we can set it to a placeholder if new.
             
             shift = { 
-                id: crypto.randomUUID(), 
+                id: generateUUID(), 
                 doctorId, 
                 date, 
                 station: '未分配', // Default allocation
@@ -1781,7 +1782,7 @@ BMD :{{bmd}}
         
         // Add explanation shift
         const explanationShift: DoctorShift = {
-            id: crypto.randomUUID(),
+            id: generateUUID(),
             doctorId,
             date,
             station: '解說',
@@ -1930,7 +1931,7 @@ BMD :{{bmd}}
                              const ws = doc.weekdaySettings?.find(w => w.dayOfWeek === dayOfWeek);
                             
                             const newFixedShift: DoctorShift = {
-                                id: crypto.randomUUID(),
+                                id: generateUUID(),
                                 doctorId: doc.id,
                                 date: dateStr,
                                 station: fixed.station,
@@ -2012,7 +2013,7 @@ BMD :{{bmd}}
                     const ws = winner.weekdaySettings?.find(w => w.dayOfWeek === dayOfWeek);
 
                     const newShift: DoctorShift = {
-                        id: crypto.randomUUID(),
+                        id: generateUUID(),
                         doctorId: winner.id,
                         date: dateStr,
                         station: stationName,
