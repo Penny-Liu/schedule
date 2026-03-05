@@ -163,13 +163,22 @@ class Store {
 
             if (usersRes.data && usersRes.data.length > 0) {
                 console.log(`[Store] Successfully loaded ${usersRes.data.length} users from Supabase.`);
-                this.users = usersRes.data.map((u: any) => ({
-                    ...u,
-                    permissions: (u.permissions !== null && u.permissions !== undefined) 
+                this.users = usersRes.data.map((u: any) => {
+                    const permissions = (u.permissions !== null && u.permissions !== undefined) 
                         ? u.permissions 
-                        : getPermissionsByRole(u.role)
-                }));
-                this.connectionStatus = { type: 'Supabase', details: 'Connected and loaded users' };
+                        : getPermissionsByRole(u.role);
+                    
+                    // Debug: Log permissions for critical roles
+                    if (u.role === UserRole.SCHEDULER || u.role === UserRole.SYSTEM_ADMIN) {
+                        console.log(`[Store] User ${u.name} (${u.role}) permissions:`, permissions);
+                    }
+
+                    return {
+                        ...u,
+                        permissions
+                    };
+                });
+                this.connectionStatus = { type: 'Supabase', details: `Loaded ${this.users.length} users` };
             } else {
                 console.warn('[Store] Users table appears empty or fetch failed. Falling back to MOCK data.');
                 const errorMsg = usersRes.error ? `Error: ${usersRes.error.message}` : 'Table empty';
@@ -651,10 +660,13 @@ BMD :{{bmd}}
             'isActive': 'is_active',
             'resignationDate': 'resignation_date',
             'groupIndex': 'group_index',
+            'groupId': 'group_id',
             'mustChangePassword': 'must_change_password',
             'avatarUrl': 'avatar_url',
             'personalCycles': 'personal_cycles',
-            'primaryStation': 'primary_station'
+            'primaryStation': 'primary_station',
+            'learningCapabilities': 'learning_capabilities',
+            'excludedCapabilities': 'excluded_capabilities'
         };
         Object.keys(mapping).forEach(key => {
             if (key in obj) {
