@@ -705,19 +705,17 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
             const subtitle = `${dateRange[0]} ~ ${dateRange[dateRange.length - 1]}`;
             const exportDate = `匯出日期: ${new Date().toLocaleDateString('zh-TW')}`;
 
-            // REMOVED Title as requested
-            // doc.setFontSize(14);
-            // doc.setFont(fontName); 
-            // doc.text(title, 7, 10);
+            const drawHeaders = () => {
+                doc.setFont(fontName); 
+                doc.setFontSize(12);
+                doc.text(`${title} ${subtitle}`, 7, 6);
 
-            // Subtitle and Date only
-            doc.setFont(fontName); 
-            doc.setFontSize(12); // Increased from 10
-            doc.text(`${title} ${subtitle}`, 7, 6); // Moved to top, added title
+                doc.setFontSize(10);
+                const pageWidth = doc.internal.pageSize.width;
+                doc.text(exportDate, pageWidth - 7, 6, { align: 'right' });
+            };
 
-            doc.setFontSize(10); // Increased from 9
-            const pageWidth = doc.internal.pageSize.width;
-            doc.text(exportDate, pageWidth - 7, 6, { align: 'right' }); // Moved to top
+            drawHeaders();
 
             const weekDays = ['日', '一', '二', '三', '四', '五', '六'];
             
@@ -740,7 +738,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                 styles: {
                     font: fontName,
                     fontSize: 7, // Default body font
-                    cellPadding: 0.1, // Reduced global padding
+                    cellPadding: 1.5, // Increased padding
                     valign: 'middle',
                     halign: 'center',
                     lineWidth: 0.2,
@@ -910,9 +908,10 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                          shifts.forEach((shift: any, idx: number) => {
                              totalHeight += 3.2; // Name (Increased for 8pt)
                              // Tighter spacing if details exist
-                             const hasDetails = shift.time || (shift.task && !(shift.stationName === '晚班' && shift.task === '晚班'));
+                             const hasDetails = shift.time || shift.locationAbbr || (shift.task && !(shift.stationName === '晚班' && shift.task === '晚班'));
                              if (hasDetails) totalHeight -= 0.7; // Reduce gap by 0.7mm (3.2 -> 2.5) for first detail
 
+                             if (shift.locationAbbr) totalHeight += 2.2;
                              if (shift.time) totalHeight += 2.2;
                              if (shift.task && !(shift.stationName === '晚班' && shift.task === '晚班')) totalHeight += 2.2; 
                              if (idx < shifts.length - 1) totalHeight += 0.8; // Spacing
@@ -922,11 +921,17 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                          
                          shifts.forEach((shift: any, idx: number) => {
                              // Name (8pt) - Requested
-                             // Name (8pt) - Requested
                              doc.setFontSize(8);
                              doc.text(shift.name, x, y, { align: 'center' });
                              y += 2.5; // Reduced from 3.2 to tighten spacing with details 
                              
+                             // Location Abbr (5pt)
+                             if (shift.locationAbbr) {
+                                 doc.setFontSize(6);
+                                 doc.text(shift.locationAbbr, x, y, { align: 'center' });
+                                 y += 2.4;
+                             }
+
                              // Time (5pt)
                              if (shift.time) {
                                  doc.setFontSize(5);
@@ -951,6 +956,9 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
 
             let headRow = [];
             let bodyRows: any[] = [];
+            // 為崗位分離建置兩組 body
+            let beitouRows: any[] = [];
+            let dazhiTaichungRows: any[] = [];
 
             if (viewMode === 'station') {
                  // Single Page Logic with Sections
@@ -975,7 +983,10 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                             }
                         }
                     ];
-                    bodyRows.push(locationHeaderRow);
+                    // Check if loc is Beitou to determine which rows array to use
+                    const targetRows = loc === '北投' ? beitouRows : dazhiTaichungRows;
+                    
+                    targetRows.push(locationHeaderRow);
                     
                     // Add Main/Assistant Shift Row (only for Beitou)
                     if (loc === '北投') {
@@ -1018,7 +1029,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                             });
                         });
                         
-                        bodyRows.push(mainAssistantRow);
+                        targetRows.push(mainAssistantRow);
                     }
                     
                     locStations.forEach(st => {
@@ -1028,7 +1039,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                          const rowData: any[] = [{ content: `${st.name}`, styles: { fontStyle: 'bold' }, location: st.location }];
                          
                          dateRange.forEach(date => {
-                             const assignedShifts = shifts.filter(s => {
+                             let assignedShifts = shifts.filter(s => {
                                  if (s.date !== date || s.location !== st.location) return false;
                                  if (st.name === '晚班') return s.task?.includes('晚班');
                                  if (s.scheduled_station === st.name) return true;
@@ -1038,6 +1049,16 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                  }
                                  return false;
                              });
+                             
+                             // Follow UI logic for remote crossover
+                             if (assignedShifts.length === 0 && ['遠班', '遠距', '遠'].includes(st.name)) {
+                                 if (st.location === '大直') {
+                                     assignedShifts = shifts.filter(s => s.date === date && s.location === '北投' && ['遠班', '遠距', '遠'].includes(s.scheduled_station || ''));
+                                 } else if (st.location === '北投') {
+                                     assignedShifts = shifts.filter(s => s.date === date && s.location === '大直' && ['遠班', '遠距', '遠'].includes(s.scheduled_station || ''));
+                                 }
+                             }
+                             
                                                           const formatTimeShort = (time: string) => {
                                   if (!time) return '';
                                   return time.replace(/\s/g, '').replace(/(\d{1,2}):(\d{2})/g, (match, hour, minute) => {
@@ -1064,22 +1085,26 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                  });
                                  cellStyles = { minCellHeight: Math.max(totalHeight + 1, 5) }; // Reduced minCellHeight
                              }
-
+                             
                              rowData.push({
                                  content: docInfos, // Dummy content for autoTable
                                  styles: cellStyles,
                                  rawStationShifts: assignedShifts.map(s => {
                                      const doc = doctors.find(d => d.id === s.doctorId);
+                                     // 遠班加上地點縮寫，但移至下一行 (加入 locationAbbr)
+                                     const isRemote = st.name.includes('遠');
+                                     const locAbbrStr = isRemote && s.location ? s.location : '';
                                      return {
                                          name: doc?.name || '?',
                                          time: formatTimeShort(s.workTime),
                                          task: s.task,
+                                         locationAbbr: locAbbrStr,
                                          stationName: st.name
                                      };
                                  })
                              });
                          });
-                         bodyRows.push(rowData);
+                         targetRows.push(rowData);
                     });
                 });
 
@@ -1173,7 +1198,28 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
             }
 
             // Unified autoTable call for both views
-            if (bodyRows.length > 0) {
+            if (viewMode === 'station') {
+                 if (beitouRows.length > 0) {
+                     autoTable(doc, {
+                        ...tableConfig,
+                        startY: 9, 
+                        head: headRow,
+                        body: beitouRows,
+                        margin: { top: 11, right: 2, bottom: 2, left: 2 },
+                     });
+                 }
+                 if (dazhiTaichungRows.length > 0) {
+                     if (beitouRows.length > 0) doc.addPage();
+                     drawHeaders();
+                     autoTable(doc, {
+                        ...tableConfig,
+                        startY: 9, 
+                        head: headRow,
+                        body: dazhiTaichungRows,
+                        margin: { top: 11, right: 2, bottom: 2, left: 2 },
+                     });
+                 }
+            } else if (bodyRows.length > 0) {
                  autoTable(doc, {
                     ...tableConfig,
                     startY: 9, // Moved higher from 11mm
