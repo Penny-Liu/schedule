@@ -193,6 +193,7 @@ export interface DailyManpowerStats {
   dazhi_clients: number;
   beitou_gi?: number; // New: Manual GI cases count
   beitou_mr?: number; // New: Manual MR cases count
+  dazhi_gi?: number;  // New: Manual GI cases count for Dazhi
   beitou_total?: number; // Manually entered total radiographer count for Beitou
 }
 

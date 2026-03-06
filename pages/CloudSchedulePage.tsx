@@ -674,7 +674,9 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
                                                     key={date} 
                                                     className={`px-0 py-1 text-center border-r border-slate-100 min-w-[45px] md:min-w-[70px] sticky top-0 z-40 ${isToday ? 'bg-teal-50' : (isWeekend ? 'bg-red-50' : 'bg-white')} border-b border-slate-200`}
                                                 >
-                                                    <div className={`font-bold text-[11px] leading-tight ${isToday ? 'text-teal-600' : (isWeekend ? 'text-red-500' : 'text-slate-800')}`}>{d.getDate()}</div>
+                                                    <div className={`font-bold text-[11px] leading-tight ${isToday ? 'text-teal-600' : (isWeekend ? 'text-red-500' : 'text-slate-800')}`}>
+                                                        {d.getMonth() + 1}/{d.getDate()}
+                                                    </div>
                                                     <div className={`text-[10px] opacity-75 leading-tight ${isToday ? 'text-teal-600' : (isWeekend ? 'text-red-500' : 'text-slate-700')}`}>
                                                         {['日', '一', '二', '三', '四', '五', '六'][d.getDay()]}
                                                     </div>

@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { db } from '../services/store';
 import { Doctor, UserRole, DoctorStationConfig, DateEventType, DoctorShift, PERMISSIONS } from '../types';
-import { ChevronLeft, ChevronRight, Download, Lock, RefreshCw, Save, Unlock, User, UserPlus, X, Calendar as CalendarIcon, Clock, Filter, Sliders, ArrowUpDown, Wand2, BarChart2, Check, AlertCircle, Plus, LayoutGrid, List as ListIcon, Trash2, Briefcase, FileText, MapPin, FileSpreadsheet, CalendarClock } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Download, Lock, RefreshCw, Save, Unlock, User, UserPlus, X, Calendar as CalendarIcon, Clock, Filter, Sliders, ArrowUpDown, Wand2, BarChart2, Check, AlertCircle, Plus, LayoutGrid, List as ListIcon, Trash2, Briefcase, FileText, MapPin, FileSpreadsheet, CalendarClock, Star, Shield } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import ConfirmModal from '../components/ConfirmModal';
@@ -727,7 +727,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
 
             const dateHeaders = dateRange.map(date => {
                 const d = new Date(date);
-                return `${d.getDate()} \n${weekDays[d.getDay()]}`;
+                return `${d.getMonth() + 1}/${d.getDate()} \n${weekDays[d.getDay()]}`;
             });
 
             // Common Table Config
@@ -1303,7 +1303,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                     const cell = headerRow2.getCell(colIndex);
                     const dayOfWeek = date.getDay();
                     
-                    cell.value = `${date.getDate()}\n${weekDays[dayOfWeek]}`;
+                    cell.value = `${date.getMonth() + 1}/${date.getDate()}\n${weekDays[dayOfWeek]}`;
                     cell.alignment = alignCenter;
                     cell.border = borderStyle;
                     cell.font = { ...fontBase, bold: true, color: (dayOfWeek === 0 || dayOfWeek === 6) ? { argb: 'FFFF0000' } : undefined };
@@ -2040,8 +2040,8 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                 }}
                                                 className={`px-0.5 py-0.5 text-center border-r border-slate-100 min-w-[40px] sticky top-0 z-50 cursor-pointer hover:bg-slate-100 transition-colors ${isToday ? 'bg-teal-50' : (isHoliday || isWeekend ? 'bg-red-50' : 'bg-white')} border-b border-slate-200`}
                                             >
-                                                <div className={`font-bold text-xs leading-tight ${isToday ? 'text-teal-600' : (isHoliday || isWeekend ? 'text-red-500' : 'text-slate-800')}`}>{d.getDate()}</div>
-                                                <div className={`text-[9px] opacity-75 leading-tight ${isToday ? 'text-teal-600' : (isHoliday || isWeekend ? 'text-red-500' : 'text-slate-700')}`}>
+                                                <div className={`font-bold text-[11px] leading-tight ${isToday ? 'text-teal-600' : (isHoliday || isWeekend ? 'text-red-500' : 'text-slate-800')}`}>{d.getMonth() + 1}/{d.getDate()}</div>
+                                                <div className={`text-[10px] opacity-75 leading-tight ${isToday ? 'text-teal-600' : (isHoliday || isWeekend ? 'text-red-500' : 'text-slate-700')}`}>
                                                     {['日', '一', '二', '三', '四', '五', '六'][d.getDay()]}
                                                 </div>
                                                 {(holiday || note || doctorNote) && (
@@ -2325,12 +2325,12 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                 className={`border-b border-slate-200 py-1.5 min-w-[52px] text-center relative ${isToday ? 'bg-teal-100' : (holiday ? 'bg-red-50' : 'bg-white')}`}
                                             >
                                                 <div className="flex flex-col items-center gap-0.5">
-                                                    <span className={`text-[10px] font-bold ${isToday ? 'text-teal-700' : (isWeekend || holiday ? 'text-red-500' : 'text-slate-400')}`}>
+                                                    <div className={`font-bold text-[11px] leading-tight ${isToday ? 'text-teal-600' : (isWeekend || holiday ? 'text-red-500' : 'text-slate-800')}`}>
+                                                        {d.getMonth() + 1}/{d.getDate()}
+                                                    </div>
+                                                    <div className={`text-[10px] opacity-75 leading-tight ${isToday ? 'text-teal-600' : (isWeekend || holiday ? 'text-red-500' : 'text-slate-700')}`}>
                                                         {['日', '一', '二', '三', '四', '五', '六'][d.getDay()]}
-                                                    </span>
-                                                    <span className={`text-sm font-bold leading-none ${isToday ? 'text-teal-900' : (isWeekend || holiday ? 'text-red-600' : 'text-slate-800')}`}>
-                                                        {d.getDate()}
-                                                    </span>
+                                                    </div>
                                                     {holiday && (
                                                         <span className={`text-[9px] px-1 rounded-sm leading-tight max-w-[45px] truncate mt-0.5 ${isToday ? 'bg-teal-200 text-teal-800 border border-teal-300' : 'bg-red-100 text-red-700 border border-red-200'}`}>
                                                             {holiday.name}
@@ -2350,7 +2350,6 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                     </td>
                                     {dateRange.map(date => {
                                         const stats = db.getDailyStats(date);
-                                        const isToday = date === toLocalISOString(new Date());
                                         return (
                                             <td key={date} className="p-0.5 border-r border-slate-100 text-center align-middle">
                                                 {canEditStats ? (
@@ -2370,11 +2369,56 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                 </tr>
                                 <tr className="bg-slate-50">
                                     <td className={`sticky left-0 z-10 bg-slate-50/95 backdrop-blur border-r border-slate-200 shadow-[4px_0_8px_rgba(0,0,0,0.02)] ${isMobile ? 'p-1 w-[85px] min-w-[85px]' : 'p-2'}`}>
-                                        <div className="text-[10px] font-bold text-slate-600 flex items-center justify-end pr-2">CTA</div>
+                                        <div className="text-[10px] font-bold text-slate-600 flex items-center justify-end pr-2">MR 數</div>
                                     </td>
                                     {dateRange.map(date => {
                                         const stats = db.getDailyStats(date);
-                                        const isToday = date === toLocalISOString(new Date());
+                                        return (
+                                            <td key={date} className="p-0.5 border-r border-slate-100 text-center align-middle">
+                                                {canEditStats ? (
+                                                    <input 
+                                                        type="number"
+                                                        value={stats?.beitou_mr || 0}
+                                                        onChange={(e) => db.updateDailyStats(date, { beitou_mr: Number(e.target.value) })}
+                                                        className="w-full text-center text-xs font-bold bg-transparent outline-none focus:bg-white focus:ring-1 focus:ring-teal-500 rounded py-1 text-slate-700"
+                                                        placeholder="0"
+                                                    />
+                                                ) : (
+                                                    <span className="text-xs font-bold text-blue-600">{stats?.beitou_mr || 0}</span>
+                                                )}
+                                            </td>
+                                        );
+                                    })}
+                                </tr>
+                                <tr className="bg-slate-50">
+                                    <td className={`sticky left-0 z-10 bg-slate-50/95 backdrop-blur border-r border-slate-200 shadow-[4px_0_8px_rgba(0,0,0,0.02)] ${isMobile ? 'p-1 w-[85px] min-w-[85px]' : 'p-2'}`}>
+                                        <div className="text-[10px] font-bold text-slate-600 flex items-center justify-end pr-2">GI(北投)</div>
+                                    </td>
+                                    {dateRange.map(date => {
+                                        const stats = db.getDailyStats(date);
+                                        return (
+                                            <td key={date} className="p-0.5 border-r border-slate-100 text-center align-middle">
+                                                {canEditStats ? (
+                                                    <input 
+                                                        type="number"
+                                                        value={stats?.beitou_gi || 0}
+                                                        onChange={(e) => db.updateDailyStats(date, { beitou_gi: Number(e.target.value) })}
+                                                        className="w-full text-center text-xs font-bold bg-transparent outline-none focus:bg-white focus:ring-1 focus:ring-teal-500 rounded py-1 text-slate-700"
+                                                        placeholder="0"
+                                                    />
+                                                ) : (
+                                                    <span className="text-xs font-bold text-emerald-600">{stats?.beitou_gi || 0}</span>
+                                                )}
+                                            </td>
+                                        );
+                                    })}
+                                </tr>
+                                <tr className="bg-slate-50">
+                                    <td className={`sticky left-0 z-10 bg-slate-50/95 backdrop-blur border-r border-slate-200 shadow-[4px_0_8px_rgba(0,0,0,0.02)] ${isMobile ? 'p-1 w-[85px] min-w-[85px]' : 'p-2'}`}>
+                                        <div className="text-[10px] font-bold text-slate-600 flex items-center justify-end pr-2">CTA 數</div>
+                                    </td>
+                                    {dateRange.map(date => {
+                                        const stats = db.getDailyStats(date);
                                         return (
                                             <td key={date} className="p-0.5 border-r border-slate-100 text-center align-middle">
                                                 {canEditStats ? (
@@ -2398,7 +2442,6 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                     </td>
                                     {dateRange.map(date => {
                                         const stats = db.getDailyStats(date);
-                                        const isToday = date === toLocalISOString(new Date());
                                         return (
                                             <td key={date} className="p-0.5 border-r border-slate-100 text-center align-middle">
                                                 {canEditStats ? (
@@ -2416,49 +2459,24 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                         );
                                     })}
                                 </tr>
-                                <tr className="bg-slate-50">
-                                    <td className={`sticky left-0 z-10 bg-slate-50/95 backdrop-blur border-r border-slate-200 shadow-[4px_0_8px_rgba(0,0,0,0.02)] ${isMobile ? 'p-1 w-[85px] min-w-[85px]' : 'p-2'}`}>
-                                        <div className="text-[10px] font-bold text-slate-600 flex items-center justify-end pr-2">MR 數</div>
-                                    </td>
-                                    {dateRange.map(date => {
-                                        const stats = db.getDailyStats(date);
-                                        const isToday = date === toLocalISOString(new Date());
-                                        return (
-                                            <td key={date} className="p-0.5 border-r border-slate-100 text-center align-middle">
-                                                {canEditStats ? (
-                                                    <input 
-                                                        type="number"
-                                                        value={stats?.beitou_mr || 0}
-                                                        onChange={(e) => db.updateDailyStats(date, { beitou_mr: Number(e.target.value) })}
-                                                        className="w-full text-center text-xs font-bold bg-transparent outline-none focus:bg-white focus:ring-1 focus:ring-teal-500 rounded py-1 text-slate-700"
-                                                        placeholder="0"
-                                                    />
-                                                ) : (
-                                                    <span className="text-xs font-bold text-blue-600">{stats?.beitou_mr || 0}</span>
-                                                )}
-                                            </td>
-                                        );
-                                    })}
-                                </tr>
                                 <tr className="bg-slate-50 border-b border-slate-200">
                                     <td className={`sticky left-0 z-10 bg-slate-50/95 backdrop-blur border-r border-slate-200 shadow-[4px_0_8px_rgba(0,0,0,0.02)] ${isMobile ? 'p-1 w-[85px] min-w-[85px]' : 'p-2'}`}>
-                                        <div className="text-[10px] font-bold text-slate-600 flex items-center justify-end pr-2">GI 數</div>
+                                        <div className="text-[10px] font-bold text-slate-600 flex items-center justify-end pr-2">GI(大直)</div>
                                     </td>
                                     {dateRange.map(date => {
                                         const stats = db.getDailyStats(date);
-                                        const isToday = date === toLocalISOString(new Date());
                                         return (
                                             <td key={date} className="p-0.5 border-r border-slate-100 text-center align-middle">
                                                 {canEditStats ? (
                                                     <input 
                                                         type="number"
-                                                        value={stats?.beitou_gi || 0}
-                                                        onChange={(e) => db.updateDailyStats(date, { beitou_gi: Number(e.target.value) })}
+                                                        value={stats?.dazhi_gi || 0}
+                                                        onChange={(e) => db.updateDailyStats(date, { dazhi_gi: Number(e.target.value) })}
                                                         className="w-full text-center text-xs font-bold bg-transparent outline-none focus:bg-white focus:ring-1 focus:ring-teal-500 rounded py-1 text-slate-700"
                                                         placeholder="0"
                                                     />
                                                 ) : (
-                                                    <span className="text-xs font-bold text-emerald-600">{stats?.beitou_gi || 0}</span>
+                                                    <span className="text-xs font-bold text-emerald-600">{stats?.dazhi_gi || 0}</span>
                                                 )}
                                             </td>
                                         );
@@ -2627,8 +2645,30 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                                     `}
                                                                     onClick={() => canEdit && handleStationCellClick(stationName, location, date)}
                                                                 >
+                                                                    {/* Indicators for GI (Red) and Explanation (Deep Blue) */}
+                                                                    {(() => {
+                                                                        const isGI = ['GI', '腸胃'].some(term => stationName.includes(term));
+                                                                        const isExp = stationName.includes('解說');
+                                                                        const stats = db.getDailyStats(date);
+                                                                        
+                                                                        if (isGI) {
+                                                                            return (
+                                                                                <div className="absolute top-0 right-0 z-10 bg-red-600 text-white px-1.5 py-0.5 text-[10px] font-black rounded-bl shadow-md pointer-events-none">
+                                                                                    {location === '北投' ? stats?.beitou_gi : (location === '大直' ? stats?.dazhi_gi : '')}
+                                                                                </div>
+                                                                            );
+                                                                        }
+                                                                        if (isExp) {
+                                                                            return (
+                                                                                <div className="absolute top-0 right-0 z-10 bg-blue-700 text-white px-1.5 py-0.5 text-[10px] font-black rounded-bl shadow-md pointer-events-none">
+                                                                                    {location === '北投' ? stats?.beitou_clients : (location === '大直' ? stats?.dazhi_clients : '')}
+                                                                                </div>
+                                                                            );
+                                                                        }
+                                                                        return null;
+                                                                    })()}
                                                                     {displayShifts.length > 0 ? (
-                                                                        <div className="flex flex-col items-center justify-center gap-0.5 py-1 px-0.5">
+                                                                        <div className={`flex flex-col items-center gap-0.5 px-0.5 pb-1 w-full ${(['GI', '腸胃'].some(term => stationName.includes(term)) || stationName.includes('解說')) ? 'justify-start pt-6' : 'justify-center py-1'}`}>
                                                                              {displayShifts.map((shift, index) => {
                                                                                 const doc = doctors.find(d => d.id === shift.doctorId);
                                                                                 const isSimulated = simulatedShifts?.some(ss => ss.id === shift.id);
@@ -2683,8 +2723,9 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                 {viewMode === 'daily' && (
                     <div className="flex flex-col gap-8 pb-10">
                         {/* Main/Assistant Shift Display */}
-                        <div className="bg-gradient-to-r from-yellow-50 to-amber-50 border border-yellow-200 rounded-lg p-4">
-                            <div className="flex flex-col sm:flex-row gap-3">
+                        <div className="bg-gradient-to-r from-amber-50 via-orange-50/50 to-amber-50 border border-amber-200/80 rounded-2xl p-4 shadow-[0_2px_10px_rgba(251,191,36,0.15)] relative overflow-hidden">
+                            <div className="absolute top-0 left-0 w-1.5 h-full bg-gradient-to-b from-amber-400 to-orange-400"></div>
+                            <div className="flex flex-col sm:flex-row gap-4 ml-2">
                                 {(() => {
                                     const dateStr = toLocalISOString(currentDate);
                                     const radiographerShifts = db.shifts;
@@ -2699,13 +2740,23 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
 
                                     return (
                                         <>
-                                            <div className="flex-1 flex items-center gap-2 bg-white/60 rounded px-3 py-2 border border-yellow-300/30">
-                                                <span className="text-xs font-bold text-yellow-800">主班：</span>
-                                                <span className="text-sm font-medium text-yellow-900">{mainName}</span>
+                                            <div className="flex-1 flex items-center gap-3 bg-white/80 backdrop-blur-sm rounded-xl px-4 py-2.5 border border-amber-100 shadow-[0_1px_2px_rgba(0,0,0,0.02)] transition-transform hover:scale-[1.02]">
+                                                <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center text-amber-600 shadow-sm ring-2 ring-white">
+                                                    <Star size={18} className="fill-amber-500"/>
+                                                </div>
+                                                <div>
+                                                    <div className="text-[10px] font-bold text-amber-600/80 uppercase tracking-widest mb-0.5">主班 (場控)</div>
+                                                    <div className="text-[15px] font-black text-amber-900">{mainName}</div>
+                                                </div>
                                             </div>
-                                            <div className="flex-1 flex items-center gap-2 bg-white/60 rounded px-3 py-2 border border-yellow-300/30">
-                                                <span className="text-xs font-bold text-yellow-800">輔班：</span>
-                                                <span className="text-sm font-medium text-yellow-900">{assistantName}</span>
+                                            <div className="flex-1 flex items-center gap-3 bg-white/80 backdrop-blur-sm rounded-xl px-4 py-2.5 border border-orange-100 shadow-[0_1px_2px_rgba(0,0,0,0.02)] transition-transform hover:scale-[1.02]">
+                                                <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center text-orange-600 shadow-sm ring-2 ring-white">
+                                                    <Shield size={18} className="fill-orange-400"/>
+                                                </div>
+                                                <div>
+                                                    <div className="text-[10px] font-bold text-orange-600/80 uppercase tracking-widest mb-0.5">輔班</div>
+                                                    <div className="text-[15px] font-black text-orange-900">{assistantName}</div>
+                                                </div>
                                             </div>
                                         </>
                                     );
@@ -2719,10 +2770,50 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
 
                             return (
                                 <div key={loc} className="space-y-4">
-                                    <div className="flex items-center gap-3 border-b border-gray-200 pb-2">
-                                        <h2 className={`font-bold text-base px-3 py-1 rounded-full text-white shadow-sm ${LOCATION_COLORS[loc]?.split(' ')[0] || 'bg-gray-500'}`}>
+                                    <div className="flex items-center gap-4 border-b border-gray-200 pb-2">
+                                        <h2 className={`font-bold text-base px-4 py-1 rounded-full text-white shadow-md ${LOCATION_COLORS[loc]?.split(' ')[0] || 'bg-gray-500'}`}>
                                             {loc}區
                                         </h2>
+                                        {(() => {
+                                            const stats = db.getDailyStats(toLocalISOString(currentDate));
+                                            if (loc === '北投') {
+                                                return (
+                                                    <div className="flex flex-wrap items-center gap-3">
+                                                        <div className="flex items-center gap-1.5 bg-slate-100 px-3 py-1.5 rounded-full border border-slate-200 shadow-sm">
+                                                            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">北投客戶數</span>
+                                                            <span className="text-base font-black text-slate-800">{stats?.beitou_clients || 0}</span>
+                                                        </div>
+                                                        <div className="flex items-center gap-1.5 bg-blue-50 px-3 py-1.5 rounded-full border border-blue-100 shadow-sm">
+                                                            <span className="text-[11px] font-bold text-blue-500 uppercase tracking-wider">MR 數</span>
+                                                            <span className="text-base font-black text-blue-700">{stats?.beitou_mr || 0}</span>
+                                                        </div>
+                                                        <div className="flex items-center gap-1.5 bg-emerald-50 px-3 py-1.5 rounded-full border border-emerald-100 shadow-sm">
+                                                            <span className="text-[11px] font-bold text-emerald-500 uppercase tracking-wider">GI(北投)</span>
+                                                            <span className="text-base font-black text-emerald-700">{stats?.beitou_gi || 0}</span>
+                                                        </div>
+                                                        <div className="flex items-center gap-1.5 bg-amber-50 px-3 py-1.5 rounded-full border border-amber-100 shadow-sm">
+                                                            <span className="text-[11px] font-bold text-amber-600 uppercase tracking-wider">CTA 數</span>
+                                                            <span className="text-base font-black text-amber-700">{stats?.beitou_cta || 0}</span>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            }
+                                            if (loc === '大直') {
+                                                return (
+                                                    <div className="flex flex-wrap items-center gap-3">
+                                                        <div className="flex items-center gap-1.5 bg-slate-100 px-3 py-1.5 rounded-full border border-slate-200 shadow-sm">
+                                                            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">大直客戶數</span>
+                                                            <span className="text-base font-black text-slate-800">{stats?.dazhi_clients || 0}</span>
+                                                        </div>
+                                                        <div className="flex items-center gap-1.5 bg-emerald-50 px-3 py-1.5 rounded-full border border-emerald-100 shadow-sm">
+                                                            <span className="text-[11px] font-bold text-emerald-500 uppercase tracking-wider">GI(大直)</span>
+                                                            <span className="text-base font-black text-emerald-700">{stats?.dazhi_gi || 0}</span>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            }
+                                            return null;
+                                        })()}
                                         <div className="flex-1 h-px bg-gray-100"></div>
                                     </div>
                                     
@@ -2779,36 +2870,122 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                             const req = reqs[dayOfWeek];
                                             const isShort = displayShifts.length < req;
 
+                                            const getStationTheme = (stationName: string) => {
+                                                if (stationName.includes('解說')) return {
+                                                    card: 'bg-gradient-to-br from-white to-indigo-50/70 border-indigo-200/80 hover:border-indigo-300 hover:shadow-indigo-100/50',
+                                                    title: 'text-indigo-900',
+                                                    border: 'border-indigo-100',
+                                                    badgeNormal: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+                                                    avatarRing: 'ring-indigo-100',
+                                                    avatarBg: 'bg-gradient-to-br from-indigo-50 to-indigo-100/50 text-indigo-700',
+                                                    avatarEdge: 'bg-indigo-400/80',
+                                                    emptyBorder: 'border-indigo-200/80 bg-indigo-50/30 hover:bg-indigo-50/50 hover:border-indigo-300 hover:text-indigo-700',
+                                                    emptyIconBg: 'group-hover/empty:bg-indigo-50 group-hover/empty:border-indigo-200 group-hover/empty:shadow-indigo-100/50',
+                                                    emptyIconText: 'group-hover/empty:text-indigo-500 text-indigo-300'
+                                                };
+                                                if (stationName.includes('影像') || stationName.match(/MR|CT/i)) return {
+                                                    card: 'bg-gradient-to-br from-white to-blue-50/70 border-blue-200/80 hover:border-blue-300 hover:shadow-blue-100/50',
+                                                    title: 'text-blue-900',
+                                                    border: 'border-blue-100',
+                                                    badgeNormal: 'bg-blue-50 text-blue-700 border-blue-200',
+                                                    avatarRing: 'ring-blue-100',
+                                                    avatarBg: 'bg-gradient-to-br from-blue-50 to-blue-100/50 text-blue-700',
+                                                    avatarEdge: 'bg-blue-400/80',
+                                                    emptyBorder: 'border-blue-200/80 bg-blue-50/30 hover:bg-blue-50/50 hover:border-blue-300 hover:text-blue-700',
+                                                    emptyIconBg: 'group-hover/empty:bg-blue-50 group-hover/empty:border-blue-200 group-hover/empty:shadow-blue-100/50',
+                                                    emptyIconText: 'group-hover/empty:text-blue-500 text-blue-300'
+                                                };
+                                                if (stationName.includes('遠')) return {
+                                                    card: 'bg-gradient-to-br from-white to-rose-50/70 border-rose-200/80 hover:border-rose-300 hover:shadow-rose-100/50',
+                                                    title: 'text-rose-900',
+                                                    border: 'border-rose-100',
+                                                    badgeNormal: 'bg-rose-50 text-rose-700 border-rose-200',
+                                                    avatarRing: 'ring-rose-100',
+                                                    avatarBg: 'bg-gradient-to-br from-rose-50 to-rose-100/50 text-rose-700',
+                                                    avatarEdge: 'bg-rose-400/80',
+                                                    emptyBorder: 'border-rose-200/80 bg-rose-50/30 hover:bg-rose-50/50 hover:border-rose-300 hover:text-rose-700',
+                                                    emptyIconBg: 'group-hover/empty:bg-rose-50 group-hover/empty:border-rose-200 group-hover/empty:shadow-rose-100/50',
+                                                    emptyIconText: 'group-hover/empty:text-rose-500 text-rose-300'
+                                                };
+                                                if (stationName.includes('GI') || stationName.includes('腸胃')) return {
+                                                    card: 'bg-gradient-to-br from-white to-emerald-50/70 border-emerald-200/80 hover:border-emerald-300 hover:shadow-emerald-100/50',
+                                                    title: 'text-emerald-900',
+                                                    border: 'border-emerald-100',
+                                                    badgeNormal: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+                                                    avatarRing: 'ring-emerald-100',
+                                                    avatarBg: 'bg-gradient-to-br from-emerald-50 to-emerald-100/50 text-emerald-700',
+                                                    avatarEdge: 'bg-emerald-400/80',
+                                                    emptyBorder: 'border-emerald-200/80 bg-emerald-50/30 hover:bg-emerald-50/50 hover:border-emerald-300 hover:text-emerald-700',
+                                                    emptyIconBg: 'group-hover/empty:bg-emerald-50 group-hover/empty:border-emerald-200 group-hover/empty:shadow-emerald-100/50',
+                                                    emptyIconText: 'group-hover/empty:text-emerald-500 text-emerald-300'
+                                                };
+                                                if (stationName.includes('婦科')) return {
+                                                    card: 'bg-gradient-to-br from-white to-pink-50/70 border-pink-200/80 hover:border-pink-300 hover:shadow-pink-100/50',
+                                                    title: 'text-pink-900',
+                                                    border: 'border-pink-100',
+                                                    badgeNormal: 'bg-pink-50 text-pink-700 border-pink-200',
+                                                    avatarRing: 'ring-pink-100',
+                                                    avatarBg: 'bg-gradient-to-br from-pink-50 to-pink-100/50 text-pink-700',
+                                                    avatarEdge: 'bg-pink-400/80',
+                                                    emptyBorder: 'border-pink-200/80 bg-pink-50/30 hover:bg-pink-50/50 hover:border-pink-300 hover:text-pink-700',
+                                                    emptyIconBg: 'group-hover/empty:bg-pink-50 group-hover/empty:border-pink-200 group-hover/empty:shadow-pink-100/50',
+                                                    emptyIconText: 'group-hover/empty:text-pink-500 text-pink-300'
+                                                };
+                                                return {
+                                                    card: 'bg-gradient-to-br from-white to-slate-50/30 border-slate-200/60 hover:border-slate-300 hover:shadow-slate-100/50',
+                                                    title: 'text-slate-800',
+                                                    border: 'border-slate-100/80',
+                                                    badgeNormal: 'bg-slate-50 text-slate-500 border-slate-200',
+                                                    avatarRing: 'ring-teal-50',
+                                                    avatarBg: 'bg-gradient-to-br from-teal-50 to-teal-100/50 text-teal-700',
+                                                    avatarEdge: 'bg-teal-400/80',
+                                                    emptyBorder: 'border-slate-200/80 bg-slate-50/30 hover:bg-teal-50/20 hover:border-teal-300/60 hover:text-teal-600',
+                                                    emptyIconBg: 'group-hover/empty:bg-teal-50 group-hover/empty:border-teal-200 group-hover/empty:shadow-teal-100/50',
+                                                    emptyIconText: 'group-hover/empty:text-teal-500 text-slate-300'
+                                                };
+                                            };
+                                            const theme = getStationTheme(st);
+
                                             return (
-                                                <div key={`${loc}-${st}`} className={`rounded-xl border p-4 shadow-sm flex flex-col h-full bg-white transition-all ${isShort ? 'border-red-200 shadow-red-50' : 'border-gray-200'}`}>
-                                                    <div className="flex justify-between items-center mb-3 pb-2 border-b border-gray-50">
-                                                        <h3 className="font-bold text-gray-800 flex items-center gap-2">
+                                                <div key={`${loc}-${st}`} className={`group rounded-2xl border p-4 shadow-sm flex flex-col h-full transition-all duration-300 ${isShort ? 'border-red-200 bg-red-50/10 hover:shadow-red-100/50' : `${theme.card} hover:shadow-md`}`}>
+                                                    <div className={`flex justify-between items-center mb-4 pb-3 border-b ${theme.border}`}>
+                                                        <h3 className={`font-extrabold flex items-center gap-2 text-[15px] tracking-wide ${theme.title}`}>
                                                             {st}
-                                                            {isShort && <span className="flex h-2 w-2 rounded-full bg-red-500 animate-pulse" title="人力不足"></span>}
+                                                            {isShort && <span className="flex h-2 w-2 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.8)] animate-pulse" title="人力不足"></span>}
                                                         </h3>
-                                                        <span className={`text-xs font-bold px-2 py-1 rounded-full ${isShort ? 'bg-red-50 text-red-600' : 'bg-slate-50 text-slate-400'}`}>
+                                                        <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full shadow-[inset_0_1px_2px_rgba(0,0,0,0.05)] border ${isShort ? 'bg-red-50 text-red-600 border-red-100' : theme.badgeNormal}`}>
                                                             {displayShifts.length} / {req} 人
                                                         </span>
                                                     </div>
                                                     
-                                                    <div className="space-y-2 flex-1">
+                                                    <div className="space-y-2.5 flex-1">
                                                         {displayShifts.length > 0 ? (
                                                             displayShifts.map(s => {
                                                                 const doc = doctors.find(d => d.id === s.doctorId);
                                                                 const isSimulated = simulatedShifts?.some(ss => ss.id === s.id);
                                                                 return (
-                                                                    <div key={s.id} className={`flex items-center gap-3 p-2 rounded-lg transform hover:scale-[1.02] transition-all ${isSimulated ? 'bg-amber-50 border border-dashed border-amber-300 animate-pulse' : 'bg-slate-50 border border-slate-100'} ${canEdit ? 'cursor-pointer hover:bg-white hover:shadow-sm' : 'cursor-not-allowed'}`} onClick={()=>canEdit && handleCellClick(s.doctorId, s.date)}>
-                                                                        <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shadow-sm border ${isSimulated ? 'bg-amber-100 text-amber-700 border-amber-200' : 'bg-teal-100 text-teal-600 border-teal-50'}`}>
+                                                                    <div key={s.id} className={`relative flex items-start gap-3 p-3 rounded-xl border transition-all duration-200 overflow-hidden ${isSimulated ? 'bg-amber-50/80 border-dashed border-amber-300 animate-[pulse_2s_ease-in-out_infinite]' : 'bg-white border-slate-100 shadow-[0_2px_4px_rgba(0,0,0,0.02)]'} ${canEdit ? `cursor-pointer hover:-translate-y-[2px] hover:shadow-lg ${theme.border.replace('border-', 'hover:border-')}` : 'cursor-not-allowed'}`} onClick={()=>canEdit && handleCellClick(s.doctorId, s.date)}>
+                                                                        {/* Indicator bar on the left edge */}
+                                                                        <div className={`absolute left-0 top-0 bottom-0 w-1 ${isSimulated ? 'bg-amber-400' : theme.avatarEdge}`}></div>
+                                                                        <div className={`shrink-0 w-10 h-10 rounded-full flex items-center justify-center font-black text-[13px] shadow-sm ring-2 ring-offset-1 z-10 ${isSimulated ? 'bg-amber-100 text-amber-700 ring-amber-50' : `${theme.avatarBg} ${theme.avatarRing}`}`}>
                                                                             {doc?.alias}
                                                                         </div>
-                                                                        <div className="flex-1 min-w-0">
-                                                                            <div className="font-bold text-gray-800 truncate flex items-center gap-1">
-                                                                                {doc?.name}
-                                                                                {suffix && <span className="text-[10px] text-teal-700 bg-teal-50 px-1 rounded border border-teal-100">{suffix}</span>}
+                                                                        <div className="flex-1 min-w-0 pt-0.5 z-10">
+                                                                            <div className="flex justify-between items-start gap-2 mb-1">
+                                                                                <div className={`font-bold truncate flex items-center gap-1.5 text-[14px] ${theme.title}`}>
+                                                                                    {doc?.name}
+                                                                                    {suffix && <span className="text-[9px] text-teal-700 bg-teal-50 px-1.5 py-0.5 rounded-md border border-teal-100/50 tracking-wider font-bold whitespace-nowrap">{suffix}</span>}
+                                                                                </div>
+                                                                                {s.workTime && (
+                                                                                    <div className="shrink-0 text-[10px] font-bold text-slate-500 bg-slate-50/80 px-1.5 py-0.5 rounded flex items-center gap-1 shadow-[inset_0_1px_1px_rgba(0,0,0,0.02)] border border-slate-100/50">
+                                                                                        <Clock size={10} className="text-slate-400"/> {s.workTime}
+                                                                                    </div>
+                                                                                )}
                                                                             </div>
-                                                                            {s.workTime && <div className="text-xs text-gray-500 flex items-center gap-1"><Clock size={10}/> {s.workTime}</div>}
-                                                                            {s.task && <div className="text-xs text-blue-600 font-bold">{s.task}</div>}
-                                                                            {s.note && <div className="text-xs text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-100 mt-0.5 break-all">📝 {s.note}</div>}
+                                                                            <div className="flex flex-wrap gap-1.5">
+                                                                                {s.task && <span className="text-[10px] text-blue-700 bg-blue-50/80 px-2 py-0.5 rounded border border-blue-100/50 font-bold tracking-wide">{s.task}</span>}
+                                                                                {s.note && <span className="text-[10px] text-amber-700 bg-amber-50/80 px-1.5 py-0.5 rounded border border-amber-100/50 font-bold break-words flex flex-wrap items-center gap-1 leading-tight w-full"><span className="text-amber-500 shrink-0">📝</span> <span>{s.note}</span></span>}
+                                                                            </div>
                                                                         </div>
                                                                     </div>
                                                                 );
@@ -2816,12 +2993,14 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                         ) : (
                                                             <div 
                                                                 onClick={() => canEdit && handleStationCellClick(st, loc, toLocalISOString(currentDate))}
-                                                                className={`h-20 flex items-center justify-center text-slate-300 text-xs italic border-2 border-dashed border-slate-50 rounded-lg bg-slate-50/50 transition-all font-bold group ${canEdit ? 'cursor-pointer hover:bg-teal-50 hover:border-teal-200 hover:text-teal-600' : 'cursor-not-allowed'}`}
+                                                                className={`group/empty h-full min-h-[5.5rem] flex flex-col items-center justify-center text-[13px] border-2 border-dashed rounded-xl transition-all duration-300 font-bold ${canEdit ? `cursor-pointer ${theme.emptyBorder}` : 'border-slate-100 bg-slate-50/30 cursor-not-allowed text-slate-400'}`}
                                                             >
-                                                                <span className="group-hover:scale-105 transition-transform flex items-center gap-1">
-                                                                    <Plus size={14}/> 指派醫師
-                                                                </span>
+                                                                <div className={`w-8 h-8 rounded-full bg-white shadow-sm border border-slate-100 flex items-center justify-center mb-1.5 transition-all duration-300 ${canEdit ? theme.emptyIconBg : ''}`}>
+                                                                    <Plus size={16} className={`transition-colors ${canEdit ? theme.emptyIconText : 'text-slate-200'}`}/>
+                                                                </div>
+                                                                <span className="opacity-70 tracking-widest">指派醫師</span>
                                                             </div>
+
                                                         )}
                                                     </div>
                                                 </div>

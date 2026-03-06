@@ -458,7 +458,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
             const userHeaders = ['姓名', ...dateRange.map(d => {
                 const date = new Date(d);
                 const weekArr = ['日', '一', '二', '三', '四', '五', '六'];
-                return `${date.getDate()} (${weekArr[date.getDay()]})`;
+                return `${date.getMonth() + 1}/${date.getDate()} (${weekArr[date.getDay()]})`;
             }), '上班天數'];
             
             const userHeaderRow = userSheet.addRow(userHeaders);
@@ -552,7 +552,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
             const stationHeaders = ['崗位', ...dateRange.map(d => {
                 const date = new Date(d);
                 const weekArr = ['日', '一', '二', '三', '四', '五', '六'];
-                return `${date.getDate()} (${weekArr[date.getDay()]})`;
+                return `${date.getMonth() + 1}/${date.getDate()} (${weekArr[date.getDay()]})`;
             })];
 
             const stationHeaderRow = stationSheet.addRow(stationHeaders);
@@ -734,7 +734,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
             // Prepare Headers
             const dateHeaders = dateRange.map(date => {
                 const d = new Date(date);
-                return `${d.getDate()} \n${weekDays[d.getDay()]} `;
+                return `${d.getMonth() + 1}/${d.getDate()} \n${weekDays[d.getDay()]} `;
             });
 
             // Add '上班天數' to header for User View
@@ -1946,8 +1946,8 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
 
                                 return (
                                     <th key={date} className={`border-[0.5px] border-gray-400 p-1 min-w-[40px] ${isWeekend ? 'bg-red-50 text-gray-900' : 'text-gray-800'} ${isPrintToday ? 'bg-yellow-200 border-b-2 border-red-500' : ''} `}>
-                                        <div className="text-[10px] font-medium">{weekDays[d.getDay()]}</div>
-                                        <div className={`text-base ${isPrintToday ? 'font-bold text-red-600' : 'font-medium'} `}>{d.getDate()}</div>
+                                        <div className={`font-bold text-[11px] leading-tight ${isPrintToday ? 'text-red-600' : ''} `}>{d.getMonth() + 1}/{d.getDate()}</div>
+                                        <div className="text-[10px] opacity-75 leading-tight">{weekDays[d.getDay()]}</div>
                                     </th>
                                 );
                             })}
@@ -2534,12 +2534,12 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                     className={`bg-white rounded-lg shadow-sm border p-3 flex items-center gap-4 ${isToday ? 'border-teal-500 ring-1 ring-teal-500' : 'border-slate-200'} ${isOff ? 'bg-slate-50' : ''} ${isPast && !isToday ? 'opacity-50 grayscale-[0.5]' : ''}`}
                                 >
                                     {/* Date Column */}
-                                    <div className="flex flex-col items-center min-w-[3.5rem] border-r border-slate-100 pr-4">
+                                    <div className="flex flex-col items-center justify-center min-w-[3.5rem] border-r border-slate-100 pr-4">
+                                        <span className={`text-2xl font-bold leading-none mb-1 ${isToday ? 'text-teal-600' : 'text-slate-800'}`}>
+                                            {d.getMonth() + 1}/{d.getDate()}
+                                        </span>
                                         <span className={`text-xs font-bold ${isWeekend || event ? 'text-red-500' : 'text-slate-500'}`}>
                                             {weekDay}
-                                        </span>
-                                        <span className={`text-2xl font-bold leading-none ${isToday ? 'text-teal-600' : 'text-slate-800'}`}>
-                                            {d.getDate()}
                                         </span>
                                         {event && (
                                             <span className="text-[9px] mt-1 bg-red-50 text-red-600 px-1 rounded border border-red-100 whitespace-nowrap overflow-hidden max-w-[3rem] text-ellipsis">
@@ -2671,12 +2671,12 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                 )}
 
                                                 <div className="flex flex-col items-center gap-0.5">
-                                                    <span className={`text-[10px] font-bold ${isToday ? 'text-teal-700' : (isWeekend ? 'text-red-500' : 'text-slate-400')} `}>
+                                                    <div className={`font-bold text-[11px] leading-tight ${systemEvents.length > 0 ? (systemEvents[0].type === DateEventType.NOTE ? 'text-blue-600' : 'text-red-600') : (isToday ? 'text-teal-600' : (isWeekend ? 'text-red-500' : 'text-slate-800'))} `}>
+                                                        {d.getMonth() + 1}/{d.getDate()}
+                                                    </div>
+                                                    <div className={`text-[10px] opacity-75 leading-tight ${isToday ? 'text-teal-600' : (isWeekend ? 'text-red-500' : 'text-slate-700')} `}>
                                                         {weekDays[d.getDay()]}
-                                                    </span>
-                                                    <span className={`text-sm font-bold leading-none ${systemEvents.length > 0 ? (systemEvents[0].type === DateEventType.NOTE ? 'text-blue-600' : 'text-red-600') : (isToday ? 'text-teal-800' : 'text-slate-800')} `}>
-                                                        {d.getDate()}
-                                                    </span>
+                                                    </div>
                                                     
                                                     {/* Event Display Container */}
                                                     <div className="flex flex-col gap-0.5 mt-0.5 w-full items-center px-1">

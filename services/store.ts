@@ -726,7 +726,13 @@ BMD :{{bmd}}
         const dbUpdates: any = { ...updates };
         this.mapToDbFields(dbUpdates);
 
-        await supabase.from('users').update(dbUpdates).eq('id', id);
+        const { error } = await supabase.from('users').update(dbUpdates).eq('id', id);
+        if (error) {
+            console.error('Failed to update user in Supabase:', error);
+            throw error;
+        }
+        
+        this.notifyListeners();
     }
 
     async deleteUser(id: string) {
@@ -1394,6 +1400,7 @@ BMD :{{bmd}}
             dazhi_clients: 0,
             beitou_gi: 0,
             beitou_mr: 0,
+            dazhi_gi: 0,
             beitou_total: 0,
         };
 
@@ -1476,7 +1483,7 @@ BMD :{{bmd}}
             if(error) throw error;
          } catch(error: any) {
              console.error('Failed to update doctor:', error);
-             if (error.messsage?.includes('Failed to fetch') || error.message?.includes('fetch') || this.connectionStatus.type === 'Mock') {
+             if (error.message?.includes('Failed to fetch') || error.message?.includes('fetch') || this.connectionStatus.type === 'Mock') {
                  console.warn('[Mock] Supabase failed, saving local change for updateDoctor');
              }
          }
