@@ -1,5 +1,5 @@
 
-import { User, Shift, LeaveRequest, SystemSettings, StationDefault, SYSTEM_OFF, RosterCycle, DateEventType, Holiday, LeaveStatus, LeaveType, StaffGroup, SPECIAL_ROLES, CycleAnchor, DailyManpowerStats, Doctor, WeekdaySetting, DoctorShift, ReportAssistant, CloudScheduleEntry, UserRole, PERMISSIONS, HealthMgmtStaff } from '../types';
+import { User, Shift, HealthMgmtShift, LeaveRequest, SystemSettings, StationDefault, SYSTEM_OFF, RosterCycle, DateEventType, Holiday, LeaveStatus, LeaveType, StaffGroup, SPECIAL_ROLES, CycleAnchor, DailyManpowerStats, Doctor, WeekdaySetting, DoctorShift, ReportAssistant, CloudScheduleEntry, UserRole, PERMISSIONS, HealthMgmtStaff } from '../types';
 import { MOCK_USERS, MOCK_LEAVES, MOCK_DOCTORS } from './mockData';
 import { supabase } from './supabaseClient';
 import { generateUUID } from './utils';
@@ -59,6 +59,7 @@ class Store {
     users: User[] = [];
     healthMgmtStaff: HealthMgmtStaff[] = [];
     shifts: Shift[] = [];
+    healthMgmtShifts: HealthMgmtShift[] = [];
     leaves: LeaveRequest[] = [];
     settings: SystemSettings = {
         stations: Object.values(StationDefault),
@@ -140,6 +141,39 @@ class Store {
         return { data: allShifts, error: lastError };
     }
 
+    private async fetchAllHealthMgmtShifts() {
+        let allShifts: any[] = [];
+        let page = 0;
+        const pageSize = 1000;
+        let hasMore = true;
+        let lastError = null;
+
+        while (hasMore) {
+            const { data, error } = await supabase
+                .from('health_mgmt_shifts')
+                .select('*')
+                .range(page * pageSize, (page + 1) * pageSize - 1);
+
+            if (error) {
+                console.error('Error fetching HM shifts page:', page, error);
+                lastError = error;
+                hasMore = false;
+            } else if (data) {
+                allShifts = [...allShifts, ...data];
+                if (data.length < pageSize) {
+                    hasMore = false;
+                } else {
+                    page++;
+                }
+            } else {
+                hasMore = false;
+            }
+        }
+
+        console.log(`[Pagination] Total HM shifts fetched: ${allShifts.length}`);
+        return { data: allShifts, error: lastError };
+    }
+
     // New method to fetch all data from Supabase
     async initializeData(force: boolean = false) {
         if (this.isLoaded && !force) return;
@@ -152,14 +186,15 @@ class Store {
 
             // Load Cloud Schedule Data early
             console.log('[Store] Loading data from Supabase...');
-            const [usersRes, shiftsRes, leavesRes, settingsRes, doctorsRes, dShiftsRes, hmStaffRes] = await Promise.all([
+            const [usersRes, shiftsRes, leavesRes, settingsRes, doctorsRes, dShiftsRes, hmStaffRes, hmShiftsRes] = await Promise.all([
                 supabase.from('users').select('*'),
                 this.fetchAllShifts(),
                 supabase.from('leaves').select('*'),
                 supabase.from('settings').select('*'),
                 supabase.from('doctors').select('*'),
                 supabase.from('doctor_shifts').select('*'),
-                supabase.from('health_mgmt_staff').select('*')
+                supabase.from('health_mgmt_staff').select('*'),
+                this.fetchAllHealthMgmtShifts()
             ]);
             console.log('[Store] Data loaded. Errors:', {
                 users: usersRes.error,
@@ -168,7 +203,8 @@ class Store {
                 settings: settingsRes.error,
                 doctors: doctorsRes.error,
                 doctorShifts: dShiftsRes.error,
-                hmStaff: hmStaffRes.error
+                hmStaff: hmStaffRes.error,
+                hmShifts: hmShiftsRes.error
             });
 
             if (usersRes.data && usersRes.data.length > 0) {
@@ -232,6 +268,13 @@ class Store {
                 });
                 this.shifts = Array.from(uniqueShiftsMap.values());
             }
+            if (hmShiftsRes.data) {
+                this.healthMgmtShifts = hmShiftsRes.data.map((s: any) => {
+                    const mapped = { ...s };
+                    this.mapFromDbFields(mapped);
+                    return mapped;
+                });
+            }
             if (leavesRes.data && leavesRes.data.length > 0) {
                 this.leaves = leavesRes.data.map(l => {
                     const mapped = { ...l };
@@ -249,9 +292,9 @@ class Store {
             // Enhanced Settings Fetch: Try ID=1 first, then fallback to ANY row
             let finalSettingsData = null;
 
-            if (settingsRes.data && settingsRes.data.data) {
-                finalSettingsData = settingsRes.data.data;
-                this.settingsRowId = settingsRes.data.id; // Capture ID
+            if (settingsRes.data && settingsRes.data.length > 0) {
+                finalSettingsData = settingsRes.data[0].data;
+                this.settingsRowId = settingsRes.data[0].id; // Capture ID
             } else if (settingsRes.error && settingsRes.error.code === 'PGRST116') {
                 // ID=1 not found. Try fetching ANY settings row (fallback)
                 const fallbackRes = await supabase.from('settings').select('id, data').limit(1).single();
@@ -291,6 +334,7 @@ class Store {
                     displayOrder: d.display_order, // Map snake_case to camelCase
                     fixedShifts: d.fixed_shifts || [], // Map snake_case to camelCase
                     personalCycles: d.personal_cycles,
+                    isActive: d.is_active !== false, // Default to true if missing
                     weekdaySettings: (d.weekday_settings || []).map((s: any) => ({
                         dayOfWeek: s.dayOfWeek,
                         workTime: s.workTime,
@@ -322,6 +366,7 @@ class Store {
                 this.healthMgmtStaff = hmStaffRes.data.map((hm: any) => ({
                     id: hm.id,
                     name: hm.name,
+                    alias: hm.alias,
                     isActive: hm.is_active
                 }));
             }
@@ -761,6 +806,7 @@ BMD :{{bmd}}
         const { error } = await supabase.from('health_mgmt_staff').insert({
             id: staff.id,
             name: staff.name,
+            alias: staff.alias,
             is_active: staff.isActive
         });
         if (error) {
@@ -768,7 +814,7 @@ BMD :{{bmd}}
             throw error;
         }
         
-        this.healthMgmtStaff.push(staff);
+        this.healthMgmtStaff = [...this.healthMgmtStaff, staff];
         this.notifyListeners();
     }
 
@@ -777,6 +823,7 @@ BMD :{{bmd}}
         
         const dbUpdates: any = {};
         if (updates.name !== undefined) dbUpdates.name = updates.name;
+        if (updates.alias !== undefined) dbUpdates.alias = updates.alias;
         if (updates.isActive !== undefined) dbUpdates.is_active = updates.isActive;
 
         if (Object.keys(dbUpdates).length > 0) {
@@ -925,6 +972,61 @@ BMD :{{bmd}}
             if (error) throw error;
         } catch (err) {
             console.error('Failed to delete shift:', err);
+        }
+    }
+
+    // --- Health Mgmt Shift Operations ---
+    
+    getHealthMgmtShifts(startDate?: string, endDate?: string) {
+        if (!startDate && !endDate) return this.healthMgmtShifts;
+        return this.healthMgmtShifts.filter(s => s.date >= (startDate || '') && s.date <= (endDate || '9999'));
+    }
+
+    async upsertHealthMgmtShift(shift: HealthMgmtShift) {
+        // Local state update
+        const index = this.healthMgmtShifts.findIndex(s => s.userId === shift.userId && s.date === shift.date);
+        if (index >= 0) {
+            this.healthMgmtShifts[index] = shift;
+        } else {
+            this.healthMgmtShifts.push(shift);
+        }
+        this.notifyListeners();
+
+        // Remote sync
+        try {
+            const { data: existing } = await supabase
+                .from('health_mgmt_shifts')
+                .select('id')
+                .eq('userId', shift.userId)
+                .eq('date', shift.date);
+
+            if (existing && existing.length > 0) {
+                const targetId = existing[0].id;
+                await supabase.from('health_mgmt_shifts').update({ ...shift, id: targetId }).eq('id', targetId);
+                
+                // Cleanup duplicates if any
+                if (existing.length > 1) {
+                    const extras = existing.slice(1).map(e => e.id);
+                    await supabase.from('health_mgmt_shifts').delete().in('id', extras);
+                }
+            } else {
+                const newId = generateUUID();
+                await supabase.from('health_mgmt_shifts').insert({ ...shift, id: newId });
+            }
+        } catch (err) {
+            console.error('Failed to upsert HM shift:', err);
+            throw err;
+        }
+    }
+
+    async deleteHealthMgmtShift(userId: string, date: string) {
+        this.healthMgmtShifts = this.healthMgmtShifts.filter(s => !(s.userId === userId && s.date === date));
+        this.notifyListeners();
+
+        try {
+            await supabase.from('health_mgmt_shifts').delete().eq('userId', userId).eq('date', date);
+        } catch (err) {
+            console.error('Failed to delete HM shift:', err);
         }
     }
 
@@ -1505,7 +1607,8 @@ BMD :{{bmd}}
                 excluded_auto_schedule_locations: excludedAutoScheduleLocations,
                 specialty: specialty,
                 is_part_time: isPartTime,
-                monthly_target_shifts: monthlyTargetShifts,
+                monthly_target_shifts: newDoctor.monthlyTargetShifts,
+                is_active: true, // New doctors are active
                 fixed_shifts: [],
                 weekday_settings: weekdaySettings,
                 personal_cycles: newDoctor.personalCycles
@@ -1546,7 +1649,8 @@ BMD :{{bmd}}
                 display_order: doctor.displayOrder,
                 fixed_shifts: doctor.fixedShifts,
                 weekday_settings: doctor.weekdaySettings,
-                personal_cycles: doctor.personalCycles
+                personal_cycles: doctor.personalCycles,
+                is_active: doctor.isActive
             }).eq('id', doctor.id);
             if(error) throw error;
          } catch(error: any) {
@@ -1599,29 +1703,21 @@ BMD :{{bmd}}
     }
 
     async deleteDoctor(id: string) {
-        // Optimistic update
-        const originalDoctors = [...this.doctors];
-        this.doctors = this.doctors.filter(d => d.id !== id);
-        this.doctorShifts = this.doctorShifts.filter(s => s.doctorId !== id); 
-        this.notifyListeners(); // Notify immediately for responsiveness
+        // Soft delete: update isActive instead of removing
+        const doctor = this.doctors.find(d => d.id === id);
+        if (doctor) {
+            doctor.isActive = false;
+            this.notifyListeners();
 
-        // Remote update
-        try {
-            // Delete shifts first to avoid FK constraint violations
-            const { error: shiftsError } = await supabase.from('doctor_shifts').delete().eq('doctor_id', id);
-            if (shiftsError) { console.error('Error deleting doctor shifts:', shiftsError); throw shiftsError; }
-            
-            const { error } = await supabase.from('doctors').delete().eq('id', id);
-            if(error) throw error;
-        } catch(e: any) {
-             console.error('Failed to delete doctor:', e);
-             if (e.messsage?.includes('Failed to fetch') || e.message?.includes('fetch') || this.connectionStatus.type === 'Mock') {
-                 console.warn('[Mock] Deleting doctor locally only');
-                 return;
-             }
-             // Revert if critical failure and not mock
-             this.doctors = originalDoctors;
-             this.notifyListeners();
+            try {
+                const { error } = await supabase.from('doctors').update({ is_active: false }).eq('id', id);
+                if (error) throw error;
+            } catch (e: any) {
+                console.error('Failed to soft delete doctor:', e);
+                // We keep the local state as false even if remote fails (optimistic) 
+                // unless we want to revert for data parity. 
+                // But generally users expect 'deleted' to stay deleted.
+            }
         }
     }
 
@@ -2360,19 +2456,15 @@ BMD :{{bmd}}
                             const roles = existingShift.specialRoles || [];
                             const hasAnySpecialRole = roles.length > 0;
 
-                            // 1. Dazhi (大直) Strict Rules
-                            // CANNOT have any special role
-                            if (slot.includes('大直')) {
-                                if (hasAnySpecialRole) return false;
-                            }
 
-                            // 2. Field Control (場控) Strict Rules
+
+                            // 1. Field Control (場控) Strict Rules
                             // CANNOT have any special role
                             if (slot.includes('場控')) {
                                 if (hasAnySpecialRole) return false;
                             }
 
-                            // 3. Remote (遠班/距) Strict Rules
+                            // 2. Remote (遠班/距) Strict Rules
                             // CANNOT have any special role
                             if (slot.includes('遠')) {
                                 if (hasAnySpecialRole) return false;
@@ -2556,7 +2648,7 @@ BMD :{{bmd}}
                         // STRICT RULE: Conflict with specific Stations
                         // If manually assigned to '場控', '遠距', '大直', '遠班', CANNOT have special roles
                         const station = shift.station || '';
-                        if (station.includes('場控') || station.includes('遠') || station.includes('大直')) {
+                        if (station.includes('場控') || station.includes('遠')) {
                             return false;
                         }
                     }

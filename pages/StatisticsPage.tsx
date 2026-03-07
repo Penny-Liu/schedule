@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { User, UserRole, SPECIAL_ROLES, StationDefault, DateEventType } from '../types';
 import { db } from '../services/store';
 import { BarChart3, Calendar, Filter, Download, FileSpreadsheet, Settings2, Save, FileText, ChevronLeft, ChevronRight, AlertCircle } from 'lucide-react';
@@ -13,30 +13,37 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
     const cycles = db.getCycles();
     const [activeTab, setActiveTab] = useState<'stats' | 'cycles'>('stats');
 
-    // Default to the current cycle (based on today) if found, otherwise first cycle (latest), otherwise 'rolling'
-    const [selectedCycleId, setSelectedCycleId] = useState<string>(() => {
-        const today = new Date().toISOString().split('T')[0];
-        const activeCycle = cycles.find(c => today >= c.startDate && today <= c.endDate);
-        if (activeCycle) return activeCycle.id;
-        return cycles.length > 0 ? cycles[0].id : 'rolling';
-    });
-    const [currentDate, setCurrentDate] = useState(new Date());
+    // ── Helper: build date array for a range (Robust to timezone) ──
+    const buildDateRange = (startDate: string, endDate: string) => {
+        const dates: string[] = [];
+        const [sY, sM, sD] = startDate.split('-').map(Number);
+        const [eY, eM, eD] = endDate.split('-').map(Number);
+        const start = new Date(sY, sM - 1, sD);
+        const end = new Date(eY, eM - 1, eD);
+        
+        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+            dates.push(d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'));
+        }
+        return dates;
+    };
 
-    // Personal Cycle Tab state
-    const [selectedMonth, setSelectedMonth] = useState<string>(() => {
-        const today = new Date();
-        return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
-    });
-    const [radiographers, setRadiographers] = useState<User[]>(
-        db.getUsers().filter(u => u.isRadiographer === true && u.isActive !== false)
-    );
-    const [savingId, setSavingId] = useState<string | null>(null);
-    const [saveError, setSaveError] = useState<string | null>(null);
+    // ── Format date range for remarks (e.g. "3/8-4/6") ──
+    const formatRangeShort = (startDate: string, endDate: string) => {
+        const [, sm, sd] = startDate.split('-');
+        const [, em, ed] = endDate.split('-');
+        return `${parseInt(sm)}/${parseInt(sd)}-${parseInt(em)}/${parseInt(ed)}`;
+    };
 
-    // 只統計有勾選為放射師的人員
-    const users = db.getUsers().filter(u => u.isRadiographer === true);
-    const shifts = db.getShifts('', '');
-    const cloudSchedule = db.getCloudScheduleEntries();
+    // ── Personal Cycle helpers ──
+    const calculateDays = (startDate?: string, endDate?: string) => {
+        if (!startDate || !endDate) return 0;
+        const [sY, sM, sD] = startDate.split('-').map(Number);
+        const [eY, eM, eD] = endDate.split('-').map(Number);
+        const start = new Date(sY, sM - 1, sD);
+        const end = new Date(eY, eM - 1, eD);
+        const diffDays = Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+        return diffDays > 0 ? diffDays : 0;
+    };
 
     // ── Default dates for a month: prefer roster cycle that starts (or overlaps) this month ──
     const getDefaultDatesForMonth = (yearMonth: string) => {
@@ -56,13 +63,53 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
         return { startDate: monthStart, endDate: monthEnd };
     };
 
-    // ── Determine which YYYY-MM key corresponds to the selected cycle ──
+    // Default to the current cycle (based on today) if found, otherwise first cycle (latest), otherwise 'rolling'
+    const [selectedCycleId, setSelectedCycleId] = useState<string>(() => {
+        const today = new Date().toISOString().split('T')[0];
+        const activeCycle = cycles.find(c => today >= c.startDate && today <= c.endDate);
+        if (activeCycle) return activeCycle.id;
+        return cycles.length > 0 ? cycles[0].id : 'rolling';
+    });
+    const [currentDate, setCurrentDate] = useState(new Date());
+
+    // Personal Cycle Tab state
+    const [selectedMonth, setSelectedMonth] = useState<string>(() => {
+        const today = new Date();
+        return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+    });
+    const [radiographers, setRadiographers] = useState<User[]>([]);
+    const [savingId, setSavingId] = useState<string | null>(null);
+    const [saveError, setSaveError] = useState<string | null>(null);
+
+    // Sync radiographers with DB and handle updates
+    useEffect(() => {
+        const refreshData = () => {
+            setRadiographers(db.getUsers().filter(u => u.isRadiographer === true && u.isActive !== false));
+        };
+        refreshData();
+        return db.subscribe(refreshData);
+    }, []);
+
+    // 只統計有勾選為放射師的人員
+    const users = db.getUsers().filter(u => u.isRadiographer === true);
+    const shifts = db.getShifts('', '');
+    const cloudSchedule = db.getCloudScheduleEntries();
+
+    // ── Default dates for a month (already moved up) ──
+
     const cycleMonthKey = useMemo(() => {
         if (selectedCycleId === 'rolling') {
             return `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
         }
         const cycle = cycles.find(c => c.id === selectedCycleId);
-        return cycle ? cycle.startDate.slice(0, 7) : null;
+        if (!cycle) return null;
+        
+        // If name is like '2026/02', use that as the month key ('2026-02') to match personalCycles
+        if (cycle.name.match(/^\d{4}\/\d{2}$/)) {
+            return cycle.name.replace('/', '-');
+        }
+        
+        return cycle.startDate.slice(0, 7);
     }, [selectedCycleId, currentDate, cycles]);
 
     // ── Determine Date Range (for header display / default) ──
@@ -70,37 +117,16 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
         if (selectedCycleId !== 'rolling') {
             const cycle = cycles.find(c => c.id === selectedCycleId);
             if (cycle) {
-                const dates: string[] = [];
-                for (let d = new Date(cycle.startDate); d <= new Date(cycle.endDate); d.setDate(d.getDate() + 1)) {
-                    dates.push(d.toISOString().split('T')[0]);
-                }
-                return dates;
+                return buildDateRange(cycle.startDate, cycle.endDate);
             }
         }
-        const dates: string[] = [];
-        const start = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
-        const end = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
-        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-            dates.push(d.toISOString().split('T')[0]);
-        }
-        return dates;
+        const start = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-01`;
+        const lastDay = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
+        const end = `${lastDay.getFullYear()}-${String(lastDay.getMonth() + 1).padStart(2, '0')}-${String(lastDay.getDate()).padStart(2, '0')}`;
+        return buildDateRange(start, end);
     }, [currentDate, selectedCycleId, cycles]);
 
-    // ── Helper: build date array for a range ──
-    const buildDateRange = (startDate: string, endDate: string) => {
-        const dates: string[] = [];
-        for (let d = new Date(startDate); d <= new Date(endDate); d.setDate(d.getDate() + 1)) {
-            dates.push(d.toISOString().split('T')[0]);
-        }
-        return dates;
-    };
 
-    // ── Format date range for remarks (e.g. "3/8-4/6") ──
-    const formatRangeShort = (startDate: string, endDate: string) => {
-        const [, sm, sd] = startDate.split('-');
-        const [, em, ed] = endDate.split('-');
-        return `${parseInt(sm)}/${parseInt(sd)}-${parseInt(em)}/${parseInt(ed)}`;
-    };
 
     // ── Calculations ──
     const statsData = useMemo(() => {
@@ -132,9 +158,12 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
             if (cycleMonthKey) {
                 const saved = user.personalCycles?.[cycleMonthKey];
                 const defaults = getDefaultDatesForMonth(cycleMonthKey);
-                if (saved && (saved.startDate !== defaults.startDate || saved.endDate !== defaults.endDate)) {
+                
+                // Always use saved cycle if it exists to pick up memos even if dates are default
+                if (saved) {
                     effectiveRange = buildDateRange(saved.startDate, saved.endDate);
-                    stats.remarks = formatRangeShort(saved.startDate, saved.endDate);
+                    // Use custom memo if available, otherwise show the date range as fallback
+                    stats.remarks = saved.memo || formatRangeShort(saved.startDate, saved.endDate);
                 }
             }
 
@@ -175,12 +204,7 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
         });
     }, [users, dateRange, shifts, cloudSchedule, cycleMonthKey]);
 
-    // ── Personal Cycle helpers ──
-    const calculateDays = (startDate?: string, endDate?: string) => {
-        if (!startDate || !endDate) return 0;
-        const diffDays = Math.ceil((new Date(endDate).getTime() - new Date(startDate).getTime()) / (1000 * 60 * 60 * 24)) + 1;
-        return diffDays > 0 ? diffDays : 0;
-    };
+    // ── Personal Cycle helpers (already moved up) ──
 
     const handleCycleChange = (userId: string, field: 'startDate' | 'endDate' | 'memo', value: string) => {
         setRadiographers(prev => prev.map(u => {

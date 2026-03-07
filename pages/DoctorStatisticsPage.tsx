@@ -9,9 +9,18 @@ interface DoctorStatisticsPageProps {
 }
 
 const DoctorStatisticsPage: React.FC<DoctorStatisticsPageProps> = ({ currentUser }) => {
-  const [doctors, setDoctors] = useState<Doctor[]>(db.getDoctors().filter(d => !d.isPartTime));
+  const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Sync doctors with DB and handle updates
+  useEffect(() => {
+    const refreshDoctors = () => {
+      setDoctors(db.getDoctors().filter(d => !d.isPartTime));
+    };
+    refreshDoctors();
+    return db.subscribe(refreshDoctors);
+  }, []);
 
   // Initialize selectedMonth strictly to current YYYY-MM
   const [selectedMonth, setSelectedMonth] = useState<string>(() => {
@@ -94,19 +103,27 @@ const DoctorStatisticsPage: React.FC<DoctorStatisticsPageProps> = ({ currentUser
 
   const calculateDays = (startDate?: string, endDate?: string) => {
     if (!startDate || !endDate) return 0;
-    const start = new Date(startDate);
-    const end = new Date(endDate);
+    
+    // Split to ensure local date interpretation (avoids UTC timezone shift)
+    const [sY, sM, sD] = startDate.split('-').map(Number);
+    const [eY, eM, eD] = endDate.split('-').map(Number);
+    
+    const start = new Date(sY, sM - 1, sD);
+    const end = new Date(eY, eM - 1, eD);
+    
     if (isNaN(start.getTime()) || isNaN(end.getTime())) return 0;
     
     // Include both start and end dates
     const diffTime = end.getTime() - start.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+    const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24)) + 1;
     return diffDays > 0 ? diffDays : 0;
   };
 
   // Pre-calculate shift counts
   const shiftCounts = useMemo(() => {
-    const counts: Record<string, number> = {};
+    const counts: Record<string, { total: number; weekday: number; holiday: number }> = {};
+    const holidays = db.getHolidays();
+    
     doctors.forEach(doc => {
       // Fallback to the full calendar month if the doctor has no saved cycle for this month
       const savedCycle = doc.personalCycles?.[selectedMonth];
@@ -115,24 +132,62 @@ const DoctorStatisticsPage: React.FC<DoctorStatisticsPageProps> = ({ currentUser
         startDate: savedCycle?.startDate || defaultDates.startDate,
         endDate: savedCycle?.endDate || defaultDates.endDate,
       };
+      
       if (!cycleData.startDate || !cycleData.endDate) {
-        counts[doc.id] = 0;
+        counts[doc.id] = { total: 0, weekday: 0, holiday: 0 };
         return;
       }
       
       const shifts = db.getDoctorShifts();
-      // Count days in the date range where the doctor has any assignment.
-      // A shift record existing within the range with either a scheduled_station or a real station means they worked.
-      const NON_WORK = ['', '未分配', 'Unassigned', '休假', 'SystemOff', 'X', null, undefined];
+      
+      let total = 0;
+      let weekdayCount = 0;
+      let holidayCount = 0;
+
       const docShifts = shifts.filter(s => {
         if (s.doctorId !== doc.id) return false;
         if (s.date < cycleData.startDate || s.date > cycleData.endDate) return false;
-        // Has a real scheduled_station (actual clinic assignment) OR a real manpower station
-        const hasScheduled = !!s.scheduled_station && !NON_WORK.includes(s.scheduled_station.trim());
-        const hasStation = !!s.station && !NON_WORK.includes(s.station.trim());
-        return hasScheduled || hasStation;
+        
+        // Helper to check if a station label represents actual work
+        const isActualWork = (station?: string) => {
+          if (!station) return false;
+          const sNormalized = station.trim().toUpperCase();
+          if (sNormalized === '' || sNormalized === '未分配' || sNormalized === 'UNASSIGNED') return false;
+          if (sNormalized === '休假' || sNormalized.startsWith('休')) return false;
+          if (sNormalized === 'X' || sNormalized === 'SYSTEMOFF') return false;
+          // Meeting/Note is usually work unless specific rules apply, 
+          // but if it's strictly about shift attendance, we include it if it's an assignment.
+          return true;
+        };
+
+        const hasScheduled = isActualWork(s.scheduled_station);
+        const hasStation = isActualWork(s.station);
+        
+        if (hasScheduled || hasStation) {
+          // Robust date parsing to avoid timezone shifts
+          const [y, m, d] = s.date.split('-').map(Number);
+          const dateObj = new Date(y, m - 1, d);
+          const dayOfWeek = dateObj.getDay(); // 0=Sun, 6=Sat
+          const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+          
+          // Only NATIONAL and CLOSED are considered holidays for shift counting
+          const isNationalHoliday = holidays.some(h => 
+            h.date === s.date && 
+            (h.type === 'NATIONAL' || h.type === 'CLOSED')
+          );
+          
+          if (isWeekend || isNationalHoliday) {
+            holidayCount++;
+          } else {
+            weekdayCount++;
+          }
+          total++;
+          return true;
+        }
+        return false;
       });
-      counts[doc.id] = docShifts.length;
+
+      counts[doc.id] = { total, weekday: weekdayCount, holiday: holidayCount };
     });
     return counts;
   }, [doctors, selectedMonth]);
@@ -156,6 +211,8 @@ const DoctorStatisticsPage: React.FC<DoctorStatisticsPageProps> = ({ currentUser
       { key: 'endDate', width: 14 },
       { key: 'totalDays', width: 12 },
       { key: 'shiftDays', width: 12 },
+      { key: 'weekdayShifts', width: 10 },
+      { key: 'holidayShifts', width: 10 },
       { key: 'memo', width: 24 },
     ];
 
@@ -165,10 +222,10 @@ const DoctorStatisticsPage: React.FC<DoctorStatisticsPageProps> = ({ currentUser
     titleRow.getCell(1).font = { bold: true, size: 18 };
     titleRow.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
     titleRow.height = 36;
-    sheet.mergeCells('A1:G1');
+    sheet.mergeCells('A1:I1');
 
     // Row 2: Column headers
-    const colHeaders = ['醫師姓名', '科別', '週期開始', '週期結束', '當期天數', '排班天數', '備註'];
+    const colHeaders = ['醫師姓名', '科別', '週期開始', '週期結束', '當期天數', '總排班', '平日班', '假日班', '備註'];
     const headerRow = sheet.getRow(2);
     colHeaders.forEach((label, idx) => {
       const cell = headerRow.getCell(idx + 1);
@@ -180,8 +237,16 @@ const DoctorStatisticsPage: React.FC<DoctorStatisticsPageProps> = ({ currentUser
     });
     headerRow.height = 22;
 
-    const NON_WORK = ['', '未分配', 'Unassigned', '休假', 'SystemOff', 'X', null, undefined];
     const allDoctorShifts = db.getDoctorShifts();
+
+    const isActualWork = (station?: string) => {
+      if (!station) return false;
+      const sNormalized = station.trim().toUpperCase();
+      if (sNormalized === '' || sNormalized === '未分配' || sNormalized === 'UNASSIGNED') return false;
+      if (sNormalized === '休假' || sNormalized.startsWith('休')) return false;
+      if (sNormalized === 'X' || sNormalized === 'SYSTEMOFF') return false;
+      return true;
+    };
 
     doctors.forEach(doc => {
       const savedCycle = doc.personalCycles?.[selectedMonth];
@@ -189,17 +254,46 @@ const DoctorStatisticsPage: React.FC<DoctorStatisticsPageProps> = ({ currentUser
       const startDate = savedCycle?.startDate || defaultDates.startDate;
       const endDate = savedCycle?.endDate || defaultDates.endDate;
 
-      const start = new Date(startDate);
-      const end = new Date(endDate);
-      const totalDays = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+      const [sY, sM, sD] = startDate.split('-').map(Number);
+      const [eY, eM, eD] = endDate.split('-').map(Number);
+      const start = new Date(sY, sM - 1, sD);
+      const end = new Date(eY, eM - 1, eD);
+      const totalDays = Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
 
-      const shiftDays = allDoctorShifts.filter(s => {
+      const doctorStats = {
+        total: 0,
+        weekday: 0,
+        holiday: 0
+      };
+
+      const holidays = db.getHolidays();
+
+      allDoctorShifts.filter(s => {
         if (s.doctorId !== doc.id) return false;
         if (s.date < startDate || s.date > endDate) return false;
-        const hasScheduled = !!s.scheduled_station && !NON_WORK.includes(s.scheduled_station.trim());
-        const hasStation = !!s.station && !NON_WORK.includes(s.station.trim());
-        return hasScheduled || hasStation;
-      }).length;
+        const hasScheduled = isActualWork(s.scheduled_station);
+        const hasStation = isActualWork(s.station);
+        
+        if (hasScheduled || hasStation) {
+          const [y, m, d] = s.date.split('-').map(Number);
+          const dateObj = new Date(y, m - 1, d);
+          const dayOfWeek = dateObj.getDay();
+          const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+          const isNationalHoliday = holidays.some(h => 
+            h.date === s.date && 
+            (h.type === 'NATIONAL' || h.type === 'CLOSED')
+          );
+          
+          if (isWeekend || isNationalHoliday) {
+            doctorStats.holiday++;
+          } else {
+            doctorStats.weekday++;
+          }
+          doctorStats.total++;
+          return true;
+        }
+        return false;
+      });
 
       const row = sheet.addRow({
         name: doc.name,
@@ -207,7 +301,9 @@ const DoctorStatisticsPage: React.FC<DoctorStatisticsPageProps> = ({ currentUser
         startDate,
         endDate,
         totalDays,
-        shiftDays,
+        shiftDays: doctorStats.total,
+        weekdayShifts: doctorStats.weekday,
+        holidayShifts: doctorStats.holiday,
         memo: savedCycle?.memo || '',
       });
       row.eachCell(cell => {
@@ -297,10 +393,12 @@ const DoctorStatisticsPage: React.FC<DoctorStatisticsPageProps> = ({ currentUser
                   <tr className="bg-slate-50 border-b border-gray-200 text-xs text-gray-500 uppercase tracking-wider">
                     <th className="px-6 py-4 font-bold w-[15%]">醫師姓名</th>
                     <th className="px-6 py-4 font-bold w-[30%]">本月週期範圍</th>
-                    <th className="px-6 py-4 font-bold w-[20%]">備註</th>
-                    <th className="px-6 py-4 font-bold text-center w-[12%]">當期天數</th>
-                    <th className="px-6 py-4 font-bold text-center w-[12%]">排班天數</th>
-                    {!isViewOnly && <th className="px-6 py-4 font-bold text-center w-[11%]">操作</th>}
+                    <th className="px-6 py-4 font-bold w-[12%]">備註</th>
+                    <th className="px-6 py-4 font-bold text-center w-[10%]">當期天數</th>
+                    <th className="px-6 py-4 font-bold text-center w-[8%]">平日班</th>
+                    <th className="px-6 py-4 font-bold text-center w-[8%]">假日班</th>
+                    <th className="px-6 py-4 font-bold text-center w-[8%]">總天數</th>
+                    {!isViewOnly && <th className="px-6 py-4 font-bold text-center w-[10%]">操作</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -326,7 +424,7 @@ const DoctorStatisticsPage: React.FC<DoctorStatisticsPageProps> = ({ currentUser
                       );
                       
                       const currentDays = calculateDays(currentMonthData.startDate, currentMonthData.endDate);
-                      const actShifts = shiftCounts[doc.id] || 0;
+                      const actShifts = shiftCounts[doc.id] || { total: 0, weekday: 0, holiday: 0 };
                       
                       return (
                         <tr key={doc.id} className={`transition-colors ${isCustomized ? 'bg-amber-50 hover:bg-amber-100/60 border-l-4 border-amber-400' : 'hover:bg-slate-50/50'}`}>
@@ -385,8 +483,18 @@ const DoctorStatisticsPage: React.FC<DoctorStatisticsPageProps> = ({ currentUser
                             </span>
                           </td>
                           <td className="px-6 py-4 text-center">
-                            <span className="inline-flex items-center justify-center min-w-[3rem] px-2 py-1 bg-emerald-50 text-emerald-700 font-bold rounded-lg border border-emerald-100">
-                              {actShifts} 天
+                            <span className="inline-flex items-center justify-center min-w-[2.5rem] px-2 py-1 bg-emerald-50 text-emerald-700 text-xs font-bold rounded-lg border border-emerald-100">
+                              {actShifts.weekday}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-center">
+                            <span className="inline-flex items-center justify-center min-w-[2.5rem] px-2 py-1 bg-amber-50 text-amber-700 text-xs font-bold rounded-lg border border-amber-100">
+                              {actShifts.holiday}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-center">
+                            <span className="inline-flex items-center justify-center min-w-[2.5rem] px-2 py-1 bg-slate-100 text-slate-700 text-xs font-bold rounded-lg border border-slate-200">
+                              {actShifts.total}
                             </span>
                           </td>
                           {!isViewOnly && (

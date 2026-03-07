@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { db } from '../services/store';
 import { Doctor, UserRole, DoctorStationConfig, DateEventType, DoctorShift, PERMISSIONS } from '../types';
-import { ChevronLeft, ChevronRight, Download, Lock, RefreshCw, Save, Unlock, User, UserPlus, X, Calendar as CalendarIcon, Clock, Filter, Sliders, ArrowUpDown, Wand2, BarChart2, Check, AlertCircle, Plus, LayoutGrid, List as ListIcon, Trash2, Briefcase, FileText, MapPin, FileSpreadsheet, CalendarClock, Star, Shield } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Download, Lock, RefreshCw, Save, Unlock, User, UserPlus, X, Calendar as CalendarIcon, Clock, Filter, Sliders, ArrowUpDown, Wand2, BarChart2, Check, AlertCircle, Plus, LayoutGrid, List as ListIcon, Trash2, Briefcase, FileText, MapPin, FileSpreadsheet, CalendarClock, Star, Shield, Users } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import ConfirmModal from '../components/ConfirmModal';
@@ -47,16 +47,18 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
         // Filter Staff Shifts for this date
         const dayStaffShifts = staffShifts.filter(s => s.date === dateKey);
         
-        const mainRads = dayStaffShifts.filter(s => s.station?.includes('場控')).map(s => getName(s.userId));
-        const assistRads = dayStaffShifts.filter(s => s.specialRoles?.includes('輔班')).map(s => getName(s.userId));
+        const mainRads = dayStaffShifts.filter(s => (s.station?.includes('場控') || s.station ==='主' || s.station === '主控') && users.some(u => u.id === s.userId)).map(s => getName(s.userId));
+        const assistRads = dayStaffShifts.filter(s => (s.specialRoles?.includes('輔班') || s.station === '輔' || s.station === '輔控') && users.some(u => u.id === s.userId)).map(s => getName(s.userId));
         
-        // const supportRads = dayStaffShifts.filter(s => s.station?.includes('支援') || s.station?.includes('技術支援')).map(s => {
-        //     const name = getName(s.userId);
-        //     // Check for Late shift in specialRoles (or task if used there)
-        //     return s.specialRoles?.includes('Late') || s.specialRoles?.includes('晚班') ? `${name}(晚)` : name;
-        // });
-        
-        // const adminRads = dayStaffShifts.filter(s => s.station === '行政').map(s => getName(s.userId));
+        const hmStaff = db.getHealthMgmtStaff();
+        const mainHM = dayStaffShifts.filter(s => (s.station?.includes('場控') || s.station ==='主' || s.station === '主控') && hmStaff.some(u => u.id === s.userId)).map(s => {
+            const u = hmStaff.find(staff => staff.id === s.userId);
+            return u?.alias || u?.name?.slice(-2) || '-';
+        });
+        const assistHM = dayStaffShifts.filter(s => (s.specialRoles?.includes('輔班') || s.station === '輔' || s.station === '輔控') && hmStaff.some(u => u.id === s.userId)).map(s => {
+            const u = hmStaff.find(staff => staff.id === s.userId);
+            return u?.alias || u?.name?.slice(-2) || '-';
+        });
 
         // --- 2. Doctors ---
         const getDocs = (stationName: string) => {
@@ -111,7 +113,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
 
         const lines = [
             `${date.getMonth() + 1}/${date.getDate()} （${['日', '一', '二', '三', '四', '五', '六'][date.getDay()]}）`,
-            `主/輔：${mainRads.join('/') || '無'}/${assistRads.join('/') || '無'}`,
+            `主/輔：${mainRads.join('/') || '無'}/${assistRads.join('/') || '無'}     ${mainHM.join('/') || '無'}/${assistHM.join('/') || '無'}`,
             `影像：${imgDocs.join('/') || '無'}`,
             `解說：${expDocs.join('/') || '無'}`,
             `支援：${supDocs.join('/') || '無'}`,
@@ -235,11 +237,27 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
     const canEditStats = (currentUser.permissions?.includes(PERMISSIONS.VIEW_DOCTOR_STATS) || currentUser.role === UserRole.SYSTEM_ADMIN || currentUser.role === UserRole.VIEWER || currentUser.role === UserRole.FINANCE) && !isLocked;
     const canManageLock = currentUser.role === UserRole.SYSTEM_ADMIN || currentUser.permissions?.includes(PERMISSIONS.EDIT_SETTINGS);
     
-    const [doctors, setDoctors] = useState<Doctor[]>(db.getDoctors());
+    const [doctors, setDoctors] = useState<Doctor[]>([]);
+  const [savingId, setSavingId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  // Sync doctors with DB and handle updates
+  useEffect(() => {
+    const refreshDoctors = () => {
+      setDoctors(db.getDoctors().filter(d => !d.isPartTime));
+    };
+    refreshDoctors();
+    return db.subscribe(refreshDoctors);
+  }, []);
     const [shifts, setShifts] = useState(db.getDoctorShifts());
     const [staffShifts, setStaffShifts] = useState(db.shifts); // New: For Radiologist Total Count
     // Fetch all users for name resolution (radiographers)
     const [users, setUsers] = useState<any[]>(db.getUsers());
+    const radiographers = useMemo(() => users.filter(u => u.isRadiographer === true && u.isActive !== false), [users]);
+    const currentCycle = useMemo(() => {
+        const monthStr = `${currentDate.getFullYear()}/${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
+        return db.getCycles().find(c => c.name === monthStr) || db.getCycles().find(c => c.startDate.startsWith(monthStr.replace('/', '-')));
+    }, [currentDate]);
 
     // Define User's Preferred Order and Defaults
     const PREFERRED_STATIONS = [
@@ -715,7 +733,8 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                 doc.text(exportDate, pageWidth - 7, 6, { align: 'right' });
             };
 
-            drawHeaders();
+            // drawHeaders(); // Handled by didDrawPage
+
 
             const weekDays = ['日', '一', '二', '三', '四', '五', '六'];
             
@@ -737,19 +756,23 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                 tableLineWidth: 0.2,
                 styles: {
                     font: fontName,
-                    fontSize: 7, // Default body font
-                    cellPadding: 1.5, // Increased padding
+                    fontSize: 7, 
+                    cellPadding: 1.0, 
                     valign: 'middle',
                     halign: 'center',
                     lineWidth: 0.2,
-                    lineColor: [0, 0, 0]
+                    lineColor: [0, 0, 0],
+                    minCellHeight: 4.0
                 },
                 headStyles: {
                     fillColor: [66, 66, 66],
                     textColor: [255, 255, 255],
                     font: fontName,
                     fontSize: 8,
-                    minCellHeight: 5 
+                    minCellHeight: 4.0 
+                },
+                didDrawPage: (data: any) => {
+                    drawHeaders();
                 },
                 // ... (didParseCell logic remains same)
                 didParseCell: function(data: any) {
@@ -903,52 +926,43 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                          // Calculate Height for Centering
                          // Name: 8pt (~2.8mm line height) -> use 3.2mm spacing
                          // Details: 5pt (~1.8mm line height) -> use 2.2mm spacing
-                         
-                         let totalHeight = 0;
-                         shifts.forEach((shift: any, idx: number) => {
-                             totalHeight += 3.2; // Name (Increased for 8pt)
-                             // Tighter spacing if details exist
-                             const hasDetails = shift.time || shift.locationAbbr || (shift.task && !(shift.stationName === '晚班' && shift.task === '晚班'));
-                             if (hasDetails) totalHeight -= 0.7; // Reduce gap by 0.7mm (3.2 -> 2.5) for first detail
-
-                             if (shift.locationAbbr) totalHeight += 2.2;
-                             if (shift.time) totalHeight += 2.2;
-                             if (shift.task && !(shift.stationName === '晚班' && shift.task === '晚班')) totalHeight += 2.2; 
-                             if (idx < shifts.length - 1) totalHeight += 0.8; // Spacing
-                         });
-                         
-                         let y = data.cell.y + (data.cell.height - totalHeight) / 2 + 2.2; // Baseline adjust
+                                                  let totalHeight = 0;
+                          shifts.forEach((shift: any, idx: number) => {
+                              totalHeight += 2.8; // Name (8pt)
+                              if (shift.locationAbbr) totalHeight += 2.1;
+                              if (shift.time) totalHeight += 2.1;
+                              if (shift.task && !(shift.stationName === '晚班' && shift.task === '晚班')) totalHeight += 2.1; 
+                              if (idx < shifts.length - 1) totalHeight += 0.6; // Spacing between doctors
+                          });
+                          
+                          let y = data.cell.y + (data.cell.height - totalHeight) / 2 + 2.2; // Baseline adjust
                          
                          shifts.forEach((shift: any, idx: number) => {
-                             // Name (8pt) - Requested
-                             doc.setFontSize(8);
-                             doc.text(shift.name, x, y, { align: 'center' });
-                             y += 2.5; // Reduced from 3.2 to tighten spacing with details 
-                             
-                             // Location Abbr (5pt)
-                             if (shift.locationAbbr) {
-                                 doc.setFontSize(6);
-                                 doc.text(shift.locationAbbr, x, y, { align: 'center' });
-                                 y += 2.4;
-                             }
+                              doc.setFontSize(8);
+                              doc.text(shift.name, x, y, { align: 'center' });
+                              y += 2.8; 
+                              
+                              if (shift.locationAbbr) {
+                                  doc.setFontSize(6);
+                                  doc.text(shift.locationAbbr, x, y, { align: 'center' });
+                                  y += 2.1;
+                              }
 
-                             // Time (5pt)
-                             if (shift.time) {
-                                 doc.setFontSize(5);
-                                 doc.text(shift.time, x, y, { align: 'center' });
-                                 y += 2.2; 
-                             }
-                             
-                             // Task (5pt)
-                             if (shift.task && !(shift.stationName === '晚班' && shift.task === '晚班')) {
-                                 doc.setFontSize(5);
-                                 doc.text(shift.task, x, y, { align: 'center' });
-                                 y += 2.2; 
-                             }
-                             
-                             if (idx < shifts.length - 1) {
-                                 y += 0.8;
-                             }
+                              if (shift.time) {
+                                  doc.setFontSize(5);
+                                  doc.text(shift.time, x, y, { align: 'center' });
+                                  y += 2.1; 
+                              }
+                              
+                              if (shift.task && !(shift.stationName === '晚班' && shift.task === '晚班')) {
+                                  doc.setFontSize(5);
+                                  doc.text(shift.task, x, y, { align: 'center' });
+                                  y += 2.1; 
+                              }
+                              
+                              if (idx < shifts.length - 1) {
+                                  y += 0.6;
+                              }
                          });
                      }
                 }
@@ -964,6 +978,8 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                  // Single Page Logic with Sections
                 headRow = [['崗位', ...dateHeaders]];
                 
+                const healthMgmtStaff = db.getHealthMgmtStaff();
+                
                 LOCATIONS.forEach((loc, locIndex) => {
                     const locStations = stations.filter(s => s.location === loc);
                     if (locStations.length === 0) return;
@@ -974,12 +990,12 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                             content: loc,
                             colSpan: dateRange.length + 1,
                             styles: {
-                                fillColor: loc === '北投' ? [220, 235, 255] : loc === '大直' ? [245, 235, 230] : [255, 237, 220],
+                                fillColor: [220, 235, 255], // Unified light blue
                                 fontStyle: 'bold',
                                 halign: 'center',
-                                fontSize: 10, // Reduced to 10pt as requested
-                                cellPadding: 0.5, // Further reduced padding
-                                minCellHeight: 5 // Further reduced min height
+                                fontSize: 10,
+                                cellPadding: 0.5,
+                                minCellHeight: 5.0 
                             }
                         }
                     ];
@@ -988,55 +1004,82 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                     
                     targetRows.push(locationHeaderRow);
                     
-                    // Add Main/Assistant Shift Row (only for Beitou)
+                    // Add Main/Assistant Shift Rows (only for Beitou)
                     if (loc === '北投') {
-                        // Build Main/Assistant row with date-specific data
-                        const mainAssistantRow: any[] = [
+                        const isHM = (userId: string) => healthMgmtStaff.some(s => s.id === userId);
+                        const isRad = (userId: string) => users.some(u => u.id === userId);
+
+                        // Row 1: Radiographers
+                        const radRow: any[] = [
                             {
-                                content: '主/輔',
-                                styles: {
-                                    fontStyle: 'bold',
-                                    fillColor: [255, 250, 205], // Light yellow
-                                    halign: 'center',
-                                    fontSize: 8
-                                }
+                                content: '主/輔 (放射)',
+                                styles: { fontStyle: 'bold', halign: 'center', fontSize: 7, minCellHeight: 4.0 }
                             }
                         ];
                         
+                        // Row 2: Health Management
+                        const hmRow: any[] = [
+                            {
+                                content: '主/輔 (健管)',
+                                styles: { fontStyle: 'bold', halign: 'center', fontSize: 6, minCellHeight: 4.0 }
+                            }
+                        ];
+
                         dateRange.forEach(date => {
-                            const radiographerShifts = db.shifts;
-                            const mainShift = radiographerShifts.find(s => 
-                                s.date === date && s.station?.includes('場控')
-                            );
-                            const assistantShift = radiographerShifts.find(s => 
-                                s.date === date && s.specialRoles?.includes('輔班')
-                            );
+                            const dayRadShifts = db.shifts.filter(s => s.date === date);
+                            const dayHMShifts = db.getHealthMgmtShifts().filter(s => s.date === date);
                             
-                            const mainAlias = mainShift 
-                                ? (db.getUsers().find(u => u.id === mainShift.userId)?.alias || '-')
-                                : '-';
-                            const assistantAlias = assistantShift 
-                                ? (db.getUsers().find(u => u.id === assistantShift.userId)?.alias || '-')
-                                : '-';
-                            
-                            mainAssistantRow.push({
-                                content: `${mainAlias}/${assistantAlias}`,
-                                styles: {
-                                    fillColor: [255, 250, 205], // Light yellow to match header
-                                    halign: 'center',
-                                    fontSize: 7
-                                }
+                            const radMainShifts = dayRadShifts.filter(s => s.station?.includes('場控') || s.station === '主' || s.station === '主控');
+                            const radAssistShifts = dayRadShifts.filter(s => s.specialRoles?.includes('輔班') || s.station === '輔' || s.station === '輔控');
+
+                            const hmMainShifts = dayHMShifts.filter(s => s.station === '主控');
+                            const hmAssistShifts = dayHMShifts.filter(s => s.station === '輔控');
+
+                            const getRadNames = (shifts: any[]) => {
+                                return shifts
+                                    .map(s => {
+                                        const u = users.find(user => user.id === s.userId);
+                                        return u?.alias || u?.name?.slice(-2) || '-';
+                                    })
+                                    .filter(n => n !== '-')
+                                    .join('/');
+                            };
+
+                            const getHMNames = (shifts: any[]) => {
+                                return shifts
+                                    .map(s => {
+                                        const u = healthMgmtStaff.find(st => st.id === s.userId);
+                                        return u?.alias || u?.name?.slice(-2) || '-';
+                                    })
+                                    .filter(n => n !== '-')
+                                    .join('/');
+                            };
+
+                            const radMain = getRadNames(radMainShifts) || '-';
+                            const radAssist = getRadNames(radAssistShifts) || '-';
+                            radRow.push({
+                                content: `${radMain}/${radAssist}`,
+                                styles: { halign: 'center', fontSize: 7, minCellHeight: 4.0 }
+                            });
+
+                            const hmMain = getHMNames(hmMainShifts) || '-';
+                            const hmAssist = getHMNames(hmAssistShifts) || '-';
+                            hmRow.push({
+                                content: `${hmMain}/${hmAssist}`,
+                                styles: { halign: 'center', fontSize: 7, minCellHeight: 4.0 }
                             });
                         });
                         
-                        targetRows.push(mainAssistantRow);
+                        targetRows.push(radRow, hmRow);
                     }
                     
                     locStations.forEach(st => {
                          // Filter out '晚班' for '大直' location as requested
                          if (st.location === '大直' && st.name === '晚班') return;
-                         
-                         const rowData: any[] = [{ content: `${st.name}`, styles: { fontStyle: 'bold' }, location: st.location }];
+                                                  const isExpandedLoc = st.location === '大直' || st.location === '台中';
+                          // For Dazhi/Taichung, add 4pt (2.85mm total) vertical padding buffer to minimum height
+                          const dynamicMinHeight = isExpandedLoc ? 6.5 : 4.0;
+                          const rowData: any[] = [{ content: `${st.name}`, styles: { fontStyle: 'bold', minCellHeight: dynamicMinHeight }, location: st.location }];
                          
                          dateRange.forEach(date => {
                              let assignedShifts = shifts.filter(s => {
@@ -1069,22 +1112,25 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                              
                              const docInfos = assignedShifts.map(s => {
                                   const doc = doctors.find(d => d.id === s.doctorId);
-                                  return doc?.name || '?';
+                                   return doc?.name || '?';
                              }).join('\n');
-                             
-                             let cellStyles: any = {};
-                             if (assignedShifts.length > 0) {
-                                 let totalHeight = 0;
-                                 assignedShifts.forEach((s, idx) => {
-                                      // Adjusted Height Estimates for 8pt font (Physician name)
-                                      totalHeight += 3.2; // Name (Requested 8pt ~ 3.2mm)
-                                      if (s.workTime) totalHeight += 2.2; 
-                                      const showTask = s.task && !(st.name === '晚班' && s.task === '晚班');
-                                      if (showTask) totalHeight += 2.2;
-                                      if (idx < assignedShifts.length - 1) totalHeight += 0.8;
-                                 });
-                                 cellStyles = { minCellHeight: Math.max(totalHeight + 1, 5) }; // Reduced minCellHeight
-                             }
+                              
+                              let cellStyles: any = { minCellHeight: 4.0 };
+                              if (assignedShifts.length > 0) {
+                                  let totalHeight = 0;
+                                  assignedShifts.forEach((s, idx) => {
+                                       totalHeight += 2.8; // Name (8pt)
+                                       if (s.workTime) totalHeight += 2.1; 
+                                       const showTask = s.task && !(st.name === '晚班' && s.task === '晚班');
+                                       if (showTask) totalHeight += 2.1;
+                                       if (idx < assignedShifts.length - 1) totalHeight += 0.6;
+                                  });
+                                  // For Dazhi/Taichung, 4pt top + 4pt bottom padding is approx 2.85mm buffer
+                                  const paddingBuffer = isExpandedLoc ? 2.85 : 0.5;
+                                  cellStyles = { minCellHeight: Math.max(totalHeight + paddingBuffer, dynamicMinHeight) }; 
+                              } else {
+                                  cellStyles = { minCellHeight: dynamicMinHeight };
+                              }
                              
                              rowData.push({
                                  content: docInfos, // Dummy content for autoTable
@@ -1104,8 +1150,8 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                  })
                              });
                          });
-                         targetRows.push(rowData);
-                    });
+                          targetRows.push(rowData);
+                     });
                 });
 
             } else {
@@ -1210,7 +1256,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                  }
                  if (dazhiTaichungRows.length > 0) {
                      if (beitouRows.length > 0) doc.addPage();
-                     drawHeaders();
+
                      autoTable(doc, {
                         ...tableConfig,
                         startY: 9, 
@@ -1393,7 +1439,6 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                     dateRange.forEach((dateStr, colIdx) => {
                          // Find shifts with task '晚班' in this location (Multiple doctors possible)
                          const lateShifts = locShifts.filter(s => s.date === dateStr && s.task?.includes('晚班'));
-                         
                          const date = new Date(dateStr);
                          const isWeekend = date.getDay() === 0 || date.getDay() === 6;
                          const cell = rowLate.getCell(colIdx + 2);
@@ -2510,21 +2555,32 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                             <div className="text-xs font-bold text-amber-800 flex items-center justify-end pr-2">主班</div>
                                                         </td>
                                                         {dateRange.map(date => {
-                                                            const radiographerShifts = db.shifts;
-                                                            const mainShift = radiographerShifts.find(s => 
-                                                                s.date === date && (s.station?.includes('場控') || s.station === '主')
+                                                            const radShifts = db.shifts.filter(s => 
+                                                                s.date === date && (s.station?.includes('場控') || s.station === '主' || s.station === '主控')
                                                             );
-                                                            const userName = mainShift 
-                                                                ? db.getUsers().find(u => u.id === mainShift.userId)?.name 
-                                                                : '-';
-                                                            const isToday = date === toLocalISOString(new Date());
+                                                            const hmShifts = db.getHealthMgmtShifts().filter(s => 
+                                                                s.date === date && s.station === '主控'
+                                                            );
+                                                            
+                                                            const radUsers = db.getUsers();
+                                                            const hmStaff = db.getHealthMgmtStaff();
+                                                            
+                                                            const radNames = radShifts.map(s => radUsers.find(u => u.id === s.userId)?.name);
+                                                            const hmNames = hmShifts.map(s => {
+                                                                const st = hmStaff.find(u => u.id === s.userId);
+                                                                return st?.alias || st?.name;
+                                                            });
+                                                            
+                                                            const displayList = [...radNames, ...hmNames].filter(Boolean);
                                                             
                                                             return (
                                                                 <td 
                                                                     key={date} 
-                                                                    className="p-1 border-r border-amber-50 text-center text-[11px] font-normal text-amber-900 whitespace-nowrap"
+                                                                    className="p-1 border-r border-amber-50 text-center text-[11px] font-normal text-amber-900"
                                                                 >
-                                                                    {userName}
+                                                                    {displayList.length > 0 ? displayList.map((name, i) => (
+                                                                        <div key={`${name}-${i}`} className="leading-tight py-0.5">{name}</div>
+                                                                    )) : '-'}
                                                                 </td>
                                                             );
                                                         })}
@@ -2536,21 +2592,32 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                             <div className="text-xs font-bold text-amber-800 flex items-center justify-end pr-2">輔班</div>
                                                         </td>
                                                         {dateRange.map(date => {
-                                                            const radiographerShifts = db.shifts;
-                                                            const assistantShift = radiographerShifts.find(s => 
-                                                                s.date === date && (s.specialRoles?.includes('輔班') || s.station === '輔')
+                                                            const radShifts = db.shifts.filter(s => 
+                                                                s.date === date && (s.specialRoles?.includes('輔班') || s.station === '輔' || s.station === '輔控')
                                                             );
-                                                            const userName = assistantShift 
-                                                                ? db.getUsers().find(u => u.id === assistantShift.userId)?.name 
-                                                                : '-';
-                                                            const isToday = date === toLocalISOString(new Date());
+                                                            const hmShifts = db.getHealthMgmtShifts().filter(s => 
+                                                                s.date === date && s.station === '輔控'
+                                                            );
+                                                            
+                                                            const radUsers = db.getUsers();
+                                                            const hmStaff = db.getHealthMgmtStaff();
+                                                            
+                                                            const radNames = radShifts.map(s => radUsers.find(u => u.id === s.userId)?.name);
+                                                            const hmNames = hmShifts.map(s => {
+                                                                const st = hmStaff.find(u => u.id === s.userId);
+                                                                return st?.alias || st?.name;
+                                                            });
+                                                            
+                                                            const displayList = [...radNames, ...hmNames].filter(Boolean);
                                                             
                                                             return (
                                                                 <td 
                                                                     key={date} 
-                                                                    className="p-1 border-r border-amber-50 text-center text-[11px] font-normal text-amber-900 whitespace-nowrap"
+                                                                    className="p-1 border-r border-amber-50 text-center text-[11px] font-normal text-amber-900"
                                                                 >
-                                                                    {userName}
+                                                                    {displayList.length > 0 ? displayList.map((name, i) => (
+                                                                        <div key={`${name}-${i}`} className="leading-tight py-0.5">{name}</div>
+                                                                    )) : '-'}
                                                                 </td>
                                                             );
                                                         })}
@@ -2728,15 +2795,25 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                             <div className="flex flex-col sm:flex-row gap-4 ml-2">
                                 {(() => {
                                     const dateStr = toLocalISOString(currentDate);
-                                    const radiographerShifts = db.shifts;
-                                    const mainShift = radiographerShifts.find(s => 
-                                        s.date === dateStr && s.station?.includes('場控')
-                                    );
-                                    const assistantShift = radiographerShifts.find(s => 
-                                        s.date === dateStr && s.specialRoles?.includes('輔班')
-                                    );
-                                    const mainName = mainShift ? db.getUsers().find(u => u.id === mainShift.userId)?.name : '-';
-                                    const assistantName = assistantShift ? db.getUsers().find(u => u.id === assistantShift.userId)?.name : '-';
+                                    const radShifts = db.shifts.filter(s => s.date === dateStr);
+                                    const hmShifts = db.getHealthMgmtShifts().filter(s => s.date === dateStr);
+                                    
+                                    const radUsers = db.getUsers();
+                                    const hmStaff = db.getHealthMgmtStaff();
+
+                                    const mainRadNames = radShifts.filter(s => (s.station?.includes('場控') || s.station === '主' || s.station === '主控')).map(s => radUsers.find(u => u.id === s.userId)?.name);
+                                    const mainHMNames = hmShifts.filter(s => s.station === '主控').map(s => {
+                                        const u = hmStaff.find(st => st.id === s.userId);
+                                        return u?.alias || u?.name;
+                                    });
+                                    const mainNamesJoined = [...mainRadNames, ...mainHMNames].filter(Boolean).join(' / ') || '-';
+
+                                    const assistRadNames = radShifts.filter(s => (s.specialRoles?.includes('輔班') || s.station === '輔' || s.station === '輔控')).map(s => radUsers.find(u => u.id === s.userId)?.name);
+                                    const assistHMNames = hmShifts.filter(s => s.station === '輔控').map(s => {
+                                        const u = hmStaff.find(st => st.id === s.userId);
+                                        return u?.alias || u?.name;
+                                    });
+                                    const assistNamesJoined = [...assistRadNames, ...assistHMNames].filter(Boolean).join(' / ') || '-';
 
                                     return (
                                         <>
@@ -2746,7 +2823,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                 </div>
                                                 <div>
                                                     <div className="text-[10px] font-bold text-amber-600/80 uppercase tracking-widest mb-0.5">主班 (場控)</div>
-                                                    <div className="text-[15px] font-black text-amber-900">{mainName}</div>
+                                                    <div className="text-[15px] font-black text-amber-900">{mainNamesJoined}</div>
                                                 </div>
                                             </div>
                                             <div className="flex-1 flex items-center gap-3 bg-white/80 backdrop-blur-sm rounded-xl px-4 py-2.5 border border-orange-100 shadow-[0_1px_2px_rgba(0,0,0,0.02)] transition-transform hover:scale-[1.02]">
@@ -2755,7 +2832,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                 </div>
                                                 <div>
                                                     <div className="text-[10px] font-bold text-orange-600/80 uppercase tracking-widest mb-0.5">輔班</div>
-                                                    <div className="text-[15px] font-black text-orange-900">{assistantName}</div>
+                                                    <div className="text-[15px] font-black text-orange-900">{assistNamesJoined}</div>
                                                 </div>
                                             </div>
                                         </>
@@ -3150,6 +3227,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                     <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-200">
                                         <tr>
                                             <th className="px-3 py-2 text-left sticky left-0 bg-slate-50 z-10 border-r border-slate-200 shadow-[2px_0_5px_rgba(0,0,0,0.05)] w-32">醫師姓名</th>
+                                            <th className="px-2 py-2 text-center bg-teal-50 text-teal-700 border-r border-teal-100 font-extrabold w-16">週期</th>
                                             <th className="px-2 py-2 text-center bg-indigo-50 text-indigo-700 border-r border-indigo-100 font-extrabold w-16">總計</th>
                                             {stations.map(st => (
                                                 <th key={`doc-head-${st.name}-${st.location}`} className="px-2 py-2 text-center min-w-[60px] border-r border-gray-100 font-normal">
@@ -3165,11 +3243,45 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                     </thead>
                                     <tbody className="divide-y divide-gray-100">
                                         {doctors.map(doc => {
-                                            const docShifts = shifts.filter(s => s.doctorId === doc.id && dateRange.includes(s.date));
-                                            // Only count shifts that match displayed stations (station+location must exist in stations list)
+                                            const monthKey = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
+                                            const savedCycle = doc.personalCycles?.[monthKey];
+                                            
+                                            // Fallback to current calendar month if no personal cycle
+                                            let currentCycleRange = dateRange;
+                                            const holidays = db.getHolidays();
+                                            
+                                            // Helper to check if a station label represents actual work (Synced with Stats page)
+                                            const isActualWork = (station?: string) => {
+                                                if (!station) return false;
+                                                const sNormalized = station.trim().toUpperCase();
+                                                if (sNormalized === '' || sNormalized === '未分配' || sNormalized === 'UNASSIGNED') return false;
+                                                if (sNormalized === '休假' || sNormalized.startsWith('休')) return false;
+                                                if (sNormalized === 'X' || sNormalized === 'SYSTEMOFF') return false;
+                                                return true;
+                                            };
+
+                                            if (savedCycle) {
+                                                const start = savedCycle.startDate;
+                                                const end = savedCycle.endDate;
+                                                // Generate all dates in the cycle for consistent filtering
+                                                const tempRange = [];
+                                                const [sY, sM, sD] = start.split('-').map(Number);
+                                                const [eY, eM, eD] = end.split('-').map(Number);
+                                                const startDate = new Date(sY, sM - 1, sD);
+                                                const endDate = new Date(eY, eM - 1, eD);
+                                                
+                                                for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+                                                    // Standardize formatting
+                                                    tempRange.push(toLocalISOString(d));
+                                                }
+                                                currentCycleRange = tempRange;
+                                            }
+
+                                            const docShifts = shifts.filter(s => s.doctorId === doc.id && currentCycleRange.includes(s.date));
+                                            // Only count shifts that match displayed stations AND count as actual work
                                             const total = docShifts.filter(s => {
                                                 const st = s.station || s.scheduled_station;
-                                                if (!st) return false;
+                                                if (!isActualWork(st)) return false;
                                                 return stations.some(station => 
                                                     (s.station === station.name || s.scheduled_station === station.name) && 
                                                     s.location === station.location
@@ -3181,7 +3293,13 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                             return (
                                                 <tr key={doc.id} className="hover:bg-slate-50 transition-colors">
                                                     <td className="px-3 py-2 text-left sticky left-0 bg-white z-10 border-r border-slate-100 font-bold text-slate-700 shadow-[2px_0_5px_rgba(0,0,0,0.05)]">
-                                                        {doc.name}
+                                                        <div className="flex flex-col">
+                                                            <span>{doc.name}</span>
+                                                            {savedCycle?.memo && <span className="text-[9px] text-amber-600 font-normal leading-tight">{savedCycle.memo}</span>}
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-2 py-2 text-center bg-teal-50/20 text-teal-700 text-[10px] border-r border-teal-50">
+                                                        {savedCycle ? `${savedCycle.startDate.slice(5)}~${savedCycle.endDate.slice(5)}` : '全月'}
                                                     </td>
                                                     <td className="px-2 py-2 text-center bg-indigo-50/30 text-indigo-700 font-bold border-r border-indigo-50">
                                                         {total}
@@ -3190,6 +3308,102 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                         const count = docShifts.filter(s => (s.station === st.name || s.scheduled_station === st.name) && s.location === st.location).length;
                                                         return (
                                                             <td key={`${doc.id}-${st.name}-${st.location}`} className={`px-2 py-2 text-center border-r border-gray-50 ${count > 0 ? 'font-bold text-slate-700 bg-slate-50' : 'text-gray-200'}`}>
+                                                                {count > 0 ? count : '-'}
+                                                            </td>
+                                                        );
+                                                    })}
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        {/* 3. Technologist Workload Analysis (New) */}
+                        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mt-6">
+                            <h3 className="text-sm font-bold bg-slate-50 px-4 py-2 border-b border-gray-100 flex items-center gap-2 text-slate-700">
+                                <Users size={16} className="text-teal-600"/> 放射師排班統計 (上班天數)
+                            </h3>
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-xs text-center border-collapse">
+                                    <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-200">
+                                        <tr>
+                                            <th className="px-3 py-2 text-left sticky left-0 bg-slate-50 z-10 border-r border-slate-200 shadow-[2px_0_5px_rgba(0,0,0,0.05)] w-32">放射師姓名</th>
+                                            <th className="px-2 py-2 text-center bg-teal-50 text-teal-700 border-r border-teal-100 font-extrabold w-16">週期</th>
+                                            <th className="px-2 py-2 text-center bg-indigo-50 text-indigo-700 border-r border-indigo-100 font-extrabold w-12">總天數</th>
+                                            {stations.map(st => (
+                                                <th key={`tech-head-${st.name}-${st.location}`} className="px-2 py-2 text-center min-w-[50px] border-r border-gray-100 font-normal">
+                                                    <div className="flex flex-col items-center opacity-80">
+                                                        <span>{st.name}</span>
+                                                        <span className={`text-[8px] px-1 rounded-full mt-0.5 text-white ${LOCATION_COLORS[st.location]?.split(' ')[0] || 'bg-gray-400'}`}>
+                                                            {st.location}
+                                                        </span>
+                                                    </div>
+                                                </th>
+                                            ))}
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-100">
+                                        {radiographers.map(user => {
+                                            const monthKey = currentCycle && currentCycle.name.match(/^\d{4}\/\d{2}$/) 
+                                                ? currentCycle.name.replace('/', '-') 
+                                                : (currentCycle ? currentCycle.startDate.slice(0, 7) : `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`);
+                                            
+                                            const savedCycle = user.personalCycles?.[monthKey];
+                                            
+                                            let currentCycleRange = dateRange;
+                                            
+                                            if (savedCycle) {
+                                                const start = savedCycle.startDate;
+                                                const end = savedCycle.endDate;
+                                                const tempRange = [];
+                                                const [sY, sM, sD] = start.split('-').map(Number);
+                                                const [eY, eM, eD] = end.split('-').map(Number);
+                                                const startDate = new Date(sY, sM - 1, sD);
+                                                const endDate = new Date(eY, eM - 1, eD);
+                                                
+                                                for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+                                                    tempRange.push(toLocalISOString(d));
+                                                }
+                                                currentCycleRange = tempRange;
+                                            }
+
+                                            const isActualWork = (station?: string) => {
+                                                if (!station) return false;
+                                                const sNormalized = station.trim().toUpperCase();
+                                                if (sNormalized === '' || sNormalized === '未分配' || sNormalized === 'UNASSIGNED') return false;
+                                                if (sNormalized === '休假' || sNormalized.startsWith('休')) return false;
+                                                if (sNormalized === 'X' || sNormalized === 'SYSTEMOFF') return false;
+                                                return true;
+                                            };
+
+                                            const userShifts = (staffShifts as any[]).filter(s => s.userId === user.id && currentCycleRange.includes(s.date));
+                                            
+                                            const totalWorkDays = currentCycleRange.filter(date => {
+                                                const shift = userShifts.find(s => s.date === date);
+                                                if (shift) return isActualWork(shift.station);
+                                                return db.getUserStatusOnDate(user.id, date) === 'WORK';
+                                            }).length;
+
+                                            return (
+                                                <tr key={user.id} className="hover:bg-slate-50 transition-colors">
+                                                    <td className="px-3 py-2 text-left sticky left-0 bg-white z-10 border-r border-slate-200 font-bold text-slate-700 shadow-[2px_0_5px_rgba(0,0,0,0.05)]">
+                                                        <div className="flex flex-col">
+                                                            <span>{user.name}</span>
+                                                            {savedCycle?.memo && <span className="text-[9px] text-amber-600 font-normal leading-tight">{savedCycle.memo}</span>}
+                                                        </div>
+                                                    </td>
+                                                    <td className={`px-2 py-2 text-center text-[10px] border-r ${savedCycle ? 'bg-amber-50 text-amber-700 border-amber-100' : 'bg-teal-50/20 text-teal-700 border-teal-50'}`}>
+                                                        {savedCycle ? `${savedCycle.startDate.slice(5)}~${savedCycle.endDate.slice(5)}` : (currentCycle ? '本週期' : '全月')}
+                                                    </td>
+                                                    <td className={`px-2 py-2 text-center font-bold border-r ${savedCycle ? 'bg-amber-50/50 text-amber-800 border-amber-100' : 'bg-indigo-50/30 text-indigo-700 border-indigo-50'}`}>
+                                                        {totalWorkDays}
+                                                    </td>
+                                                    {stations.map(st => {
+                                                        const count = userShifts.filter(s => s.station === st.name && s.location === st.location).length;
+                                                        return (
+                                                            <td key={`${user.id}-${st.name}-${st.location}`} className={`px-2 py-2 text-center border-r border-gray-50 ${count > 0 ? 'font-bold text-slate-700 bg-slate-50' : 'text-gray-200'}`}>
                                                                 {count > 0 ? count : '-'}
                                                             </td>
                                                         );

@@ -89,13 +89,25 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
             const today = new Date();
             return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
         }
-        return currentCycle ? currentCycle.startDate.slice(0, 7) : null;
+        if (!currentCycle) return null;
+        
+        // Match StatisticsPage logic: prioritize YYYY/MM name format
+        if (currentCycle.name.match(/^\d{4}\/\d{2}$/)) {
+            return currentCycle.name.replace('/', '-');
+        }
+        
+        return currentCycle.startDate.slice(0, 7);
     }, [selectedCycleId, currentCycle]);
 
     // Helper: build date array between two ISO dates
     const buildPersonalDateRange = (startDate: string, endDate: string): string[] => {
         const dates: string[] = [];
-        for (let d = new Date(startDate); d <= new Date(endDate); d.setDate(d.getDate() + 1)) {
+        const [sY, sM, sD] = startDate.split('-').map(Number);
+        const [eY, eM, eD] = endDate.split('-').map(Number);
+        const start = new Date(sY, sM - 1, sD);
+        const end = new Date(eY, eM - 1, eD);
+        
+        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
             dates.push(toLocalISOString(d));
         }
         return dates;
@@ -1322,16 +1334,9 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
         let newRoles = [...currentRoles];
 
         // 0. Validation Constraints
-        // Constraint A: Dazhi Support only for Remote
-        if (role === SPECIAL_ROLES.DAZHI_SUPPORT) {
-            if (!currentStation.includes('遠距') && !currentStation.includes('遠班')) {
-                alert('只有遠距班才能選擇「大直支援」');
-                return;
-            }
-        }
-        // Constraint B: Dazhi / Floor Control cannot take roles
-        if ((currentStation.includes('大直') || currentStation.includes('場控')) && !currentRoles.includes(role)) {
-            alert('此崗位(大直/場控)不需選擇特殊任務');
+        // Constraint B: Field Control cannot take roles (Dazhi constraint removed by user)
+        if (currentStation.includes('場控') && !currentRoles.includes(role)) {
+            alert('此崗位(場控)不需選擇特殊任務');
             return;
         }
 
@@ -1517,8 +1522,8 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
         const existingShift = db.shifts.find(s => s.userId === userId && s.date === dateStr);
         let roles = existingShift ? existingShift.specialRoles : [];
 
-        // Clear roles if moving to Dazhi or Floor Control (Strict exclusion)
-        if (station.includes('大直') || station.includes('場控')) {
+        // Clear roles if moving to Floor Control (Dazhi constraint removed by user)
+        if (station.includes('場控')) {
             roles = [];
         }
 
@@ -1730,13 +1735,8 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
         const station = existingShift ? existingShift.station : StationDefault.UNASSIGNED;
         const currentRoles = existingShift ? existingShift.specialRoles : [];
 
-        // Validation
-        if (role === SPECIAL_ROLES.DAZHI_SUPPORT && (!station.includes('遠距') && !station.includes('遠班'))) {
-            alert('只有遠距班才能選擇「大直支援」');
-            return;
-        }
-        if ((station.includes('大直') || station.includes('場控'))) {
-            alert('此崗位(大直/場控)不需選擇特殊任務');
+        if (station.includes('場控')) {
+            alert('此崗位(場控)不需選擇特殊任務');
             return;
         }
 
@@ -2768,6 +2768,11 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                             >
                                                                 {isMobile ? (user.alias || user.name.charAt(0)) : user.name}
                                                             </div>
+                                                            {personalCycleData?.memo && (
+                                                                <div className="text-[9px] text-amber-600 font-normal leading-tight mt-0.5 truncate max-w-[80px]">
+                                                                    {personalCycleData.memo}
+                                                                </div>
+                                                            )}
                                                         </div>
                                                     </div>
                                                 </td>

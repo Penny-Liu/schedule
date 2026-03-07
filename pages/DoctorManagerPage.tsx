@@ -16,7 +16,7 @@ const PREDEFINED_COLORS = [
 const LOCATIONS = ['北投', '大直', '台中'];
 
 const DoctorManagerPage: React.FC<DoctorManagerPageProps> = ({ currentUser }) => {
-    const [doctors, setDoctors] = useState<Doctor[]>(db.getDoctors());
+    const [doctors, setDoctors] = useState<Doctor[]>(() => db.getDoctors().filter(d => d.isActive !== false));
     // Get ALL stations from settings, plus default hardcoded ones to ensure complete list
     // Get ALL stations from settings, plus default hardcoded ones to ensure complete list
     const [availableStations, setAvailableStations] = useState<string[]>(() => {
@@ -58,7 +58,7 @@ const DoctorManagerPage: React.FC<DoctorManagerPageProps> = ({ currentUser }) =>
     // Sync data
     useEffect(() => {
         const unsubscribe = db.subscribe(() => {
-            setDoctors([...db.getDoctors()]);
+            setDoctors([...db.getDoctors().filter(d => d.isActive !== false)]);
             // Safe map handling for older string[] data or new DoctorStationConfig[]
             const rawStations = db.settings.doctorStations?.map(s => typeof s === 'string' ? s : s.name) || ['解說', '影像', '遠距', 'GI', '行政', '麻醉'];
             const stations = Array.from(new Set(rawStations));
