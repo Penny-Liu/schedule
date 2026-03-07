@@ -26,6 +26,13 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
   const [editingStaffName, setEditingStaffName] = useState(''); // For editing existing staff name
   const [editingStaffIsActive, setEditingStaffIsActive] = useState(true); // For editing existing staff active status
 
+  // HM Shift Editing Modal State
+  const [isShiftModalOpen, setIsShiftModalOpen] = useState(false);
+  const [editingShiftStaffId, setEditingShiftStaffId] = useState<string | null>(null);
+  const [editingShiftDate, setEditingShiftDate] = useState<string | null>(null);
+  const [editingShiftTime, setEditingShiftTime] = useState('');
+  const [editingShiftTask, setEditingShiftTask] = useState('');
+
   const isReadOnly = (currentUser.role === UserRole.VIEWER || currentUser.role === UserRole.EMPLOYEE) && !currentUser.permissions?.includes(PERMISSIONS.EDIT_HEALTH_MGMT);
 
   // Fetch HM staff exclusively from the new table
@@ -59,24 +66,58 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
 
   const handleUpdateShift = async (userId: string, date: string, station: string) => {
     if (isReadOnly) return;
-    const existingAtStation = shifts.find(s => s.date === date && s.station === station);
-    if (existingAtStation) {
-        await db.upsertShift({ ...existingAtStation, station: '未分配' });
-    }
-    if (userId) {
-        const userExistingShift = shifts.find(s => s.userId === userId && s.date === date);
-        if (userExistingShift) {
-            await db.upsertShift({ ...userExistingShift, station });
+    const existing = shifts.find(s => s.userId === userId && s.date === date);
+    
+    if (existing) {
+        if (!station) {
+            await db.deleteShift(userId, date);
         } else {
-            await db.upsertShift({
-                id: generateUUID(),
-                userId,
-                date,
-                station,
-                specialRoles: []
-            });
+            await db.upsertShift({ ...existing, station });
         }
+    } else if (station) {
+        const newShift: Shift = {
+            id: generateUUID(),
+            userId,
+            date,
+            station,
+            specialRoles: []
+        };
+        await db.upsertShift(newShift);
     }
+  };
+
+  const openShiftModal = (userId: string, date: string) => {
+      if (isReadOnly) return;
+      setEditingShiftStaffId(userId);
+      setEditingShiftDate(date);
+      
+      const existing = shifts.find(s => s.userId === userId && s.date === date);
+      if (existing && existing.station && existing.station !== '未分配') {
+          const parts = existing.station.split(' ');
+          if (parts.length > 1) {
+              setEditingShiftTime(parts[0]);
+              setEditingShiftTask(parts.slice(1).join(' '));
+          } else {
+              setEditingShiftTime('');
+              setEditingShiftTask(existing.station);
+          }
+      } else {
+          setEditingShiftTime('');
+          setEditingShiftTask('');
+      }
+      setIsShiftModalOpen(true);
+  };
+
+  const handleSaveShiftModal = async () => {
+      if (!editingShiftStaffId || !editingShiftDate) return;
+      
+      let finalStation = '';
+      if (editingShiftTime || editingShiftTask) {
+          finalStation = `${editingShiftTime} ${editingShiftTask}`.trim();
+      }
+
+      await handleUpdateShift(editingShiftStaffId, editingShiftDate, finalStation);
+      setIsShiftModalOpen(false);
   };
 
   // Function to add new HM staff
@@ -214,12 +255,12 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
               <table className="w-full border-collapse">
                 <thead>
                   <tr className="bg-gray-50 border-b border-gray-100">
-                    <th className="p-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider w-40 sticky left-0 bg-gray-50 z-10">崗位</th>
+                    <th className="p-4 text-left text-xs font-bold text-gray-500 uppercase tracking-wider w-32 sticky left-0 bg-gray-50 z-10">人員</th>
                     {dateRange.map(date => {
                       const d = new Date(date);
                       const isToday = toLocalISOString(new Date()) === date;
                       return (
-                        <th key={date} className={`p-4 text-center border-l border-gray-100 min-w-[140px] ${isToday ? 'bg-teal-50' : ''}`}>
+                        <th key={date} className={`p-4 text-center border-l border-gray-100 min-w-[100px] ${isToday ? 'bg-teal-50' : ''}`}>
                           <div className="text-[11px] text-gray-400">{date.split('-').slice(1).join('/')}</div>
                           <div className={`text-[13px] font-bold ${isToday ? 'text-teal-700' : 'text-gray-700'}`}>
                             {['日', '一', '二', '三', '四', '五', '六'][d.getDay()]}
@@ -230,42 +271,135 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                   </tr>
                 </thead>
                 <tbody>
-                  {STATIONS.map(station => (
-                    <tr key={station} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
-                      <td className="p-4 font-bold text-gray-700 text-sm bg-white sticky left-0 z-10">{station}</td>
+                  {dbHMStaff.map(staff => (
+                    <tr key={staff.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
+                      <td className="p-4 font-bold text-gray-700 text-sm bg-white sticky left-0 z-10 whitespace-nowrap">{staff.name}</td>
                       {dateRange.map(date => {
-                        const shift = shifts.find(s => s.date === date && s.station === station);
-                        const selectedUserId = shift ? shift.userId : '';
+                        const shift = shifts.find(s => s.userId === staff.id && s.date === date);
+                        const displayVal = shift && shift.station !== '未分配' ? shift.station : '';
+                        
+                        // Parse display values
+                        const parts = displayVal.split(' ');
+                        const time = parts.length > 1 ? parts[0] : '';
+                        const task = parts.length > 1 ? parts.slice(1).join(' ') : displayVal;
+
                         return (
-                          <td key={date} className="p-3 border-l border-gray-50 text-center">
-                            {canEdit ? (
-                              <select
-                                value={selectedUserId}
-                                onChange={(e) => handleUpdateShift(e.target.value, date, station)}
-                                className={`w-full p-2 text-xs rounded-lg border focus:ring-2 focus:ring-teal-500 outline-none cursor-pointer ${
-                                  selectedUserId ? 'bg-teal-50 border-teal-200 text-teal-800 font-medium' : 'bg-gray-50 border-gray-100 text-gray-400'
-                                }`}
-                                disabled={isReadOnly}
-                              >
-                                <option value="">未分配</option>
-                                {healthMgmtStaff.filter(u => u.isActive !== false).map(u => (
-                                  <option key={u.id} value={u.id}>{u.name}</option>
-                                ))}
-                              </select>
-                            ) : (
-                              <span className="text-sm">{healthMgmtStaff.find(u => u.id === selectedUserId)?.name || '-'}</span>
-                            )}
+                          <td 
+                            key={date} 
+                            onClick={() => openShiftModal(staff.id, date)}
+                            className={`p-2 border-l border-gray-50 text-center cursor-pointer transition-colors ${displayVal ? 'bg-teal-50/30 hover:bg-teal-100/50' : 'hover:bg-gray-100/50'}`}
+                          >
+                             {displayVal ? (
+                                <div className="flex flex-col items-center justify-center h-full min-h-[44px]">
+                                    {time && <span className="text-xs text-gray-500 font-mono">{time}</span>}
+                                    {task && <span className="text-sm font-bold text-teal-800">{task}</span>}
+                                </div>
+                             ) : (
+                                <div className="h-full min-h-[44px] flex items-center justify-center text-gray-300">
+                                    <Plus size={16} className="opacity-0 group-hover:opacity-100" />
+                                </div>
+                             )}
                           </td>
                         );
                       })}
                     </tr>
                   ))}
+                  {dbHMStaff.length === 0 && (
+                      <tr>
+                          <td colSpan={dateRange.length + 1} className="p-8 text-center text-gray-400">目前沒有健管人員，請先至「健管人員管理」新增名單。</td>
+                      </tr>
+                  )}
                 </tbody>
               </table>
             </div>
           </div>
+          
+          {/* Shift Editing Modal */}
+          {isShiftModalOpen && (
+              <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+                  <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                      <div className="p-4 border-b flex items-center justify-between bg-gray-50">
+                          <h3 className="font-bold text-gray-800">
+                              編輯班表 - {dbHMStaff.find(s => s.id === editingShiftStaffId)?.name}
+                          </h3>
+                          <button onClick={() => setIsShiftModalOpen(false)} className="p-1 text-gray-400 hover:text-gray-600 rounded">
+                              <X size={20} />
+                          </button>
+                      </div>
+                      <div className="p-5 space-y-4">
+                          <div>
+                              <label className="text-xs font-bold text-gray-500 mb-1 block">日期</label>
+                              <div className="text-sm font-medium text-gray-700 bg-gray-50 p-2 rounded-lg border">{editingShiftDate}</div>
+                          </div>
+                          <div>
+                              <label className="text-xs font-bold text-gray-500 mb-1 block">時間 (選填)</label>
+                              <input 
+                                  type="text" 
+                                  value={editingShiftTime}
+                                  onChange={e => setEditingShiftTime(e.target.value)}
+                                  placeholder="例如：08:00-16:00"
+                                  className="w-full p-2 border rounded-lg text-sm focus:ring-2 focus:ring-teal-500 outline-none font-mono"
+                              />
+                          </div>
+                          <div>
+                              <label className="text-xs font-bold text-gray-500 mb-2 block">任務 (選填)</label>
+                              <div className="flex flex-wrap gap-2">
+                                  {['主管', '輔控', '排班', '晚班', 'call班'].map(t => (
+                                      <button
+                                          key={t}
+                                          type="button"
+                                          onClick={() => setEditingShiftTask(editingShiftTask === t ? '' : t)}
+                                          className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-colors border ${
+                                              editingShiftTask === t 
+                                                ? 'bg-teal-100 text-teal-800 border-teal-200' 
+                                                : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                                          }`}
+                                      >
+                                          {t}
+                                      </button>
+                                  ))}
+                              </div>
+                              <input 
+                                  type="text" 
+                                  value={editingShiftTask}
+                                  onChange={e => setEditingShiftTask(e.target.value)}
+                                  placeholder="自訂任務"
+                                  className="w-full mt-2 p-2 border rounded-lg text-sm focus:ring-2 focus:ring-teal-500 outline-none"
+                              />
+                          </div>
+                      </div>
+                      <div className="p-4 border-t bg-gray-50 flex justify-between gap-3">
+                          {editingShiftTime || editingShiftTask ? (
+                              <button 
+                                  onClick={() => handleUpdateShift(editingShiftStaffId!, editingShiftDate!, '')}
+                                  className="px-4 py-2 bg-white border border-red-200 text-red-600 rounded-lg text-sm font-bold hover:bg-red-50"
+                              >
+                                  清除排班
+                              </button>
+                          ) : (
+                              <div /> // Spacer
+                          )}
+                          <div className="flex gap-2">
+                            <button 
+                                onClick={() => setIsShiftModalOpen(false)}
+                                className="px-4 py-2 border rounded-lg text-sm font-bold text-gray-600 hover:bg-gray-100 bg-white"
+                            >
+                                取消
+                            </button>
+                            <button 
+                                onClick={handleSaveShiftModal}
+                                className="px-5 py-2 bg-teal-600 text-white rounded-lg text-sm font-bold hover:bg-teal-700"
+                            >
+                                儲存
+                            </button>
+                          </div>
+                      </div>
+                  </div>
+              </div>
+          )}
         </>
       ) : (
+
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-1">
             <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm sticky top-4">
