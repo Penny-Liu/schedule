@@ -303,7 +303,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
         title="確認停用帳號"
         message="注意：停用帳號後，該人員將從名單中隱藏，但「歷史排班資料」將會被完整保留以供查閱。您確定要停用此帳號嗎？"
         confirmText="確認停用"
-        cancelText="取消"
+        confirmColor="red"
       />
       
       <ConfirmModal
