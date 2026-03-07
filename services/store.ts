@@ -682,7 +682,8 @@ BMD :{{bmd}}
             'approverId': 'approver_id',
             'processedAt': 'processed_at',
             'roleToSwap': 'role_to_swap',
-            'targetApproval': 'target_approval'
+            'targetApproval': 'target_approval',
+            'permissions': 'permissions'
         };
         Object.keys(mapping).forEach(key => {
             if (key in obj) {
