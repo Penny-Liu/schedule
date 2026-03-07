@@ -12,6 +12,8 @@ interface StaffPageProps {
 
 const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
   const [users, setUsers] = useState<User[]>(db.getUsers());
+  const [error, setError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
   const allStations = db.getStations().filter(s => s !== SYSTEM_OFF && s !== StationDefault.UNASSIGNED);
 
   // Combine Stations + Special Roles for Capability Selection
@@ -97,57 +99,66 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
     setEditingId(null);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
+    setIsSaving(true);
 
     // Auto-generate alias if empty (take first char)
     const finalAlias = formData.alias || formData.name.charAt(0);
 
-    if (editingId) {
-      // Update existing user
-      db.updateUser(editingId, {
-        name: formData.name,
-        alias: finalAlias,
-        username: formData.username,
-        role: formData.role,
-        groupId: formData.groupId,
-        color: formData.color,
-        capabilities: formData.capabilities,
-        learningCapabilities: formData.learningCapabilities,
-        excludedCapabilities: formData.excludedCapabilities,
-        isRadiographer: formData.isRadiographer,
-        isPartTime: formData.isPartTime,
-        isActive: formData.isActive,
-        resignationDate: formData.resignationDate,
-        groupIndex: formData.groupId === StaffGroup.GROUP_D ? formData.groupIndex : undefined,
-        permissions: formData.permissions
-      });
-    } else {
-      const u: User = {
-        id: generateUUID(),
-        name: formData.name,
-        alias: finalAlias,
-        username: formData.username,
-        role: formData.role,
-        groupId: formData.groupId,
-        color: formData.color,
-        capabilities: formData.capabilities,
-        learningCapabilities: formData.learningCapabilities,
-        excludedCapabilities: formData.excludedCapabilities,
-        isRadiographer: formData.isRadiographer,
-        isPartTime: formData.isPartTime,
-        isActive: formData.isActive,
-        resignationDate: formData.resignationDate,
-        groupIndex: formData.groupId === StaffGroup.GROUP_D ? formData.groupIndex : undefined,
-        password: '1234',
-        mustChangePassword: true,
-        permissions: formData.permissions
-      };
-      db.addUser(u);
-    }
+    try {
+      if (editingId) {
+        // Update existing user
+        await db.updateUser(editingId, {
+          name: formData.name,
+          alias: finalAlias,
+          username: formData.username,
+          role: formData.role,
+          groupId: formData.groupId,
+          color: formData.color,
+          capabilities: formData.capabilities,
+          learningCapabilities: formData.learningCapabilities,
+          excludedCapabilities: formData.excludedCapabilities,
+          isRadiographer: formData.isRadiographer,
+          isPartTime: formData.isPartTime,
+          isActive: formData.isActive,
+          resignationDate: formData.resignationDate,
+          groupIndex: formData.groupId === StaffGroup.GROUP_D ? formData.groupIndex : undefined,
+          permissions: formData.permissions
+        });
+      } else {
+        const u: User = {
+          id: generateUUID(),
+          name: formData.name,
+          alias: finalAlias,
+          username: formData.username,
+          role: formData.role,
+          groupId: formData.groupId,
+          color: formData.color,
+          capabilities: formData.capabilities,
+          learningCapabilities: formData.learningCapabilities,
+          excludedCapabilities: formData.excludedCapabilities,
+          isRadiographer: formData.isRadiographer,
+          isPartTime: formData.isPartTime,
+          isActive: formData.isActive,
+          resignationDate: formData.resignationDate,
+          groupIndex: formData.groupId === StaffGroup.GROUP_D ? formData.groupIndex : undefined,
+          password: '1234',
+          mustChangePassword: true,
+          permissions: formData.permissions
+        };
+        await db.addUser(u);
+      }
 
-    setUsers([...db.getUsers()]); // Refresh list
-    resetForm();
+      setUsers([...db.getUsers()]); // Refresh list
+      resetForm();
+    } catch (err: any) {
+      console.error("Save failed:", err);
+      setError(typeof err === 'object' ? (err.message || JSON.stringify(err)) : String(err));
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleEditClick = (e: React.MouseEvent, user: User) => {
@@ -323,6 +334,12 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
+              {error && (
+                <div className="bg-red-50 text-red-600 p-3 rounded-lg text-xs flex items-center gap-2 border border-red-100 animate-pulse">
+                  <AlertCircle size={14} className="shrink-0" />
+                  <div className="flex-1 break-all font-mono">{error}</div>
+                </div>
+              )}
               <div className="flex gap-3">
                 <div className="flex-1">
                   <label className="text-xs font-semibold text-gray-500 mb-1 block">姓名</label>
@@ -590,16 +607,19 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                       取消
                     </button>
                   )}
-                  <button
-                    type="submit"
-                    className={`flex-1 font-bold py-2.5 rounded-lg transition-colors text-sm flex items-center justify-center gap-2 shadow-sm ${editingId
-                      ? 'bg-teal-600 hover:bg-teal-700 text-white shadow-teal-200'
-                      : 'bg-gray-800 hover:bg-gray-900 text-white shadow-gray-300'
-                      }`}
-                  >
-                    {editingId ? <Save size={16} /> : <Plus size={16} />}
-                    {editingId ? '儲存變更' : '建立帳號'}
-                  </button>
+                    <button
+                      type="submit"
+                      disabled={isSaving}
+                      className={`flex-1 font-bold py-2.5 rounded-lg transition-colors text-sm flex items-center justify-center gap-2 shadow-sm ${
+                        isSaving ? 'opacity-50 cursor-not-allowed' : ''
+                      } ${editingId
+                        ? 'bg-teal-600 hover:bg-teal-700 text-white shadow-teal-200'
+                        : 'bg-gray-800 hover:bg-gray-900 text-white shadow-gray-300'
+                        }`}
+                    >
+                      {isSaving ? <Check className="animate-spin" size={16} /> : (editingId ? <Save size={16} /> : <Plus size={16} />)}
+                      {isSaving ? '處理中...' : (editingId ? '儲存變更' : '建立帳號')}
+                    </button>
                 </div>
 
                 {editingId && currentUser.role === UserRole.SYSTEM_ADMIN && (
