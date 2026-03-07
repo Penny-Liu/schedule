@@ -672,9 +672,11 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
           {users.filter(user => {
             // Hide resigned users once their resignation date is effective
             if (user.isActive === false) {
-              if (!user.resignationDate) return false; // No date = already resigned
-              return new Date().toISOString().slice(0, 10) <= user.resignationDate; // Still show before effective date
+              if (!user.resignationDate) return false;
+              return new Date().toISOString().slice(0, 10) <= user.resignationDate;
             }
+            // Hide if purely health management (not radiographer)
+            if (user.isHealthMgmt && !user.isRadiographer) return false;
             return true;
           }).map(user => {
             const isEditingThisUser = editingId === user.id;
