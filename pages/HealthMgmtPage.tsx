@@ -9,7 +9,7 @@ interface HealthMgmtPageProps {
   currentUser: User;
 }
 
-const STATIONS = ['健管主控', '健管輔控'];
+const STATIONS = ['主控', '輔控'];
 
 const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
   const [activeTab, setActiveTab] = useState<'schedule' | 'staff'>('schedule');
@@ -33,6 +33,10 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
   const [editingShiftTime, setEditingShiftTime] = useState('');
   const [editingShiftTask, setEditingShiftTask] = useState('');
 
+  // Quick Schedule State
+  const [isQuickScheduleMode, setIsQuickScheduleMode] = useState(false);
+  const [quickScheduleTask, setQuickScheduleTask] = useState('主控');
+
   const isReadOnly = (currentUser.role === UserRole.VIEWER || currentUser.role === UserRole.EMPLOYEE) && !currentUser.permissions?.includes(PERMISSIONS.EDIT_HEALTH_MGMT);
 
   // Fetch HM staff exclusively from the new table
@@ -55,11 +59,13 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
 
   const dateRange = useMemo(() => {
     const dates = [];
-    const start = new Date(currentDate);
-    for (let i = 0; i < 7; i++) {
-      const d = new Date(start);
-      d.setDate(start.getDate() + i);
-      dates.push(toLocalISOString(d));
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    
+    for (let i = 1; i <= daysInMonth; i++) {
+        const d = new Date(year, month, i);
+        dates.push(toLocalISOString(d));
     }
     return dates;
   }, [currentDate]);
@@ -106,6 +112,19 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
           setEditingShiftTask('');
       }
       setIsShiftModalOpen(true);
+  };
+  
+  const handleCellClick = async (userId: string, date: string) => {
+      if (isReadOnly) return;
+      
+      if (isQuickScheduleMode) {
+          // Quick apply
+          const taskToApply = quickScheduleTask === '清除' ? '' : quickScheduleTask;
+          await handleUpdateShift(userId, date, taskToApply);
+      } else {
+          // Open Modal
+          openShiftModal(userId, date);
+      }
   };
 
   const handleSaveShiftModal = async () => {
@@ -228,26 +247,58 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
 
       {activeTab === 'schedule' ? (
         <>
-          <div className="mb-4 flex justify-between items-center">
-            <div className="flex items-center gap-2 bg-white p-1 rounded-xl shadow-sm border">
+          <div className="mb-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-center gap-2 bg-white p-1 rounded-xl shadow-sm border w-fit">
               <button onClick={() => {
-                const prev = new Date(currentDate);
-                prev.setDate(prev.getDate() - 7);
+                const prev = new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1);
                 setCurrentDate(prev);
               }} className="p-2 hover:bg-gray-50 rounded-lg text-gray-500 transition-colors">
                 <ArrowLeft size={18} />
               </button>
               <div className="px-4 py-1 text-sm font-bold text-gray-700 min-w-[150px] text-center">
-                {dateRange[0]} ~ {dateRange[6]}
+                {currentDate.getFullYear()} 年 {currentDate.getMonth() + 1} 月
               </div>
               <button onClick={() => {
-                const next = new Date(currentDate);
-                next.setDate(next.getDate() + 7);
+                const next = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1);
                 setCurrentDate(next);
               }} className="p-2 hover:bg-gray-50 rounded-lg text-gray-500 transition-colors">
                 <ArrowRight size={18} />
               </button>
             </div>
+
+            {/* Quick Schedule Toolbar */}
+            {!isReadOnly && (
+                <div className="flex flex-wrap items-center gap-2 bg-white p-2 rounded-xl shadow-sm border border-gray-200">
+                    <button
+                        onClick={() => setIsQuickScheduleMode(!isQuickScheduleMode)}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-bold transition-all border ${
+                            isQuickScheduleMode ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'
+                        }`}
+                        title="開啟後，點擊格子可快速填寫所選任務"
+                    >
+                        快速排班 {isQuickScheduleMode ? 'ON' : 'OFF'}
+                    </button>
+                    
+                    {isQuickScheduleMode && (
+                        <div className="flex items-center gap-1 pl-2 border-l border-gray-200">
+                            <span className="text-xs text-gray-500 font-bold mr-2">選擇要點擊填入的任務：</span>
+                            {['主控', '輔控', '排班', '晚班', 'call班', '清除'].map(task => (
+                                <button
+                                    key={task}
+                                    onClick={() => setQuickScheduleTask(task)}
+                                    className={`px-3 py-1 rounded-md text-xs font-bold transition-colors border ${
+                                        quickScheduleTask === task 
+                                            ? task === '清除' ? 'bg-red-100 text-red-700 border-red-200' : 'bg-indigo-600 text-white border-indigo-700'
+                                            : task === '清除' ? 'bg-white text-red-600 border-red-200 hover:bg-red-50' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                                    }`}
+                                >
+                                    {task}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
           </div>
 
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
@@ -286,17 +337,25 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                         return (
                           <td 
                             key={date} 
-                            onClick={() => openShiftModal(staff.id, date)}
-                            className={`p-2 border-l border-gray-50 text-center cursor-pointer transition-colors ${displayVal ? 'bg-teal-50/30 hover:bg-teal-100/50' : 'hover:bg-gray-100/50'}`}
+                            onClick={() => handleCellClick(staff.id, date)}
+                            className={`p-2 border-l border-gray-50 text-center cursor-pointer transition-colors ${
+                                displayVal ? 'bg-teal-50/30' : ''
+                            } ${
+                                isQuickScheduleMode && quickScheduleTask === '清除' ? 'hover:bg-red-50' : isQuickScheduleMode ? 'hover:bg-indigo-50' : 'hover:bg-teal-100/50'
+                            }`}
                           >
                              {displayVal ? (
                                 <div className="flex flex-col items-center justify-center h-full min-h-[44px]">
                                     {time && <span className="text-xs text-gray-500 font-mono">{time}</span>}
-                                    {task && <span className="text-sm font-bold text-teal-800">{task}</span>}
+                                    {task && <span className={`text-sm font-bold ${task === '主控' ? 'text-blue-700' : 'text-teal-800'}`}>{task}</span>}
                                 </div>
                              ) : (
                                 <div className="h-full min-h-[44px] flex items-center justify-center text-gray-300">
-                                    <Plus size={16} className="opacity-0 group-hover:opacity-100" />
+                                    {isQuickScheduleMode ? (
+                                         <span className="opacity-0 group-hover:opacity-50 text-xs">{quickScheduleTask}</span>
+                                    ) : (
+                                         <Plus size={16} className="opacity-0 group-hover:opacity-100" />
+                                    )}
                                 </div>
                              )}
                           </td>
@@ -344,7 +403,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                           <div>
                               <label className="text-xs font-bold text-gray-500 mb-2 block">任務 (選填)</label>
                               <div className="flex flex-wrap gap-2">
-                                  {['主管', '輔控', '排班', '晚班', 'call班'].map(t => (
+                                  {['主控', '輔控', '排班', '晚班', 'call班'].map(t => (
                                       <button
                                           key={t}
                                           type="button"
