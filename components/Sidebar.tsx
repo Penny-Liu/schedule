@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Users, FileText, LogOut, LayoutDashboard, Settings, Menu, BarChart3, Stethoscope, CalendarClock, Sliders, Cloud } from 'lucide-react';
+import { Users, FileText, LogOut, LayoutDashboard, Settings, Menu, BarChart3, Stethoscope, CalendarClock, Sliders, Cloud, Calendar } from 'lucide-react';
 import { User, UserRole, PERMISSIONS } from '../types';
 
 interface SidebarProps {
@@ -48,6 +48,12 @@ const Sidebar: React.FC<SidebarProps> = ({ currentUser, onNavigate, currentPage,
       label: '人員管理',
       icon: Users,
       permission: PERMISSIONS.VIEW_STAFF
+    },
+    {
+      id: 'health_mgmt',
+      label: '健管排班',
+      icon: Calendar,
+      permission: PERMISSIONS.VIEW_HEALTH_MGMT
     },
     {
       id: 'physician_schedule',

@@ -23,7 +23,9 @@ export const getPermissionsByRole = (role: UserRole): string[] => {
                 PERMISSIONS.VIEW_DOCTOR_STATS,
                 PERMISSIONS.EDIT_DOCTOR_STATS,
                 PERMISSIONS.MANAGE_DOCTORS,
-                PERMISSIONS.EDIT_SETTINGS
+                PERMISSIONS.EDIT_SETTINGS,
+                PERMISSIONS.VIEW_HEALTH_MGMT,
+                PERMISSIONS.EDIT_HEALTH_MGMT
             ];
         case UserRole.SCHEDULER:
             return [
@@ -662,6 +664,7 @@ BMD :{{bmd}}
         const mapping: Record<string, string> = {
             'isRadiographer': 'is_radiographer',
             'isPartTime': 'is_part_time',
+            'isHealthMgmt': 'is_health_mgmt',
             'isActive': 'is_active',
             'resignationDate': 'resignation_date',
             'groupIndex': 'group_index',
@@ -693,6 +696,7 @@ BMD :{{bmd}}
         const mapping: Record<string, string> = {
             'is_radiographer': 'isRadiographer',
             'is_part_time': 'isPartTime',
+            'is_health_mgmt': 'isHealthMgmt',
             'is_active': 'isActive',
             'resignation_date': 'resignationDate',
             'group_index': 'groupIndex',
@@ -736,8 +740,22 @@ BMD :{{bmd}}
     }
 
     async deleteUser(id: string) {
-        this.users = this.users.filter(u => u.id !== id);
-        await supabase.from('users').delete().eq('id', id);
+        // Soft delete: set isActive to false instead of removing the record
+        const user = this.users.find(u => u.id === id);
+        if (user) {
+            user.isActive = false;
+            // Sync to DB
+            const { error } = await supabase
+                .from('users')
+                .update({ is_active: false })
+                .eq('id', id);
+            
+            if (error) {
+                console.error('Error deactivating user:', error);
+                throw error;
+            }
+            this.notifyListeners();
+        }
     }
 
     // Shifts

@@ -16,6 +16,7 @@ import PhysicianSchedulePage from './pages/PhysicianSchedulePage';
 import PhysicianSettingsPage from './pages/PhysicianSettingsPage';
 import DoctorStatisticsPage from './pages/DoctorStatisticsPage';
 import CloudSchedulePage from './pages/CloudSchedulePage';
+import HealthMgmtPage from './pages/HealthMgmtPage';
 
 
 
@@ -180,6 +181,8 @@ const App: React.FC = () => {
         return <PhysicianSchedulePage currentUser={currentUser} />;
       case 'cloud_schedule':
         return <CloudSchedulePage currentUser={currentUser} />;
+      case 'health_mgmt':
+        return <HealthMgmtPage currentUser={currentUser} />;
       default:
         return <DashboardPage currentUser={currentUser} />;
     }

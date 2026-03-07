@@ -28,6 +28,8 @@ export const PERMISSIONS = {
   EDIT_DOCTOR_STATS: 'doctor_stats_edit',
   MANAGE_DOCTORS: 'doctors_manage',
   EDIT_SETTINGS: 'settings_edit',
+  VIEW_HEALTH_MGMT: 'health_mgmt_view',
+  EDIT_HEALTH_MGMT: 'health_mgmt_edit',
 };
 
 export const PERMISSION_LABELS: Record<string, string> = {
@@ -42,6 +44,8 @@ export const PERMISSION_LABELS: Record<string, string> = {
   [PERMISSIONS.EDIT_DOCTOR_STATS]: '編輯醫師統計',
   [PERMISSIONS.MANAGE_DOCTORS]: '管理醫師名單',
   [PERMISSIONS.EDIT_SETTINGS]: '系統設定權限',
+  [PERMISSIONS.VIEW_HEALTH_MGMT]: '查看健管排班',
+  [PERMISSIONS.EDIT_HEALTH_MGMT]: '編輯健管排班',
 };
 
 export interface User {
@@ -63,6 +67,7 @@ export interface User {
   resignationDate?: string; // New: Date of resignation YYYY-MM-DD
   isRadiographer?: boolean; // New: Flag to indicate if user should appear in Radiographer Schedule
   isPartTime?: boolean; // New: Flag for part-time radiographers (hidden in main view)
+  isHealthMgmt?: boolean; // New: Flag for health management staff
   groupIndex?: number; // New: Fixed rotation index for Group D (0-based, determines rest day order)
   personalCycles?: Record<string, { startDate: string; endDate: string; memo: string }>; // Per-month cycle adjustments
   permissions?: string[]; // Fine-grained permissions

@@ -56,6 +56,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
     excludedCapabilities: string[]; // New
     isRadiographer: boolean; // New
     isPartTime: boolean; // New
+    isHealthMgmt: boolean; // New
     isActive: boolean; // New
     resignationDate: string; // New
     groupIndex: number; // For Group D rotation order
@@ -72,6 +73,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
     excludedCapabilities: [], // New
     isRadiographer: false, // New
     isPartTime: false, // New
+    isHealthMgmt: false, // New
     isActive: true, // New
     resignationDate: '', // New
     groupIndex: 0,
@@ -92,6 +94,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
       isRadiographer: false,
       isActive: true,
       isPartTime: false,
+      isHealthMgmt: false,
       resignationDate: '',
       groupIndex: 0,
       permissions: []
@@ -122,6 +125,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
           excludedCapabilities: formData.excludedCapabilities,
           isRadiographer: formData.isRadiographer,
           isPartTime: formData.isPartTime,
+          isHealthMgmt: formData.isHealthMgmt,
           isActive: formData.isActive,
           resignationDate: formData.resignationDate,
           groupIndex: formData.groupId === StaffGroup.GROUP_D ? formData.groupIndex : undefined,
@@ -141,6 +145,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
           excludedCapabilities: formData.excludedCapabilities,
           isRadiographer: formData.isRadiographer,
           isPartTime: formData.isPartTime,
+          isHealthMgmt: formData.isHealthMgmt,
           isActive: formData.isActive,
           resignationDate: formData.resignationDate,
           groupIndex: formData.groupId === StaffGroup.GROUP_D ? formData.groupIndex : undefined,
@@ -176,6 +181,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
       excludedCapabilities: user.excludedCapabilities || [],
       isRadiographer: user.isRadiographer || false,
       isPartTime: user.isPartTime || false,
+      isHealthMgmt: user.isHealthMgmt || false,
       isActive: user.isActive !== undefined ? user.isActive : true,
       resignationDate: user.resignationDate || '',
       groupIndex: user.groupIndex ?? 0,
@@ -257,14 +263,25 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
     setDeleteTargetId(id);
   };
 
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (deleteTargetId) {
-      db.deleteUser(deleteTargetId);
-      setUsers(db.getUsers());
-      if (editingId === deleteTargetId) {
-        resetForm();
+      try {
+        await db.deleteUser(deleteTargetId);
+        // Refresh local state
+        const updatedUser = db.getUsers().find(u => u.id === deleteTargetId);
+        if (updatedUser) {
+           // If we are showing only active users in a list, we need to handle that.
+           // For now, let's just refresh the whole list from store.
+           setUsers([...db.getUsers()]);
+        }
+        
+        if (editingId === deleteTargetId) {
+          resetForm();
+        }
+        setDeleteTargetId(null);
+      } catch (err) {
+        alert("停用失敗，請稍後再試。");
       }
-      setDeleteTargetId(null);
     }
   };
 
@@ -283,10 +300,10 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
         isOpen={!!deleteTargetId}
         onClose={() => setDeleteTargetId(null)}
         onConfirm={handleConfirmDelete}
-        title="刪除人員確認"
-        message="確定要移除此人員嗎？此動作無法復原，該人員的相關排班紀錄可能會遺失。"
-        confirmText="確認刪除"
-        confirmColor="red"
+        title="確認停用帳號"
+        message="注意：停用帳號後，該人員將從名單中隱藏，但「歷史排班資料」將會被完整保留以供查閱。您確定要停用此帳號嗎？"
+        confirmText="確認停用"
+        cancelText="取消"
       />
       
       <ConfirmModal
@@ -400,8 +417,21 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                         disabled={!formData.isRadiographer} // Only relevant if radiographer
                         className={`w-4 h-4 text-teal-600 border-gray-300 rounded focus:ring-teal-500 ${!formData.isRadiographer ? 'opacity-50 cursor-not-allowed' : ''}`}
                      />
-                     <label htmlFor="isPartTime" className={`text-xs font-bold cursor-pointer ${!formData.isRadiographer ? 'text-gray-400' : 'text-gray-700'}`}>
+                      <label htmlFor="isPartTime" className={`text-xs font-bold cursor-pointer ${!formData.isRadiographer ? 'text-gray-400' : 'text-gray-700'}`}>
                         兼職放射師 (總覽隱藏，崗位顯示)
+                      </label>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                     <input
+                        type="checkbox"
+                        id="isHealthMgmt"
+                        checked={formData.isHealthMgmt}
+                        onChange={e => setFormData({ ...formData, isHealthMgmt: e.target.checked })}
+                        className="w-4 h-4 text-teal-600 border-gray-300 rounded focus:ring-teal-500"
+                     />
+                     <label htmlFor="isHealthMgmt" className="text-xs font-bold text-gray-700 cursor-pointer">
+                        是否為健管人員 (健管排班)
                      </label>
                   </div>
               </div>
@@ -671,10 +701,10 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                     <button
                       type="button"
                       onClick={(e) => handleDeleteClick(e, user.id)}
-                      className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                      title="移除人員"
+                      className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                      title="停用帳號"
                     >
-                      <Trash2 size={16} />
+                      <Trash2 size={18} />
                     </button>
                   </div>
                 )}
