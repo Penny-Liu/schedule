@@ -675,8 +675,6 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
               if (!user.resignationDate) return false;
               return new Date().toISOString().slice(0, 10) <= user.resignationDate;
             }
-            // Hide if purely health management (not radiographer)
-            if (user.isHealthMgmt && !user.isRadiographer) return false;
             return true;
           }).map(user => {
             const isEditingThisUser = editingId === user.id;

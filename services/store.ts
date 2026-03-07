@@ -1,5 +1,5 @@
 
-import { User, Shift, LeaveRequest, SystemSettings, StationDefault, SYSTEM_OFF, RosterCycle, DateEventType, Holiday, LeaveStatus, LeaveType, StaffGroup, SPECIAL_ROLES, CycleAnchor, DailyManpowerStats, Doctor, WeekdaySetting, DoctorShift, ReportAssistant, CloudScheduleEntry, UserRole, PERMISSIONS } from '../types';
+import { User, Shift, LeaveRequest, SystemSettings, StationDefault, SYSTEM_OFF, RosterCycle, DateEventType, Holiday, LeaveStatus, LeaveType, StaffGroup, SPECIAL_ROLES, CycleAnchor, DailyManpowerStats, Doctor, WeekdaySetting, DoctorShift, ReportAssistant, CloudScheduleEntry, UserRole, PERMISSIONS, HealthMgmtStaff } from '../types';
 import { MOCK_USERS, MOCK_LEAVES, MOCK_DOCTORS } from './mockData';
 import { supabase } from './supabaseClient';
 import { generateUUID } from './utils';
@@ -57,6 +57,7 @@ import { toLocalISOString, countNonSundayDays } from './utils';
 
 class Store {
     users: User[] = [];
+    healthMgmtStaff: HealthMgmtStaff[] = [];
     shifts: Shift[] = [];
     leaves: LeaveRequest[] = [];
     settings: SystemSettings = {
@@ -150,18 +151,25 @@ class Store {
             console.log('Fetching data from Supabase...');
 
             // Load Cloud Schedule Data early
-            await this.loadCloudScheduleData();
-
-            const [usersRes, shiftsRes, leavesRes, settingsRes] = await Promise.all([
+            console.log('[Store] Loading data from Supabase...');
+            const [usersRes, shiftsRes, leavesRes, settingsRes, doctorsRes, dShiftsRes, hmStaffRes] = await Promise.all([
                 supabase.from('users').select('*'),
                 this.fetchAllShifts(),
                 supabase.from('leaves').select('*'),
-                supabase.from('settings').select('id, data').eq('id', 1).single()
+                supabase.from('settings').select('*'),
+                supabase.from('doctors').select('*'),
+                supabase.from('doctor_shifts').select('*'),
+                supabase.from('health_mgmt_staff').select('*')
             ]);
-
-            if (usersRes.error) {
-                console.error('[Store] CRITICAL: Error fetching users:', usersRes.error);
-            }
+            console.log('[Store] Data loaded. Errors:', {
+                users: usersRes.error,
+                shifts: shiftsRes.error,
+                leaves: leavesRes.error,
+                settings: settingsRes.error,
+                doctors: doctorsRes.error,
+                doctorShifts: dShiftsRes.error,
+                hmStaff: hmStaffRes.error
+            });
 
             if (usersRes.data && usersRes.data.length > 0) {
                 console.log(`[Store] Successfully loaded ${usersRes.data.length} users from Supabase.`);
@@ -252,6 +260,9 @@ class Store {
                     finalSettingsData = fallbackRes.data.data;
                     this.settingsRowId = fallbackRes.data.id; // Capture ID
                 }
+            } else if (settingsRes.data && settingsRes.data.length > 0) { // Handle case where select('*') returns an array
+                finalSettingsData = settingsRes.data[0].data;
+                this.settingsRowId = settingsRes.data[0].id;
             }
 
             if (finalSettingsData) {
@@ -268,9 +279,8 @@ class Store {
             this.ensureSettingsIntegrity();
 
             // Load Doctors and Doctor Shifts
-            const { data: doctorsData } = await supabase.from('doctors').select('*');
-            if (doctorsData && doctorsData.length > 0) {
-                 const loadedDoctors = doctorsData.map((d: any) => ({
+            if (doctorsRes.data && doctorsRes.data.length > 0) {
+                 const loadedDoctors = doctorsRes.data.map((d: any) => ({
                     ...d,
                     capabilities: d.capabilities || [],
                     locations: d.locations || [],
@@ -295,17 +305,8 @@ class Store {
                  await this.seedMockDoctors();
             }
 
-            const today = new Date();
-            const sixMonthsAgo = new Date(today.getFullYear(), today.getMonth() - 6, 1).toISOString().split('T')[0];
-            const sixMonthsAhead = new Date(today.getFullYear(), today.getMonth() + 6, 28).toISOString().split('T')[0];
-            const { data: doctorShiftsData } = await supabase
-                .from('doctor_shifts')
-                .select('*')
-                .gte('date', sixMonthsAgo)
-                .lte('date', sixMonthsAhead)
-                .limit(10000);
-            if (doctorShiftsData) {
-                this.doctorShifts = doctorShiftsData.map((s: any) => ({
+            if (dShiftsRes.data) {
+                this.doctorShifts = dShiftsRes.data.map((s: any) => ({
                     ...s,
                     doctorId: s.doctor_id || s.doctorId, // Map snake_case to camelCase
                     explanationTaskType: s.explanation_task_type || s.explanationTaskType, // Map snake to camel
@@ -314,6 +315,14 @@ class Store {
                     location: s.location,
                     task: s.task,
                     scheduled_station: s.scheduled_station // Explicit map
+                }));
+            }
+
+            if (hmStaffRes.data) {
+                this.healthMgmtStaff = hmStaffRes.data.map((hm: any) => ({
+                    id: hm.id,
+                    name: hm.name,
+                    isActive: hm.is_active
                 }));
             }
 
@@ -375,7 +384,7 @@ BMD :{{bmd}}
             }
 
             // Load cloud schedule data (影像雲班表)
-            // (移除重複的 await this.loadCloudScheduleData())
+            await this.loadCloudScheduleData();
 
             this.isLoaded = true;
             console.log('Data initialized successfully');
@@ -399,44 +408,20 @@ BMD :{{bmd}}
             const uniqueMap = new Map<string, Shift>();
             const idsToDelete: string[] = [];
 
-            allShifts.forEach((s: Shift) => {
-                const key = `${s.userId}-${s.date}`;
-                const existing = uniqueMap.get(key);
-
-                if (!existing) {
-                    uniqueMap.set(key, s);
+            allShifts.forEach((s: any) => {
+                const key = `${s.date}_${s.user_id}_${s.station}`;
+                if (uniqueMap.has(key)) {
+                    idsToDelete.push(s.id);
                 } else {
-                    // Conflict: Keep the "Better" one
-                    // Prioritize: 1. Valid UUID > 'userId-date'
-                    //            2. Content (Station) > Unassigned
-                    //            3. Newer (if timestamps existed, but we don't have them reliably here)
-                    const isExistingUUID = existing.id.length > 25;
-                    const isNewUUID = s.id.length > 25;
-                    const isExistingContent = existing.station && existing.station !== 'Unassigned' && existing.station !== '未分配' && existing.station !== 'SystemOff';
-                    const isNewContent = s.station && s.station !== 'Unassigned' && s.station !== '未分配' && s.station !== 'SystemOff';
-
-                    let keepNew = false;
-
-                    if (isNewUUID && !isExistingUUID) keepNew = true;
-                    else if (isNewUUID === isExistingUUID) {
-                        if (isNewContent && !isExistingContent) keepNew = true;
-                    }
-
-                    if (keepNew) {
-                        idsToDelete.push(existing.id);
-                        uniqueMap.set(key, s);
-                    } else {
-                        idsToDelete.push(s.id);
-                    }
+                    uniqueMap.set(key, s);
                 }
             });
 
             console.log(`Found ${idsToDelete.length} duplicates to delete.`);
 
-            // 3. Delete Bad IDs
+            // 3. Delete Duplicates in chunks
+            const chunkSize = 200;
             if (idsToDelete.length > 0) {
-                // Batch delete in chunks of 100 to avoid URL limits
-                const chunkSize = 100;
                 for (let i = 0; i < idsToDelete.length; i += chunkSize) {
                     const chunk = idsToDelete.slice(i, i + chunkSize);
                     const { error: delError } = await supabase.from('shifts').delete().in('id', chunk);
@@ -656,8 +641,14 @@ BMD :{{bmd}}
         const dbUser: any = { ...userToSave };
         this.mapToDbFields(dbUser);
 
+        const { error } = await supabase.from('users').insert(dbUser);
+        if (error) {
+            console.error('Failed to add user to Supabase:', error);
+            throw error;
+        }
+        
         this.users.push(userToSave);
-        await supabase.from('users').insert(dbUser);
+        this.notifyListeners();
     }
 
     private mapToDbFields(obj: any) {
@@ -753,13 +744,70 @@ BMD :{{bmd}}
                 .eq('id', id);
             
             if (error) {
-                console.error('Error deactivating user:', error);
+                console.error('Failed to soft delete user in Supabase:', error);
                 throw error;
             }
             this.notifyListeners();
         }
     }
 
+    // --- Health Mgmt Staff Operations ---
+    
+    getHealthMgmtStaff() {
+        return this.healthMgmtStaff;
+    }
+
+    async addHealthMgmtStaff(staff: HealthMgmtStaff) {
+        const { error } = await supabase.from('health_mgmt_staff').insert({
+            id: staff.id,
+            name: staff.name,
+            is_active: staff.isActive
+        });
+        if (error) {
+            console.error('Failed to add health mgmt staff to Supabase:', error);
+            throw error;
+        }
+        
+        this.healthMgmtStaff.push(staff);
+        this.notifyListeners();
+    }
+
+    async updateHealthMgmtStaff(id: string, updates: Partial<HealthMgmtStaff>) {
+        this.healthMgmtStaff = this.healthMgmtStaff.map(s => s.id === id ? { ...s, ...updates } : s);
+        
+        const dbUpdates: any = {};
+        if (updates.name !== undefined) dbUpdates.name = updates.name;
+        if (updates.isActive !== undefined) dbUpdates.is_active = updates.isActive;
+
+        if (Object.keys(dbUpdates).length > 0) {
+            const { error } = await supabase.from('health_mgmt_staff').update(dbUpdates).eq('id', id);
+            if (error) {
+                console.error('Failed to update health mgmt staff in Supabase:', error);
+                throw error;
+            }
+        }
+        this.notifyListeners();
+    }
+
+    async deleteHealthMgmtStaff(id: string) {
+        // Soft delete for HM staff too
+        const staff = this.healthMgmtStaff.find(s => s.id === id);
+        if (staff) {
+            staff.isActive = false;
+            const { error } = await supabase
+                .from('health_mgmt_staff')
+                .update({ is_active: false })
+                .eq('id', id);
+            
+            if (error) {
+                console.error('Failed to soft delete health mgmt staff in Supabase:', error);
+                throw error;
+            }
+            this.notifyListeners();
+        }
+    }
+
+    // -------------------------------------------------------------------------------- //
     // Shifts
     getShifts(startDate: string, endDate: string) {
         if (!startDate && !endDate) return this.shifts;
@@ -1530,7 +1578,6 @@ BMD :{{bmd}}
         currentDoctor.displayOrder = newTargetOrder;
         targetDoctor.displayOrder = tempOrder;
         
-        // Update both doctors in memory
         this.doctors = this.doctors.map(d => {
             if (d.id === currentDoctor.id) return currentDoctor;
             if (d.id === targetDoctor.id) return targetDoctor;
@@ -1856,7 +1903,9 @@ BMD :{{bmd}}
     private shuffleArray<T>(array: T[]): T[] {
         for (let i = array.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
-            [array[i], array[j]] = [array[j], array[i]];
+            const temp = array[i];
+            array[i] = array[j];
+            array[j] = temp;
         }
         return array;
     }

@@ -48,6 +48,12 @@ export const PERMISSION_LABELS: Record<string, string> = {
   [PERMISSIONS.EDIT_HEALTH_MGMT]: '編輯健管排班',
 };
 
+export interface HealthMgmtStaff {
+    id: string;
+    name: string;
+    isActive: boolean;
+}
+
 export interface User {
   id: string;
   name: string;

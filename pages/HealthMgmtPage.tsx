@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { User, Shift, UserRole, PERMISSIONS, StaffGroup } from '../types';
+import { User, Shift, UserRole, PERMISSIONS, StaffGroup, HealthMgmtStaff } from '../types';
 import { db } from '../services/store';
 import { LayoutDashboard, Users, Calendar, Save, Trash2, Plus, ArrowLeft, ArrowRight, X, AlertCircle, Key, UserPlus } from 'lucide-react';
 import { toLocalISOString, generateUUID } from '../services/utils';
@@ -16,22 +16,29 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [healthMgmtUsers, setHealthMgmtUsers] = useState<User[]>([]);
+  const [healthMgmtStaff, setHealthMgmtStaff] = useState<HealthMgmtStaff[]>([]); // Changed from healthMgmtUsers
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
 
-  const [formData, setFormData] = useState({
-    name: '',
-    username: '',
-    role: UserRole.EMPLOYEE,
-    isActive: true,
-  });
+  const [newStaffName, setNewStaffName] = useState(''); // For adding new staff
+  const [editingStaffName, setEditingStaffName] = useState(''); // For editing existing staff name
+  const [editingStaffIsActive, setEditingStaffIsActive] = useState(true); // For editing existing staff active status
+
+  const isReadOnly = (currentUser.role === UserRole.VIEWER || currentUser.role === UserRole.EMPLOYEE) && !currentUser.permissions?.includes(PERMISSIONS.EDIT_HEALTH_MGMT);
+
+  // Fetch HM staff exclusively from the new table
+  const dbHMStaff = useMemo(() => {
+      return db.getHealthMgmtStaff().filter(s => s.isActive !== false);
+  }, [db.healthMgmtStaff]); // Depend on db.healthMgmtStaff
+
+  // State for local modifications (if needed, but for this change, direct DB updates are used)
+  // const [localStaff, setLocalStaff] = useState<HealthMgmtStaff[]>([]);
 
   useEffect(() => {
     const loadData = () => {
-      const users = db.getUsers().filter(u => u.isHealthMgmt);
-      setHealthMgmtUsers(users);
+      setHealthMgmtStaff(db.getHealthMgmtStaff()); // Fetch from new HealthMgmtStaff table
       setShifts(db.getShifts('', ''));
     };
     loadData();
@@ -51,6 +58,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
   }, [currentDate]);
 
   const handleUpdateShift = async (userId: string, date: string, station: string) => {
+    if (isReadOnly) return;
     const existingAtStation = shifts.find(s => s.date === date && s.station === station);
     if (existingAtStation) {
         await db.upsertShift({ ...existingAtStation, station: '未分配' });
@@ -71,58 +79,65 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
     }
   };
 
-  const handleStaffSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    setIsSaving(true);
-    try {
-      if (editingId) {
-        await db.updateUser(editingId, {
-          name: formData.name,
-          username: formData.username,
-          isActive: formData.isActive
-        });
-      } else {
-        const newUser: User = {
-          id: generateUUID(),
-          name: formData.name,
-          alias: formData.name.charAt(0),
-          username: formData.username,
-          role: UserRole.EMPLOYEE,
-          groupId: StaffGroup.GROUP_A,
-          color: '#3B82F6',
-          isRadiographer: false,
-          isHealthMgmt: true,
-          isActive: true,
-          password: '1234',
-          mustChangePassword: true,
-          permissions: []
-        };
-        await db.addUser(newUser);
+  // Function to add new HM staff
+  const addStaff = async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (isReadOnly) return;
+      if (!newStaffName.trim()) {
+          setError('請輸入人員名稱');
+          return;
       }
-      setEditingId(null);
-      setFormData({ name: '', username: '', role: UserRole.EMPLOYEE, isActive: true });
-    } catch (err: any) {
-      setError(err.message || '儲存失敗');
-    } finally {
-      setIsSaving(false);
-    }
+      setError(null);
+      setIsSaving(true);
+      try {
+          const newStaff: HealthMgmtStaff = {
+              id: generateUUID(),
+              name: newStaffName.trim(),
+              isActive: true
+          };
+          await db.addHealthMgmtStaff(newStaff);
+          setNewStaffName('');
+      } catch (err: any) {
+          setError(err.message || '新增失敗，請重試');
+      } finally {
+          setIsSaving(false);
+      }
   };
 
-  const handleEditStaff = (user: User) => {
-    setEditingId(user.id);
-    setFormData({
-      name: user.name,
-      username: user.username,
-      role: user.role,
-      isActive: user.isActive !== false
-    });
+  // Function to update staff name and active status
+  const updateStaff = async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (isReadOnly) return;
+      if (!editingId || !editingStaffName.trim()) {
+          setError('請輸入人員名稱');
+          return;
+      }
+      setError(null);
+      setIsSaving(true);
+      try {
+          await db.updateHealthMgmtStaff(editingId, { name: editingStaffName.trim(), isActive: editingStaffIsActive });
+          setEditingId(null);
+          setEditingStaffName('');
+          setEditingStaffIsActive(true);
+      } catch (err: any) {
+          setError(err.message || '更新失敗，請重試');
+      } finally {
+          setIsSaving(false);
+      }
+  };
+
+  const handleEditStaff = (staff: HealthMgmtStaff) => {
+    if (isReadOnly) return;
+    setEditingId(staff.id);
+    setEditingStaffName(staff.name);
+    setEditingStaffIsActive(staff.isActive);
     setActiveTab('staff');
   };
 
   const handleDeleteStaff = async () => {
+    if (isReadOnly) return;
     if (deleteTargetId) {
-      await db.deleteUser(deleteTargetId);
+      await db.updateHealthMgmtStaff(deleteTargetId, { isActive: false }); // Deactivate instead of delete
       setDeleteTargetId(null);
     }
   };
@@ -230,14 +245,15 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                                 className={`w-full p-2 text-xs rounded-lg border focus:ring-2 focus:ring-teal-500 outline-none cursor-pointer ${
                                   selectedUserId ? 'bg-teal-50 border-teal-200 text-teal-800 font-medium' : 'bg-gray-50 border-gray-100 text-gray-400'
                                 }`}
+                                disabled={isReadOnly}
                               >
                                 <option value="">未分配</option>
-                                {healthMgmtUsers.filter(u => u.isActive !== false).map(u => (
+                                {healthMgmtStaff.filter(u => u.isActive !== false).map(u => (
                                   <option key={u.id} value={u.id}>{u.name}</option>
                                 ))}
                               </select>
                             ) : (
-                              <span className="text-sm">{healthMgmtUsers.find(u => u.id === selectedUserId)?.name || '-'}</span>
+                              <span className="text-sm">{healthMgmtStaff.find(u => u.id === selectedUserId)?.name || '-'}</span>
                             )}
                           </td>
                         );
@@ -257,28 +273,18 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                 <UserPlus size={18} className="text-teal-600" />
                 {editingId ? '編輯健管人員' : '新增健管人員'}
               </h3>
-              <form onSubmit={handleStaffSubmit} className="space-y-4">
+              <form onSubmit={editingId ? updateStaff : addStaff} className="space-y-4">
                 {error && <div className="p-2 text-xs bg-red-50 text-red-600 rounded border border-red-100">{error}</div>}
                 <div>
                   <label className="text-xs font-bold text-gray-500 mb-1 block">姓名</label>
                   <input
                     type="text"
                     required
-                    value={formData.name}
-                    onChange={e => setFormData({ ...formData, name: e.target.value })}
+                    value={editingId ? editingStaffName : newStaffName}
+                    onChange={e => editingId ? setEditingStaffName(e.target.value) : setNewStaffName(e.target.value)}
                     className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-teal-500 outline-none"
                     placeholder="例如：林健管"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-bold text-gray-500 mb-1 block">帳號 (Username)</label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.username}
-                    onChange={e => setFormData({ ...formData, username: e.target.value })}
-                    className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-teal-500 outline-none font-mono"
-                    placeholder="hm_staff_01"
+                    disabled={isReadOnly}
                   />
                 </div>
                 {editingId && (
@@ -286,9 +292,10 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                     <input
                       type="checkbox"
                       id="isActive_hm"
-                      checked={formData.isActive}
-                      onChange={e => setFormData({ ...formData, isActive: e.target.checked })}
+                      checked={editingStaffIsActive}
+                      onChange={e => setEditingStaffIsActive(e.target.checked)}
                       className="w-4 h-4 text-teal-600"
+                      disabled={isReadOnly}
                     />
                     <label htmlFor="isActive_hm" className="text-xs font-bold text-gray-700">在職中</label>
                   </div>
@@ -297,15 +304,16 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                   {editingId && (
                     <button
                       type="button"
-                      onClick={() => { setEditingId(null); setFormData({ name: '', username: '', role: UserRole.EMPLOYEE, isActive: true }); }}
+                      onClick={() => { setEditingId(null); setEditingStaffName(''); setEditingStaffIsActive(true); setError(null); }}
                       className="flex-1 px-4 py-2 border rounded-lg text-sm font-bold text-gray-500 hover:bg-gray-50"
+                      disabled={isReadOnly}
                     >
                       取消
                     </button>
                   )}
                   <button
                     type="submit"
-                    disabled={isSaving}
+                    disabled={isSaving || isReadOnly}
                     className="flex-1 bg-teal-600 text-white rounded-lg py-2 text-sm font-bold hover:bg-teal-700 transition-colors disabled:opacity-50"
                   >
                     {isSaving ? '處理中...' : (editingId ? '儲存變更' : '建立人員')}
@@ -316,28 +324,28 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
           </div>
 
           <div className="lg:col-span-2 space-y-3">
-             {healthMgmtUsers.map(user => (
-               <div key={user.id} className={`bg-white p-4 rounded-xl border flex items-center justify-between transition-all ${user.isActive === false ? 'opacity-50' : 'hover:shadow-sm'}`}>
+             {healthMgmtStaff.map(staff => (
+               <div key={staff.id} className={`bg-white p-4 rounded-xl border flex items-center justify-between transition-all ${staff.isActive === false ? 'opacity-50' : 'hover:shadow-sm'}`}>
                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-bold">
-                      {user.name.charAt(0)}
+                    <div className="w-10 h-10 rounded-full bg-teal-100 flex items-center justify-center text-teal-700 font-bold">
+                      {staff.name.charAt(0)}
                     </div>
                     <div>
-                      <div className="font-bold text-sm text-gray-800">{user.name}</div>
-                      <div className="text-xs text-gray-400 font-mono">{user.username}</div>
+                      <div className="font-bold text-sm text-gray-800">{staff.name}</div>
+                      <div className="text-xs text-teal-600 mt-0.5">健管人員</div>
                     </div>
                  </div>
                  <div className="flex items-center gap-2">
-                    <button onClick={() => handleEditStaff(user)} className="p-2 text-gray-400 hover:text-teal-600 hover:bg-teal-50 rounded-lg transition-colors">
+                    <button onClick={() => handleEditStaff(staff)} disabled={isReadOnly} className="p-2 text-gray-400 hover:text-teal-600 hover:bg-teal-50 rounded-lg transition-colors disabled:opacity-50">
                       <Save size={18} />
                     </button>
-                    <button onClick={() => setDeleteTargetId(user.id)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
+                    <button onClick={() => setDeleteTargetId(staff.id)} disabled={isReadOnly} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50">
                       <Trash2 size={18} />
                     </button>
                  </div>
                </div>
              ))}
-             {healthMgmtUsers.length === 0 && (
+             {healthMgmtStaff.length === 0 && (
                <div className="text-center py-10 bg-gray-50 rounded-2xl border border-dashed text-gray-400 text-sm">
                  目前尚無健管人員，請由左側新增。
                </div>
