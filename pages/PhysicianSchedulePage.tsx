@@ -17,12 +17,13 @@ import { toLocalISOString, generateUUID } from '../services/utils';
 // Alias for internal use if needed
 const propsToLocalISOString = toLocalISOString;
 
-const LOCATIONS = ['北投', '大直', '台中'];
+const LOCATIONS = ['北投', '大直', '台中', '外部'];
 
 const LOCATION_COLORS: Record<string, string> = {
     '北投': 'bg-blue-500 border-blue-600',
-    '大直': 'bg-[#A1887F] border-[#8D6E63]', // Light Brown (Material Brown 300/400 range)
-    '台中': 'bg-orange-500 border-orange-600'
+    '大直': 'bg-stone-500 border-stone-600',
+    '台中': 'bg-orange-500 border-orange-600',
+    '外部': 'bg-purple-500 border-purple-600',
 };
 
 const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUser }) => {
@@ -1195,7 +1196,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                          return minute === '00' ? `${h}` : `${h}'`;
                      });
                  };
-                 const formatLocShort = (loc: string) => (loc === '北投' ? '北' : loc === '台中' ? '中' : loc === '大直' ? '直' : loc ? `(${loc})` : '');
+                 const formatLocShort = (loc: string) => (loc === '北投' ? '北' : loc === '台中' ? '中' : loc === '大直' ? '直' : loc === '外部' ? '外' : loc ? `(${loc})` : '');
 
                 // Push to outer bodyRows
                 bodyRows = sortedDoctors.map(doc => {
@@ -1514,6 +1515,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
             addLocationSection('北投', 'FF3B82F6');
             addLocationSection('大直', 'FFA1887F');
             addLocationSection('台中', 'FFF97316');
+            addLocationSection('外部', 'FF8B5CF6');
 
 
             // ==========================================
@@ -1921,6 +1923,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                         <option value="北投">北投</option>
                                         <option value="大直">大直</option>
                                         <option value="台中">台中</option>
+                                        <option value="外部">外部</option>
                                     </select>
                                     <span className="text-amber-400">/</span>
                                     <input
