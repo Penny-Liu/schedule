@@ -17,6 +17,8 @@ import { toLocalISOString, generateUUID } from '../services/utils';
 // Alias for internal use if needed
 const propsToLocalISOString = toLocalISOString;
 
+const isGIStation = (name: string) => (name || '').includes('GI') || (name || '').includes('腸胃');
+
 const LOCATIONS = ['北投', '大直', '台中', '外部'];
 
 const LOCATION_COLORS: Record<string, string> = {
@@ -25,6 +27,10 @@ const LOCATION_COLORS: Record<string, string> = {
     '台中': 'bg-orange-500 border-orange-600',
     '外部': 'bg-purple-500 border-purple-600',
 };
+
+const ASSIGNMENT_STATION_ORDER = [
+    '解說', '影像', '遠班', '支援', 'GI1', 'GI2', 'GI', '麻醉', '行政', '耳鼻喉科', '眼科', '婦科'
+];
 
 const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUser }) => {
     
@@ -168,7 +174,13 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
         // User Request: Imaging line shows "遠班" doctors, with (北投) suffix if location is 北投
         const imgDocs = getRemoteDocs();
         const expDocs = getFullDocs('解說');
-        const giDocs = [...getFullDocs('GI'), ...getFullDocs('腸胃')]; // GI or 腸胃
+        const giDocs = shifts
+            .filter(s => s.date === dateKey && s.location === '大直' && isGIStation(s.scheduled_station || s.station || ''))
+            .map(s => {
+                const d = doctors.find(doc => doc.id === s.doctorId);
+                let suffix = ' 醫師';
+                return `${d?.name}${suffix}`;
+            });
         const anesthDocs = [...getFullDocs('麻醫'), ...getFullDocs('麻醉')];
 
         // 3-Specialty
@@ -1180,6 +1192,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                 }
 
                 // Find GI range
+                const isGI = (st: string) => isGIStation(st);
                 const giIndices = sortedDoctors
                     .map((d, i) => d.specialty === '腸胃科' ? i : -1)
                     .filter(i => i !== -1);
@@ -1463,8 +1476,19 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                 }
 
                 // Stations
+                const processedStations: string[] = [];
                 locStations.forEach(stationConfig => {
-                    const station = stationConfig.name;
+                    let station = stationConfig.name;
+                    
+                    // Unified GI logic for Excel
+                    if (isGIStation(station)) {
+                        if (processedStations.includes('GI')) return;
+                        station = 'GI';
+                        processedStations.push('GI');
+                    } else {
+                        processedStations.push(station);
+                    }
+
                     // Skip if station is explicitly '晚班' to avoid duplication
                     if (station === '晚班') return;
 
@@ -1480,8 +1504,12 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                         cell.border = borderStyle;
                         if (isWeekend) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF5F5F5' } };
 
-                        // Modified: Strict check for scheduled_station only
-                        const stationShifts = locShifts.filter(s => s.date === dateStr && s.scheduled_station === station);
+                        // Find shifts for this station (support multiple doctors)
+                        const stationShifts = locShifts.filter(s => {
+                            if (s.date !== dateStr) return false;
+                            if (station === 'GI') return isGIStation(s.scheduled_station || '');
+                            return s.scheduled_station === station;
+                        });
                         
                         if (stationShifts.length > 0) {
                             const contentParts = stationShifts.map(shift => {
@@ -2221,7 +2249,8 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                             
                                             // Display logic just for this cell
                                             let cellDisplayStation = shift?.scheduled_station || '';
-                                            if (cellDisplayStation === '耳鼻喉科') cellDisplayStation = 'ENT';
+                                            if (isGIStation(cellDisplayStation)) cellDisplayStation = 'GI';
+                                            else if (cellDisplayStation === '耳鼻喉科') cellDisplayStation = 'ENT';
                                             
                                             // Gyn+Explanation Logic (simplified visual check, or use computed)
                                             // We need to check if '解+婦' applies here too? 
@@ -2659,6 +2688,11 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                             
                                                             const currentShifts = allRelevantShifts.filter(s => {
                                                                 if (s.date !== date || s.location !== location) return false;
+                                                                
+                                                                if (stationName === 'GI') {
+                                                                    return isGIStation(s.scheduled_station || '');
+                                                                }
+
                                                                 if (s.scheduled_station === stationName) return true;
                                                                 
                                                                 // Logic: Show 'Explanation' doctors in 'Gyn' station if FamilyMed + Gyn Capable
@@ -2717,7 +2751,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                                 >
                                                                     {/* Indicators for GI (Red) and Explanation (Deep Blue) */}
                                                                     {(() => {
-                                                                        const isGI = ['GI', '腸胃'].some(term => stationName.includes(term));
+                                                                        const isGI = isGIStation(stationName);
                                                                         const isExp = stationName.includes('解說');
                                                                         const stats = db.getDailyStats(date);
                                                                         
@@ -2738,7 +2772,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                                         return null;
                                                                     })()}
                                                                     {displayShifts.length > 0 ? (
-                                                                        <div className={`flex flex-col items-center gap-0.5 px-0.5 pb-1 w-full ${(['GI', '腸胃'].some(term => stationName.includes(term)) || stationName.includes('解說')) ? 'justify-start pt-6' : 'justify-center py-1'}`}>
+                                                                        <div className={`flex flex-col items-center gap-0.5 px-0.5 pb-1 w-full ${(isGIStation(stationName) || stationName.includes('解說')) ? 'justify-start pt-6' : 'justify-center py-1'}`}>
                                                                              {displayShifts.map((shift, index) => {
                                                                                 const doc = doctors.find(d => d.id === shift.doctorId);
                                                                                 const isSimulated = simulatedShifts?.some(ss => ss.id === shift.id);
@@ -2760,7 +2794,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                                                             </div>
                                                                                         )}
                                                                                         {shift.task && (
-                                                                                            <div className={`text-[9px] leading-tight font-bold ${shift.task.includes('晚班') ? 'text-red-500' : 'text-blue-500'}`}>
+                                                                                            <div className="text-[9px] leading-tight font-bold ${shift.task.includes('晚班') ? 'text-red-500' : 'text-blue-500'}">
                                                                                                 {shift.task}
                                                                                             </div>
                                                                                         )}
@@ -2845,8 +2879,22 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                         </div>
 
                         {LOCATIONS.map(loc => {
-                            const locStations = stations.filter(s => s.location === loc);
-                            if (locStations.length === 0) return null;
+                            const rawLocStations = stations.filter(s => s.location === loc);
+                            if (rawLocStations.length === 0) return null;
+
+                            // Merge GI stations for Daily View cards
+                            const locStations: DoctorStationConfig[] = [];
+                            const seenGI = new Set<string>();
+                            rawLocStations.forEach(s => {
+                                if (isGIStation(s.name)) {
+                                    if (!seenGI.has(loc)) {
+                                        locStations.push({ ...s, name: 'GI' });
+                                        seenGI.add(loc);
+                                    }
+                                } else {
+                                    locStations.push(s);
+                                }
+                            });
 
                             return (
                                 <div key={loc} className="space-y-4">
@@ -2907,11 +2955,12 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                 ...activeShifts,
                                                 ...(simulatedShifts || [])
                                             ];
-                                            
-                                            const shiftsOnStation = allRelevantShifts.filter(s => {
-                                                if (s.date !== toLocalISOString(currentDate) || s.location !== config.location) return false;
-                                                const assignedSt = s.scheduled_station || s.station;
-                                                if (assignedSt === st) return true;
+                                                                                        const shiftsOnStation = allRelevantShifts.filter(s => {
+                                                 if (s.date !== toLocalISOString(currentDate) || s.location !== config.location) return false;
+                                                 const assignedSt = s.scheduled_station || s.station || '';
+                                                 
+                                                 if (st === 'GI') return isGIStation(assignedSt);
+                                                 if (assignedSt === st) return true;
                                                 
                                                  // Logic: Show 'Explanation' doctors in 'Gyn' station if FamilyMed + Gyn Capable
                                                 if (st === '婦科' && assignedSt === '解說') {
@@ -2941,13 +2990,23 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                     suffix = '(大直)';
                                                 }
                                             }
-                                            
-                                            // Get Requirement
-                                            // Fix: Settings uses [Sun, Mon...] index 0-6. currentDate.getDay() returns 0-6 (Sun-Sat).
-                                            const dayOfWeek = currentDate.getDay();
-                                            const reqKey = `${config.name}_${config.location}`;
-                                            const reqs = requirements[reqKey] || requirements[config.name] || [0,0,0,0,0,0,0];
-                                            const req = reqs[dayOfWeek];
+                                                                                        // Get Requirement (sum up if GI)
+                                             const dayOfWeek = currentDate.getDay();
+                                             let req = 0;
+
+                                             if (st === 'GI') {
+                                                 // Find all original stations that count as GI for this location
+                                                 const originalGIStations = rawLocStations.filter(s => isGIStation(s.name));
+                                                 originalGIStations.forEach(orig => {
+                                                     const reqKey = `${orig.name}_${orig.location}`;
+                                                     const reqs = requirements[reqKey] || requirements[orig.name] || [0,0,0,0,0,0,0];
+                                                     req += reqs[dayOfWeek] || 0;
+                                                 });
+                                             } else {
+                                                 const reqKey = `${config.name}_${config.location}`;
+                                                 const reqs = requirements[reqKey] || requirements[config.name] || [0,0,0,0,0,0,0];
+                                                 req = reqs[dayOfWeek] || 0;
+                                             }
                                             const isShort = displayShifts.length < req;
 
                                             const getStationTheme = (stationName: string) => {
@@ -3159,16 +3218,27 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                     <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-200">
                                         <tr>
                                             <th className="px-3 py-2 text-left sticky left-0 bg-slate-50 z-10 border-r border-slate-200 shadow-[2px_0_5px_rgba(0,0,0,0.05)]">日期</th>
-                                            {stations.map(st => (
-                                                <th key={`head-${st.name}-${st.location}`} className="px-2 py-2 text-center min-w-[60px] border-r border-gray-100">
-                                                    <div className="flex flex-col items-center">
-                                                        <span>{st.name}</span>
-                                                        <span className={`text-[9px] px-1.5 rounded-full mt-0.5 text-white ${LOCATION_COLORS[st.location]?.split(' ')[0] || 'bg-gray-400'}`}>
-                                                            {st.location}
-                                                        </span>
-                                                    </div>
-                                                </th>
-                                            ))}
+                                            {(() => {
+                                                const seen = new Set<string>();
+                                                return stations.filter(st => {
+                                                    const key = `${isGIStation(st.name) ? 'GI' : st.name}-${st.location}`;
+                                                    if (seen.has(key)) return false;
+                                                    seen.add(key);
+                                                    return true;
+                                                }).map(st => {
+                                                    const displayStationName = isGIStation(st.name) ? 'GI' : st.name;
+                                                    return (
+                                                        <th key={`head-${displayStationName}-${st.location}`} className="px-2 py-2 text-center min-w-[60px] border-r border-gray-100">
+                                                            <div className="flex flex-col items-center">
+                                                                <span>{displayStationName}</span>
+                                                                <span className={`text-[9px] px-1.5 rounded-full mt-0.5 text-white ${LOCATION_COLORS[st.location]?.split(' ')[0] || 'bg-gray-400'}`}>
+                                                                    {st.location}
+                                                                </span>
+                                                            </div>
+                                                        </th>
+                                                    );
+                                                });
+                                            })()}
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-100">
@@ -3182,36 +3252,60 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                     <td className="px-3 py-2 text-left sticky left-0 bg-white z-10 border-r border-slate-100 font-bold text-slate-600 whitespace-nowrap shadow-[2px_0_5px_rgba(0,0,0,0.05)]">
                                                         {date.slice(5)} <span className="text-gray-400 font-normal">({dayLabel})</span>
                                                     </td>
-                                                    {stations.map(st => {
-                                                        // Special logic for Gynecology: include Explanation doctors with Gyn capability
-                                                        let count = shifts.filter(s => {
-                                                            if (s.date !== date || s.location !== st.location || !s.doctorId) return false;
-                                                            
-                                                            // Direct station match
-                                                            if (s.station === st.name || s.scheduled_station === st.name) return true;
-                                                            
-                                                            // Special: For Gyn station, include Explanation doctors with Gyn capability
-                                                            if (st.name === '婦科' && s.scheduled_station === '解說') {
-                                                                const doc = doctors.find(d => d.id === s.doctorId);
-                                                                return doc?.capabilities?.includes('婦科');
+                                                    {(() => {
+                                                        const seen = new Set<string>();
+                                                        return stations.filter(st => {
+                                                            const key = `${isGIStation(st.name) ? 'GI' : st.name}-${st.location}`;
+                                                            if (seen.has(key)) return false;
+                                                            seen.add(key);
+                                                            return true;
+                                                        }).map(st => {
+                                                            const displayStationName = isGIStation(st.name) ? 'GI' : st.name;
+                                                            // Calculate count (sum up if GI)
+                                                            let count = shifts.filter(s => {
+                                                                if (s.date !== date || s.location !== st.location || !s.doctorId) return false;
+                                                                
+                                                                const sStation = s.scheduled_station || s.station || '';
+                                                                if (displayStationName === 'GI') {
+                                                                    if (isGIStation(sStation)) return true;
+                                                                } else if (sStation === displayStationName) {
+                                                                    return true;
+                                                                }
+                                                                
+                                                                // Special: For Gyn station, include Explanation doctors with Gyn capability
+                                                                if (displayStationName === '婦科' && sStation === '解說') {
+                                                                    const doc = doctors.find(d => d.id === s.doctorId);
+                                                                    return doc?.capabilities?.includes('婦科');
+                                                                }
+                                                                
+                                                                return false;
+                                                            }).length;
+
+                                                            // Calculate requirement (sum up if GI)
+                                                            let req = 0;
+                                                            if (displayStationName === 'GI') {
+                                                                stations.filter(os => os.location === st.location && isGIStation(os.name)).forEach(os => {
+                                                                    const reqKey = `${os.name}_${os.location}`;
+                                                                    const reqs = requirements[reqKey] || requirements[os.name] || [0,0,0,0,0,0,0];
+                                                                    req += reqs[dayOfWeek] || 0;
+                                                                });
+                                                            } else {
+                                                                const reqKey = `${st.name}_${st.location}`;
+                                                                const reqs = requirements[reqKey] || requirements[st.name] || [0,0,0,0,0,0,0];
+                                                                req = reqs[dayOfWeek] || 0;
                                                             }
+
+                                                            const isLow = count < req;
                                                             
-                                                            return false;
-                                                        }).length;
-                                                        const reqKey = `${st.name}_${st.location}`;
-                                                        // Fallback to legacy
-                                                        const reqs = requirements[reqKey] || requirements[st.name] || [0,0,0,0,0,0,0];
-                                                        const req = reqs[dayOfWeek];
-                                                        const isLow = count < req;
-                                                        
-                                                        return (
-                                                            <td key={`${date}-${st.name}-${st.location}`} className={`px-2 py-2 text-center border-r border-gray-50 font-mono font-bold ${isLow ? 'bg-red-50' : ''}`}>
-                                                                <span className={isLow ? 'text-red-600' : 'text-teal-600'}>{count}</span>
-                                                                <span className="text-gray-300 mx-0.5 text-[10px]">/</span>
-                                                                <span className="text-gray-400 text-[10px]">{req}</span>
-                                                            </td>
-                                                        );
-                                                    })}
+                                                            return (
+                                                                <td key={`${date}-${displayStationName}-${st.location}`} className={`px-2 py-2 text-center border-r border-gray-50 font-mono font-bold ${isLow ? 'bg-red-50' : ''}`}>
+                                                                    <span className={isLow ? 'text-red-600' : 'text-teal-600'}>{count}</span>
+                                                                    <span className="text-gray-300 mx-0.5 text-[10px]">/</span>
+                                                                    <span className="text-gray-400 text-[10px]">{req}</span>
+                                                                </td>
+                                                            );
+                                                        });
+                                                    })()}
                                                 </tr>
                                              );
                                         })}
@@ -3232,16 +3326,27 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                             <th className="px-3 py-2 text-left sticky left-0 bg-slate-50 z-10 border-r border-slate-200 shadow-[2px_0_5px_rgba(0,0,0,0.05)] w-32">醫師姓名</th>
                                             <th className="px-2 py-2 text-center bg-teal-50 text-teal-700 border-r border-teal-100 font-extrabold w-16">週期</th>
                                             <th className="px-2 py-2 text-center bg-indigo-50 text-indigo-700 border-r border-indigo-100 font-extrabold w-16">總計</th>
-                                            {stations.map(st => (
-                                                <th key={`doc-head-${st.name}-${st.location}`} className="px-2 py-2 text-center min-w-[60px] border-r border-gray-100 font-normal">
-                                                    <div className="flex flex-col items-center opacity-80">
-                                                        <span>{st.name}</span>
-                                                        <span className={`text-[8px] px-1 rounded-full mt-0.5 text-white ${LOCATION_COLORS[st.location]?.split(' ')[0] || 'bg-gray-400'}`}>
-                                                            {st.location}
-                                                        </span>
-                                                    </div>
-                                                </th>
-                                            ))}
+                                            {(() => {
+                                                const seen = new Set<string>();
+                                                return stations.filter(st => {
+                                                    const key = `${isGIStation(st.name) ? 'GI' : st.name}-${st.location}`;
+                                                    if (seen.has(key)) return false;
+                                                    seen.add(key);
+                                                    return true;
+                                                }).map(st => {
+                                                    const displayStationName = isGIStation(st.name) ? 'GI' : st.name;
+                                                    return (
+                                                        <th key={`doc-head-${displayStationName}-${st.location}`} className="px-2 py-2 text-center min-w-[60px] border-r border-gray-100 font-normal">
+                                                            <div className="flex flex-col items-center opacity-80">
+                                                                <span>{displayStationName}</span>
+                                                                <span className={`text-[8px] px-1 rounded-full mt-0.5 text-white ${LOCATION_COLORS[st.location]?.split(' ')[0] || 'bg-gray-400'}`}>
+                                                                    {st.location}
+                                                                </span>
+                                                            </div>
+                                                        </th>
+                                                    );
+                                                });
+                                            })()}
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-100">
@@ -3283,12 +3388,15 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                             const docShifts = shifts.filter(s => s.doctorId === doc.id && currentCycleRange.includes(s.date));
                                             // Only count shifts that match displayed stations AND count as actual work
                                             const total = docShifts.filter(s => {
-                                                const st = s.station || s.scheduled_station;
-                                                if (!isActualWork(st)) return false;
-                                                return stations.some(station => 
-                                                    (s.station === station.name || s.scheduled_station === station.name) && 
-                                                    s.location === station.location
-                                                );
+                                                const stName = s.station || s.scheduled_station || '';
+                                                if (!isActualWork(stName)) return false;
+                                                return stations.some(station => {
+                                                    const displayStationName = isGIStation(station.name) ? 'GI' : station.name;
+                                                    if (displayStationName === 'GI') {
+                                                        return isGIStation(stName) && s.location === station.location;
+                                                    }
+                                                    return (stName === station.name) && s.location === station.location;
+                                                });
                                             }).length;
                                             
                                             // Skip doctors with 0 shifts if list is too long? No, show all.
@@ -3307,14 +3415,30 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                     <td className="px-2 py-2 text-center bg-indigo-50/30 text-indigo-700 font-bold border-r border-indigo-50">
                                                         {total}
                                                     </td>
-                                                    {stations.map(st => {
-                                                        const count = docShifts.filter(s => (s.station === st.name || s.scheduled_station === st.name) && s.location === st.location).length;
-                                                        return (
-                                                            <td key={`${doc.id}-${st.name}-${st.location}`} className={`px-2 py-2 text-center border-r border-gray-50 ${count > 0 ? 'font-bold text-slate-700 bg-slate-50' : 'text-gray-200'}`}>
-                                                                {count > 0 ? count : '-'}
-                                                            </td>
-                                                        );
-                                                    })}
+                                                    {(() => {
+                                                        const seen = new Set<string>();
+                                                        return stations.filter(st => {
+                                                            const key = `${isGIStation(st.name) ? 'GI' : st.name}-${st.location}`;
+                                                            if (seen.has(key)) return false;
+                                                            seen.add(key);
+                                                            return true;
+                                                        }).map(st => {
+                                                            const displayStationName = isGIStation(st.name) ? 'GI' : st.name;
+                                                            const count = docShifts.filter(s => {
+                                                                const sStation = s.scheduled_station || s.station || '';
+                                                                if (displayStationName === 'GI') {
+                                                                    return isGIStation(sStation) && s.location === st.location;
+                                                                }
+                                                                return sStation === displayStationName && s.location === st.location;
+                                                            }).length;
+                                                            
+                                                            return (
+                                                                <td key={`${doc.id}-${displayStationName}-${st.location}`} className={`px-2 py-2 text-center border-r border-gray-50 ${count > 0 ? 'font-bold text-slate-700 bg-slate-50' : 'text-gray-200'}`}>
+                                                                    {count > 0 ? count : '-'}
+                                                                </td>
+                                                            );
+                                                        });
+                                                    })()}
                                                 </tr>
                                             );
                                         })}
@@ -3335,16 +3459,27 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                             <th className="px-3 py-2 text-left sticky left-0 bg-slate-50 z-10 border-r border-slate-200 shadow-[2px_0_5px_rgba(0,0,0,0.05)] w-32">放射師姓名</th>
                                             <th className="px-2 py-2 text-center bg-teal-50 text-teal-700 border-r border-teal-100 font-extrabold w-16">週期</th>
                                             <th className="px-2 py-2 text-center bg-indigo-50 text-indigo-700 border-r border-indigo-100 font-extrabold w-12">總天數</th>
-                                            {stations.map(st => (
-                                                <th key={`tech-head-${st.name}-${st.location}`} className="px-2 py-2 text-center min-w-[50px] border-r border-gray-100 font-normal">
-                                                    <div className="flex flex-col items-center opacity-80">
-                                                        <span>{st.name}</span>
-                                                        <span className={`text-[8px] px-1 rounded-full mt-0.5 text-white ${LOCATION_COLORS[st.location]?.split(' ')[0] || 'bg-gray-400'}`}>
-                                                            {st.location}
-                                                        </span>
-                                                    </div>
-                                                </th>
-                                            ))}
+                                            {(() => {
+                                                const seen = new Set<string>();
+                                                return stations.filter(st => {
+                                                    const key = `${isGIStation(st.name) ? 'GI' : st.name}-${st.location}`;
+                                                    if (seen.has(key)) return false;
+                                                    seen.add(key);
+                                                    return true;
+                                                }).map(st => {
+                                                    const displayStationName = isGIStation(st.name) ? 'GI' : st.name;
+                                                    return (
+                                                        <th key={`tech-head-${displayStationName}-${st.location}`} className="px-2 py-2 text-center min-w-[50px] border-r border-gray-100 font-normal">
+                                                            <div className="flex flex-col items-center opacity-80">
+                                                                <span>{displayStationName}</span>
+                                                                <span className={`text-[8px] px-1 rounded-full mt-0.5 text-white ${LOCATION_COLORS[st.location]?.split(' ')[0] || 'bg-gray-400'}`}>
+                                                                    {st.location}
+                                                                </span>
+                                                            </div>
+                                                        </th>
+                                                    );
+                                                });
+                                            })()}
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-100">
@@ -3403,14 +3538,30 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                     <td className={`px-2 py-2 text-center font-bold border-r ${savedCycle ? 'bg-amber-50/50 text-amber-800 border-amber-100' : 'bg-indigo-50/30 text-indigo-700 border-indigo-50'}`}>
                                                         {totalWorkDays}
                                                     </td>
-                                                    {stations.map(st => {
-                                                        const count = userShifts.filter(s => s.station === st.name && s.location === st.location).length;
-                                                        return (
-                                                            <td key={`${user.id}-${st.name}-${st.location}`} className={`px-2 py-2 text-center border-r border-gray-50 ${count > 0 ? 'font-bold text-slate-700 bg-slate-50' : 'text-gray-200'}`}>
-                                                                {count > 0 ? count : '-'}
-                                                            </td>
-                                                        );
-                                                    })}
+                                                    {(() => {
+                                                        const seen = new Set<string>();
+                                                        return stations.filter(st => {
+                                                            const key = `${isGIStation(st.name) ? 'GI' : st.name}-${st.location}`;
+                                                            if (seen.has(key)) return false;
+                                                            seen.add(key);
+                                                            return true;
+                                                        }).map(st => {
+                                                            const displayStationName = isGIStation(st.name) ? 'GI' : st.name;
+                                                            const count = userShifts.filter(s => {
+                                                                const sStation = s.station || '';
+                                                                if (displayStationName === 'GI') {
+                                                                    return isGIStation(sStation) && s.location === st.location;
+                                                                }
+                                                                return sStation === displayStationName && s.location === st.location;
+                                                            }).length;
+                                                            
+                                                            return (
+                                                                <td key={`${user.id}-${displayStationName}-${st.location}`} className={`px-2 py-2 text-center border-r border-gray-50 ${count > 0 ? 'font-bold text-slate-700 bg-slate-50' : 'text-gray-200'}`}>
+                                                                    {count > 0 ? count : '-'}
+                                                                </td>
+                                                            );
+                                                        });
+                                                    })()}
                                                 </tr>
                                             );
                                         })}
@@ -3458,6 +3609,14 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                     </button>
                                     {Array.from(new Set(stations.map(s => s.name)))
                                         .filter(name => name !== '晚班') // User Request: Late Shift is a Task, not a Station assignment here
+                                        .sort((a, b) => {
+                                            const idxA = ASSIGNMENT_STATION_ORDER.indexOf(a);
+                                            const idxB = ASSIGNMENT_STATION_ORDER.indexOf(b);
+                                            if (idxA === -1 && idxB === -1) return a.localeCompare(b, 'zh-Hant');
+                                            if (idxA === -1) return 1;
+                                            if (idxB === -1) return -1;
+                                            return idxA - idxB;
+                                        })
                                         .map(stationName => {
                                         // Check associated locations for this station name
                                         const associatedLocs = stations.filter(s => s.name === stationName);

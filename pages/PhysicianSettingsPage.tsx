@@ -8,7 +8,8 @@ import ConfirmModal from '../components/ConfirmModal';
 const LOCATION_COLORS: Record<string, string> = {
     '北投': 'bg-blue-500 text-white',
     '大直': 'bg-[#A1887F] text-white', // Light Brown
-    '台中': 'bg-orange-500 text-white'
+    '台中': 'bg-orange-500 text-white',
+    '外部': 'bg-purple-500 text-white'
 };
 
 interface PhysicianSettingsPageProps {
@@ -285,6 +286,7 @@ const PhysicianSettingsPage: React.FC<PhysicianSettingsPageProps> = ({ currentUs
                                     <option value="北投">北投</option>
                                     <option value="大直">大直</option>
                                     <option value="台中">台中</option>
+                                    <option value="外部">外部</option>
                                 </select>
                                 <button
                                     type="button"
@@ -296,7 +298,7 @@ const PhysicianSettingsPage: React.FC<PhysicianSettingsPageProps> = ({ currentUs
                             </div>
 
                             <div className="flex flex-wrap gap-2">
-                                {doctorStations.map(config => (
+                                {[...doctorStations].sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant')).map(config => (
                                     <div key={`${config.name}-${config.location}`} className="group flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-sm text-gray-700 shadow-sm hover:border-indigo-200 hover:shadow-md transition-all">
                                         <span>{config.name}</span>
                                         <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${LOCATION_COLORS[config.location] || 'bg-gray-400 text-white'}`}>
@@ -382,8 +384,10 @@ const PhysicianSettingsPage: React.FC<PhysicianSettingsPageProps> = ({ currentUs
                                     </tr>
                                 </thead>
                                 <tbody className="bg-white">
-                                    {['北投', '大直', '台中'].map(location => {
-                                        const locStations = doctorStations.filter(s => s.location === location);
+                                    {['北投', '大直', '台中', '外部'].map(location => {
+                                        const locStations = doctorStations
+                                            .filter(s => s.location === location)
+                                            .sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant'));
                                         if (locStations.length === 0) return null;
 
                                         return (
@@ -461,6 +465,7 @@ const PhysicianSettingsPage: React.FC<PhysicianSettingsPageProps> = ({ currentUs
                                     <option value="北投">北投</option>
                                     <option value="大直">大直</option>
                                     <option value="台中">台中</option>
+                                    <option value="外部">外部</option>
                                 </select>
                             </div>
 
