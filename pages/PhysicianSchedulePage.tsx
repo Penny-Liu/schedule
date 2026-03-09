@@ -2794,7 +2794,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                                                             </div>
                                                                                         )}
                                                                                         {shift.task && (
-                                                                                            <div className="text-[9px] leading-tight font-bold ${shift.task.includes('晚班') ? 'text-red-500' : 'text-blue-500'}">
+                                                                                            <div className={`text-[9px] leading-tight font-bold ${shift.task.includes('晚班') ? 'text-red-500' : 'text-blue-500'}`}>
                                                                                                 {shift.task}
                                                                                             </div>
                                                                                         )}
@@ -3122,7 +3122,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                                                 )}
                                                                             </div>
                                                                             <div className="flex flex-wrap gap-1.5">
-                                                                                {s.task && <span className="text-[10px] text-blue-700 bg-blue-50/80 px-2 py-0.5 rounded border border-blue-100/50 font-bold tracking-wide">{s.task}</span>}
+                                                                                {s.task && <span className={`text-[10px] px-2 py-0.5 rounded border font-bold tracking-wide ${s.task.includes('晚班') ? 'text-red-700 bg-red-50/80 border-red-100/50' : 'text-blue-700 bg-blue-50/80 border-blue-100/50'}`}>{s.task}</span>}
                                                                                 {s.note && <span className="text-[10px] text-amber-700 bg-amber-50/80 px-1.5 py-0.5 rounded border border-amber-100/50 font-bold break-words flex flex-wrap items-center gap-1 leading-tight w-full"><span className="text-amber-500 shrink-0">📝</span> <span>{s.note}</span></span>}
                                                                             </div>
                                                                         </div>

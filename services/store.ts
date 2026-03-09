@@ -722,7 +722,7 @@ BMD :{{bmd}}
             'permissions': 'permissions'
         };
         Object.keys(mapping).forEach(key => {
-            if (key in obj) {
+            if (key in obj && key !== mapping[key]) {
                 obj[mapping[key]] = obj[key];
                 delete obj[key];
             }
