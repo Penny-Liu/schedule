@@ -48,7 +48,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
     // Tab State
     const [activeTab, setActiveTab] = useState<'personal' | 'radiographer' | 'health_mgmt' | 'system'>('personal');
 
-    const isSupervisorOrAdmin = currentUser.role === UserRole.SUPERVISOR || currentUser.role === UserRole.SYSTEM_ADMIN;
+    const isSupervisorOrAdmin = currentUser.role === UserRole.SUPERVISOR || currentUser.role === UserRole.SYSTEM_ADMIN || currentUser.role === UserRole.PHYSICIAN_ADMIN;
     const canManageHealthMgmt = currentUser.role === UserRole.SYSTEM_ADMIN || currentUser.permissions?.includes(PERMISSIONS.EDIT_HEALTH_MGMT);
     const canManageDates = isSupervisorOrAdmin || currentUser.role === UserRole.SCHEDULER || canManageHealthMgmt;
     const isSystemAdmin = currentUser.role === UserRole.SYSTEM_ADMIN;
@@ -56,11 +56,12 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
 
     // Auto-switch away from restricted tabs
     useEffect(() => {
-        if (activeTab === 'radiographer' && !isSupervisorOrAdmin) {
-            setActiveTab('personal');
+        if (activeTab === 'radiographer' && !isSupervisorOrAdmin && currentUser.role !== UserRole.PHYSICIAN_ADMIN) {
+            // Radiographer tab stays for Radiographer supervisors
+            if (currentUser.role !== UserRole.SUPERVISOR) setActiveTab('personal');
         } else if (activeTab === 'health_mgmt' && !canManageHealthMgmt) {
             setActiveTab('personal');
-        } else if (activeTab === 'system' && !(isSupervisorOrAdmin || currentUser.role === UserRole.SCHEDULER)) {
+        } else if (activeTab === 'system' && !(isSupervisorOrAdmin || currentUser.role === UserRole.SCHEDULER || currentUser.role === UserRole.PHYSICIAN_ADMIN)) {
             setActiveTab('personal');
         }
     }, [activeTab, isSupervisorOrAdmin, canManageHealthMgmt, currentUser.role]);
@@ -1275,7 +1276,7 @@ BMD :{{bmd}}
                                         >
                                             <option value={DateEventType.NATIONAL}>國定假日 (紅字)</option>
                                             <option value={DateEventType.NOTE}>全院備忘 (藍字)</option>
-                                            {isSupervisorOrAdmin && currentUser.isRadiographer !== false && (
+                                            {(isSupervisorOrAdmin || currentUser.role === UserRole.SCHEDULER) && (
                                                 <option value={DateEventType.RADIOGRAPHER_NOTE}>放射師備註 (綠字)</option>
                                             )}
                                             <option value={DateEventType.DOCTOR_NOTE}>醫師備註 (紫字)</option>
