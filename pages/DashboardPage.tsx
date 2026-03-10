@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import type { User, Shift, DoctorShift } from '../types';
+import type { User, Shift, DoctorShift, HealthMgmtStaff, HealthMgmtShift } from '../types';
 import { UserRole, SYSTEM_OFF, SPECIAL_ROLES, LeaveRequest, LeaveStatus, LeaveType, StationDefault, DateEventType } from '../types';
 import { db } from '../services/store';
 import { ChevronLeft, ChevronRight, Briefcase, Moon, Sun, Monitor, Activity, Calendar as CalendarIcon, Filter, Wand2, Users, LayoutList, Star, AlertCircle, Plus, X, Download, BarChart2, Sparkles, ChevronDown, ChevronUp, GripVertical, BookOpen, Lock, Unlock, CheckCircle, Loader2, User as UserIcon, Key, Settings, Trash2, Check, AlertTriangle, Copy, FileSpreadsheet } from 'lucide-react';
@@ -69,6 +69,8 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
 
     const pendingLeaves = db.getLeaves().filter(l => l.status === LeaveStatus.PENDING);
     const [shifts, setShifts] = useState<Shift[]>(db.getShifts('', ''));
+    const [healthMgmtStaff, setHealthMgmtStaff] = useState<HealthMgmtStaff[]>(db.getHealthMgmtStaff());
+    const [healthMgmtShifts, setHealthMgmtShifts] = useState<HealthMgmtShift[]>(db.getHealthMgmtShifts('', ''));
     const [doctorShifts, setDoctorShifts] = useState(db.getDoctorShifts());
     
     
@@ -165,7 +167,9 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
     useEffect(() => {
         const unsubscribe = db.subscribe(() => {
             setAllRadiographers(db.getUsers().filter(u => u.isRadiographer));
+            setHealthMgmtStaff(db.getHealthMgmtStaff());
             setShifts([...db.getShifts('', '')]);
+            setHealthMgmtShifts([...db.getHealthMgmtShifts('', '')]);
             setDisplayOrder([...db.getStationDisplayOrder()]);
             setDoctorShifts([...db.getDoctorShifts()]);
         });
@@ -1224,13 +1228,22 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
         // Optimized Lookup O(1)
         const override = shiftMap.get(`${userId}-${dateStr}`);
 
-        // If there is an override shift record, TRUST IT.
-        // Even if it is Unassigned, it means the user was explicitly set to be here (e.g. Leave Cancelled).
+        // 1. If there is an override shift record for Radiographer, TRUST IT.
         if (override) {
             return {
                 station: override.station === SYSTEM_OFF ? null : override.station,
                 specialRoles: override.specialRoles || [],
                 isOff: override.station === SYSTEM_OFF
+            };
+        }
+
+        // 2. Check Health Mgmt Shifts
+        const hmShift = healthMgmtShifts.find(s => s.userId === userId && s.date === dateStr);
+        if (hmShift) {
+            return {
+                station: hmShift.station === '休假' ? null : hmShift.station,
+                specialRoles: hmShift.task ? [hmShift.task] : [],
+                isOff: hmShift.station === '休假'
             };
         }
 
@@ -2387,82 +2400,129 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                             {/* Main/Assistant Shift Display */}
 
 
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 p-4">
+                            <div className="space-y-6 px-4 py-6">
                                 {(() => {
-                                    // Station-based grouping logic
                                     const dateStr = toLocalISOString(dailyDate);
 
-                                    // Define requested order
-                                    const stationOrder = [
-                                        '遠距', '場控', '輔班', '排班',
-                                        StationDefault.MR3T, StationDefault.MR1_5T,
-                                        StationDefault.US1, StationDefault.US2, StationDefault.US3, StationDefault.US4,
-                                        StationDefault.CT, StationDefault.BMD_DX,
-                                        '技術支援', '行政', '大直'
-                                    ];
-
-                                    // Helper function to get assignments
-                                    const getAssignmentsForStation = (stationName: string) => {
-                                        return users.filter(u => {
+                                    // Unified Shift Getter for Daily View
+                                    const getAllAssignments = (stationName: string) => {
+                                        const assignments: { id: string; name: string; alias?: string; color?: string; specialRoles: string[] }[] = [];
+                                        
+                                        // 1. Look in Radiographers
+                                        allRadiographers.forEach(u => {
                                             const s = getDayShift(u.id, dateStr);
-                                            // Check Roles First (since they are treated like stations in the request)
-                                            if (stationName === '遠距' && s.station?.includes('遠')) return true;
-                                            if (stationName === '場控' && s.station?.includes('場控')) return true;
-                                            if (stationName === '輔班' && s.specialRoles.includes(SPECIAL_ROLES.ASSIST)) return true;
-                                            if (stationName === '排班' && s.specialRoles.includes(SPECIAL_ROLES.SCHEDULER)) return true;
-
-                                            // [Dual Display] If looking for '大直', include 'Remote + Dazhi Support'
-                                            if (stationName === '大直') {
-                                                const isRemote = s.station?.includes('遠');
-                                                const hasSupport = s.specialRoles.includes(SPECIAL_ROLES.DAZHI_SUPPORT);
-                                                if (isRemote && hasSupport) return true;
+                                            let match = false;
+                                            if (stationName === '遠距' && s.station?.includes('遠')) match = true;
+                                            else if (stationName === '場控' && s.station?.includes('場控')) match = true;
+                                            else if (stationName === '輔班' && s.specialRoles.includes(SPECIAL_ROLES.ASSIST)) match = true;
+                                            else if (stationName === '排班' && s.specialRoles.includes(SPECIAL_ROLES.SCHEDULER)) match = true;
+                                            else if (stationName === '大直') {
+                                                if (s.station?.includes('遠') && s.specialRoles.includes(SPECIAL_ROLES.DAZHI_SUPPORT)) match = true;
                                             }
+                                            else if (s.station === stationName) match = true;
 
-                                            // Then Check Exact Station Match
-                                            return s.station === stationName;
+                                            if (match) {
+                                                assignments.push({
+                                                    id: u.id,
+                                                    name: u.name,
+                                                    alias: u.alias,
+                                                    color: u.color,
+                                                    specialRoles: s.specialRoles.filter(r => r !== '輔班' && r !== '排班')
+                                                });
+                                            }
                                         });
+
+                                        // 2. Look in Health Mgmt Staff
+                                        healthMgmtStaff.filter(s => s.isActive !== false).forEach(staff => {
+                                            const shift = healthMgmtShifts.find(s => s.userId === staff.id && s.date === dateStr);
+                                            if (shift && shift.station === stationName) {
+                                                assignments.push({
+                                                    id: staff.id,
+                                                    name: staff.name,
+                                                    alias: staff.alias,
+                                                    color: '#10b981', // Emerald for HM
+                                                    specialRoles: shift.task ? [shift.task] : []
+                                                });
+                                            }
+                                        });
+
+                                        return assignments;
                                     };
 
-                                    const processedStations = new Set<string>();
-                                    const cards: React.ReactNode[] = [];
-
-                                    stationOrder.forEach(st => {
-                                        processedStations.add(st);
-                                        const assignedUsers = getAssignmentsForStation(st);
-
-                                        if (assignedUsers.length > 0) {
-                                            cards.push(
-                                                <div key={st} className="bg-slate-50 border border-slate-200 rounded-lg p-3">
-                                                    <div className={`text-sm font-bold mb-2 flex items-center justify-between ${getStationChipStyle(st)} px-2 py-1 rounded`}>
-                                                        {st}
-                                                        <span className="text-xs opacity-70 bg-white/30 px-1.5 rounded-full">{assignedUsers.length}</span>
-                                                    </div>
-                                                    <div className="flex flex-wrap gap-2">
-                                                        {assignedUsers.map(u => {
-                                                            const s = getDayShift(u.id, dateStr);
-                                                            const isSelf = u.id === currentUser.id;
-                                                            return (
-                                                                <div key={u.id} className={`flex items-center gap-2 bg-white px-2 py-1.5 rounded border shadow-sm ${isSelf ? 'border-teal-200 bg-teal-50' : 'border-slate-100'} `}>
-                                                                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white ${u.color || 'bg-slate-400'} `}>
-                                                                        {u.alias || u.name[0]}
-                                                                    </div>
-                                                                    <div className="text-base font-medium text-slate-700">
-                                                                        {u.name} {s.specialRoles.filter(r => r !== '輔班' && r !== '排班').map(r => <span key={r} className="text-[10px] text-teal-600 ml-1">({r})</span>)}
-                                                                    </div>
-                                                                </div>
-                                                            )
-                                                        })}
-                                                    </div>
-                                                </div>
-                                            );
+                                    const categories = [
+                                        {
+                                            title: '放射師排班',
+                                            icon: <Activity size={16} className="text-blue-500" />,
+                                            stations: [
+                                                StationDefault.MR3T, StationDefault.MR1_5T,
+                                                StationDefault.US1, StationDefault.US2, StationDefault.US3, StationDefault.US4,
+                                                StationDefault.CT, StationDefault.BMD_DX,
+                                                '技術支援', '行政'
+                                            ]
+                                        },
+                                        {
+                                            title: '醫師/遠距支援',
+                                            icon: <Users size={16} className="text-purple-500" />,
+                                            stations: ['遠距', '場控', '輔班', '排班', '大直']
+                                        },
+                                        {
+                                            title: '健管排班',
+                                            icon: <Sparkles size={16} className="text-emerald-500" />,
+                                            stations: ['主控', '輔控', '晚班', 'H', 'G', '櫃1', '櫃2', '櫃3', '櫃助', '營1', '營2', '行政班']
                                         }
+                                    ];
+
+                                    return categories.map(cat => {
+                                        const visibleStations = cat.stations.filter(st => getAllAssignments(st).length > 0);
+                                        if (visibleStations.length === 0) return null;
+
+                                        return (
+                                            <div key={cat.title} className="space-y-3">
+                                                <div className="flex items-center gap-2 px-1">
+                                                    {cat.icon}
+                                                    <span className="text-sm font-bold text-slate-600 tracking-wide">{cat.title}</span>
+                                                    <div className="h-px flex-1 bg-gradient-to-r from-slate-200 to-transparent"></div>
+                                                </div>
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                                    {visibleStations.map(st => {
+                                                        const assignments = getAllAssignments(st);
+                                                        return (
+                                                            <div key={st} className="bg-slate-50 border border-slate-200 rounded-xl p-3 hover:shadow-md transition-shadow">
+                                                                <div className={`text-xs font-bold mb-2.5 flex items-center justify-between ${getStationChipStyle(st)} px-2 py-1 rounded-lg`}>
+                                                                    <span className="truncate">{st}</span>
+                                                                    <span className="text-[10px] opacity-70 bg-white/30 px-1.5 py-0.5 rounded-full ring-1 ring-white/20">{assignments.length}</span>
+                                                                </div>
+                                                                <div className="flex flex-wrap gap-2">
+                                                                    {assignments.map(u => (
+                                                                        <div key={u.id} className={`flex items-center gap-2 bg-white px-2 py-1.5 rounded-lg border shadow-sm ${u.id === currentUser.id ? 'border-teal-200 bg-teal-50' : 'border-slate-100'} min-w-[100px]`}>
+                                                                            <div 
+                                                                                className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white shadow-inner"
+                                                                                style={{ backgroundColor: u.color || '#94a3b8' }}
+                                                                            >
+                                                                                {u.alias || u.name[0]}
+                                                                            </div>
+                                                                            <div className="flex flex-col min-w-0">
+                                                                                <span className="text-sm font-semibold text-slate-700 truncate">{u.name}</span>
+                                                                                {u.specialRoles.length > 0 && (
+                                                                                    <div className="flex flex-wrap gap-0.5">
+                                                                                        {u.specialRoles.map(r => (
+                                                                                            <span key={r} className="text-[9px] text-teal-600 font-medium leading-none">
+                                                                                                {r}
+                                                                                            </span>
+                                                                                        ))}
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        );
                                     });
-
-                                    // Handle Unassigned / Others if needed? Or just focus on the Station list.
-                                    // User mainly asked for "All Staff Status... arranged by station". 
-                                    // Usually it's good to show unassigned too, but let's stick to the requested structure first.
-
-                                    return cards;
                                 })()}
                             </div>
 
@@ -2478,16 +2538,22 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                             {/* Off Staff Summary */}
                             <div className="px-6 py-3 bg-slate-50 border-t border-slate-200 text-xs text-slate-500 flex flex-wrap gap-2 items-center">
                                 <span className="font-bold">今日休假:</span>
-                                {displayUsers.filter(u => {
-                                    const status = getDayShift(u.id, toLocalISOString(dailyDate));
-                                    if (!status.isOff) return false;
-                                    
-                                    // Exclude if OFF due to resignation
+                                {[...displayUsers, ...healthMgmtStaff.filter(s => s.isActive !== false)].filter(u => {
                                     const dateStr = toLocalISOString(dailyDate);
-                                    if (u.isActive === false && u.resignationDate && dateStr > u.resignationDate) {
-                                        return false;
-                                    }
-                                    return true;
+                                    
+                                    // Radio Shift Check
+                                    const radioShift = shifts.find(s => s.userId === u.id && s.date === dateStr);
+                                    const isRadioOff = radioShift?.station === StationDefault.OFF || radioShift?.station === SYSTEM_OFF;
+                                    
+                                    // HM Shift Check
+                                    const hmShift = healthMgmtShifts.find(s => s.userId === u.id && s.date === dateStr);
+                                    const isHMOff = hmShift?.station === '休假';
+
+                                    // If designated as Radio or HM staff, check their respective schedule
+                                    if ('isRadiographer' in u && u.isRadiographer) return isRadioOff;
+                                    if (!('isRadiographer' in u)) return hmShift ? isHMOff : true; // HM staff with no shift record is off
+
+                                    return false;
                                 }).map(u => (
                                     <span key={u.id} className="bg-white border border-slate-200 px-1.5 py-0.5 rounded text-slate-400">
                                         {u.name}
