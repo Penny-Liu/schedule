@@ -58,13 +58,13 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
         const assistRads = dayStaffShifts.filter(s => (s.specialRoles?.includes('輔班') || s.station === '輔' || s.station === '輔控') && users.some(u => u.id === s.userId)).map(s => getName(s.userId));
         
         const hmStaff = db.getHealthMgmtStaff();
-        const mainHM = dayStaffShifts.filter(s => (s.station?.includes('場控') || s.station ==='主' || s.station === '主控' || s.task === '主控') && hmStaff.some(u => u.id === s.userId)).map(s => {
+        const mainHM = dayStaffShifts.filter(s => (s.station?.includes('主控') || s.station ==='主' || s.station === '主控' || s.task === '主控') && hmStaff.some(u => u.id === s.userId)).map(s => {
             const u = hmStaff.find(staff => staff.id === s.userId);
-            return u?.alias || u?.name?.slice(-2) || '-';
+            return u?.name || '-';
         });
         const assistHM = dayStaffShifts.filter(s => (s.specialRoles?.includes('輔班') || s.station === '輔' || s.station === '輔控' || s.task === '輔控') && hmStaff.some(u => u.id === s.userId)).map(s => {
             const u = hmStaff.find(staff => staff.id === s.userId);
-            return u?.alias || u?.name?.slice(-2) || '-';
+            return u?.name || '-';
         });
 
         // --- 2. Doctors ---
@@ -120,7 +120,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
 
         const lines = [
             `${date.getMonth() + 1}/${date.getDate()} （${['日', '一', '二', '三', '四', '五', '六'][date.getDay()]}）`,
-            `主/輔：${mainRads.join('/') || '無'}/${assistRads.join('/') || '無'}     ${mainHM.join('/') || '無'}/${assistHM.join('/') || '無'}`,
+            `主/輔：${mainRads.join('/') || '無'}/${assistRads.join('/') || '無'}      ${mainHM.join('/') || '無'}/${assistHM.join('/') || '無'}`,
             `影像：${imgDocs.join('/') || '無'}`,
             `解說：${expDocs.join('/') || '無'}`,
             `支援：${supDocs.join('/') || '無'}`,
