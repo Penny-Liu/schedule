@@ -853,7 +853,7 @@ BMD :{{bmd}}
             u.password = newPass;
             u.mustChangePassword = false; // Clear flag
             // Sync DB
-            await supabase.from('users').update({ password: newPass, mustChangePassword: false }).eq('id', userId);
+            await supabase.from('users').update({ password: newPass, must_change_password: false }).eq('id', userId);
         }
     }
 
@@ -863,7 +863,7 @@ BMD :{{bmd}}
             u.password = '1234';
             u.mustChangePassword = true; // Force change on next login
             // Sync DB
-            await supabase.from('users').update({ password: '1234', mustChangePassword: true }).eq('id', userId);
+            await supabase.from('users').update({ password: '1234', must_change_password: true }).eq('id', userId);
         }
     }
 
@@ -872,7 +872,7 @@ BMD :{{bmd}}
         if (u) {
             u.password = newPass;
             u.mustChangePassword = false;
-            await supabase.from('users').update({ password: newPass, mustChangePassword: false }).eq('id', userId);
+            await supabase.from('users').update({ password: newPass, must_change_password: false }).eq('id', userId);
         }
     }
 

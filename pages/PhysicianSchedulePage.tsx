@@ -2600,7 +2600,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                             const radNames = radShifts.map(s => radUsers.find(u => u.id === s.userId)?.name);
                                                             const hmNames = hmShifts.map(s => {
                                                                 const st = hmStaff.find(u => u.id === s.userId);
-                                                                return st?.alias || st?.name;
+                                                                return st?.name;
                                                             });
                                                             
                                                             const displayList = [...radNames, ...hmNames].filter(Boolean);
@@ -2637,7 +2637,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                             const radNames = radShifts.map(s => radUsers.find(u => u.id === s.userId)?.name);
                                                             const hmNames = hmShifts.map(s => {
                                                                 const st = hmStaff.find(u => u.id === s.userId);
-                                                                return st?.alias || st?.name;
+                                                                return st?.name;
                                                             });
                                                             
                                                             const displayList = [...radNames, ...hmNames].filter(Boolean);
