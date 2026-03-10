@@ -104,45 +104,51 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
 
   const handleUpdateShift = async (userId: string, date: string, station: string, task?: string) => {
     if (isReadOnly) return;
-    const existing = shifts.find(s => s.userId === userId && s.date === date);
-    
-    if (existing) {
-        if (!station && !task) {
-            await db.deleteHealthMgmtShift(userId, date);
-        } else {
-            await db.upsertHealthMgmtShift({ ...existing, station: station || '', task });
+    try {
+        const existing = shifts.find(s => s.userId === userId && s.date === date);
+        
+        if (existing) {
+            if (!station && !task) {
+                await db.deleteHealthMgmtShift(userId, date);
+            } else {
+                await db.upsertHealthMgmtShift({ ...existing, station: station || '', task });
+            }
+        } else if (station || task) {
+            const newShift: HealthMgmtShift = {
+                id: generateUUID(),
+                userId,
+                date,
+                station: station || '',
+                task
+            };
+            await db.upsertHealthMgmtShift(newShift);
         }
-    } else if (station || task) {
-        const newShift: HealthMgmtShift = {
-            id: generateUUID(),
-            userId,
-            date,
-            station: station || '',
-            task
-        };
-        await db.upsertHealthMgmtShift(newShift);
+    } catch (err) {
+        console.error('[HealthMgmtPage] handleUpdateShift failed:', err);
+        alert(`健管排班更新失敗: ${err instanceof Error ? err.message : JSON.stringify(err)}`);
     }
   };
 
   const handleCellClick = async (userId: string, date: string) => {
       if (isReadOnly) return;
       
-      if (isQuickScheduleMode) {
-          // Quick apply
-          // Use quickScheduleStation or quickScheduleTask
-          await handleUpdateShift(userId, date, quickScheduleStation, quickScheduleTask || undefined);
-      } else {
-          // Open Inline Popup
-          setSelectedCell({ userId, date });
-          const existing = shifts.find(s => s.userId === userId && s.date === date);
-          if (existing) {
-              // Extract station and optional time
-              if (existing.station) {
-                  const parts = existing.station.split(' ');
-                  if (parts.length > 1 && parts[0].includes(':')) {
-                      setEditingShiftTime(parts[0]);
-                      setEditingShiftTask(parts.slice(1).join(' ')); // This is 'station' (崗位)
-                  } else {
+      try {
+          if (isQuickScheduleMode) {
+              // Quick apply
+              // Use quickScheduleStation or quickScheduleTask
+              await handleUpdateShift(userId, date, quickScheduleStation, quickScheduleTask || undefined);
+          } else {
+              // Open Inline Popup
+              setSelectedCell({ userId, date });
+              const existing = shifts.find(s => s.userId === userId && s.date === date);
+              if (existing) {
+                  // Extract station and optional time
+                  if (existing.station) {
+                      const parts = existing.station.split(' ');
+                      if (parts.length > 1 && parts[0].includes(':')) {
+                          setEditingShiftTime(parts[0]);
+                          setEditingShiftTask(parts.slice(1).join(' ')); // This is 'station' (崗位)
+                      } else {
                       setEditingShiftTime('');
                       setEditingShiftTask(existing.station);
                   }
@@ -157,21 +163,30 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
               setEditingShiftSubTask('');
           }
       }
+    } catch (err) {
+          console.error('[HealthMgmtPage] handleCellClick failed:', err);
+          alert(`健管排班點擊失敗: ${err instanceof Error ? err.message : JSON.stringify(err)}`);
+      }
   };
 
   const handleSavePopup = async () => {
       if (!selectedCell) return;
       
-      let finalStation = editingShiftTask;
-      if (editingShiftTime) {
-          finalStation = (`${editingShiftTime} ${editingShiftTask}`).trim();
+      try {
+          let finalStation = editingShiftTask;
+          if (editingShiftTime) {
+              finalStation = (`${editingShiftTime} ${editingShiftTask}`).trim();
+          }
+
+          const finalTask = editingShiftCustomTask || editingShiftSubTask;
+
+          await handleUpdateShift(selectedCell.userId, selectedCell.date, finalStation, finalTask || undefined);
+          setSelectedCell(null);
+          setEditingShiftCustomTask('');
+      } catch (err) {
+          console.error('[HealthMgmtPage] handleSavePopup failed:', err);
+          alert(`健管排班儲存失敗: ${err instanceof Error ? err.message : JSON.stringify(err)}`);
       }
-
-      const finalTask = editingShiftCustomTask || editingShiftSubTask;
-
-      await handleUpdateShift(selectedCell.userId, selectedCell.date, finalStation, finalTask || undefined);
-      setSelectedCell(null);
-      setEditingShiftCustomTask('');
   };
 
   const handleExportStats = () => {

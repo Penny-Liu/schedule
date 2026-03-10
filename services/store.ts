@@ -969,7 +969,8 @@ BMD :{{bmd}}
             'processed_at': 'processedAt',
             'role_to_swap': 'roleToSwap',
             'target_approval': 'targetApproval',
-            'permissions': 'permissions'
+            'permissions': 'permissions',
+            'user_id': 'userId'
         };
         Object.keys(mapping).forEach(key => {
             if (key in obj) {
@@ -1257,6 +1258,8 @@ BMD :{{bmd}}
             const finalIndex = this.healthMgmtShifts.findIndex(s => s.userId === shift.userId && s.date === shift.date);
             if (finalIndex >= 0) {
                 this.healthMgmtShifts[finalIndex].id = targetId;
+            } else {
+                console.warn('[Store] HM shift not found in local memory after DB sync. Date:', shift.date, 'User:', shift.userId);
             }
 
         } catch (err) {
