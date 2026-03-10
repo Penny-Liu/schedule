@@ -192,7 +192,7 @@ const DoctorStatisticsPage: React.FC<DoctorStatisticsPageProps> = ({ currentUser
     return counts;
   }, [doctors, selectedMonth]);
 
-  if (currentUser.role !== UserRole.SYSTEM_ADMIN && currentUser.role !== UserRole.SCHEDULER && currentUser.role !== UserRole.FINANCE) {
+  if (currentUser.role !== UserRole.SYSTEM_ADMIN && currentUser.role !== UserRole.SCHEDULER && currentUser.role !== UserRole.FINANCE && currentUser.role !== UserRole.PHYSICIAN_ADMIN) {
     return <div className="p-8 text-center text-gray-500">權限不足</div>;
   }
 

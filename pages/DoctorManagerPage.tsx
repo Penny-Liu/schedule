@@ -272,7 +272,7 @@ const DoctorManagerPage: React.FC<DoctorManagerPageProps> = ({ currentUser }) =>
     }
 
 
-    if (currentUser.role !== UserRole.SYSTEM_ADMIN && currentUser.role !== UserRole.SCHEDULER) {
+    if (currentUser.role !== UserRole.SYSTEM_ADMIN && currentUser.role !== UserRole.SCHEDULER && currentUser.role !== UserRole.PHYSICIAN_ADMIN) {
         return <div className="p-8 text-center text-gray-500">權限不足</div>;
     }
 
