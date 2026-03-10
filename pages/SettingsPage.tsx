@@ -48,23 +48,23 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
     // Tab State
     const [activeTab, setActiveTab] = useState<'personal' | 'radiographer' | 'health_mgmt' | 'system'>('personal');
 
-    const isSupervisorOrAdmin = currentUser.role === UserRole.SUPERVISOR || currentUser.role === UserRole.SYSTEM_ADMIN || currentUser.role === UserRole.PHYSICIAN_ADMIN;
+    const isSupervisorOrAdmin = currentUser.role === UserRole.SUPERVISOR || currentUser.role === UserRole.SYSTEM_ADMIN;
     const canManageHealthMgmt = currentUser.role === UserRole.SYSTEM_ADMIN || currentUser.permissions?.includes(PERMISSIONS.EDIT_HEALTH_MGMT);
-    const canManageDates = isSupervisorOrAdmin || currentUser.role === UserRole.SCHEDULER || canManageHealthMgmt;
+    const canManageDates = isSupervisorOrAdmin || currentUser.role === UserRole.SCHEDULER || currentUser.role === UserRole.PHYSICIAN_ADMIN || canManageHealthMgmt;
     const isSystemAdmin = currentUser.role === UserRole.SYSTEM_ADMIN;
     const isFinanceOnly = currentUser.role === UserRole.FINANCE;
+    const isHR = currentUser.role === UserRole.SCHEDULER || currentUser.role === UserRole.PHYSICIAN_ADMIN;
 
     // Auto-switch away from restricted tabs
     useEffect(() => {
-        if (activeTab === 'radiographer' && !isSupervisorOrAdmin && currentUser.role !== UserRole.PHYSICIAN_ADMIN) {
-            // Radiographer tab stays for Radiographer supervisors
-            if (currentUser.role !== UserRole.SUPERVISOR) setActiveTab('personal');
+        if (activeTab === 'radiographer' && !isSupervisorOrAdmin) {
+            setActiveTab('personal');
         } else if (activeTab === 'health_mgmt' && !canManageHealthMgmt) {
             setActiveTab('personal');
-        } else if (activeTab === 'system' && !(isSupervisorOrAdmin || currentUser.role === UserRole.SCHEDULER || currentUser.role === UserRole.PHYSICIAN_ADMIN)) {
+        } else if (activeTab === 'system' && !(isSupervisorOrAdmin || isHR)) {
             setActiveTab('personal');
         }
-    }, [activeTab, isSupervisorOrAdmin, canManageHealthMgmt, currentUser.role]);
+    }, [activeTab, isSupervisorOrAdmin, canManageHealthMgmt, isHR]);
 
     // Template blocks state: [Block1, Block2, Block3]
     const [templateBlocks, setTemplateBlocks] = useState<string[]>(['', '', '']);
@@ -650,7 +650,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
                         <Calendar size={18} /> 健管設定
                     </button>
                 )}
-                {(isSupervisorOrAdmin || currentUser.role === UserRole.SCHEDULER) && (
+                {(isSupervisorOrAdmin || isHR) && (
                     <button
                         onClick={() => setActiveTab('system')}
                         className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-2 ${
