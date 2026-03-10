@@ -55,10 +55,19 @@ const PhysicianSettingsPage: React.FC<PhysicianSettingsPageProps> = ({ currentUs
             setDoctorStations(cleanStations);
         }
         
-        // Sync Latest Settings
-        if (db.settings.doctorWorkTimeOptions) {
-             setDoctorWorkTimeOptions(db.settings.doctorWorkTimeOptions);
-        }
+        const loadData = () => {
+             setDoctorStations((db.settings.doctorStations || []).map(s => 
+                 typeof s === 'string' ? { name: s, location: '北投' } : s
+             ));
+             setDoctorWorkTime(db.settings.defaultDoctorWorkTime || '08:30-17:30');
+             setDoctorWorkTimeOptions(db.settings.doctorWorkTimeOptions || ['08:30-17:30', '08:00-12:00', '13:30-17:30']);
+             setDoctorSpecialties(db.settings.doctorSpecialties || []);
+             setRequirements(db.getStationRequirements());
+        };
+
+        const unsubscribe = db.subscribe(loadData);
+        loadData();
+        return () => unsubscribe();
     }, []);
 
     // Handlers

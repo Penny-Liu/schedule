@@ -565,43 +565,207 @@ BMD :{{bmd}}
         if (this.subscription) return;
 
         this.subscription = supabase
-            .channel('public:shifts')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'shifts' }, (payload) => {
-                this.handleRealtimeShiftUpdate(payload);
-            })
+            .channel('db_changes')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'shifts' }, (payload) => this.handleRealtimeShiftUpdate(payload))
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'health_mgmt_shifts' }, (payload) => this.handleRealtimeHMShiftUpdate(payload))
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'health_mgmt_staff' }, (payload) => this.handleRealtimeHMStaffUpdate(payload))
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'users' }, (payload) => this.handleRealtimeUserUpdate(payload))
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'doctors' }, (payload) => this.handleRealtimeDoctorUpdate(payload))
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'doctor_shifts' }, (payload) => this.handleRealtimeDoctorShiftUpdate(payload))
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'leaves' }, (payload) => this.handleRealtimeLeaveUpdate(payload))
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'settings' }, (payload) => this.handleRealtimeSettingsUpdate(payload))
             .subscribe((status) => {
                 if (status === 'SUBSCRIBED') {
-                    console.log('[Realtime] Connected to shifts table');
+                    console.log('[Realtime] Subscribed to all database changes');
                 }
             });
     }
 
     private handleRealtimeShiftUpdate(payload: any) {
         const { eventType, new: newRecord, old: oldRecord } = payload;
+        const record = { ...newRecord };
+        if (record.id) this.mapFromDbFields(record);
 
-        if (eventType === 'INSERT') {
-            const exists = this.shifts.some(s => s.id === newRecord.id);
-            if (!exists) {
-                // Check if we have a "pending" shift for this slot (optimistic update with different ID)
-                const slotIndex = this.shifts.findIndex(s => s.userId === newRecord.userId && s.date === newRecord.date);
+        if (eventType === 'INSERT' || eventType === 'UPDATE') {
+            const index = this.shifts.findIndex(s => s.id === record.id);
+            if (index !== -1) {
+                this.shifts[index] = record as Shift;
+            } else {
+                // Check for optimistic match by userId and date if it was an INSERT
+                const slotIndex = this.shifts.findIndex(s => s.userId === record.userId && s.date === record.date);
                 if (slotIndex >= 0) {
-                    // Update the existing slot with the authoritative record from DB
-                    this.shifts[slotIndex] = newRecord as Shift;
+                    this.shifts[slotIndex] = record as Shift;
                 } else {
-                    this.shifts.push(newRecord as Shift);
+                    this.shifts.push(record as Shift);
+                }
+            }
+            this.notifyListeners();
+        } else if (eventType === 'DELETE') {
+            this.shifts = this.shifts.filter(s => s.id !== oldRecord.id);
+            this.notifyListeners();
+        }
+    }
+
+    private handleRealtimeHMShiftUpdate(payload: any) {
+        const { eventType, new: newRecord, old: oldRecord } = payload;
+        const record = { ...newRecord };
+        if (record.id) this.mapFromDbFields(record);
+
+        if (eventType === 'INSERT' || eventType === 'UPDATE') {
+            const index = this.healthMgmtShifts.findIndex(s => s.id === record.id);
+            if (index !== -1) {
+                this.healthMgmtShifts[index] = record as HealthMgmtShift;
+            } else {
+                const slotIndex = this.healthMgmtShifts.findIndex(s => s.userId === record.userId && s.date === record.date);
+                if (slotIndex >= 0) {
+                    this.healthMgmtShifts[slotIndex] = record as HealthMgmtShift;
+                } else {
+                    this.healthMgmtShifts.push(record as HealthMgmtShift);
+                }
+            }
+            this.notifyListeners();
+        } else if (eventType === 'DELETE') {
+            this.healthMgmtShifts = this.healthMgmtShifts.filter(s => s.id !== oldRecord.id);
+            this.notifyListeners();
+        }
+    }
+
+    private handleRealtimeHMStaffUpdate(payload: any) {
+        const { eventType, new: newRecord, old: oldRecord } = payload;
+        if (eventType === 'INSERT' || eventType === 'UPDATE') {
+            const index = this.healthMgmtStaff.findIndex(s => s.id === newRecord.id);
+            if (index !== -1) {
+                this.healthMgmtStaff[index] = newRecord as HealthMgmtStaff;
+            } else {
+                this.healthMgmtStaff.push(newRecord as HealthMgmtStaff);
+            }
+            this.notifyListeners();
+        } else if (eventType === 'DELETE') {
+            this.healthMgmtStaff = this.healthMgmtStaff.filter(s => s.id !== oldRecord.id);
+            this.notifyListeners();
+        }
+    }
+
+    private handleRealtimeUserUpdate(payload: any) {
+        const { eventType, new: newRecord, old: oldRecord } = payload;
+        const record = { ...newRecord };
+        if (record.id) this.mapFromDbFields(record);
+
+        if (eventType === 'INSERT' || eventType === 'UPDATE') {
+            const index = this.users.findIndex(u => u.id === record.id);
+            if (index !== -1) {
+                this.users[index] = { 
+                    ...record as User,
+                    permissions: record.permissions || getPermissionsByRole(record.role)
+                };
+            } else {
+                this.users.push({
+                    ...record as User,
+                    permissions: record.permissions || getPermissionsByRole(record.role)
+                });
+            }
+            this.notifyListeners();
+        } else if (eventType === 'DELETE') {
+            this.users = this.users.filter(u => u.id !== oldRecord.id);
+            this.notifyListeners();
+        }
+    }
+
+    private handleRealtimeDoctorUpdate(payload: any) {
+        const { eventType, new: newRecord, old: oldRecord } = payload;
+        const record = { ...newRecord };
+        if (record.id) {
+            // Doctors mapping is slightly different in initializeData
+            const mapped = {
+                ...record,
+                capabilities: record.capabilities || [],
+                locations: record.locations || [],
+                excludedDays: record.excluded_days || [],
+                excludedAutoScheduleLocations: record.excluded_auto_schedule_locations || [],
+                isPartTime: record.is_part_time || false,
+                monthlyTargetShifts: record.monthly_target_shifts,
+                displayOrder: record.display_order,
+                fixedShifts: record.fixed_shifts || [],
+                personalCycles: record.personal_cycles,
+                isActive: record.is_active !== false,
+                weekdaySettings: (record.weekday_settings || []).map((s: any) => ({
+                    dayOfWeek: s.dayOfWeek,
+                    workTime: s.workTime,
+                    task: s.task || s.memo
+                }))
+            };
+
+            if (eventType === 'INSERT' || eventType === 'UPDATE') {
+                const index = this.doctors.findIndex(d => d.id === mapped.id);
+                if (index !== -1) {
+                    this.doctors[index] = mapped as Doctor;
+                } else {
+                    this.doctors.push(mapped as Doctor);
                 }
                 this.notifyListeners();
             }
-        } else if (eventType === 'UPDATE') {
-            const index = this.shifts.findIndex(s => s.id === newRecord.id);
-            if (index !== -1) {
-                this.shifts[index] = newRecord as Shift;
+        }
+        
+        if (eventType === 'DELETE') {
+            this.doctors = this.doctors.filter(d => d.id !== oldRecord.id);
+            this.notifyListeners();
+        }
+    }
+
+    private handleRealtimeDoctorShiftUpdate(payload: any) {
+        const { eventType, new: newRecord, old: oldRecord } = payload;
+        const record = { ...newRecord };
+        if (record.id) {
+            const mapped = {
+                ...record,
+                doctorId: record.doctor_id || record.doctorId,
+                explanationTaskType: record.explanation_task_type || record.explanationTaskType,
+                workTime: record.work_time || record.workTime,
+            };
+
+            if (eventType === 'INSERT' || eventType === 'UPDATE') {
+                const index = this.doctorShifts.findIndex(s => s.id === mapped.id);
+                if (index !== -1) {
+                    this.doctorShifts[index] = mapped as DoctorShift;
+                } else {
+                    this.doctorShifts.push(mapped as DoctorShift);
+                }
                 this.notifyListeners();
             }
-        } else if (eventType === 'DELETE') {
-            const idToDelete = oldRecord.id;
-            this.shifts = this.shifts.filter(s => s.id !== idToDelete);
+        }
+
+        if (eventType === 'DELETE') {
+            this.doctorShifts = this.doctorShifts.filter(s => s.id !== oldRecord.id);
             this.notifyListeners();
+        }
+    }
+
+    private handleRealtimeLeaveUpdate(payload: any) {
+        const { eventType, new: newRecord, old: oldRecord } = payload;
+        const record = { ...newRecord };
+        if (record.id) this.mapFromDbFields(record);
+
+        if (eventType === 'INSERT' || eventType === 'UPDATE') {
+            const index = this.leaves.findIndex(l => l.id === record.id);
+            if (index !== -1) {
+                this.leaves[index] = record as LeaveRequest;
+            } else {
+                this.leaves.push(record as LeaveRequest);
+            }
+            this.notifyListeners();
+        } else if (eventType === 'DELETE') {
+            this.leaves = this.leaves.filter(l => l.id !== oldRecord.id);
+            this.notifyListeners();
+        }
+    }
+
+    private handleRealtimeSettingsUpdate(payload: any) {
+        const { eventType, new: newRecord } = payload;
+        if (eventType === 'UPDATE' || eventType === 'INSERT') {
+            if (newRecord.id === this.settingsRowId) {
+                this.settings = { ...this.settings, ...newRecord.data };
+                this.notifyListeners();
+            }
         }
     }
 

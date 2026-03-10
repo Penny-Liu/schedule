@@ -12,6 +12,14 @@ interface StaffPageProps {
 
 const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
   const [users, setUsers] = useState<User[]>(db.getUsers());
+
+  React.useEffect(() => {
+    const loadData = () => {
+      setUsers(db.getUsers());
+    };
+    const unsubscribe = db.subscribe(loadData);
+    return () => unsubscribe();
+  }, []);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const allStations = db.getStations().filter(s => s !== SYSTEM_OFF && s !== StationDefault.UNASSIGNED);

@@ -92,13 +92,28 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
         return [b1, b2, b3];
     };
 
-    // Initialize blocks on mount using current setting
     useEffect(() => {
-        const currentTemplate = db.settings.lineCopyTemplate || '';
-         if (currentTemplate) {
-            setTemplateBlocks(parseTemplate(currentTemplate));
-         }
-    }, [db.settings.lineCopyTemplate]);
+        const loadData = () => {
+            setStations(db.getStations());
+            setRequirements(db.getStationRequirements());
+            setCycles(db.getCycles());
+            setHolidays(db.getHolidays());
+            setCycleStartDate(db.getCycleStartDate());
+            setAnchors(db.getCycleAnchors());
+            setHmStations(db.getHealthMgmtStations());
+            setHmTasks(db.getHealthMgmtTasks());
+            setHmCycles(db.getHealthMgmtCycles());
+            
+            const currentTemplate = db.settings.lineCopyTemplate || '';
+            if (currentTemplate) {
+                setTemplateBlocks(parseTemplate(currentTemplate));
+            }
+        };
+
+        const unsubscribe = db.subscribe(loadData);
+        loadData();
+        return () => unsubscribe();
+    }, []);
 
 
 
