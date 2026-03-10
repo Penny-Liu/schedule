@@ -58,11 +58,11 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
         const assistRads = dayStaffShifts.filter(s => (s.specialRoles?.includes('輔班') || s.station === '輔' || s.station === '輔控') && users.some(u => u.id === s.userId)).map(s => getName(s.userId));
         
         const hmStaff = db.getHealthMgmtStaff();
-        const mainHM = dayStaffShifts.filter(s => (s.station?.includes('場控') || s.station ==='主' || s.station === '主控') && hmStaff.some(u => u.id === s.userId)).map(s => {
+        const mainHM = dayStaffShifts.filter(s => (s.station?.includes('場控') || s.station ==='主' || s.station === '主控' || s.task === '主控') && hmStaff.some(u => u.id === s.userId)).map(s => {
             const u = hmStaff.find(staff => staff.id === s.userId);
             return u?.alias || u?.name?.slice(-2) || '-';
         });
-        const assistHM = dayStaffShifts.filter(s => (s.specialRoles?.includes('輔班') || s.station === '輔' || s.station === '輔控') && hmStaff.some(u => u.id === s.userId)).map(s => {
+        const assistHM = dayStaffShifts.filter(s => (s.specialRoles?.includes('輔班') || s.station === '輔' || s.station === '輔控' || s.task === '輔控') && hmStaff.some(u => u.id === s.userId)).map(s => {
             const u = hmStaff.find(staff => staff.id === s.userId);
             return u?.alias || u?.name?.slice(-2) || '-';
         });
@@ -2591,7 +2591,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                                 s.date === date && (s.station?.includes('場控') || s.station === '主' || s.station === '主控')
                                                             );
                                                             const hmShifts = db.getHealthMgmtShifts().filter(s => 
-                                                                s.date === date && s.station === '主控'
+                                                                s.date === date && (s.task === '主控' || s.station?.includes('主控'))
                                                             );
                                                             
                                                             const radUsers = db.getUsers();
@@ -2628,7 +2628,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                                 s.date === date && (s.specialRoles?.includes('輔班') || s.station === '輔' || s.station === '輔控')
                                                             );
                                                             const hmShifts = db.getHealthMgmtShifts().filter(s => 
-                                                                s.date === date && s.station === '輔控'
+                                                                s.date === date && (s.task === '輔控' || s.station?.includes('輔控'))
                                                             );
                                                             
                                                             const radUsers = db.getUsers();

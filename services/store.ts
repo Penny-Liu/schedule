@@ -18,22 +18,32 @@ export const getPermissionsByRole = (role: UserRole): string[] => {
                 PERMISSIONS.VIEW_STAFF,
                 PERMISSIONS.EDIT_STAFF,
                 PERMISSIONS.VIEW_PHYSICIAN,
-                PERMISSIONS.EDIT_PHYSICIAN,
                 PERMISSIONS.VIEW_STATS,
-                PERMISSIONS.VIEW_DOCTOR_STATS,
-                PERMISSIONS.EDIT_DOCTOR_STATS,
-                PERMISSIONS.MANAGE_DOCTORS,
                 PERMISSIONS.EDIT_SETTINGS,
-                PERMISSIONS.VIEW_HEALTH_MGMT,
-                PERMISSIONS.EDIT_HEALTH_MGMT
+                PERMISSIONS.VIEW_HEALTH_MGMT
             ];
+        case UserRole.PHYSICIAN_ADMIN:
         case UserRole.SCHEDULER:
             return [
                 PERMISSIONS.VIEW_CLOUD_SCHEDULE,
                 PERMISSIONS.VIEW_PHYSICIAN,
                 PERMISSIONS.EDIT_PHYSICIAN,
                 PERMISSIONS.MANAGE_DOCTORS,
-                PERMISSIONS.VIEW_DOCTOR_STATS
+                PERMISSIONS.VIEW_DOCTOR_STATS,
+                PERMISSIONS.EDIT_DOCTOR_STATS
+            ];
+        case UserRole.HM_SUPERVISOR:
+            return [
+                PERMISSIONS.VIEW_CLOUD_SCHEDULE,
+                PERMISSIONS.VIEW_HEALTH_MGMT,
+                PERMISSIONS.EDIT_HEALTH_MGMT,
+                PERMISSIONS.VIEW_STAFF, // Allow HM Supervisor to view staff list
+                PERMISSIONS.EDIT_SETTINGS
+            ];
+        case UserRole.HM_STAFF:
+            return [
+                PERMISSIONS.VIEW_CLOUD_SCHEDULE,
+                PERMISSIONS.VIEW_HEALTH_MGMT
             ];
         case UserRole.FINANCE:
             return [
@@ -45,7 +55,7 @@ export const getPermissionsByRole = (role: UserRole): string[] => {
                 PERMISSIONS.VIEW_CLOUD_SCHEDULE,
                 PERMISSIONS.VIEW_PHYSICIAN
             ];
-        default: // EMPLOYEE
+        default: // EMPLOYEE (Radiographer)
             return [
                 PERMISSIONS.VIEW_CLOUD_SCHEDULE,
                 PERMISSIONS.VIEW_PHYSICIAN
@@ -174,6 +184,38 @@ class Store {
         return { data: allShifts, error: lastError };
     }
 
+    private async fetchAllDoctorShifts() {
+        let allShifts: any[] = [];
+        let page = 0;
+        const pageSize = 1000;
+        let hasMore = true;
+        let lastError = null;
+
+        while (hasMore) {
+            const { data, error } = await supabase
+                .from('doctor_shifts')
+                .select('*')
+                .range(page * pageSize, (page + 1) * pageSize - 1);
+
+            if (error) {
+                console.error('Error fetching Doctor shifts page:', page, error);
+                lastError = error;
+                hasMore = false;
+            } else {
+                if (data && data.length > 0) {
+                    allShifts = [...allShifts, ...data];
+                    if (data.length < pageSize) hasMore = false;
+                    else page++;
+                } else {
+                    hasMore = false;
+                }
+            }
+        }
+
+        console.log(`[Pagination] Total doctor shifts fetched: ${allShifts.length}`);
+        return { data: allShifts, error: lastError };
+    }
+
     // New method to fetch all data from Supabase
     async initializeData(force: boolean = false) {
         if (this.isLoaded && !force) return;
@@ -192,7 +234,7 @@ class Store {
                 supabase.from('leaves').select('*'),
                 supabase.from('settings').select('*'),
                 supabase.from('doctors').select('*'),
-                supabase.from('doctor_shifts').select('*'),
+                this.fetchAllDoctorShifts(),
                 supabase.from('health_mgmt_staff').select('*'),
                 this.fetchAllHealthMgmtShifts()
             ]);
@@ -594,6 +636,18 @@ BMD :{{bmd}}
                 }
             }
         });
+
+        if (!this.settings.healthMgmtStations) {
+            this.settings.healthMgmtStations = ['H', 'G', '櫃1', '櫃2', '櫃3', '櫃助', '營1', '營2', '行政班'];
+        }
+
+        if (!this.settings.healthMgmtTasks) {
+            this.settings.healthMgmtTasks = ['主控', '輔控', '晚班', '排班', 'call班'];
+        }
+
+        if (!this.settings.healthMgmtCycles) {
+            this.settings.healthMgmtCycles = [];
+        }
     }
 
     // --- Data Persistence Methods (Sync Local + Async Remote) ---
@@ -1240,7 +1294,48 @@ BMD :{{bmd}}
     }
 
     // Settings: Stations
-    getStations() { return this.settings.stations; }
+    getStations(): string[] {
+        return this.settings.stations;
+    }
+
+    getHealthMgmtStations(): string[] {
+        return this.settings.healthMgmtStations || ['H', 'G', '櫃1', '櫃2', '櫃3', '櫃助', '營1', '營2', '行政班'];
+    }
+
+    async updateHealthMgmtStations(stations: string[]) {
+        this.settings.healthMgmtStations = stations;
+        await this.saveSettings();
+        this.notifyListeners();
+    }
+
+    getHealthMgmtTasks(): string[] {
+        return this.settings.healthMgmtTasks || ['主控', '輔控', '晚班', '排班', 'call班'];
+    }
+
+    async updateHealthMgmtTasks(tasks: string[]) {
+        this.settings.healthMgmtTasks = tasks;
+        await this.saveSettings();
+        this.notifyListeners();
+    }
+
+    getHealthMgmtCycles(): RosterCycle[] {
+        return this.settings.healthMgmtCycles || [];
+    }
+
+    async addHealthMgmtCycle(cycle: RosterCycle) {
+        if (!this.settings.healthMgmtCycles) this.settings.healthMgmtCycles = [];
+        this.settings.healthMgmtCycles.unshift(cycle);
+        await this.saveSettings();
+        this.notifyListeners();
+    }
+
+    async deleteHealthMgmtCycle(id: string) {
+        if (!this.settings.healthMgmtCycles) return;
+        this.settings.healthMgmtCycles = this.settings.healthMgmtCycles.filter(c => c.id !== id);
+        await this.saveSettings();
+        this.notifyListeners();
+    }
+
     getStationRequirements() { return this.settings.stationRequirements || {}; }
 
     async addStation(name: string) {

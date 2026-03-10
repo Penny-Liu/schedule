@@ -15,77 +15,43 @@ const Sidebar: React.FC<SidebarProps> = ({ currentUser, onNavigate, currentPage,
   // Define permissions based on requirements:
   // Supervisor & System Admin: Full Access (Dashboard, Stats, Leave, Staff, Settings(Admin only/Shared))
   // Employee: Dashboard, Stats, Leave
-  const navItems = [
+  const categories = [
     {
-      id: 'dashboard',
-      label: '排班總覽',
-      icon: LayoutDashboard,
-      permission: null,
-      isRadiographerOnly: true
+      label: '放射師排班',
+      items: [
+        { id: 'dashboard', label: '排班總覽', icon: LayoutDashboard, permission: null, isRadiographerOnly: true },
+        { id: 'statistics', label: '工作統計', icon: BarChart3, permission: PERMISSIONS.VIEW_STATS, isRadiographerOnly: true },
+        { id: 'leave', label: '請假管理', icon: FileText, permission: null, isRadiographerOnly: true },
+      ]
     },
     {
-      id: 'statistics',
-      label: '工作統計',
-      icon: BarChart3,
-      permission: PERMISSIONS.VIEW_STATS,
-      isRadiographerOnly: true
-    },
-    {
-      id: 'leave',
-      label: '請假管理',
-      icon: FileText,
-      permission: null,
-      isRadiographerOnly: true
-    },
-    {
-      id: 'cloud_schedule',
-      label: '影像雲班表',
-      icon: Cloud,
-      permission: PERMISSIONS.VIEW_CLOUD_SCHEDULE
-    },
-    {
-      id: 'staff',
-      label: '人員管理',
-      icon: Users,
-      permission: PERMISSIONS.VIEW_STAFF
-    },
-    {
-      id: 'health_mgmt',
-      label: '健管排班',
-      icon: Calendar,
-      permission: PERMISSIONS.VIEW_HEALTH_MGMT
-    },
-    {
-      id: 'physician_schedule',
       label: '醫師排班',
-      icon: CalendarClock,
-      permission: PERMISSIONS.VIEW_PHYSICIAN
+      items: [
+        { id: 'physician_schedule', label: '醫師排班表', icon: CalendarClock, permission: PERMISSIONS.VIEW_PHYSICIAN },
+        { id: 'doctors', label: '醫師管理', icon: Stethoscope, permission: PERMISSIONS.MANAGE_DOCTORS },
+        { id: 'doctor_statistics', label: '醫師工作統計', icon: BarChart3, permission: PERMISSIONS.VIEW_DOCTOR_STATS },
+        { id: 'physician_settings', label: '醫師排班設定', icon: Sliders, permission: PERMISSIONS.EDIT_PHYSICIAN },
+      ]
     },
     {
-      id: 'doctors',
-      label: '醫師管理',
-      icon: Stethoscope,
-      permission: PERMISSIONS.MANAGE_DOCTORS
+      label: '健管排班',
+      items: [
+        { id: 'health_mgmt', label: '健管排班表', icon: Calendar, permission: PERMISSIONS.VIEW_HEALTH_MGMT },
+      ]
     },
     {
-      id: 'doctor_statistics',
-      label: '醫師工作統計',
-      icon: BarChart3,
-      permission: PERMISSIONS.VIEW_DOCTOR_STATS
+      label: '影像雲',
+      items: [
+        { id: 'cloud_schedule', label: '影像雲班表', icon: Cloud, permission: PERMISSIONS.VIEW_CLOUD_SCHEDULE },
+      ]
     },
     {
-      id: 'physician_settings',
-      label: '醫師排班設定',
-      icon: Sliders,
-      permission: PERMISSIONS.EDIT_PHYSICIAN
-    },
-    {
-      id: 'settings',
-      label: '系統與個人設定',
-      icon: Settings,
-      permission: null,
-      hideForRoles: [UserRole.VIEWER] // Public accounts cannot change settings
-    },
+      label: '系統管理',
+      items: [
+        { id: 'staff', label: '人員管理', icon: Users, permission: PERMISSIONS.VIEW_STAFF },
+        { id: 'settings', label: '系統與個人設定', icon: Settings, permission: null, hideForRoles: [UserRole.VIEWER] },
+      ]
+    }
   ];
 
   const getRoleLabel = (role: UserRole) => {
@@ -111,35 +77,46 @@ const Sidebar: React.FC<SidebarProps> = ({ currentUser, onNavigate, currentPage,
         </h1>
       </div>
 
-      <div className="flex items-center gap-1 md:gap-2 flex-1 overflow-x-auto no-scrollbar mx-2">
-        {navItems.filter(item => {
-           // 1. Check if it's a radiographer-only feature
-           if ('isRadiographerOnly' in item && item.isRadiographerOnly && !currentUser.isRadiographer) return false;
-           
-           // 2. Check Role-based exclusion (e.g., Viewer hide settings)
-           if ('hideForRoles' in item && item.hideForRoles && (item.hideForRoles as UserRole[]).includes(currentUser.role)) return false;
+      <div className="flex items-center gap-1 md:gap-4 flex-1 overflow-x-auto no-scrollbar mx-2">
+        {categories.map((cat, idx) => {
+          const visibleItems = cat.items.filter(item => {
+            if ('isRadiographerOnly' in item && item.isRadiographerOnly && !currentUser.isRadiographer) return false;
+            if ('hideForRoles' in item && item.hideForRoles && (item.hideForRoles as UserRole[]).includes(currentUser.role)) return false;
+            if (!item.permission) return true;
+            return currentUser.permissions?.includes(item.permission);
+          });
 
-           // 3. Check permissions
-           if (!item.permission) return true;
-           return currentUser.permissions?.includes(item.permission);
-        }).map((item) => {
-          const Icon = item.icon;
-          const isActive = currentPage === item.id;
+          if (visibleItems.length === 0) return null;
+
           return (
-            <button
-              key={item.id}
-              onClick={() => onNavigate(item.id)}
-              className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${isActive
-                ? 'bg-teal-50 text-teal-700 shadow-sm ring-1 ring-teal-100'
-                : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                }`}
-            >
-              <Icon size={15} className={`transition-colors ${isActive ? 'text-teal-600' : 'text-gray-400'}`} />
-              <span className="hidden lg:inline">{item.label}</span>
-              {item.id === 'leave' && hasPendingLeaves && (
-                <span className="w-2 h-2 bg-red-500 rounded-full ml-1 animate-pulse" />
-              )}
-            </button>
+            <div key={cat.label} className={`flex items-center gap-1 ${idx !== 0 ? 'pl-2 border-l border-gray-100' : ''}`}>
+              <div className="hidden xl:block text-[10px] font-bold text-gray-400 uppercase tracking-wider mr-1 select-none">
+                {cat.label}
+              </div>
+              <div className="flex items-center gap-1">
+                {visibleItems.map(item => {
+                  const Icon = item.icon;
+                  const isActive = currentPage === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => onNavigate(item.id)}
+                      className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${isActive
+                        ? 'bg-teal-50 text-teal-700 shadow-sm ring-1 ring-teal-100'
+                        : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                        }`}
+                      title={item.label}
+                    >
+                      <Icon size={15} className={`transition-colors ${isActive ? 'text-teal-600' : 'text-gray-400'}`} />
+                      <span className="hidden lg:inline">{item.label}</span>
+                      {item.id === 'leave' && hasPendingLeaves && (
+                        <span className="w-2 h-2 bg-red-500 rounded-full ml-1 animate-pulse" />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           );
         })}
       </div>

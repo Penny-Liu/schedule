@@ -468,19 +468,26 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                     value={formData.role}
                     onChange={e => {
                         const newRole = e.target.value as UserRole;
+                        const isHM = newRole === UserRole.HM_SUPERVISOR || newRole === UserRole.HM_STAFF;
+                        const isRadio = newRole === UserRole.SUPERVISOR || newRole === UserRole.EMPLOYEE;
+                        
                         setFormData({ 
                             ...formData, 
                             role: newRole,
-                            permissions: getPermissionsByRole(newRole)
+                            permissions: getPermissionsByRole(newRole),
+                            isHealthMgmt: isHM || formData.isHealthMgmt,
+                            isRadiographer: isRadio || formData.isRadiographer
                         });
                     }}
                     className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-teal-500 outline-none text-sm shadow-sm bg-white cursor-pointer"
                   >
-                    <option value={UserRole.EMPLOYEE}>放射師</option>
-                    <option value={UserRole.SCHEDULER}>HR / 排班管理員</option>
+                    <option value={UserRole.EMPLOYEE}>放射師同仁</option>
+                    <option value={UserRole.SUPERVISOR}>放射師主管</option>
+                    <option value={UserRole.HM_STAFF}>健管同仁</option>
+                    <option value={UserRole.HM_SUPERVISOR}>健管主管</option>
+                    <option value={UserRole.PHYSICIAN_ADMIN}>醫師/行政管理</option>
                     <option value={UserRole.VIEWER}>瀏覽者 (Viewer)</option>
                     <option value={UserRole.FINANCE}>財會</option>
-                    <option value={UserRole.SUPERVISOR}>部門主管</option>
                     {currentUser.role === UserRole.SYSTEM_ADMIN && (
                       <option value={UserRole.SYSTEM_ADMIN}>系統管理員</option>
                     )}
@@ -600,29 +607,66 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                   <div className="flex justify-between items-center mb-2">
                     <label className="text-xs font-semibold text-gray-500 block">功能權限控管</label>
                   </div>
-                  <div className="bg-gray-50 rounded-lg p-3 border border-gray-100 space-y-2 max-h-48 overflow-y-auto custom-scrollbar">
-                     {Object.entries(PERMISSIONS).map(([key, value]) => (
-                        <div key={value} className="flex items-center gap-2">
-                          <input 
-                            type="checkbox" 
-                            id={`perm_${value}`}
-                            checked={formData.permissions.includes(value)}
-                            onChange={(e) => {
-                               const checked = e.target.checked;
-                               setFormData(prev => ({
-                                  ...prev,
-                                  permissions: checked 
-                                    ? [...prev.permissions, value]
-                                    : prev.permissions.filter(p => p !== value)
-                               }));
-                            }}
-                            className="w-3.5 h-3.5 text-teal-600 border-gray-300 rounded focus:ring-teal-500"
-                          />
-                          <label htmlFor={`perm_${value}`} className="text-xs text-gray-700 cursor-pointer">
-                            {PERMISSION_LABELS[value] || key}
-                          </label>
+                  <div className="bg-gray-50 rounded-lg p-3 border border-gray-100 space-y-4 max-h-64 overflow-y-auto custom-scrollbar">
+                    {[
+                      {
+                        title: '放射師業務',
+                        perms: [PERMISSIONS.VIEW_STATS]
+                      },
+                      {
+                        title: '醫師業務',
+                        perms: [
+                          PERMISSIONS.VIEW_PHYSICIAN,
+                          PERMISSIONS.EDIT_PHYSICIAN,
+                          PERMISSIONS.VIEW_DOCTOR_STATS,
+                          PERMISSIONS.EDIT_DOCTOR_STATS,
+                          PERMISSIONS.MANAGE_DOCTORS
+                        ]
+                      },
+                      {
+                        title: '健管業務',
+                        perms: [PERMISSIONS.VIEW_HEALTH_MGMT, PERMISSIONS.EDIT_HEALTH_MGMT]
+                      },
+                      {
+                        title: '影像雲',
+                        perms: [PERMISSIONS.VIEW_CLOUD_SCHEDULE, PERMISSIONS.EDIT_CLOUD_SCHEDULE]
+                      },
+                      {
+                        title: '系統管理',
+                        perms: [PERMISSIONS.VIEW_STAFF, PERMISSIONS.EDIT_STAFF, PERMISSIONS.EDIT_SETTINGS]
+                      }
+                    ].map(group => (
+                      <div key={group.title} className="space-y-1.5">
+                        <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 flex items-center gap-1">
+                          <span className="w-1 h-2.5 bg-gray-300 rounded-full"></span>
+                          {group.title}
+                        </h4>
+                        <div className="grid grid-cols-1 gap-1 pl-2">
+                          {group.perms.map(value => (
+                            <div key={value} className="flex items-center gap-2">
+                              <input 
+                                type="checkbox" 
+                                id={`perm_${value}`}
+                                checked={formData.permissions.includes(value)}
+                                onChange={(e) => {
+                                  const checked = e.target.checked;
+                                  setFormData(prev => ({
+                                      ...prev,
+                                      permissions: checked 
+                                        ? [...prev.permissions, value]
+                                        : prev.permissions.filter(p => p !== value)
+                                  }));
+                                }}
+                                className="w-3.5 h-3.5 text-teal-600 border-gray-300 rounded focus:ring-teal-500"
+                              />
+                              <label htmlFor={`perm_${value}`} className="text-xs text-gray-700 cursor-pointer hover:text-teal-700 transition-colors">
+                                {PERMISSION_LABELS[value] || value}
+                              </label>
+                            </div>
+                          ))}
                         </div>
-                     ))}
+                      </div>
+                    ))}
                   </div>
                 </div>
 
@@ -724,23 +768,27 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                       <Key size={12} /> {user.username}
                     </div>
                     <div className="flex gap-2">
+                      <div className="flex gap-2 flex-wrap">
                        <span className={`text-[10px] px-2 py-0.5 rounded font-bold border flex items-center gap-1 ${
-                          user.role === UserRole.SUPERVISOR
+                          user.role === UserRole.SUPERVISOR || user.role === UserRole.HM_SUPERVISOR
                           ? 'bg-purple-50 text-purple-700 border-purple-100'
                           : (user.role === UserRole.SYSTEM_ADMIN
                             ? 'bg-gray-800 text-white border-gray-900'
-                            : (user.role === UserRole.SCHEDULER 
-                                ? 'bg-teal-50 text-teal-700 border-teal-100'
+                            : (user.role === UserRole.PHYSICIAN_ADMIN || user.role === UserRole.SCHEDULER
+                                ? 'bg-amber-50 text-amber-700 border-amber-100'
                                 : (user.role === UserRole.VIEWER || user.role === UserRole.FINANCE
-                                    ? 'bg-amber-50 text-amber-700 border-amber-100'
-                                    : 'bg-blue-50 text-blue-700 border-blue-100')))
+                                    ? 'bg-gray-50 text-gray-500 border-gray-200'
+                                    : (user.role === UserRole.HM_STAFF 
+                                        ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                                        : 'bg-blue-50 text-blue-700 border-blue-100'))))
                         }`}>
-                        {user.role === UserRole.SUPERVISOR ? '主管' 
+                        {user.role === UserRole.SUPERVISOR ? '放射師主管' 
+                          : (user.role === UserRole.HM_SUPERVISOR ? '健管主管'
                           : (user.role === UserRole.SYSTEM_ADMIN ? '系統管理員' 
-                          : (user.role === UserRole.SCHEDULER ? 'HR / 排班' 
+                          : (user.role === UserRole.PHYSICIAN_ADMIN || user.role === UserRole.SCHEDULER ? '醫師/行政管理' 
                           : (user.role === UserRole.VIEWER ? '瀏覽者'
                           : (user.role === UserRole.FINANCE ? '財會' 
-                          : '放射師'))))}
+                          : (user.role === UserRole.HM_STAFF ? '健管同仁' : '放射師同仁'))))))}
                       </span>
                       {user.role !== UserRole.SYSTEM_ADMIN && (
                         <span className="text-[10px] px-2 py-0.5 rounded font-bold border bg-orange-50 text-orange-700 border-orange-100 flex items-center gap-1">
@@ -753,6 +801,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                           已離職
                         </span>
                       )}
+                      </div>
                     </div>
                   </div>
                 </div>

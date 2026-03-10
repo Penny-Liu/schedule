@@ -1,11 +1,14 @@
 
 export enum UserRole {
-  SUPERVISOR = 'SUPERVISOR', // 部門主管
-  EMPLOYEE = 'EMPLOYEE',     // 放射師/一般員工
+  SUPERVISOR = 'SUPERVISOR', // 放射師主管
+  EMPLOYEE = 'EMPLOYEE',     // 放射師同仁
   SYSTEM_ADMIN = 'SYSTEM_ADMIN', // 系統管理員
-  SCHEDULER = 'SCHEDULER', // 排班管理員 (HR/醫師排班)
+  PHYSICIAN_ADMIN = 'PHYSICIAN_ADMIN', // 醫師/行政管理
+  HM_SUPERVISOR = 'HM_SUPERVISOR', // 健管主管
+  HM_STAFF = 'HM_STAFF', // 健管同仁
   VIEWER = 'VIEWER', // 瀏覽者 (僅查看)
   FINANCE = 'FINANCE', // 財會 (僅查看醫師排班/工作統計/個人設定)
+  SCHEDULER = 'SCHEDULER', // Legacy: 舊版管理員
 }
 
 export enum StaffGroup {
@@ -141,6 +144,7 @@ export interface HealthMgmtShift {
     userId: string;
     date: string;
     station: string;
+    task?: string; // New: Task assignment (主控/輔控/etc)
     specialRoles?: string[];
 }
 
@@ -284,6 +288,9 @@ export interface SystemSettings {
   defaultDoctorWorkTime?: string; // Default work time for auto-schedule
   doctorWorkTimeOptions?: string[]; // New: List of available work times
   lockedMonths?: string[]; // New: List of locked months (YYYY-MM)
+  healthMgmtStations?: string[]; // New: List of health management stations
+  healthMgmtTasks?: string[]; // New: List of health management tasks
+  healthMgmtCycles?: RosterCycle[]; // New: Independent cycles for HM
 }
 
 
