@@ -879,7 +879,7 @@ BMD :{{bmd}}
     // Users
     getUsers() {
         if (!this.settings.userDisplayOrder || this.settings.userDisplayOrder.length === 0) {
-            return this.users;
+            return [...this.users];
         }
         const orderMap = new Map(this.settings.userDisplayOrder.map((id, index) => [id, index]));
         // Sort users: ordered ones first, then others
@@ -1017,7 +1017,7 @@ BMD :{{bmd}}
     // --- Health Mgmt Staff Operations ---
     
     getHealthMgmtStaff() {
-        return this.healthMgmtStaff;
+        return [...this.healthMgmtStaff];
     }
 
     async addHealthMgmtStaff(staff: HealthMgmtStaff) {
@@ -1075,7 +1075,7 @@ BMD :{{bmd}}
     // -------------------------------------------------------------------------------- //
     // Shifts
     getShifts(startDate: string, endDate: string) {
-        if (!startDate && !endDate) return this.shifts;
+        if (!startDate && !endDate) return [...this.shifts];
         return this.shifts.filter(s => s.date >= startDate && s.date <= endDate);
     }
 
@@ -1196,7 +1196,7 @@ BMD :{{bmd}}
     // --- Health Mgmt Shift Operations ---
     
     getHealthMgmtShifts(startDate?: string, endDate?: string) {
-        if (!startDate && !endDate) return this.healthMgmtShifts;
+        if (!startDate && !endDate) return [...this.healthMgmtShifts];
         return this.healthMgmtShifts.filter(s => s.date >= (startDate || '') && s.date <= (endDate || '9999'));
     }
 
@@ -2003,7 +2003,7 @@ BMD :{{bmd}}
     // --- Doctor Schedule ---
 
     getDoctorShifts() {
-        return this.doctorShifts;
+        return [...this.doctorShifts];
     }
 
     async refreshDoctorShifts() {
@@ -3083,7 +3083,7 @@ BMD :{{bmd}}
 
     // ── 影像雲班表 ────────────────────────────────────────
     getReportAssistants(): ReportAssistant[] {
-        return this.reportAssistants;
+        return [...this.reportAssistants];
     }
 
     async addReportAssistant(assistant: ReportAssistant) {
@@ -3122,7 +3122,7 @@ BMD :{{bmd}}
     }
 
     getCloudScheduleEntries(): CloudScheduleEntry[] {
-        return this.cloudScheduleEntries;
+        return [...this.cloudScheduleEntries];
     }
 
     getCloudScheduleEntry(date: string, doctorId: string): CloudScheduleEntry | undefined {
