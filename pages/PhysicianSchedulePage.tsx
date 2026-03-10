@@ -1045,8 +1045,8 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                             const radMainShifts = dayRadShifts.filter(s => s.station?.includes('場控') || s.station === '主' || s.station === '主控');
                             const radAssistShifts = dayRadShifts.filter(s => s.specialRoles?.includes('輔班') || s.station === '輔' || s.station === '輔控');
 
-                            const hmMainShifts = dayHMShifts.filter(s => s.station === '主控');
-                            const hmAssistShifts = dayHMShifts.filter(s => s.station === '輔控');
+                            const hmMainShifts = dayHMShifts.filter(s => s.station === '主控' || s.task === '主控' || s.station?.includes('主控'));
+                            const hmAssistShifts = dayHMShifts.filter(s => s.station === '輔控' || s.task === '輔控' || s.station?.includes('輔控'));
 
                             const getRadNames = (shifts: any[]) => {
                                 return shifts
