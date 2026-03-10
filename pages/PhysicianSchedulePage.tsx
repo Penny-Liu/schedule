@@ -60,11 +60,11 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
         const hmStaff = db.getHealthMgmtStaff();
         const mainHM = db.getHealthMgmtShifts().filter(s => s.date === dateKey && (s.station?.includes('主控') || s.task === '主控')).map(s => {
             const u = hmStaff.find(staff => staff.id === s.userId);
-            return u?.name || '-';
+            return u?.alias || u?.name?.slice(-2) || '-';
         });
         const assistHM = db.getHealthMgmtShifts().filter(s => s.date === dateKey && (s.station?.includes('輔控') || s.task === '輔控')).map(s => {
             const u = hmStaff.find(staff => staff.id === s.userId);
-            return u?.name || '-';
+            return u?.alias || u?.name?.slice(-2) || '-';
         });
 
         // --- 2. Doctors ---
