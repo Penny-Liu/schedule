@@ -1201,38 +1201,66 @@ BMD :{{bmd}}
     }
 
     async upsertHealthMgmtShift(shift: HealthMgmtShift) {
-        // Local state update
+        // 1. Local state update: Optimistic update
         const index = this.healthMgmtShifts.findIndex(s => s.userId === shift.userId && s.date === shift.date);
         if (index >= 0) {
-            this.healthMgmtShifts[index] = shift;
+            this.healthMgmtShifts[index] = { ...shift };
         } else {
-            this.healthMgmtShifts.push(shift);
+            this.healthMgmtShifts.push({ ...shift });
         }
         this.notifyListeners();
 
-        // Remote sync
+        // 2. Remote sync
         try {
-            const { data: existing } = await supabase
+            // Prepare DB record with explicit mapping
+            const dbRecord: any = {
+                date: shift.date,
+                station: shift.station || '',
+                task: shift.task || null,
+                userId: shift.userId // Supabase table uses 'userId' (CamelCase) for this table specifically
+            };
+
+            const { data: existing, error: fetchError } = await supabase
                 .from('health_mgmt_shifts')
                 .select('id')
                 .eq('userId', shift.userId)
                 .eq('date', shift.date);
 
+            if (fetchError) throw fetchError;
+
+            let targetId: string;
+
             if (existing && existing.length > 0) {
-                const targetId = existing[0].id;
-                await supabase.from('health_mgmt_shifts').update({ ...shift, id: targetId }).eq('id', targetId);
+                targetId = existing[0].id;
+                const { error: updateError } = await supabase
+                    .from('health_mgmt_shifts')
+                    .update({ ...dbRecord, id: targetId })
+                    .eq('id', targetId);
                 
+                if (updateError) throw updateError;
+
                 // Cleanup duplicates if any
                 if (existing.length > 1) {
                     const extras = existing.slice(1).map(e => e.id);
                     await supabase.from('health_mgmt_shifts').delete().in('id', extras);
                 }
             } else {
-                const newId = generateUUID();
-                await supabase.from('health_mgmt_shifts').insert({ ...shift, id: newId });
+                targetId = generateUUID();
+                const { error: insertError } = await supabase
+                    .from('health_mgmt_shifts')
+                    .insert({ ...dbRecord, id: targetId });
+                
+                if (insertError) throw insertError;
             }
+
+            // 3. Sync local ID
+            const finalIndex = this.healthMgmtShifts.findIndex(s => s.userId === shift.userId && s.date === shift.date);
+            if (finalIndex >= 0) {
+                this.healthMgmtShifts[finalIndex].id = targetId;
+            }
+
         } catch (err) {
-            console.error('Failed to upsert HM shift:', err);
+            console.error('[Store] Failed to upsert HM shift:', err);
             throw err;
         }
     }
