@@ -2839,16 +2839,16 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                     const hmStaff = db.getHealthMgmtStaff();
 
                                     const mainRadNames = radShifts.filter(s => (s.station?.includes('場控') || s.station === '主' || s.station === '主控')).map(s => radUsers.find(u => u.id === s.userId)?.name);
-                                    const mainHMNames = hmShifts.filter(s => s.station === '主控').map(s => {
+                                    const mainHMNames = hmShifts.filter(s => s.station === '主控' || s.task === '主控' || s.station?.includes('主控')).map(s => {
                                         const u = hmStaff.find(st => st.id === s.userId);
-                                        return u?.alias || u?.name;
+                                        return u?.name;
                                     });
                                     const mainNamesJoined = [...mainRadNames, ...mainHMNames].filter(Boolean).join(' / ') || '-';
 
                                     const assistRadNames = radShifts.filter(s => (s.specialRoles?.includes('輔班') || s.station === '輔' || s.station === '輔控')).map(s => radUsers.find(u => u.id === s.userId)?.name);
-                                    const assistHMNames = hmShifts.filter(s => s.station === '輔控').map(s => {
+                                    const assistHMNames = hmShifts.filter(s => s.station === '輔控' || s.task === '輔控' || s.station?.includes('輔控')).map(s => {
                                         const u = hmStaff.find(st => st.id === s.userId);
-                                        return u?.alias || u?.name;
+                                        return u?.name;
                                     });
                                     const assistNamesJoined = [...assistRadNames, ...assistHMNames].filter(Boolean).join(' / ') || '-';
 
