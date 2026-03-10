@@ -5,6 +5,9 @@ import { Users, LayoutDashboard, Calendar, ArrowLeft, ArrowRight, X, Lock, Unloc
 import { toLocalISOString, generateUUID } from '../services/utils';
 import ConfirmModal from '../components/ConfirmModal';
 import { utils, writeFile } from 'xlsx';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import ExcelJS from 'exceljs';
 
 interface HealthMgmtPageProps {
   currentUser: User;
@@ -25,6 +28,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [hmTasks, setHmTasks] = useState<string[]>(db.getHealthMgmtTasks());
   const [hmCycles, setHmCycles] = useState<RosterCycle[]>(db.getHealthMgmtCycles());
+  const [holidays, setHolidays] = useState(db.getHolidays());
 
   const [newStaffName, setNewStaffName] = useState(''); // For adding new staff
   const [newStaffAlias, setNewStaffAlias] = useState(''); // For adding new staff alias
@@ -45,7 +49,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
   const [quickScheduleTask, setQuickScheduleTask] = useState('');
   const [selectedCycleId, setSelectedCycleId] = useState<string>('month');
 
-  const isReadOnly = (currentUser.role === UserRole.VIEWER || currentUser.role === UserRole.EMPLOYEE) && !currentUser.permissions?.includes(PERMISSIONS.EDIT_HEALTH_MGMT);
+  const isReadOnly = (currentUser.role === UserRole.VIEWER || currentUser.role === UserRole.RADIOGRAPHER_STAFF) && !currentUser.permissions?.includes(PERMISSIONS.EDIT_HEALTH_MGMT);
 
   // Filtered staff list based on reactive state
   const activeStaff = useMemo(() => {
@@ -62,6 +66,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
       setHmStations(db.getHealthMgmtStations());
       setHmTasks(db.getHealthMgmtTasks());
       setHmCycles(db.getHealthMgmtCycles());
+      setHolidays(db.getHolidays());
     };
     loadData();
     const unsubscribe = db.subscribe(loadData);
@@ -176,21 +181,43 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
       
       const data = activeStaff.map(staff => {
           const row: any = { '姓名': staff.name };
-          let total = 0;
+          
+          let totalWorkDays = 0;
+          let weekdayWorkDays = 0;
+          let holidayWorkDays = 0;
+
+          const dateCounts: Record<string, number> = {};
+          hmStations.forEach(st => dateCounts[st] = 0);
+
+          dateRange.forEach(date => {
+              const shift = shifts.find(s => s.userId === staff.id && s.date === date);
+              if (shift && (shift.station || shift.task)) {
+                  totalWorkDays++;
+                  const d = new Date(date);
+                  const holiday = holidays.find(h => h.date === date && (h.type === 'NATIONAL' || h.type === 'CLOSED'));
+                  const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+                  if (holiday || isWeekend) {
+                      holidayWorkDays++;
+                  } else {
+                      weekdayWorkDays++;
+                  }
+
+                  const parts = shift.station.split(' ');
+                  const stationLabel = parts.length > 1 && parts[0].includes(':') ? parts.slice(1).join(' ') : shift.station;
+                  if (dateCounts[stationLabel] !== undefined) {
+                      dateCounts[stationLabel]++;
+                  }
+              }
+          });
+
+          row['上班天數'] = totalWorkDays;
+          row['平日'] = weekdayWorkDays;
+          row['假日班'] = holidayWorkDays;
           
           hmStations.forEach(st => {
-              const count = shifts.filter(s => {
-                  if (s.userId !== staff.id || !dateRange.includes(s.date)) return false;
-                  // Handle "08:00-16:00 主控" format
-                  const parts = s.station.split(' ');
-                  const task = parts.length > 1 ? parts.slice(1).join(' ') : s.station;
-                  return task === st;
-              }).length;
-              row[st] = count;
-              total += count;
+              row[st] = dateCounts[st];
           });
           
-          row['總計天數'] = total;
           return row;
       });
 
@@ -200,23 +227,168 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
       writeFile(wb, `健管排班統計_${label}.xlsx`);
   };
 
+  const handleExportScheduleExcel = async () => {
+    try {
+      const workbook = new ExcelJS.Workbook();
+      const sheet = workbook.addWorksheet('健管排班表');
+
+      const label = selectedCycleId === 'month' 
+        ? `${currentDate.getFullYear()}年${currentDate.getMonth() + 1}月`
+        : currentCycle?.name || '週期排班';
+
+      // Header row
+      const headerRow = ['人員', ...dateRange.map(date => {
+        const d = new Date(date);
+        return `${d.getMonth() + 1}/${d.getDate()}(${['日', '一', '二', '三', '四', '五', '六'][d.getDay()]})`;
+      })];
+      
+      const firstRow = sheet.addRow(headerRow);
+      firstRow.font = { bold: true };
+      firstRow.alignment = { horizontal: 'center' };
+
+      // Data rows
+      activeStaff.forEach(staff => {
+        const rowData = [staff.name];
+        dateRange.forEach(date => {
+          const shift = shifts.find(s => s.userId === staff.id && s.date === date);
+          if (shift) {
+            let content = shift.station || '';
+            if (shift.task) content += ` (${shift.task})`;
+            rowData.push(content);
+          } else {
+            rowData.push('');
+          }
+        });
+        const row = sheet.addRow(rowData);
+        row.alignment = { horizontal: 'center', vertical: 'middle' };
+      });
+
+      // Styling
+      sheet.columns.forEach((col, i) => {
+        col.width = i === 0 ? 15 : 12;
+      });
+
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `健管排班表_${label}.xlsx`;
+      link.click();
+    } catch (error) {
+      console.error('Excel export failed:', error);
+      alert('匯出 Excel 失敗');
+    }
+  };
+
+  const handleExportSchedulePDF = async () => {
+    try {
+      const doc = new jsPDF('l', 'mm', 'a4');
+      let fontName = 'helvetica';
+
+      // Font loading logic similar to PhysicianSchedulePage
+      try {
+        const pathsToTry = ['/schedule/fonts/jf-openhuninn-2.1.ttf', '/fonts/jf-openhuninn-2.1.ttf'];
+        let response: Response | null = null;
+        for (const path of pathsToTry) {
+          try {
+            const res = await fetch(path);
+            if (res.ok && res.headers.get('content-type')?.includes('font')) { response = res; break; }
+            // Or just check if ok and size > 0
+            if (res.ok) { response = res; break; }
+          } catch (e) {}
+        }
+
+        if (response) {
+          const blob = await response.blob();
+          const reader = new FileReader();
+          await new Promise((resolve, reject) => {
+            reader.onloadend = () => {
+              const base64 = (reader.result as string).split('base64,')[1];
+              doc.addFileToVFS('jf-openhuninn-2.1.ttf', base64);
+              doc.addFont('jf-openhuninn-2.1.ttf', 'OpenHuninn', 'normal');
+              doc.setFont('OpenHuninn');
+              fontName = 'OpenHuninn';
+              resolve(true);
+            };
+            reader.readAsDataURL(blob);
+          });
+        }
+      } catch (e) { console.error('Font load failed', e); }
+
+      const label = selectedCycleId === 'month' 
+        ? `${currentDate.getFullYear()}年${currentDate.getMonth() + 1}月`
+        : currentCycle?.name || '週期排班';
+
+      doc.setFont(fontName);
+      doc.setFontSize(16);
+      doc.text(`健管排班表 - ${label}`, 14, 15);
+      doc.setFontSize(10);
+      doc.text(`匯出日期: ${new Date().toLocaleDateString('zh-TW')}`, 280, 15, { align: 'right' });
+
+      const headers = [['人員', ...dateRange.map(date => {
+        const d = new Date(date);
+        return `${d.getMonth() + 1}/${d.getDate()}\n(${['日', '一', '二', '三', '四', '五', '六'][d.getDay()]})`;
+      })]];
+
+      const body = activeStaff.map(staff => [
+        staff.name,
+        ...dateRange.map(date => {
+          const shift = shifts.find(s => s.userId === staff.id && s.date === date);
+          if (!shift) return '';
+          let text = shift.station || '';
+          if (shift.task) text += `\n(${shift.task})`;
+          return text;
+        })
+      ]);
+
+      autoTable(doc, {
+        head: headers,
+        body: body,
+        startY: 20,
+        styles: { font: fontName, fontSize: 8, halign: 'center', cellPadding: 1 },
+        headStyles: { fillColor: [45, 133, 115] },
+        columnStyles: { 0: { fontStyle: 'bold', minCellWidth: 20 } },
+        margin: { horizontal: 14 }
+      });
+
+      doc.save(`健管排班表_${label}.pdf`);
+    } catch (error) {
+      console.error('PDF export failed:', error);
+      alert('匯出 PDF 失敗');
+    }
+  };
+
   const stats = useMemo(() => {
     return activeStaff.map(staff => {
         const counts: Record<string, number> = {};
         let total = 0;
-        hmStations.forEach(st => {
-            const count = shifts.filter(s => {
-                if (s.userId !== staff.id || !dateRange.includes(s.date)) return false;
-                const parts = s.station.split(' ');
-                const task = parts.length > 1 ? parts.slice(1).join(' ') : s.station;
-                return task === st;
-            }).length;
-            counts[st] = count;
-            total += count;
+        let weekday = 0;
+        let holidayCount = 0;
+
+        dateRange.forEach(date => {
+            const shift = shifts.find(s => s.userId === staff.id && s.date === date);
+            if (shift && (shift.station || shift.task)) {
+                total++;
+                const d = new Date(date);
+                const holiday = holidays.find(h => h.date === date && (h.type === 'NATIONAL' || h.type === 'CLOSED'));
+                const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+                if (holiday || isWeekend) {
+                    holidayCount++;
+                } else {
+                    weekday++;
+                }
+
+                const parts = shift.station.split(' ');
+                const stationLabel = parts.length > 1 && parts[0].includes(':') ? parts.slice(1).join(' ') : shift.station;
+                if (hmStations.includes(stationLabel)) {
+                    counts[stationLabel] = (counts[stationLabel] || 0) + 1;
+                }
+            }
         });
-        return { staff, counts, total };
+
+        return { staff, counts, total, weekday, holidayCount };
     });
-  }, [activeStaff, hmStations, shifts, dateRange]);
+  }, [activeStaff, hmStations, shifts, dateRange, holidays]);
 
   // Function to add new HM staff
   const addStaff = async (e: React.FormEvent) => {
@@ -435,6 +607,22 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                     )}
                 </div>
             )}
+
+            <div className="flex bg-teal-50 rounded-lg p-0.5 border border-teal-100 items-center h-[34px]">
+                <button 
+                    onClick={handleExportSchedulePDF}
+                    className="px-3 py-1 hover:bg-white rounded-md text-xs font-bold text-teal-700 flex items-center gap-1 transition-all"
+                >
+                    <Download size={14} /> PDF
+                </button>
+                <div className="w-[1px] h-3 bg-teal-200 mx-1"></div>
+                <button 
+                    onClick={handleExportScheduleExcel}
+                    className="px-3 py-1 hover:bg-white rounded-md text-xs font-bold text-emerald-700 flex items-center gap-1 transition-all"
+                >
+                    <FileSpreadsheet size={14} /> Excel
+                </button>
+            </div>
           </div>
 
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm inline-block min-w-full">
@@ -676,16 +864,27 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                     <thead>
                         <tr className="bg-slate-50 text-slate-500 border-b border-slate-100">
                             <th className="p-4 text-left font-bold sticky left-0 bg-slate-50 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]">姓名</th>
+                            <th className="p-4 text-center font-bold text-teal-600">上班天數</th>
+                            <th className="p-4 text-center font-bold text-blue-600">平日</th>
+                            <th className="p-4 text-center font-bold text-red-600">假日班</th>
                             {hmStations.map(st => (
                                 <th key={st} className="p-4 text-center font-bold">{st}</th>
                             ))}
-                            <th className="p-4 text-center font-bold text-teal-600">總計天數</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50">
-                        {stats.map(({ staff, counts, total }) => (
+                        {stats.map(({ staff, counts, total, weekday, holidayCount }) => (
                             <tr key={staff.id} className="hover:bg-slate-50/50 transition-colors">
                                 <td className="p-4 font-bold text-slate-700 sticky left-0 bg-white z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]">{staff.name}</td>
+                                <td className="p-4 text-center">
+                                    <span className="font-extrabold text-teal-700 bg-teal-50 px-3 py-1.5 rounded-lg border border-teal-100">{total}</span>
+                                </td>
+                                <td className="p-4 text-center">
+                                    <span className="font-bold text-blue-700 bg-blue-50 px-2.5 py-1 rounded-md">{weekday}</span>
+                                </td>
+                                <td className="p-4 text-center">
+                                    <span className="font-bold text-red-700 bg-red-50 px-2.5 py-1 rounded-md">{holidayCount}</span>
+                                </td>
                                 {hmStations.map(st => (
                                     <td key={st} className="p-4 text-center text-slate-600">
                                         {counts[st] > 0 ? (
@@ -693,9 +892,6 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                                         ) : '-'}
                                     </td>
                                 ))}
-                                <td className="p-4 text-center">
-                                    <span className="font-extrabold text-teal-700 bg-teal-50 px-3 py-1.5 rounded-lg border border-teal-100">{total}</span>
-                                </td>
                             </tr>
                         ))}
                     </tbody>

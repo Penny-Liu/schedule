@@ -55,7 +55,7 @@ export const getPermissionsByRole = (role: UserRole): string[] => {
                 PERMISSIONS.VIEW_CLOUD_SCHEDULE,
                 PERMISSIONS.VIEW_PHYSICIAN
             ];
-        default: // EMPLOYEE (Radiographer)
+        default: // RADIOGRAPHER_STAFF
             return [
                 PERMISSIONS.VIEW_CLOUD_SCHEDULE,
                 PERMISSIONS.VIEW_PHYSICIAN

@@ -65,7 +65,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
     name: '',
     alias: '',
     username: '',
-    role: UserRole.EMPLOYEE,
+    role: UserRole.RADIOGRAPHER_STAFF,
     groupId: StaffGroup.GROUP_A,
     color: COLOR_PALETTE[5], // Default Blue
     capabilities: [],
@@ -85,7 +85,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
       name: '',
       alias: '',
       username: '',
-      role: UserRole.EMPLOYEE,
+      role: UserRole.RADIOGRAPHER_STAFF,
       groupId: StaffGroup.GROUP_A,
       color: COLOR_PALETTE[5],
       capabilities: [],
@@ -292,7 +292,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
 
   // Helper to check if a capability is a special role
   const isSpecialRole = (cap: string) => Object.values(SPECIAL_ROLES).includes(cap);
-  const radiographersCount = users.filter(u => u.role === UserRole.EMPLOYEE || u.role === UserRole.SUPERVISOR).length;
+  const radiographersCount = users.filter(u => u.role === UserRole.RADIOGRAPHER_STAFF || u.role === UserRole.SUPERVISOR).length;
 
   return (
     <div className="p-6 max-w-7xl mx-auto h-screen overflow-y-auto">
@@ -324,7 +324,12 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
         <div className="flex gap-2">
           <div className="text-xs text-gray-500 flex items-center gap-1 bg-white border border-gray-200 px-3 py-1.5 rounded-full shadow-sm">
             <Users size={14} />
-            全體人數: {users.length}
+            部門人數: {users.filter(user => {
+              if (currentUser.role === UserRole.SYSTEM_ADMIN) return true;
+              if (currentUser.role === UserRole.SUPERVISOR) return user.isRadiographer;
+              if (currentUser.role === UserRole.HM_SUPERVISOR) return user.isHealthMgmt;
+              return false;
+            }).length}
           </div>
         </div>
       </div>
@@ -400,9 +405,10 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                         id="isRadiographer"
                         checked={formData.isRadiographer}
                         onChange={e => setFormData({ ...formData, isRadiographer: e.target.checked })}
+                        disabled={currentUser.role === UserRole.HM_SUPERVISOR}
                         className="w-4 h-4 text-teal-600 border-gray-300 rounded focus:ring-teal-500"
                      />
-                     <label htmlFor="isRadiographer" className="text-xs font-bold text-gray-700 cursor-pointer">
+                     <label htmlFor="isRadiographer" className={`text-xs font-bold cursor-pointer ${currentUser.role === UserRole.HM_SUPERVISOR ? 'text-gray-400' : 'text-gray-700'}`}>
                         是否為放射師 (顯示於排班總覽)
                      </label>
                   </div>
@@ -414,10 +420,10 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                         id="isPartTime"
                         checked={formData.isPartTime}
                         onChange={e => setFormData({ ...formData, isPartTime: e.target.checked })}
-                        disabled={!formData.isRadiographer} // Only relevant if radiographer
-                        className={`w-4 h-4 text-teal-600 border-gray-300 rounded focus:ring-teal-500 ${!formData.isRadiographer ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        disabled={!formData.isRadiographer || currentUser.role === UserRole.HM_SUPERVISOR}
+                        className={`w-4 h-4 text-teal-600 border-gray-300 rounded focus:ring-teal-500 ${(!formData.isRadiographer || currentUser.role === UserRole.HM_SUPERVISOR) ? 'opacity-50 cursor-not-allowed' : ''}`}
                      />
-                      <label htmlFor="isPartTime" className={`text-xs font-bold cursor-pointer ${!formData.isRadiographer ? 'text-gray-400' : 'text-gray-700'}`}>
+                      <label htmlFor="isPartTime" className={`text-xs font-bold cursor-pointer ${(!formData.isRadiographer || currentUser.role === UserRole.HM_SUPERVISOR) ? 'text-gray-400' : 'text-gray-700'}`}>
                         兼職放射師 (總覽隱藏，崗位顯示)
                       </label>
                   </div>
@@ -428,9 +434,10 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                         id="isHealthMgmt"
                         checked={formData.isHealthMgmt}
                         onChange={e => setFormData({ ...formData, isHealthMgmt: e.target.checked })}
+                        disabled={currentUser.role === UserRole.SUPERVISOR}
                         className="w-4 h-4 text-teal-600 border-gray-300 rounded focus:ring-teal-500"
                      />
-                     <label htmlFor="isHealthMgmt" className="text-xs font-bold text-gray-700 cursor-pointer">
+                     <label htmlFor="isHealthMgmt" className={`text-xs font-bold cursor-pointer ${currentUser.role === UserRole.SUPERVISOR ? 'text-gray-400' : 'text-gray-700'}`}>
                         是否為健管人員 (健管排班)
                      </label>
                   </div>
@@ -469,7 +476,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                     onChange={e => {
                         const newRole = e.target.value as UserRole;
                         const isHM = newRole === UserRole.HM_SUPERVISOR || newRole === UserRole.HM_STAFF;
-                        const isRadio = newRole === UserRole.SUPERVISOR || newRole === UserRole.EMPLOYEE;
+                        const isRadio = newRole === UserRole.SUPERVISOR || newRole === UserRole.RADIOGRAPHER_STAFF;
                         
                         setFormData({ 
                             ...formData, 
@@ -481,7 +488,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                     }}
                     className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-teal-500 outline-none text-sm shadow-sm bg-white cursor-pointer"
                   >
-                    <option value={UserRole.EMPLOYEE}>放射師同仁</option>
+                    <option value={UserRole.RADIOGRAPHER_STAFF}>放射師同仁</option>
                     <option value={UserRole.SUPERVISOR}>放射師主管</option>
                     <option value={UserRole.HM_STAFF}>健管同仁</option>
                     <option value={UserRole.HM_SUPERVISOR}>健管主管</option>
@@ -493,7 +500,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                     )}
                   </select>
                 </div>
-                {(formData.role === UserRole.EMPLOYEE || formData.role === UserRole.SUPERVISOR || formData.role === UserRole.SYSTEM_ADMIN) && (
+                {(formData.role === UserRole.RADIOGRAPHER_STAFF || formData.role === UserRole.SUPERVISOR || formData.role === UserRole.SYSTEM_ADMIN) && (
                   <div>
                     <label className="text-xs font-semibold text-gray-500 mb-1 block">組別</label>
                     <select
@@ -509,7 +516,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                   </div>
                 )}
                 {/* Group D index selector */}
-                {formData.groupId === StaffGroup.GROUP_D && (formData.role === UserRole.EMPLOYEE || formData.role === UserRole.SUPERVISOR || formData.role === UserRole.SYSTEM_ADMIN) && (
+                {formData.groupId === StaffGroup.GROUP_D && (formData.role === UserRole.RADIOGRAPHER_STAFF || formData.role === UserRole.SUPERVISOR || formData.role === UserRole.SYSTEM_ADMIN) && (
                   <div>
                     <label className="text-xs font-semibold text-gray-500 mb-1 block">
                       D組輪休順序 (Index 0–3)
@@ -558,7 +565,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
               </div>
 
               {/* Capabilities Selection (Only for Radiographer related roles) */}
-              {(formData.role === UserRole.EMPLOYEE || formData.role === UserRole.SUPERVISOR || formData.role === UserRole.SYSTEM_ADMIN) && (
+              {(formData.role === UserRole.RADIOGRAPHER_STAFF || formData.role === UserRole.SUPERVISOR || formData.role === UserRole.SYSTEM_ADMIN) && (
                 <div>
                   <div className="flex justify-between items-center mb-2">
                     <label className="text-xs font-semibold text-gray-500 block">技能與特殊任務資格</label>
@@ -714,6 +721,10 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
         {/* User List */}
         <div className={`${currentUser.permissions?.includes(PERMISSIONS.EDIT_STAFF) ? 'xl:col-span-2' : 'xl:col-span-3'} grid grid-cols-1 md:grid-cols-2 gap-4 auto-rows-min pb-20`}>
           {users.filter(user => {
+            // Department isolation for supervisors
+            if (currentUser.role === UserRole.SUPERVISOR && !user.isRadiographer) return false;
+            if (currentUser.role === UserRole.HM_SUPERVISOR && !user.isHealthMgmt) return false;
+
             // Hide resigned users once their resignation date is effective
             if (user.isActive === false) {
               if (!user.resignationDate) return false;

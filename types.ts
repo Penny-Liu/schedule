@@ -1,7 +1,7 @@
 
 export enum UserRole {
   SUPERVISOR = 'SUPERVISOR', // 放射師主管
-  EMPLOYEE = 'EMPLOYEE',     // 放射師同仁
+  RADIOGRAPHER_STAFF = 'RADIOGRAPHER_STAFF', // 放射師同仁
   SYSTEM_ADMIN = 'SYSTEM_ADMIN', // 系統管理員
   PHYSICIAN_ADMIN = 'PHYSICIAN_ADMIN', // 醫師/行政管理
   HM_SUPERVISOR = 'HM_SUPERVISOR', // 健管主管

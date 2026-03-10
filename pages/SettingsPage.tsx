@@ -48,6 +48,23 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
     // Tab State
     const [activeTab, setActiveTab] = useState<'personal' | 'radiographer' | 'health_mgmt' | 'system'>('personal');
 
+    const isSupervisorOrAdmin = currentUser.role === UserRole.SUPERVISOR || currentUser.role === UserRole.SYSTEM_ADMIN;
+    const canManageHealthMgmt = currentUser.role === UserRole.SYSTEM_ADMIN || currentUser.permissions?.includes(PERMISSIONS.EDIT_HEALTH_MGMT);
+    const canManageDates = isSupervisorOrAdmin || currentUser.role === UserRole.SCHEDULER || canManageHealthMgmt;
+    const isSystemAdmin = currentUser.role === UserRole.SYSTEM_ADMIN;
+    const isFinanceOnly = currentUser.role === UserRole.FINANCE;
+
+    // Auto-switch away from restricted tabs
+    useEffect(() => {
+        if (activeTab === 'radiographer' && !isSupervisorOrAdmin) {
+            setActiveTab('personal');
+        } else if (activeTab === 'health_mgmt' && !canManageHealthMgmt) {
+            setActiveTab('personal');
+        } else if (activeTab === 'system' && !(isSupervisorOrAdmin || currentUser.role === UserRole.SCHEDULER)) {
+            setActiveTab('personal');
+        }
+    }, [activeTab, isSupervisorOrAdmin, canManageHealthMgmt, currentUser.role]);
+
     // Template blocks state: [Block1, Block2, Block3]
     const [templateBlocks, setTemplateBlocks] = useState<string[]>(['', '', '']);
 
@@ -93,11 +110,6 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
         message: string;
     } | null>(null);
 
-    const isSupervisorOrAdmin = currentUser.role === UserRole.SUPERVISOR || currentUser.role === UserRole.SYSTEM_ADMIN;
-    const canManageHealthMgmt = currentUser.role === UserRole.SYSTEM_ADMIN || currentUser.permissions?.includes(PERMISSIONS.EDIT_HEALTH_MGMT);
-    const canManageDates = isSupervisorOrAdmin || currentUser.role === UserRole.SCHEDULER || canManageHealthMgmt;
-    const isSystemAdmin = currentUser.role === UserRole.SYSTEM_ADMIN;
-    const isFinanceOnly = currentUser.role === UserRole.FINANCE;
 
     // Calculate duration helper
     const cycleDuration = useMemo(() => {
@@ -108,6 +120,15 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
         return diffDays > 0 ? diffDays : 0;
     }, [newCycle.startDate, newCycle.endDate]);
+
+    const hmCycleDuration = useMemo(() => {
+        if (!newHmCycle.startDate || !newHmCycle.endDate) return 0;
+        const start = new Date(newHmCycle.startDate);
+        const end = new Date(newHmCycle.endDate);
+        const diffTime = end.getTime() - start.getTime();
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+        return diffDays > 0 ? diffDays : 0;
+    }, [newHmCycle.startDate, newHmCycle.endDate]);
 
     // Station Handlers
     const handleAddStation = (e: React.FormEvent) => {
@@ -593,22 +614,26 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
                 >
                     <UserCircle size={18} /> 個人設定
                 </button>
-                <button
-                    onClick={() => setActiveTab('radiographer')}
-                    className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-2 ${
-                        activeTab === 'radiographer' ? 'bg-teal-600 text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'
-                    }`}
-                >
-                    <Users size={18} /> 放射師設定
-                </button>
-                <button
-                    onClick={() => setActiveTab('health_mgmt')}
-                    className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-2 ${
-                        activeTab === 'health_mgmt' ? 'bg-teal-600 text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'
-                    }`}
-                >
-                    <Calendar size={18} /> 健管設定
-                </button>
+                {isSupervisorOrAdmin && (
+                    <button
+                        onClick={() => setActiveTab('radiographer')}
+                        className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-2 ${
+                            activeTab === 'radiographer' ? 'bg-teal-600 text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'
+                        }`}
+                    >
+                        <Users size={18} /> 放射師設定
+                    </button>
+                )}
+                {canManageHealthMgmt && (
+                    <button
+                        onClick={() => setActiveTab('health_mgmt')}
+                        className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-2 ${
+                            activeTab === 'health_mgmt' ? 'bg-teal-600 text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'
+                        }`}
+                    >
+                        <Calendar size={18} /> 健管設定
+                    </button>
+                )}
                 {(isSupervisorOrAdmin || currentUser.role === UserRole.SCHEDULER) && (
                     <button
                         onClick={() => setActiveTab('system')}
@@ -1089,217 +1114,9 @@ BMD :{{bmd}}
                                     </div>
                                 </div>
 
-                                {/* Cycle Management */}
-                                <div className="bg-white rounded-xl shadow-[0_2px_12px_rgba(0,0,0,0.03)] border border-gray-100 overflow-hidden flex flex-col h-fit">
-                                    <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
-                                        <h3 className="font-bold text-gray-800 flex items-center gap-2">
-                                            <Calendar size={16} className="text-gray-400" />
-                                            排班週期 (主管專用)
-                                        </h3>
-                                    </div>
-
-                                    <div className="p-6 border-b border-gray-100">
-                                        <form onSubmit={handleAddCycle} className="space-y-4">
-                                            <div>
-                                                <label className="text-xs font-semibold text-gray-500 mb-1 block">週期名稱 (格式建議: YYYY/NN)</label>
-                                                <input
-                                                    type="text"
-                                                    value={newCycle.name}
-                                                    onChange={(e) => setNewCycle({ ...newCycle, name: e.target.value })}
-                                                    placeholder="例：2025/12"
-                                                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 outline-none shadow-sm transition-all"
-                                                    required
-                                                />
-                                            </div>
-                                            <div className="flex gap-3">
-                                                <div className="flex-1">
-                                                    <label className="text-xs font-semibold text-gray-500 mb-1 block">開始日期</label>
-                                                    <input
-                                                        type="date"
-                                                        value={newCycle.startDate}
-                                                        onChange={(e) => setNewCycle({ ...newCycle, startDate: e.target.value })}
-                                                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 outline-none shadow-sm transition-all"
-                                                        required
-                                                    />
-                                                </div>
-                                                <div className="flex-1">
-                                                    <label className="text-xs font-semibold text-gray-500 mb-1 block">結束日期</label>
-                                                    <input
-                                                        type="date"
-                                                        value={newCycle.endDate}
-                                                        onChange={(e) => setNewCycle({ ...newCycle, endDate: e.target.value })}
-                                                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 outline-none shadow-sm transition-all"
-                                                        required
-                                                    />
-                                                </div>
-                                            </div>
-
-                                            {/* Duration Display */}
-                                            {cycleDuration > 0 && (
-                                                <div className="flex items-center gap-2 text-xs font-bold text-teal-600 bg-teal-50 px-3 py-2 rounded-lg border border-teal-100 animate-in fade-in slide-in-from-top-1">
-                                                    <Clock size={14} />
-                                                    自動計算：本週期共 {cycleDuration} 天
-                                                </div>
-                                            )}
-
-                                            <button type="submit" className="w-full bg-teal-50 hover:bg-teal-100 text-teal-700 font-bold py-2.5 rounded-lg transition-colors text-sm flex justify-center items-center gap-2 border border-teal-200">
-                                                <Plus size={16} /> 新增週期
-                                            </button>
-                                        </form>
-                                    </div>
-
-                                    <div className="p-2 overflow-y-auto max-h-[250px]">
-                                        {cycles.map(cycle => (
-                                            <div key={cycle.id} className="group p-3 hover:bg-gray-50 rounded-lg transition-colors border border-transparent hover:border-gray-200 mb-1">
-                                                <div className="flex justify-between items-center">
-                                                    <div>
-                                                        <div className="text-sm font-bold text-gray-800">{formatCycleName(cycle.name)}</div>
-                                                        <div className="text-xs text-gray-500 mt-0.5 flex items-center gap-1 font-medium">
-                                                            {cycle.startDate} ~ {cycle.endDate}
-                                                            <span className="text-gray-300">|</span>
-                                                            <span className="text-gray-400">
-                                                                {Math.ceil((new Date(cycle.endDate).getTime() - new Date(cycle.startDate).getTime()) / (1000 * 60 * 60 * 24)) + 1} 天
-                                                            </span>
-                                                        </div>
-                                                    </div>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleDeleteCycleClick(cycle.id)}
-                                                        className="text-gray-300 hover:text-red-500 transition-colors p-2 rounded-full hover:bg-white"
-                                                    >
-                                                        <Trash2 size={16} />
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        ))}
-                                        {cycles.length === 0 && (
-                                            <div className="p-8 text-center text-gray-400 text-sm">
-                                                尚未設定週期
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
                             </>
                         )}
 
-                        {canManageDates && (
-                            <>
-                                {/* Holiday / Event Management */}
-                                <div className="bg-white rounded-xl shadow-[0_2px_12px_rgba(0,0,0,0.03)] border border-gray-100 overflow-hidden flex flex-col h-fit">
-                                    <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center">
-                                        <h3 className="font-bold text-gray-800 flex items-center gap-2">
-                                            特殊日期設定 (主管與排班專用)
-                                            <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full">{holidays.length}</span>
-                                        </h3>
-                                        <button
-                                            type="button"
-                                            onClick={handleImportHolidays}
-                                            className="text-xs flex items-center gap-1 text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-2 py-1.5 rounded-lg font-bold transition-colors border border-blue-100"
-                                        >
-                                            <Globe size={12} /> 匯入台灣假日
-                                        </button>
-                                    </div>
-
-                                    <div className="p-4 border-b border-gray-100">
-                                        <form onSubmit={handleAddHoliday} className="flex flex-col gap-2 mb-4">
-                                            <div className="flex gap-2">
-                                                <input
-                                                    type="date"
-                                                    value={newHoliday.date}
-                                                    onChange={(e) => setNewHoliday({ ...newHoliday, date: e.target.value })}
-                                                    className="w-1/3 px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 outline-none"
-                                                    required
-                                                />
-                                                <input
-                                                    type="text"
-                                                    value={newHoliday.name}
-                                                    onChange={(e) => setNewHoliday({ ...newHoliday, name: e.target.value })}
-                                                    placeholder="名稱 (例: 科會)"
-                                                    className="flex-1 px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 outline-none"
-                                                    required
-                                                />
-                                            </div>
-                                            <div className="flex gap-2">
-                                                <select
-                                                    value={newHoliday.type}
-                                                    onChange={(e) => setNewHoliday({ ...newHoliday, type: e.target.value as DateEventType })}
-                                                    className="flex-1 px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 outline-none cursor-pointer bg-white"
-                                                >
-                                                    <option value={DateEventType.NATIONAL}>國定假日 (紅字)</option>
-                                                    <option value={DateEventType.NOTE}>全院備忘 (藍字)</option>
-                                                    {isSupervisorOrAdmin && (
-                                                        <option value={DateEventType.RADIOGRAPHER_NOTE}>放射師備註 (綠字)</option>
-                                                    )}
-                                                    <option value={DateEventType.DOCTOR_NOTE}>醫師備註 (紫字)</option>
-                                                    <option value={DateEventType.CLOSED}>休診 (全員預設休假)</option>
-                                                </select>
-                                                <button type="submit" className="bg-gray-800 text-white px-6 rounded-lg hover:bg-gray-700 flex items-center justify-center">
-                                                    <Plus size={16} />
-                                                </button>
-                                            </div>
-                                        </form>
-
-                                        {/* Batch Generator - Collapsible UI */}
-                                        <details className="group border border-blue-100 rounded-lg bg-blue-50/30 open:bg-blue-50/50 transition-all mb-4">
-                                            <summary className="cursor-pointer p-3 text-xs font-bold text-blue-700 flex items-center gap-2 select-none">
-                                                <RefreshCw size={14} /> 批量生成特殊日期 (進階)
-                                                <span className="ml-auto text-blue-400 group-open:rotate-180 transition-transform"><ChevronDown size={14} /></span>
-                                            </summary>
-                                            <div className="p-3 pt-0 border-t border-blue-100/50 mt-1">
-                                                <form onSubmit={handleBatchGenerate} className="space-y-3 mt-2">
-                                                    <div className="flex items-center gap-2 text-sm text-gray-700 font-medium flex-wrap">
-                                                        <span>每</span>
-                                                        <input
-                                                            type="number"
-                                                            min="1"
-                                                            value={batchConfig.frequency}
-                                                            onChange={e => setBatchConfig({ ...batchConfig, frequency: e.target.value })}
-                                                            className="w-16 bg-white border border-gray-300 rounded px-2 py-1 text-sm outline-none focus:border-blue-500 text-center"
-                                                        />
-                                                        <span>個月的 第</span>
-                                                        <select
-                                                            value={batchConfig.nth}
-                                                            onChange={e => setBatchConfig({ ...batchConfig, nth: e.target.value })}
-                                                            className="bg-white border border-gray-300 rounded px-2 py-1 text-sm outline-none focus:border-blue-500"
-                                                        >
-                                                            <option value="1">1</option>
-                                                            <option value="2">2</option>
-                                                            <option value="3">3</option>
-                                                            <option value="4">4</option>
-                                                            <option value="last">最後一個</option>
-                                                        </select>
-                                                        <span>個 星期</span>
-                                                        <select
-                                                            value={batchConfig.weekday}
-                                                            onChange={e => setBatchConfig({ ...batchConfig, weekday: e.target.value })}
-                                                            className="bg-white border border-gray-300 rounded px-2 py-1 text-sm outline-none focus:border-blue-500"
-                                                        >
-                                                            <option value="1">一</option>
-                                                            <option value="2">二</option>
-                                                            <option value="3">三</option>
-                                                            <option value="4">四</option>
-                                                            <option value="5">五</option>
-                                                            <option value="6">六</option>
-                                                            <option value="0">日</option>
-                                                        </select>
-                                                    </div>
-
-                                                    <div className="flex gap-2 items-center">
-                                                        <input
-                                                            type="month"
-                                                            value={batchConfig.startMonth}
-                                                            onChange={e => setBatchConfig({ ...batchConfig, startMonth: e.target.value })}
-                                                            className="w-1/2 border border-gray-300 rounded px-2 py-1 text-sm"
-                                                            required
-                                                        />
-                                                    </div>
-                                                </form>
-                                            </div>
-                                        </details>
-                                    </div>
-                                </div>
-                            </>
-                        )}
                     </>
                 )}
 
@@ -1398,7 +1215,7 @@ BMD :{{bmd}}
                     </>
                 )}
 
-                {canManageDates && (
+                {canManageDates && activeTab !== 'personal' && (
                     <>
                         {/* Holiday / Event Management */}
                         <div className="bg-white rounded-xl shadow-[0_2px_12px_rgba(0,0,0,0.03)] border border-gray-100 overflow-hidden flex flex-col h-fit">
@@ -1443,7 +1260,7 @@ BMD :{{bmd}}
                                         >
                                             <option value={DateEventType.NATIONAL}>國定假日 (紅字)</option>
                                             <option value={DateEventType.NOTE}>全院備忘 (藍字)</option>
-                                            {isSupervisorOrAdmin && (
+                                            {isSupervisorOrAdmin && currentUser.isRadiographer !== false && (
                                                 <option value={DateEventType.RADIOGRAPHER_NOTE}>放射師備註 (綠字)</option>
                                             )}
                                             <option value={DateEventType.DOCTOR_NOTE}>醫師備註 (紫字)</option>
@@ -1542,8 +1359,24 @@ BMD :{{bmd}}
 
 
                             <div className="p-2 overflow-y-auto max-h-[250px]">
-                                {holidays.filter(h => !(currentUser.role === UserRole.SCHEDULER && h.type === DateEventType.RADIOGRAPHER_NOTE)).length > 0 ? (
-                                    holidays.filter(h => !(currentUser.role === UserRole.SCHEDULER && h.type === DateEventType.RADIOGRAPHER_NOTE)).map(h => (
+                                {holidays.filter(h => {
+                                    // 1. If user is SCHEDULER, hide radiographer notes (legacy logic)
+                                    if (currentUser.role === UserRole.SCHEDULER && h.type === DateEventType.RADIOGRAPHER_NOTE) return false;
+                                    
+                                    // 2. If in Health Management tab, hide radiographer notes
+                                    if (activeTab === 'health_mgmt' && h.type === DateEventType.RADIOGRAPHER_NOTE) return false;
+                                    
+                                    // 3. If user is NOT a radiographer (e.g. HM Supervisor), hide radiographer notes
+                                    if (currentUser.isRadiographer === false && h.type === DateEventType.RADIOGRAPHER_NOTE) return false;
+                                    
+                                    return true;
+                                }).length > 0 ? (
+                                    holidays.filter(h => {
+                                        if (currentUser.role === UserRole.SCHEDULER && h.type === DateEventType.RADIOGRAPHER_NOTE) return false;
+                                        if (activeTab === 'health_mgmt' && h.type === DateEventType.RADIOGRAPHER_NOTE) return false;
+                                        if (currentUser.isRadiographer === false && h.type === DateEventType.RADIOGRAPHER_NOTE) return false;
+                                        return true;
+                                    }).map(h => (
                                         <div key={h.id || `${h.date}-${h.name}`} className="flex justify-between items-center p-3 hover:bg-gray-50 rounded-lg text-sm group">
                                             <div className="flex items-center gap-3">
                                                 <div className="font-mono text-gray-500 font-bold bg-gray-100 px-2 py-0.5 rounded text-xs">{h.date}</div>
@@ -1569,7 +1402,7 @@ BMD :{{bmd}}
                     </>
                 )}
 
-                {isSupervisorOrAdmin && (
+                {activeTab === 'system' && isSupervisorOrAdmin && (
                     <>
                         {/* Station Management - SYSTEM ADMIN ONLY */}
                         {isSystemAdmin && (
@@ -1751,85 +1584,97 @@ BMD :{{bmd}}
 
                         {/* Health Management Cycle Management */}
                         {canManageHealthMgmt && (
-                            <div className="bg-white rounded-xl shadow-[0_2px_12px_rgba(0,0,0,0.03)] border border-gray-100 overflow-hidden flex flex-col h-fit md:col-span-2">
-                                <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
-                                    <div>
-                                        <h3 className="font-bold text-gray-800 flex items-center gap-2">
-                                            健管排班週期管理 (主管專用)
-                                            <span className="text-xs font-semibold text-gray-500 px-2 py-0.5 bg-white border rounded-full">{hmCycles.length}</span>
-                                        </h3>
-                                    </div>
+                            <div className="bg-white rounded-xl shadow-[0_2px_12px_rgba(0,0,0,0.03)] border border-gray-100 overflow-hidden flex flex-col h-fit">
+                                <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
+                                    <h3 className="font-bold text-gray-800 flex items-center gap-2">
+                                        <Calendar size={16} className="text-gray-400" />
+                                        個管排班週期 (主管專用)
+                                    </h3>
                                 </div>
                                 
-                                <div className="p-6">
-                                    <form onSubmit={handleAddHmCycle} className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6 bg-slate-50 p-4 rounded-xl border border-slate-200">
-                                        <div className="space-y-1">
-                                            <label className="text-xs font-bold text-slate-500 flex items-center gap-1">
-                                                <Tag size={12} /> 週期名稱
-                                            </label>
+                                <div className="p-6 border-b border-gray-100">
+                                    <form onSubmit={handleAddHmCycle} className="space-y-4">
+                                        <div>
+                                            <label className="text-xs font-semibold text-gray-500 mb-1 block">週期名稱 (格式建議: YYYY/NN)</label>
                                             <input
                                                 type="text"
                                                 value={newHmCycle.name}
                                                 onChange={(e) => setNewHmCycle({ ...newHmCycle, name: e.target.value })}
-                                                placeholder="例：2026年3月第一週期"
-                                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+                                                placeholder="例：2026/03"
+                                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 outline-none shadow-sm transition-all"
+                                                required
                                             />
                                         </div>
-                                        <div className="space-y-1">
-                                            <label className="text-xs font-bold text-slate-500 flex items-center gap-1">
-                                                <Calendar size={12} /> 起始日期
-                                            </label>
-                                            <input
-                                                type="date"
-                                                value={newHmCycle.startDate}
-                                                onChange={(e) => setNewHmCycle({ ...newHmCycle, startDate: e.target.value })}
-                                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
-                                            />
+                                        <div className="flex gap-3">
+                                            <div className="flex-1">
+                                                <label className="text-xs font-semibold text-gray-500 mb-1 block">起始日期</label>
+                                                <input
+                                                    type="date"
+                                                    value={newHmCycle.startDate}
+                                                    onChange={(e) => setNewHmCycle({ ...newHmCycle, startDate: e.target.value })}
+                                                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 outline-none shadow-sm transition-all"
+                                                    required
+                                                />
+                                            </div>
+                                            <div className="flex-1">
+                                                <label className="text-xs font-semibold text-gray-500 mb-1 block">結束日期</label>
+                                                <input
+                                                    type="date"
+                                                    value={newHmCycle.endDate}
+                                                    onChange={(e) => setNewHmCycle({ ...newHmCycle, endDate: e.target.value })}
+                                                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 outline-none shadow-sm transition-all"
+                                                    required
+                                                />
+                                            </div>
                                         </div>
-                                        <div className="space-y-1">
-                                            <label className="text-xs font-bold text-slate-500 flex items-center gap-1">
-                                                <Calendar size={12} /> 結束日期
-                                            </label>
-                                            <input
-                                                type="date"
-                                                value={newHmCycle.endDate}
-                                                onChange={(e) => setNewHmCycle({ ...newHmCycle, endDate: e.target.value })}
-                                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
-                                            />
-                                        </div>
-                                        <div className="flex items-end">
-                                            <button type="submit" className="w-full bg-teal-600 hover:bg-teal-700 text-white py-2 rounded-lg font-bold text-sm transition-all shadow-sm flex items-center justify-center gap-2">
-                                                <CalendarPlus size={18} /> 新增週期
-                                            </button>
-                                        </div>
-                                    </form>
 
-                                    <div className="space-y-2">
-                                        {hmCycles.map(cycle => (
-                                            <div key={cycle.id} className="flex items-center justify-between p-3 bg-white border border-gray-100 rounded-xl hover:shadow-sm transition-all group">
-                                                <div className="flex items-center gap-4">
+                                        {/* Duration Display */}
+                                        {hmCycleDuration > 0 && (
+                                            <div className="flex items-center gap-2 text-xs font-bold text-teal-600 bg-teal-50 px-3 py-2 rounded-lg border border-teal-100 animate-in fade-in slide-in-from-top-1">
+                                                <Clock size={14} />
+                                                自動計算：本週期共 {hmCycleDuration} 天
+                                            </div>
+                                        )}
+
+                                        <button type="submit" className="w-full bg-teal-50 hover:bg-teal-100 text-teal-700 font-bold py-2.5 rounded-lg transition-colors text-sm flex justify-center items-center gap-2 border border-teal-200">
+                                            <CalendarPlus size={18} /> 新增週期
+                                        </button>
+                                    </form>
+                                </div>
+
+                                <div className="p-2 overflow-y-auto max-h-[350px]">
+                                    {hmCycles.map(cycle => (
+                                        <div key={cycle.id} className="group p-3 hover:bg-gray-50 rounded-lg transition-colors border border-transparent hover:border-gray-200 mb-1">
+                                            <div className="flex justify-between items-center">
+                                                <div className="flex items-center gap-3">
                                                     <div className="p-2 bg-teal-50 text-teal-600 rounded-lg">
-                                                        <Calendar size={20} />
+                                                        <Calendar size={18} />
                                                     </div>
                                                     <div>
-                                                        <div className="font-bold text-gray-800">{cycle.name}</div>
-                                                        <div className="text-xs text-gray-500">{cycle.startDate} ~ {cycle.endDate}</div>
+                                                        <div className="text-sm font-bold text-gray-800">{formatCycleName(cycle.name)}</div>
+                                                        <div className="text-xs text-gray-500 mt-0.5 flex items-center gap-1 font-medium">
+                                                            {cycle.startDate} ~ {cycle.endDate}
+                                                            <span className="text-gray-300">|</span>
+                                                            <span className="text-gray-400">
+                                                                {Math.ceil((new Date(cycle.endDate).getTime() - new Date(cycle.startDate).getTime()) / (1000 * 60 * 60 * 24)) + 1} 天
+                                                            </span>
+                                                        </div>
                                                     </div>
                                                 </div>
                                                 <button
                                                     onClick={() => handleDeleteHmCycle(cycle.id)}
-                                                    className="p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+                                                    className="p-2 text-gray-300 hover:text-red-500 hover:bg-white rounded-lg transition-all opacity-0 group-hover:opacity-100"
                                                 >
-                                                    <Trash2 size={18} />
+                                                    <Trash2 size={16} />
                                                 </button>
                                             </div>
-                                        ))}
-                                        {hmCycles.length === 0 && (
-                                            <div className="text-center py-8 text-gray-400 italic text-sm">
-                                                尚未設定健管週期
-                                            </div>
-                                        )}
-                                    </div>
+                                        </div>
+                                    ))}
+                                    {hmCycles.length === 0 && (
+                                        <div className="p-8 text-center text-gray-400 italic text-sm">
+                                            尚未設定健管週期
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         )}

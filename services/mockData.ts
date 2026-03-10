@@ -44,7 +44,7 @@ export const MOCK_USERS: User[] = [
     id: 'user-002',
     name: '林小美',
     username: 'mei@example.com',
-    role: UserRole.EMPLOYEE,
+    role: UserRole.RADIOGRAPHER_STAFF,
     groupId: StaffGroup.GROUP_B,
     alias: '美',
     color: '#8B5CF6', // Purple
@@ -67,7 +67,7 @@ export const MOCK_USERS: User[] = [
     id: 'user-004',
     name: '王小花',
     username: 'hua@example.com',
-    role: UserRole.EMPLOYEE,
+    role: UserRole.RADIOGRAPHER_STAFF,
     groupId: StaffGroup.GROUP_B,
     alias: '花',
     color: '#10B981', // Emerald
@@ -80,7 +80,7 @@ export const MOCK_USERS: User[] = [
     id: 'user-005',
     name: '張志豪',
     username: 'hao@example.com',
-    role: UserRole.EMPLOYEE,
+    role: UserRole.RADIOGRAPHER_STAFF,
     groupId: StaffGroup.GROUP_A,
     alias: '豪',
     color: '#F59E0B', // Amber
@@ -105,7 +105,7 @@ export const MOCK_USERS: User[] = [
     id: 'user-007',
     name: '張美玲',
     username: 'zhang@example.com',
-    role: UserRole.EMPLOYEE,
+    role: UserRole.RADIOGRAPHER_STAFF,
     groupId: StaffGroup.GROUP_B,
     alias: '玲',
     color: '#F97316', // Orange 500
@@ -116,7 +116,7 @@ export const MOCK_USERS: User[] = [
     id: 'user-008',
     name: '陳志明',
     username: 'chen@example.com',
-    role: UserRole.EMPLOYEE,
+    role: UserRole.RADIOGRAPHER_STAFF,
     groupId: StaffGroup.GROUP_A,
     alias: '志',
     color: '#84CC16', // Lime 500
@@ -127,7 +127,7 @@ export const MOCK_USERS: User[] = [
     id: 'user-009',
     name: '黃秀英',
     username: 'huang@example.com',
-    role: UserRole.EMPLOYEE,
+    role: UserRole.RADIOGRAPHER_STAFF,
     groupId: StaffGroup.GROUP_B,
     alias: '英',
     color: '#14B8A6', // Teal 500
@@ -138,7 +138,7 @@ export const MOCK_USERS: User[] = [
     id: 'user-010',
     name: '林建宏',
     username: 'lin@example.com',
-    role: UserRole.EMPLOYEE,
+    role: UserRole.RADIOGRAPHER_STAFF,
     groupId: StaffGroup.GROUP_A,
     alias: '宏',
     color: '#06B6D4', // Cyan 500
@@ -149,7 +149,7 @@ export const MOCK_USERS: User[] = [
     id: 'user-011',
     name: '吳淑芬',
     username: 'wu@example.com',
-    role: UserRole.EMPLOYEE,
+    role: UserRole.RADIOGRAPHER_STAFF,
     groupId: StaffGroup.GROUP_B,
     alias: '芬',
     color: '#3B82F6', // Blue 500
@@ -160,7 +160,7 @@ export const MOCK_USERS: User[] = [
     id: 'user-012',
     name: '蔡明德',
     username: 'tsai@example.com',
-    role: UserRole.EMPLOYEE,
+    role: UserRole.RADIOGRAPHER_STAFF,
     groupId: StaffGroup.GROUP_A,
     alias: '德',
     color: '#6366F1', // Indigo 500
@@ -171,7 +171,7 @@ export const MOCK_USERS: User[] = [
     id: 'user-013',
     name: '楊雅雯',
     username: 'yang@example.com',
-    role: UserRole.EMPLOYEE,
+    role: UserRole.RADIOGRAPHER_STAFF,
     groupId: StaffGroup.GROUP_B,
     alias: '雯',
     color: '#8B5CF6', // Violet 500
@@ -182,7 +182,7 @@ export const MOCK_USERS: User[] = [
     id: 'user-014',
     name: '鄭志偉',
     username: 'cheng@example.com',
-    role: UserRole.EMPLOYEE,
+    role: UserRole.RADIOGRAPHER_STAFF,
     groupId: StaffGroup.GROUP_A,
     alias: '偉',
     color: '#D946EF', // Fuchsia 500
@@ -193,11 +193,35 @@ export const MOCK_USERS: User[] = [
     id: 'user-015',
     name: '謝欣怡',
     username: 'hsieh@example.com',
-    role: UserRole.EMPLOYEE,
+    role: UserRole.RADIOGRAPHER_STAFF,
     groupId: StaffGroup.GROUP_B,
     alias: '怡',
     color: '#EC4899', // Pink 500
     capabilities: ALL_SKILLS,
+    mustChangePassword: false
+  },
+  {
+    id: 'user-hm-001',
+    name: '健管主管',
+    username: 'hm_mgr@example.com',
+    role: UserRole.HM_SUPERVISOR,
+    isHealthMgmt: true,
+    groupId: StaffGroup.GROUP_A,
+    alias: '健',
+    color: '#059669',
+    password: '1234',
+    mustChangePassword: false
+  },
+  {
+    id: 'user-hm-002',
+    name: '健管師甲',
+    username: 'hm_a@example.com',
+    role: UserRole.HM_STAFF,
+    isHealthMgmt: true,
+    groupId: StaffGroup.GROUP_A,
+    alias: '甲',
+    color: '#10B981',
+    password: '1234',
     mustChangePassword: false
   }
 ];

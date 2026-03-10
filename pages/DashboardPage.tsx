@@ -31,7 +31,11 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
     });
 
     const [viewMode, setViewMode] = useState<ViewMode>(() => {
-        // Default to 'daily' for mobile (Today's Stations), 'user' for desktop
+        // If HM user, default to 'daily' (Today's Stations) even on desktop
+        if (currentUser.isHealthMgmt || currentUser.role === UserRole.HM_SUPERVISOR || currentUser.role === UserRole.HM_STAFF) {
+            return 'daily';
+        }
+        // Default to 'daily' for mobile, 'user' for radiographer desktop
         return window.innerWidth < 768 ? 'daily' : 'user';
     });
     // Daily View Date State

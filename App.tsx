@@ -86,10 +86,16 @@ const App: React.FC = () => {
 
   const handleLogin = (user: User) => {
     setCurrentUser(user);
-    if (user.role === UserRole.SCHEDULER || user.role === UserRole.VIEWER) {
+    
+    // Redirect logic by role/department
+    if (user.isHealthMgmt || user.role === UserRole.HM_SUPERVISOR || user.role === UserRole.HM_STAFF) {
+      setCurrentPage('health_mgmt');
+    } else if (user.role === UserRole.PHYSICIAN_ADMIN || user.role === UserRole.SCHEDULER || user.role === UserRole.VIEWER) {
       setCurrentPage('physician_schedule');
     } else if (user.role === UserRole.FINANCE) {
       setCurrentPage('doctor_statistics');
+    } else if (user.role === UserRole.SUPERVISOR || user.role === UserRole.SYSTEM_ADMIN || user.role === UserRole.RADIOGRAPHER_STAFF || user.isRadiographer) {
+      setCurrentPage('dashboard');
     } else {
       setCurrentPage('dashboard');
     }
