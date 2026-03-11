@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Users, FileText, LogOut, LayoutDashboard, Settings, Menu, BarChart3, Stethoscope, CalendarClock, Sliders, Cloud, Calendar } from 'lucide-react';
+import { Users, FileText, LogOut, LayoutDashboard, Settings, Menu, BarChart3, Stethoscope, CalendarClock, Sliders, Cloud, Calendar, Activity } from 'lucide-react';
 import { User, UserRole, PERMISSIONS } from '../types';
 
 interface SidebarProps {
@@ -14,46 +14,79 @@ interface SidebarProps {
 const Sidebar: React.FC<SidebarProps> = ({ currentUser, onNavigate, currentPage, onLogout, hasPendingLeaves }) => {
   // Define permissions based on requirements:
   // Supervisor & System Admin: Full Access (Dashboard, Stats, Leave, Staff, Settings(Admin only/Shared))
-  // Employee: Dashboard, Stats, Leave
   const categories = [
     {
-      label: '放射師排班',
+      label: '放射師',
+      icon: Activity,
+      color: 'bg-teal-50 text-teal-700',
+      borderColor: 'border-teal-100',
+      iconColor: 'text-teal-600',
+      activeBg: 'bg-teal-50',
+      activeText: 'text-teal-700',
+      activeRing: 'ring-teal-200',
       items: [
-        { id: 'dashboard', label: '排班總覽', icon: LayoutDashboard, permission: null, isRadiographerOnly: true },
-        { id: 'statistics', label: '工作統計', icon: BarChart3, permission: PERMISSIONS.VIEW_STATS, isRadiographerOnly: true },
-        { id: 'leave', label: '請假管理', icon: FileText, permission: null, isRadiographerOnly: true },
+        { id: 'dashboard', label: '總覽', icon: LayoutDashboard, permission: null, isRadiographerOnly: true },
+        { id: 'statistics', label: '統計', icon: BarChart3, permission: PERMISSIONS.VIEW_STATS, isRadiographerOnly: true },
+        { id: 'leave', label: '請假', icon: FileText, permission: null, isRadiographerOnly: true },
       ]
     },
     {
-      label: '醫師排班',
+      label: '醫師',
+      icon: Stethoscope,
+      color: 'bg-blue-50 text-blue-700',
+      borderColor: 'border-blue-100',
+      iconColor: 'text-blue-600',
+      activeBg: 'bg-blue-50',
+      activeText: 'text-blue-700',
+      activeRing: 'ring-blue-200',
       items: [
-        { id: 'physician_schedule', label: '醫師排班表', icon: CalendarClock, permission: PERMISSIONS.VIEW_PHYSICIAN },
-        { id: 'doctors', label: '醫師管理', icon: Stethoscope, permission: PERMISSIONS.MANAGE_DOCTORS },
-        { id: 'doctor_statistics', label: '醫師工作統計', icon: BarChart3, permission: PERMISSIONS.VIEW_DOCTOR_STATS },
-        { id: 'physician_settings', label: '醫師排班設定', icon: Sliders, permission: PERMISSIONS.EDIT_PHYSICIAN },
+        { id: 'physician_schedule', label: '排班表', icon: CalendarClock, permission: PERMISSIONS.VIEW_PHYSICIAN },
+        { id: 'doctors', label: '管理', icon: Users, permission: PERMISSIONS.MANAGE_DOCTORS },
+        { id: 'doctor_statistics', label: '統計', icon: BarChart3, permission: PERMISSIONS.VIEW_DOCTOR_STATS },
+        { id: 'physician_settings', label: '設定', icon: Sliders, permission: PERMISSIONS.EDIT_PHYSICIAN },
       ]
     },
     {
-      label: '健管排班',
+      label: '健管',
+      icon: Calendar,
+      color: 'bg-emerald-50 text-emerald-700',
+      borderColor: 'border-emerald-100',
+      iconColor: 'text-emerald-600',
+      activeBg: 'bg-emerald-50',
+      activeText: 'text-emerald-700',
+      activeRing: 'ring-emerald-200',
       items: [
-        { id: 'health_mgmt', label: '健管排班表', icon: Calendar, permission: PERMISSIONS.VIEW_HEALTH_MGMT },
+        { id: 'health_mgmt', label: '排班表', icon: Calendar, permission: PERMISSIONS.VIEW_HEALTH_MGMT },
       ]
     },
     {
       label: '影像雲',
+      icon: Cloud,
+      color: 'bg-indigo-50 text-indigo-700',
+      borderColor: 'border-indigo-100',
+      iconColor: 'text-indigo-600',
+      activeBg: 'bg-indigo-50',
+      activeText: 'text-indigo-700',
+      activeRing: 'ring-indigo-200',
       items: [
-        { id: 'cloud_schedule', label: '影像雲班表', icon: Cloud, permission: PERMISSIONS.VIEW_CLOUD_SCHEDULE },
+        { id: 'cloud_schedule', label: '班表', icon: Cloud, permission: PERMISSIONS.VIEW_CLOUD_SCHEDULE },
       ]
     },
     {
-      label: '系統管理',
+      label: '系統',
+      icon: Settings,
+      color: 'bg-slate-100 text-slate-700',
+      borderColor: 'border-slate-200',
+      iconColor: 'text-slate-600',
+      activeBg: 'bg-slate-100',
+      activeText: 'text-slate-800',
+      activeRing: 'ring-slate-300',
       items: [
-        { id: 'staff', label: '人員管理', icon: Users, permission: PERMISSIONS.VIEW_STAFF },
-        { id: 'settings', label: '系統與個人設定', icon: Settings, permission: null, hideForRoles: [UserRole.VIEWER] },
+        { id: 'staff', label: '人員', icon: Users, permission: PERMISSIONS.VIEW_STAFF },
+        { id: 'settings', label: '設定', icon: Settings, permission: null, hideForRoles: [UserRole.VIEWER] },
       ]
     }
   ];
-
   const getRoleLabel = (role: UserRole) => {
     switch (role) {
       case UserRole.SUPERVISOR: return '部門主管';
@@ -77,7 +110,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentUser, onNavigate, currentPage,
         </h1>
       </div>
 
-      <div className="flex items-center gap-1 md:gap-4 flex-1 overflow-x-auto no-scrollbar mx-2">
+      <div className="flex items-center gap-2 md:gap-4 flex-1 overflow-x-auto no-scrollbar mx-2 py-1">
         {categories.map((cat, idx) => {
           const visibleItems = cat.items.filter(item => {
             if ('isRadiographerOnly' in item && item.isRadiographerOnly && !currentUser.isRadiographer) return false;
@@ -89,34 +122,35 @@ const Sidebar: React.FC<SidebarProps> = ({ currentUser, onNavigate, currentPage,
           if (visibleItems.length === 0) return null;
 
           return (
-            <div key={cat.label} className={`flex items-center gap-1 ${idx !== 0 ? 'pl-2 border-l border-gray-100' : ''}`}>
-              <div className="hidden xl:block text-[10px] font-bold text-gray-400 uppercase tracking-wider mr-1 select-none">
-                {cat.label}
+             <div key={cat.label} className={`flex items-center gap-2 ${idx !== 0 ? 'pl-3 border-l border-gray-100' : ''}`}>
+                 <div className={`hidden xl:flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold tracking-widest select-none ${cat.color} border ${cat.borderColor}`}>
+                    <cat.icon size={12} className={cat.iconColor} />
+                    <span>{cat.label}</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  {visibleItems.map(item => {
+                    const Icon = item.icon;
+                    const isActive = currentPage === item.id;
+                    return (
+                       <button
+                          key={item.id}
+                          onClick={() => onNavigate(item.id)}
+                          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 group relative ${isActive
+                              ? `${cat.activeBg} ${cat.activeText} shadow-sm ring-1 ring-inset ${cat.activeRing}`
+                              : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'
+                              }`}
+                          title={item.label}
+                      >
+                         <Icon size={16} className={`transition-transform duration-200 ${isActive ? cat.activeText : 'text-gray-400 group-hover:scale-110'}`} strokeWidth={isActive ? 2.5 : 2} />
+                         <span className="hidden lg:inline">{item.label}</span>
+                         {item.id === 'leave' && hasPendingLeaves && (
+                            <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white animate-pulse" />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-              <div className="flex items-center gap-1">
-                {visibleItems.map(item => {
-                  const Icon = item.icon;
-                  const isActive = currentPage === item.id;
-                  return (
-                    <button
-                      key={item.id}
-                      onClick={() => onNavigate(item.id)}
-                      className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${isActive
-                        ? 'bg-teal-50 text-teal-700 shadow-sm ring-1 ring-teal-100'
-                        : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                        }`}
-                      title={item.label}
-                    >
-                      <Icon size={15} className={`transition-colors ${isActive ? 'text-teal-600' : 'text-gray-400'}`} />
-                      <span className="hidden lg:inline">{item.label}</span>
-                      {item.id === 'leave' && hasPendingLeaves && (
-                        <span className="w-2 h-2 bg-red-500 rounded-full ml-1 animate-pulse" />
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
           );
         })}
       </div>

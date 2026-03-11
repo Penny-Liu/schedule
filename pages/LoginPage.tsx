@@ -138,7 +138,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
                             
                             <h2 className="text-xs font-bold tracking-[0.2em] text-blue-400 uppercase mb-3">Administration & HM</h2>
                             <h1 className="text-4xl font-bold tracking-tight mb-2 text-white drop-shadow-sm">Physician & Health Portal</h1>
-                            <p className="text-slate-400 text-lg font-light tracking-wide italic">醫師排班、行政管理與健康管理系統</p>
+                            <p className="text-slate-400 text-lg font-medium tracking-wide">醫師排班、行政管理與健康管理系統</p>
                         </div>
 
                         <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-xl p-6 md:p-8 shadow-xl">
@@ -188,8 +188,8 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
                             </div>
 
                             <h2 className="text-xs font-bold tracking-[0.2em] text-teal-600 uppercase mb-3">Radiology Dept</h2>
-                            <h1 className="text-4xl font-bold tracking-tight mb-2 text-slate-900 font-serif italic">Medical Imaging Portal</h1>
-                            <p className="text-slate-500 text-lg font-light tracking-wide italic">影像醫學部排班系統</p>
+                            <h1 className="text-4xl font-bold tracking-tight mb-2 text-slate-900">Medical Imaging Portal</h1>
+                            <p className="text-slate-500 text-lg font-medium tracking-wide">影像醫學部排班系統</p>
                         </div>
 
                         <div className="bg-white rounded-xl p-6 md:p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 relative">
