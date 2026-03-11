@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { User, UserRole, LeaveRequest, LeaveType, LeaveStatus, SPECIAL_ROLES } from '../types';
 import { db } from '../services/store';
+import { generateUUID } from '../services/utils';
 import {
   Calendar,
   Clock,
@@ -460,7 +461,7 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
     }
 
     const newLeave: LeaveRequest = {
-      id: Math.random().toString(36).substr(2, 9),
+      id: generateUUID(),
       userId: currentUser.id,
       startDate: formData.startDate,
       endDate: finalEndDate,

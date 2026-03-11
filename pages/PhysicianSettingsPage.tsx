@@ -37,6 +37,13 @@ const PhysicianSettingsPage: React.FC<PhysicianSettingsPageProps> = ({ currentUs
     const [editStationLocation, setEditStationLocation] = useState('北投');
     const [doctorSpecialties, setDoctorSpecialties] = useState<string[]>(db.settings.doctorSpecialties || []);
     const [newSpecialty, setNewSpecialty] = useState('');
+    const [confirmState, setConfirmState] = useState<{
+        type: 'worktime' | 'station' | 'specialty';
+        id: string;
+        title: string;
+        message: string;
+        payload?: any;
+    } | null>(null);
     
     // Requirements
     const [requirements, setRequirements] = useState<Record<string, number[]>>(db.getStationRequirements());
@@ -88,19 +95,12 @@ const PhysicianSettingsPage: React.FC<PhysicianSettingsPageProps> = ({ currentUs
             alert('至少需保留一個時間選項');
             return;
         }
-        if (confirm(`確定要移除時間選項 "${time}" 嗎？`)) {
-            const updated = doctorWorkTimeOptions.filter(t => t !== time);
-            setDoctorWorkTimeOptions(updated);
-            db.settings.doctorWorkTimeOptions = updated;
-            
-            // If deleted default, set first available as default
-            if (doctorWorkTime === time) {
-                 const newDefault = updated[0];
-                 setDoctorWorkTime(newDefault);
-                 db.settings.defaultDoctorWorkTime = newDefault;
-            }
-            db.saveSettings();
-        }
+        setConfirmState({
+            type: 'worktime',
+            id: time,
+            title: '移除時間選項',
+            message: `確定要移除時間選項 "${time}" 嗎？`
+        });
     };
 
     const handleSetDefaultWorkTime = (time: string) => {
@@ -130,12 +130,13 @@ const PhysicianSettingsPage: React.FC<PhysicianSettingsPageProps> = ({ currentUs
     };
 
     const handleRemoveDocStation = (target: DoctorStationConfig) => {
-        if (confirm(`確定要移除醫師崗位 "${target.name}" (${target.location}) 嗎？`)) {
-            const newStations = doctorStations.filter(s => !(s.name === target.name && s.location === target.location));
-            setDoctorStations(newStations);
-            db.settings.doctorStations = newStations;
-            db.saveSettings();
-        }
+        setConfirmState({
+            type: 'station',
+            id: '',
+            title: '移除醫師崗位',
+            message: `確定要移除醫師崗位 "${target.name}" (${target.location}) 嗎？`,
+            payload: target
+        });
     };
 
     const handleEditStationClick = (config: DoctorStationConfig) => {
@@ -178,12 +179,41 @@ const PhysicianSettingsPage: React.FC<PhysicianSettingsPageProps> = ({ currentUs
     };
 
     const handleRemoveSpecialty = (name: string) => {
-        if (confirm(`確定要移除醫師專科 "${name}" 嗎？`)) {
+        setConfirmState({
+            type: 'specialty',
+            id: name,
+            title: '移除醫師專科',
+            message: `確定要移除醫師專科 "${name}" 嗎？`
+        });
+    };
+
+    const handleConfirmAction = () => {
+        if (!confirmState) return;
+        if (confirmState.type === 'worktime') {
+            const time = confirmState.id;
+            const updated = doctorWorkTimeOptions.filter(t => t !== time);
+            setDoctorWorkTimeOptions(updated);
+            db.settings.doctorWorkTimeOptions = updated;
+            if (doctorWorkTime === time) {
+                const newDefault = updated[0];
+                setDoctorWorkTime(newDefault);
+                db.settings.defaultDoctorWorkTime = newDefault;
+            }
+            db.saveSettings();
+        } else if (confirmState.type === 'station') {
+            const target: DoctorStationConfig = confirmState.payload;
+            const newStations = doctorStations.filter(s => !(s.name === target.name && s.location === target.location));
+            setDoctorStations(newStations);
+            db.settings.doctorStations = newStations;
+            db.saveSettings();
+        } else if (confirmState.type === 'specialty') {
+            const name = confirmState.id;
             const updated = doctorSpecialties.filter(s => s !== name);
             setDoctorSpecialties(updated);
             db.settings.doctorSpecialties = updated;
             db.saveSettings();
         }
+        setConfirmState(null);
     };
 
     const handleRequirementChange = (stationKey: string, dayIndex: number, count: number) => {
@@ -200,6 +230,15 @@ const PhysicianSettingsPage: React.FC<PhysicianSettingsPageProps> = ({ currentUs
 
     return (
         <div className="p-6 max-w-7xl mx-auto h-[calc(100vh-64px)] overflow-y-auto pb-40">
+            <ConfirmModal
+                isOpen={!!confirmState}
+                onClose={() => setConfirmState(null)}
+                onConfirm={handleConfirmAction}
+                title={confirmState?.title || ''}
+                message={confirmState?.message || ''}
+                confirmText="確定移除"
+                confirmColor="red"
+            />
              <div className="mb-6 flex items-center gap-3">
                 <div className="p-2.5 bg-white border border-gray-200 rounded-xl shadow-sm">
                     <Stethoscope className="text-indigo-600" size={24} />

@@ -6,6 +6,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import ExcelJS from 'exceljs';
 import { Cloud, ChevronLeft, ChevronRight, Plus, Pencil, Trash2, Check, X, UserCheck, Save, AlertCircle, Loader2 } from 'lucide-react';
+import ConfirmModal from '../components/ConfirmModal';
 
 interface CloudSchedulePageProps {
     currentUser: User;
@@ -36,6 +37,7 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
     const [editingAssistant, setEditingAssistant] = useState<Partial<ReportAssistant> | null>(null);
     const [newName, setNewName] = useState('');
     const [newColor, setNewColor] = useState(PALETTE[0]);
+    const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
     const radiographers = db.getUsers().filter(u => u.isRadiographer && u.isActive !== false);
 
@@ -184,8 +186,13 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
     };
 
     const handleDeleteAssistant = async (id: string) => {
-        if (!confirm('確定要刪除此報告助理嗎？')) return;
-        await db.deleteReportAssistant(id);
+        setDeleteConfirmId(id);
+    };
+
+    const handleConfirmDeleteAssistant = async () => {
+        if (!deleteConfirmId) return;
+        await db.deleteReportAssistant(deleteConfirmId);
+        setDeleteConfirmId(null);
     };
 
     const activeAssistants = assistants.filter(a => a.isActive !== false);
@@ -540,6 +547,15 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
 
     return (
         <div className="h-full flex flex-col bg-slate-50 overflow-hidden">
+            <ConfirmModal
+                isOpen={!!deleteConfirmId}
+                onClose={() => setDeleteConfirmId(null)}
+                onConfirm={handleConfirmDeleteAssistant}
+                title="刪除報告助理"
+                message="確定要刪除此報告助理嗎？相關的排班資料將保留但助理資訊將移除。"
+                confirmText="確定刪除"
+                confirmColor="red"
+            />
             {/* Toast */}
             {toast && (
                 <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-sm px-4 py-2 rounded-xl shadow-xl z-50 animate-bounce-slow">

@@ -94,6 +94,10 @@ const Sidebar: React.FC<SidebarProps> = ({ currentUser, onNavigate, currentPage,
       case UserRole.SCHEDULER: return '排班管理員';
       case UserRole.VIEWER: return '瀏覽者';
       case UserRole.FINANCE: return '財會';
+      case UserRole.PHYSICIAN_ADMIN: return '醫師排班管理';
+      case UserRole.HM_SUPERVISOR: return '健管主管';
+      case UserRole.HM_STAFF: return '健管同仁';
+      case UserRole.RADIOGRAPHER_STAFF: return '放射師';
       default: return '放射師';
     }
   };

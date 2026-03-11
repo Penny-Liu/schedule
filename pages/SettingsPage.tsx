@@ -2,6 +2,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { User, UserRole, RosterCycle, SYSTEM_OFF, StationDefault, Holiday, DateEventType, CycleAnchor, PERMISSIONS } from '../types';
 import { db } from '../services/store';
+import { generateUUID } from '../services/utils';
 import { Plus, Trash2, Save, Settings, Calendar, AlertCircle, Users, Clock, Globe, X, RefreshCw, Key, UserCircle, ChevronDown, CalendarPlus, FileSpreadsheet, Download, Upload, Tag } from 'lucide-react';
 import ConfirmModal from '../components/ConfirmModal';
 
@@ -120,10 +121,11 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
 
     // Confirm Modal State
     const [confirmState, setConfirmState] = useState<{
-        type: 'station' | 'cycle' | 'holiday';
-        id: string; // stationName, cycleId, or holidayDate
+        type: 'station' | 'cycle' | 'holiday' | 'anchor' | 'purge_data' | 'batch_generate' | 'db_cleanup' | 'force_clear_month' | 'import' | 'reset_template';
+        id: string;
         title: string;
         message: string;
+        payload?: any; // extra data needed by handler
     } | null>(null);
 
 
@@ -202,7 +204,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
         e.preventDefault();
         if (!newHmCycle.name || !newHmCycle.startDate || !newHmCycle.endDate) return;
         const cycle: RosterCycle = {
-            id: Math.random().toString(36).substr(2, 9), // Using a simple random ID for now, replace with a proper UUID generator if available
+            id: generateUUID(),
             name: newHmCycle.name,
             startDate: newHmCycle.startDate,
             endDate: newHmCycle.endDate
@@ -240,14 +242,12 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
     };
 
     const handleRemoveAnchor = async (effectiveDate: string) => {
-        if (confirm('確定要刪除此重置點嗎？')) {
-            try {
-                await db.removeCycleAnchor(effectiveDate);
-                setAnchors(db.getCycleAnchors());
-            } catch (error: any) {
-                alert('刪除失敗: ' + (error.message || '未知錯誤'));
-            }
-        }
+        setConfirmState({
+            type: 'anchor',
+            id: effectiveDate,
+            title: '刪除重置點',
+            message: `確定要刪除生效日期為 ${effectiveDate} 的排班重置點嗎？`
+        });
     };
 
     // Cycle Handlers
@@ -260,7 +260,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
             }
 
             const cycle: RosterCycle = {
-                id: Math.random().toString(36).substr(2, 9),
+                id: generateUUID(),
                 name: newCycle.name,
                 startDate: newCycle.startDate,
                 endDate: newCycle.endDate
@@ -384,18 +384,20 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
         }
 
         if (generatedDates.length > 0) {
-            if (confirm(`即將產生 ${generatedDates.length} 筆資料:\n${generatedDates.map(d => d.date).join(', ')}\n\n確定新增嗎？`)) {
-                generatedDates.forEach(h => db.addHoliday(h));
-                setHolidays(db.getHolidays());
-                alert('批次新增完成！');
-            }
+            setConfirmState({
+                type: 'batch_generate',
+                id: '',
+                title: `批次新增 ${generatedDates.length} 筆特殊日期`,
+                message: `即將新增以下日期：\n${generatedDates.map(d => d.date).join(', ')}`,
+                payload: generatedDates
+            });
         } else {
             alert('此區間內找不到符合規則的日期。');
         }
     };
 
     // Unified Confirm Handler
-    const handleConfirmAction = () => {
+    const handleConfirmAction = async () => {
         if (!confirmState) return;
 
         if (confirmState.type === 'station') {
@@ -408,6 +410,43 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
         } else if (confirmState.type === 'holiday') {
             db.removeHoliday(confirmState.id);
             setHolidays(db.getHolidays());
+        } else if (confirmState.type === 'anchor') {
+            try {
+                await db.removeCycleAnchor(confirmState.id);
+                setAnchors(db.getCycleAnchors());
+            } catch (error: any) {
+                alert('刪除失敗: ' + (error.message || '未知錯誤'));
+            }
+        } else if (confirmState.type === 'batch_generate') {
+            const dates: Holiday[] = confirmState.payload || [];
+            dates.forEach(h => db.addHoliday(h));
+            setHolidays(db.getHolidays());
+        } else if (confirmState.type === 'purge_data') {
+            try {
+                const result = await db.purgeOldData(archiveDate);
+                alert(`清除完成！\n已移除：\n排班: ${result.shifts}\n醫師排班: ${result.doctorShifts}\n假單: ${result.leaves}`);
+            } catch (e: any) {
+                alert('清除失敗: ' + e.message);
+            }
+        } else if (confirmState.type === 'db_cleanup') {
+            try {
+                const count = await db.cleanupDuplicateShifts();
+                alert(`清理完成！共移除了 ${count} 筆重複資料。`);
+            } catch (e) {
+                alert('清理失敗，請查看 Console');
+            }
+        } else if (confirmState.type === 'force_clear_month') {
+            try {
+                await db.forceClearMonth(confirmState.id);
+                alert(`${confirmState.id} 資料已強制清空。請重新進行排班。`);
+            } catch (e) {
+                alert('清除失敗，請查看 Console');
+            }
+        } else if (confirmState.type === 'reset_template') {
+            const defaultTemplate = confirmState.payload;
+            setTemplateBlocks(parseTemplate(defaultTemplate));
+            db.settings.lineCopyTemplate = defaultTemplate;
+            db.saveSettings();
         }
         setConfirmState(null);
     };
@@ -432,19 +471,14 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
         }
     };
 
-    const handlePurgeData = async () => {
+    const handlePurgeData = () => {
         if (!archiveDate) return;
-        const msg = `確定要清除 ${archiveDate} 之前的所有資料嗎？\n\n這些資料將永久刪除無法復原！\n\n請確認您已經下載備份。`;
-        if (confirm(msg)) {
-            if (confirm('最後警告：資料即將被刪除。確定繼續？')) {
-                try {
-                    const result = await db.purgeOldData(archiveDate);
-                    alert(`清除完成！\n已移除：\n排班: ${result.shifts}\n醫師排班: ${result.doctorShifts}\n假單: ${result.leaves}`);
-                } catch (e: any) {
-                    alert('清除失敗: ' + e.message);
-                }
-            }
-        }
+        setConfirmState({
+            type: 'purge_data',
+            id: archiveDate,
+            title: '⚠️ 清除歷史資料',
+            message: `確定要清除 ${archiveDate} 之前的所有資料嗎？\n\n這些資料將永久刪除無法復原！請確認已下載備份。`
+        });
     };
 
     const handleImportBackup = () => {
@@ -857,15 +891,13 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
                                         </p>
                                         <button
                                             type="button"
-                                            onClick={async () => {
-                                                if (confirm('確定要執行資料庫清理嗎？這將掃描所有排班並移除重複的無效資料。')) {
-                                                    try {
-                                                        const count = await db.cleanupDuplicateShifts();
-                                                        alert(`清理完成！共移除了 ${count} 筆重複資料。`);
-                                                    } catch (e) {
-                                                        alert('清理失敗，請查看 Console');
-                                                    }
-                                                }
+                                            onClick={() => {
+                                                setConfirmState({
+                                                    type: 'db_cleanup',
+                                                    id: '',
+                                                    title: '掃描並修復重複資料',
+                                                    message: '確定要執行資料庫清理嗎？這將揃描所有排班並移除重複的無效資料。'
+                                                });
                                             }}
                                             className="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-2.5 rounded-lg transition-colors text-sm flex justify-center items-center gap-2 shadow-sm shadow-orange-200"
                                         >
@@ -889,25 +921,19 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
                                                 />
                                                 <button
                                                     type="button"
-                                                    onClick={async () => {
+                                                    onClick={() => {
                                                         const monthInput = document.getElementById('forceCleanMonth') as HTMLInputElement;
                                                         const yearMonth = monthInput.value;
                                                         if (!yearMonth) {
                                                             alert('請先選擇要清除的月份');
                                                             return;
                                                         }
-
-                                                        const confirmMsg = `【嚴重警告】\n\n您即將刪除 ${yearMonth} 的「所有」排班資料。\n\n這將無法復原！\n\n確定要繼續嗎？`;
-                                                        if (confirm(confirmMsg)) {
-                                                            if (confirm('再次確認：這真的會刪光該月資料，您確定嗎？')) {
-                                                                try {
-                                                                    await db.forceClearMonth(yearMonth);
-                                                                    alert(`${yearMonth} 資料已強制清空。請重新進行排班。`);
-                                                                } catch (e) {
-                                                                    alert('清除失敗，請查看 Console');
-                                                                }
-                                                            }
-                                                        }
+                                                        setConfirmState({
+                                                            type: 'force_clear_month',
+                                                            id: yearMonth,
+                                                            title: `❗️ 強制清除 ${yearMonth} 全部排班`,
+                                                            message: `【嚴重警告】您即將刪除 ${yearMonth} 的「所有」排班資料。\n\n這將無法復原！是否確定繼續？`
+                                                        });
                                                     }}
                                                     className="bg-red-100 hover:bg-red-200 text-red-700 font-bold px-4 py-2 rounded-lg text-sm transition-colors border border-red-200"
                                                 >
@@ -1068,8 +1094,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
                                             <button
                                                 type="button"
                                                 onClick={() => {
-                                                    if (confirm('確定要回復成系統預設格式嗎？您的修改將會遺失。')) {
-                                                        const defaultTemplate = `{{date}}
+                                                    const defaultTemplate = `{{date}}
 {{imaging_doctors}}
 
 放射師人力
@@ -1089,11 +1114,13 @@ BMD :{{bmd}}
 {{dazhi_radiographers}}
 
 三線支援：{{third_line_support}}`;
-                                                        setTemplateBlocks(parseTemplate(defaultTemplate));
-                                                        db.settings.lineCopyTemplate = defaultTemplate;
-                                                        db.saveSettings();
-                                                        alert('已回復預設值');
-                                                    }
+                                                    setConfirmState({
+                                                        type: 'reset_template',
+                                                        id: '',
+                                                        title: '回復預設格式',
+                                                        message: '確定要回復成系統預設格式嗎？您的修改將會遺失。',
+                                                        payload: defaultTemplate
+                                                    });
                                                 }}
                                                 className="bg-gray-100 hover:bg-gray-200 text-gray-600 px-4 py-2 rounded-lg text-sm font-bold"
                                             >
