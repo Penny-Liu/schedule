@@ -7,6 +7,7 @@ import autoTable from 'jspdf-autotable';
 import ExcelJS from 'exceljs';
 import { Cloud, ChevronLeft, ChevronRight, Plus, Pencil, Trash2, Check, X, UserCheck, Save, AlertCircle, Loader2 } from 'lucide-react';
 import ConfirmModal from '../components/ConfirmModal';
+import { loadChineseFontToDoc } from '../services/pdfUtils';
 
 interface CloudSchedulePageProps {
     currentUser: User;
@@ -219,42 +220,7 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
 
             // ---- Load jsPDF + font ----
             const doc = new jsPDF('l', 'mm', 'a4');
-            let fontName = 'helvetica';
-
-            try {
-                const pathsToTry = ['/schedule/fonts/jf-openhuninn-2.1.ttf', '/fonts/jf-openhuninn-2.1.ttf'];
-                let response: Response | null = null;
-                for (const path of pathsToTry) {
-                    try {
-                        const res = await fetch(path);
-                        if (res.ok && !(res.headers.get('content-type') || '').includes('text/html')) {
-                            response = res;
-                            break;
-                        }
-                    } catch { /* continue */ }
-                }
-                if (response) {
-                    const blob = await response.blob();
-                    const reader = new FileReader();
-                    await new Promise((resolve, reject) => {
-                        reader.onloadend = () => {
-                            const b64 = (reader.result as string).split('base64,')[1];
-                            if (b64) {
-                                doc.addFileToVFS('jf-openhuninn-2.1.ttf', b64);
-                                doc.addFont('jf-openhuninn-2.1.ttf', 'OpenHuninn', 'normal');
-                                doc.addFont('jf-openhuninn-2.1.ttf', 'OpenHuninn', 'bold');
-                                doc.setFont('OpenHuninn');
-                                fontName = 'OpenHuninn';
-                                resolve(true);
-                            } else { reject('invalid b64'); }
-                        };
-                        reader.onerror = reject;
-                        reader.readAsDataURL(blob);
-                    });
-                }
-            } catch (e) {
-                console.warn('Font load failed, using fallback', e);
-            }
+            const fontName = await loadChineseFontToDoc(doc);
 
             // ---- Constants ----
             const weekDays = ['日', '一', '二', '三', '四', '五', '六'];

@@ -124,20 +124,20 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
                                 </div>
                             </div>
                             
-                            <h2 className="text-xs font-bold tracking-[0.2em] text-blue-400 uppercase mb-3">Administration & HM</h2>
-                            <h1 className="text-4xl font-bold tracking-tight mb-2 text-white drop-shadow-sm">Physician & Health Portal</h1>
+                            <h2 className="text-xs font-bold tracking-[0.2em] text-blue-400 uppercase mb-3">Administration & Health Mgmt</h2>
+                            <h1 className="text-4xl font-bold tracking-tight mb-2 text-white drop-shadow-sm">醫師暨健管入口</h1>
                             <p className="text-slate-400 text-lg font-medium tracking-wide">醫師排班、行政管理與健康管理系統</p>
                         </div>
 
                         <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-xl p-6 md:p-8 shadow-xl">
-                            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3 ml-1">SELECT ACCOUNT TYPE</label>
+                            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3 ml-1">選擇帳號</label>
                             <div className="relative group">
                                 <select
                                     onChange={(e) => handleUserSelect(e.target.value)}
                                     value=""
                                     className="w-full appearance-none bg-navy-900/50 hover:bg-slate-900 border border-white/10 hover:border-blue-500/50 rounded-lg px-4 py-3.5 text-sm font-medium text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all duration-300 cursor-pointer"
                                 >
-                                    <option value="" disabled>Select account to login...</option>
+                                    <option value="" disabled>請選擇帳號登入...</option>
                                     <optgroup label="醫師與行政管理" className="text-slate-900 bg-white">
                                         {adminAndPhysicianUsers.map(user => (
                                             <option key={user.id} value={user.id}>{user.name} ({getRoleLabel(user.role)})</option>
@@ -175,20 +175,20 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
                                 </div>
                             </div>
 
-                            <h2 className="text-xs font-bold tracking-[0.2em] text-teal-600 uppercase mb-3">Radiology Dept</h2>
-                            <h1 className="text-4xl font-bold tracking-tight mb-2 text-slate-900">Medical Imaging Portal</h1>
+                            <h2 className="text-xs font-bold tracking-[0.2em] text-teal-600 uppercase mb-3">Medical Imaging Dept</h2>
+                            <h1 className="text-4xl font-bold tracking-tight mb-2 text-slate-900">放射師排班入口</h1>
                             <p className="text-slate-500 text-lg font-medium tracking-wide">影像醫學部排班系統</p>
                         </div>
 
                         <div className="bg-white rounded-xl p-6 md:p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 relative">
-                             <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3 ml-1">SELECT ACCOUNT TYPE</label>
+                             <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3 ml-1">選擇帳號</label>
                              <div className="relative group">
                                 <select 
                                     onChange={(e) => handleUserSelect(e.target.value)}
                                     value=""
                                     className="w-full appearance-none bg-slate-50 hover:bg-white border border-slate-200 hover:border-teal-400 hover:shadow-[0_4px_20px_rgba(20,184,166,0.15)] rounded-lg px-4 py-3.5 text-sm font-medium text-slate-600 group-hover:text-teal-700 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-teal-200 cursor-pointer"
                                 >
-                                    <option value="" disabled>Select account to login...</option>
+                                    <option value="" disabled>請選擇帳號登入...</option>
                                     <optgroup label="系統管理與主管">
                                          {radiologyPortalUsers.filter(u => u.role === UserRole.SYSTEM_ADMIN || u.role === UserRole.SUPERVISOR).map(user => (
                                             <option key={user.id} value={user.id}>

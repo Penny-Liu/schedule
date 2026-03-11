@@ -4,10 +4,10 @@ import { db } from '../services/store';
 import { Users, LayoutDashboard, Calendar, ArrowLeft, ArrowRight, X, Lock, Unlock, UserPlus, Save, Trash2, FileSpreadsheet, BarChart3, Download, Search } from 'lucide-react';
 import { toLocalISOString, generateUUID } from '../services/utils';
 import ConfirmModal from '../components/ConfirmModal';
-import { utils, writeFile } from 'xlsx';
+import ExcelJS from 'exceljs';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import ExcelJS from 'exceljs';
+import { loadChineseFontToDoc } from '../services/pdfUtils';
 
 interface HealthMgmtPageProps {
   currentUser: User;
@@ -197,18 +197,35 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
       }
   };
 
-  const handleExportStats = () => {
+  const handleExportStats = async () => {
       const label = selectedCycleId === 'month' 
         ? toLocalISOString(currentDate).substring(0, 7) 
         : currentCycle?.name || '週期統計';
       
-      const data = activeStaff.map(staff => {
-          const row: any = { '姓名': staff.name };
-          
+      const rangeStr = `${dateRange[0]} ~ ${dateRange[dateRange.length - 1]} (共 ${dateRange.length} 天)`;
+
+      const workbook = new ExcelJS.Workbook();
+      const ws = workbook.addWorksheet('健管排班統計');
+
+      // Title row
+      const titleRow = ws.addRow([`統計區間: ${rangeStr}`]);
+      titleRow.font = { bold: true };
+
+      // Header row
+      const headers = ['姓名', '上班天數', '平日', '假日班', '主控', '輔控', '晚班', ...hmStations];
+      const headerRow = ws.addRow(headers);
+      headerRow.font = { bold: true };
+      headerRow.alignment = { horizontal: 'center' };
+      headerRow.eachCell(cell => {
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2F0D9' } };
+          cell.border = { bottom: { style: 'thin' } };
+      });
+
+      // Data rows
+      activeStaff.forEach(staff => {
           let totalWorkDays = 0;
           let weekdayWorkDays = 0;
           let holidayWorkDays = 0;
-
           const dateCounts: Record<string, number> = {};
           hmStations.forEach(st => dateCounts[st] = 0);
           const roleCounts: Record<string, number> = { '主控': 0, '輔控': 0, '晚班': 0 };
@@ -220,19 +237,12 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                   const d = new Date(date);
                   const holiday = holidays.find(h => h.date === date && (h.type === 'NATIONAL' || h.type === 'CLOSED'));
                   const isWeekend = d.getDay() === 0 || d.getDay() === 6;
-                  if (holiday || isWeekend) {
-                      holidayWorkDays++;
-                  } else {
-                      weekdayWorkDays++;
-                  }
+                  if (holiday || isWeekend) holidayWorkDays++; else weekdayWorkDays++;
 
                   const parts = shift.station.split(' ');
                   const stationLabel = parts.length > 1 && parts[0].includes(':') ? parts.slice(1).join(' ') : shift.station;
-                  if (dateCounts[stationLabel] !== undefined) {
-                      dateCounts[stationLabel]++;
-                  }
+                  if (dateCounts[stationLabel] !== undefined) dateCounts[stationLabel]++;
 
-                  // Count specific roles in both station and task
                   const combinedText = `${shift.station} ${shift.task || ''}`;
                   if (combinedText.includes('主控')) roleCounts['主控']++;
                   if (combinedText.includes('輔控')) roleCounts['輔控']++;
@@ -240,31 +250,26 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
               }
           });
 
-          row['上班天數'] = totalWorkDays;
-          row['平日'] = weekdayWorkDays;
-          row['假日班'] = holidayWorkDays;
-          
-          Object.entries(roleCounts).forEach(([role, count]) => {
-              row[role] = count;
-          });
-
-          hmStations.forEach(st => {
-              row[st] = dateCounts[st];
-          });
-          
-          return row;
+          const row = ws.addRow([
+              staff.name, totalWorkDays, weekdayWorkDays, holidayWorkDays,
+              roleCounts['主控'], roleCounts['輔控'], roleCounts['晚班'],
+              ...hmStations.map(st => dateCounts[st])
+          ]);
+          row.alignment = { horizontal: 'center' };
+          row.getCell(1).alignment = { horizontal: 'left' };
       });
 
-      const rangeStr = `${dateRange[0]} ~ ${dateRange[dateRange.length - 1]} (共 ${dateRange.length} 天)`;
-      
-      // Add range info as a header row
-      const ws = utils.json_to_sheet([]);
-      utils.sheet_add_aoa(ws, [[`統計區間: ${rangeStr}`]], { origin: "A1" });
-      utils.sheet_add_json(ws, data, { origin: "A2", skipHeader: false });
-      
-      const wb = utils.book_new();
-      utils.book_append_sheet(wb, ws, "健管排班統計");
-      writeFile(wb, `健管排班統計_${label}_${rangeStr}.xlsx`);
+      // Column widths
+      ws.getColumn(1).width = 14;
+      for (let i = 2; i <= headers.length; i++) ws.getColumn(i).width = 10;
+
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `健管排班統計_${label}.xlsx`;
+      link.click();
+      URL.revokeObjectURL(link.href);
   };
 
   const handleExportScheduleExcel = async () => {
@@ -342,49 +347,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
   const handleExportSchedulePDF = async () => {
     try {
       const doc = new jsPDF('l', 'mm', 'a4');
-      let fontName = 'helvetica';
-
-      // Font loading logic synchronized with PhysicianSchedulePage
-      try {
-        const pathsToTry = [
-          '/schedule/fonts/jf-openhuninn-2.1.ttf',
-          '/fonts/jf-openhuninn-2.1.ttf'
-        ];
-        let response: Response | null = null;
-        for (const path of pathsToTry) {
-          try {
-            const res = await fetch(path);
-            const type = res.headers.get('content-type');
-            if (res.ok && (!type || !type.includes('text/html'))) { 
-              response = res; 
-              break; 
-            }
-          } catch (e) {}
-        }
-
-        if (response) {
-          const blob = await response.blob();
-          const reader = new FileReader();
-          await new Promise((resolve, reject) => {
-            reader.onloadend = () => {
-              const base64data = reader.result as string;
-              if (base64data && base64data.includes('base64,')) {
-                const content = base64data.split('base64,')[1];
-                doc.addFileToVFS('jf-openhuninn-2.1.ttf', content);
-                doc.addFont('jf-openhuninn-2.1.ttf', 'OpenHuninn', 'normal');
-                doc.addFont('jf-openhuninn-2.1.ttf', 'OpenHuninn', 'bold');
-                doc.setFont('OpenHuninn');
-                fontName = 'OpenHuninn';
-                resolve(true);
-              } else {
-                reject('Invalid data');
-              }
-            };
-            reader.onerror = reject;
-            reader.readAsDataURL(blob);
-          });
-        }
-      } catch (e) { console.error('Font load failed', e); }
+      const fontName = await loadChineseFontToDoc(doc);
 
       const label = selectedCycleId === 'month' 
         ? `${currentDate.getFullYear()}年${currentDate.getMonth() + 1}月`
