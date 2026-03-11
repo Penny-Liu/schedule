@@ -21,27 +21,36 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
         (!u.resignationDate || u.resignationDate > todayStr)
     );
 
+    // Sort function: Viewer (位居最上方)
+    const sortByRole = (a: any, b: any) => {
+        if (a.role === UserRole.VIEWER) return -1;
+        if (b.role === UserRole.VIEWER) return 1;
+        return 0;
+    };
+
     const radiologyPortalUsers = activeUsers.filter(u => 
         u.isRadiographer === true || 
         u.role === UserRole.RADIOGRAPHER_STAFF || 
         (u as any).role === 'EMPLOYEE' ||
         u.role === UserRole.SUPERVISOR || 
-        u.role === UserRole.SYSTEM_ADMIN
-    );
+        u.role === UserRole.SYSTEM_ADMIN ||
+        u.role === UserRole.VIEWER // Add Viewer to radiology portal too
+    ).sort(sortByRole);
 
     const leftPortalUsers = activeUsers.filter(u => 
-        !radiologyPortalUsers.some(ru => ru.id === u.id)
+        u.role === UserRole.VIEWER || // Explicitly include Viewer in Left Portal
+        !radiologyPortalUsers.some(ru => ru.id === u.id && ru.role !== UserRole.VIEWER)
     );
 
     const hmUsers = leftPortalUsers.filter(u => 
         u.isHealthMgmt === true || 
         u.role === UserRole.HM_SUPERVISOR || 
         u.role === UserRole.HM_STAFF
-    );
+    ).sort(sortByRole);
 
     const adminAndPhysicianUsers = leftPortalUsers.filter(u => 
         !hmUsers.some(hu => hu.id === u.id)
-    );
+    ).sort(sortByRole);
 
     const handleUserSelect = (userId: string) => {
         const user = users.find(u => u.id === userId);
