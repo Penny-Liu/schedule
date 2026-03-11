@@ -255,12 +255,14 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
           return row;
       });
 
-      const ws = utils.json_to_sheet(data);
-      const wb = utils.book_new();
+      const rangeStr = `${dateRange[0]} ~ ${dateRange[dateRange.length - 1]} (共 ${dateRange.length} 天)`;
       
-      // Add range info as a comment or header row? User wants to "know" it.
-      // Let's enhance the filename and add a row at the top.
-      const rangeStr = `${dateRange[0]} ~ ${dateRange[dateRange.length - 1]} (${dateRange.length}天)`;
+      // Add range info as a header row
+      const ws = utils.json_to_sheet([]);
+      utils.sheet_add_aoa(ws, [[`統計區間: ${rangeStr}`]], { origin: "A1" });
+      utils.sheet_add_json(ws, data, { origin: "A2", skipHeader: false });
+      
+      const wb = utils.book_new();
       utils.book_append_sheet(wb, ws, "健管排班統計");
       writeFile(wb, `健管排班統計_${label}_${rangeStr}.xlsx`);
   };
@@ -283,6 +285,25 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
       const firstRow = sheet.addRow(headerRow);
       firstRow.font = { bold: true };
       firstRow.alignment = { horizontal: 'center' };
+
+      // Apply background color for holidays and weekends in header
+      headerRow.forEach((colName, index) => {
+        if (index === 0) return; // Skip "人員" column
+        const dateStr = dateRange[index - 1];
+        const d = new Date(dateStr);
+        const holiday = holidays.find(h => h.date === dateStr && (h.type === 'NATIONAL' || h.type === 'CLOSED'));
+        const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+
+        if (holiday || isWeekend) {
+          const cell = firstRow.getCell(index + 1);
+          cell.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FFFFE4E1' } // MistyRose color for holidays
+          };
+          cell.font = { bold: true, color: { argb: 'FFFF0000' } }; // Red text for holidays
+        }
+      });
 
       // Data rows
       activeStaff.forEach(staff => {
@@ -398,7 +419,20 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
         styles: { font: fontName, fontSize: 8, halign: 'center', cellPadding: 1 },
         headStyles: { fillColor: [45, 133, 115] },
         columnStyles: { 0: { fontStyle: 'bold', minCellWidth: 20 } },
-        margin: { horizontal: 14 }
+        margin: { horizontal: 14 },
+        didParseCell: (data) => {
+          if (data.section === 'head' && data.column.index > 0) {
+            const dateStr = dateRange[data.column.index - 1];
+            const d = new Date(dateStr);
+            const holiday = holidays.find(h => h.date === dateStr && (h.type === 'NATIONAL' || h.type === 'CLOSED'));
+            const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+
+            if (holiday || isWeekend) {
+              data.cell.styles.fillColor = [255, 228, 225]; // MistyRose
+              data.cell.styles.textColor = [255, 0, 0]; // Red text
+            }
+          }
+        }
       });
 
       doc.save(`健管排班表_${label}.pdf`);
@@ -414,6 +448,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
         let total = 0;
         let weekday = 0;
         let holidayCount = 0;
+        const roleCounts: Record<string, number> = { '主控': 0, '輔控': 0, '晚班': 0 };
 
         dateRange.forEach(date => {
             const shift = shifts.find(s => s.userId === staff.id && s.date === date);
@@ -433,10 +468,16 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                 if (hmStations.includes(stationLabel)) {
                     counts[stationLabel] = (counts[stationLabel] || 0) + 1;
                 }
+
+                // Count specific roles in both station and task
+                const combinedText = `${shift.station} ${shift.task || ''}`;
+                if (combinedText.includes('主控')) roleCounts['主控']++;
+                if (combinedText.includes('輔控')) roleCounts['輔控']++;
+                if (combinedText.includes('晚班')) roleCounts['晚班']++;
             }
         });
 
-        return { staff, counts, total, weekday, holidayCount };
+        return { staff, counts, total, weekday, holidayCount, roleCounts };
     });
   }, [activeStaff, hmStations, shifts, dateRange, holidays]);
 
@@ -891,28 +932,23 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
         </>
       ) : activeTab === 'stats' ? (
         /* Statistics Tab */
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col h-fit">
-            <div className="p-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
-                <div className="flex items-center gap-4">
-                    <h3 className="font-bold text-gray-700">
-                        健管排班統計 ({selectedCycleId === 'month' ? toLocalISOString(currentDate).substring(0, 7) : currentCycle?.name})
-                    </h3>
-                    {selectedCycleId === 'month' && (
-                        <div className="flex items-center gap-1 bg-white border rounded-lg px-2 py-1">
-                            <Calendar size={14} className="text-gray-400" />
-                            <input 
-                                type="month" 
-                                value={toLocalISOString(currentDate).substring(0, 7)}
-                                onChange={(e) => {
-                                    if (e.target.value) {
-                                        const [y, m] = e.target.value.split('-').map(Number);
-                                        setCurrentDate(new Date(y, m - 1, 1));
-                                    }
-                                }}
-                                className="text-sm font-bold border-none outline-none bg-transparent"
-                            />
-                        </div>
-                    )}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col h-fit p-6">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 pb-6 border-b border-slate-100">
+                <div>
+                   <h3 className="text-xl font-bold text-slate-800">健管統計</h3>
+                   <div className="flex items-center gap-2 mt-1">
+                      <div className="flex items-center gap-1.5 px-3 py-1 bg-teal-50 border border-teal-100 rounded-lg text-teal-700 text-xs font-bold">
+                         <Calendar size={14} />
+                         {selectedCycleId === 'month' 
+                           ? `${currentDate.getFullYear()} 年 ${currentDate.getMonth() + 1} 月`
+                           : currentCycle?.name || '週期統計'}
+                      </div>
+                      <div className="flex items-center gap-1 px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg text-slate-500 text-xs font-medium">
+                         {dateRange[0]} ~ {dateRange[dateRange.length - 1]} 
+                         <span className="mx-1 opacity-30">|</span>
+                         共 {dateRange.length} 天
+                      </div>
+                   </div>
                 </div>
                 <button
                     onClick={handleExportStats}
@@ -927,16 +963,19 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                     <thead>
                         <tr className="bg-slate-50 text-slate-500 border-b border-slate-100">
                             <th className="p-4 text-left font-bold sticky left-0 bg-slate-50 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]">姓名</th>
-                            <th className="p-4 text-center font-bold text-teal-600">上班天數</th>
+                            <th className="p-4 text-center font-bold text-teal-600">上班</th>
                             <th className="p-4 text-center font-bold text-blue-600">平日</th>
-                            <th className="p-4 text-center font-bold text-red-600">假日班</th>
+                            <th className="p-4 text-center font-bold text-red-600">假日</th>
+                            <th className="p-4 text-center font-bold text-indigo-600">主控</th>
+                            <th className="p-4 text-center font-bold text-indigo-600">輔控</th>
+                            <th className="p-4 text-center font-bold text-indigo-600">晚班</th>
                             {hmStations.map(st => (
                                 <th key={st} className="p-4 text-center font-bold">{st}</th>
                             ))}
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50">
-                        {stats.map(({ staff, counts, total, weekday, holidayCount }) => (
+                        {stats.map(({ staff, counts, total, weekday, holidayCount, roleCounts }) => (
                             <tr key={staff.id} className="hover:bg-slate-50/50 transition-colors">
                                 <td className="p-4 font-bold text-slate-700 sticky left-0 bg-white z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]">{staff.name}</td>
                                 <td className="p-4 text-center">
@@ -945,8 +984,17 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                                 <td className="p-4 text-center">
                                     <span className="font-bold text-blue-700 bg-blue-50 px-2.5 py-1 rounded-md">{weekday}</span>
                                 </td>
-                                <td className="p-4 text-center">
-                                    <span className="font-bold text-red-700 bg-red-50 px-2.5 py-1 rounded-md">{holidayCount}</span>
+                                <td className="p-4 text-center font-bold text-red-600">
+                                    {holidayCount > 0 ? holidayCount : '-'}
+                                </td>
+                                <td className="p-4 text-center font-bold text-slate-700">
+                                    {roleCounts?.['主控'] || '-'}
+                                </td>
+                                <td className="p-4 text-center font-bold text-slate-700">
+                                    {roleCounts?.['輔控'] || '-'}
+                                </td>
+                                <td className="p-4 text-center font-bold text-slate-700">
+                                    {roleCounts?.['晚班'] || '-'}
                                 </td>
                                 {hmStations.map(st => (
                                     <td key={st} className="p-4 text-center text-slate-600">
