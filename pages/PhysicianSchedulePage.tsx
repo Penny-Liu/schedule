@@ -2062,14 +2062,14 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                     <div className="flex bg-teal-50 rounded-lg p-0.5 border border-teal-100 items-center h-[26px]">
                         <button 
                             onClick={handleExportPDF}
-                            className="px-2 py-0.5 hover:bg-white rounded text-xs font-bold text-teal-700 flex items-center gap-1 transition-all h-full"
+                            className="px-2 py-0.5 hover:bg-white rounded-lg text-xs font-bold text-teal-700 flex items-center gap-1 transition-all h-full"
                         >
                             <Download size={13} /> PDF
                         </button>
                         <div className="w-[1px] h-3 bg-teal-200 mx-0.5"></div>
                         <button 
                             onClick={handleExportExcel}
-                            className="px-2 py-0.5 hover:bg-white rounded text-xs font-bold text-emerald-700 flex items-center gap-1 transition-all h-full"
+                            className="px-2 py-0.5 hover:bg-white rounded-lg text-xs font-bold text-emerald-700 flex items-center gap-1 transition-all h-full"
                         >
                             <FileSpreadsheet size={13} /> Excel
                         </button>
@@ -2140,7 +2140,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                             </div>
                                                         )}
                                                         {doctorNote && (
-                                                            <div className="text-[9px] bg-purple-100 text-purple-700 px-0.5 rounded font-bold shadow-sm whitespace-nowrap overflow-hidden text-ellipsis max-w-[40px]" title={doctorNote.name}>
+                                                            <div className="text-[9px] bg-purple-100 text-purple-700 px-0.5 rounded-lg font-bold shadow-sm whitespace-nowrap overflow-hidden text-ellipsis max-w-[40px]" title={doctorNote.name}>
                                                                 📝 {doctorNote.name}
                                                             </div>
                                                         )}
@@ -2164,7 +2164,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                                 await db.reorderDoctor(doc.id, 'up');
                                                                 setDoctors(db.getDoctors());
                                                             }}
-                                                            className="text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded p-0.5 transition-colors disabled:opacity-20 disabled:cursor-not-allowed"
+                                                            className="text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg p-0.5 transition-colors disabled:opacity-20 disabled:cursor-not-allowed"
                                                             disabled={doctors.indexOf(doc) === 0}
                                                             title="向上移動"
                                                         >
@@ -2178,7 +2178,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                                 await db.reorderDoctor(doc.id, 'down');
                                                                 setDoctors(db.getDoctors());
                                                             }}
-                                                            className="text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded p-0.5 transition-colors disabled:opacity-20 disabled:cursor-not-allowed"
+                                                            className="text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg p-0.5 transition-colors disabled:opacity-20 disabled:cursor-not-allowed"
                                                             disabled={doctors.indexOf(doc) === doctors.length - 1}
                                                             title="向下移動"
                                                         >
@@ -2335,7 +2335,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                                     </span>
                                                                 )}
                                                                  {shift.location && (
-                                                                    <div className={`text-[10px] px-1 rounded text-white scale-90 ${LOCATION_COLORS[shift.location]?.split(' ')[0] || 'bg-gray-400'}`}>
+                                                                    <div className={`text-[10px] px-1 rounded-lg text-white scale-90 ${LOCATION_COLORS[shift.location]?.split(' ')[0] || 'bg-gray-400'}`}>
                                                                         {shift.location}
                                                                     </div>
                                                                  )}
@@ -2441,7 +2441,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                         type="number"
                                                         value={stats?.beitou_clients || 0}
                                                         onChange={(e) => db.updateDailyStats(date, { beitou_clients: Number(e.target.value) })}
-                                                        className="w-full text-center text-xs font-bold bg-transparent outline-none focus:bg-white focus:ring-1 focus:ring-teal-500 rounded py-1 text-slate-700"
+                                                        className="w-full text-center text-xs font-bold bg-transparent outline-none focus:bg-white focus:ring-1 focus:ring-teal-500 rounded-lg py-1 text-slate-700"
                                                         placeholder="0"
                                                     />
                                                 ) : (
@@ -2464,7 +2464,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                         type="number"
                                                         value={stats?.beitou_mr || 0}
                                                         onChange={(e) => db.updateDailyStats(date, { beitou_mr: Number(e.target.value) })}
-                                                        className="w-full text-center text-xs font-bold bg-transparent outline-none focus:bg-white focus:ring-1 focus:ring-teal-500 rounded py-1 text-slate-700"
+                                                        className="w-full text-center text-xs font-bold bg-transparent outline-none focus:bg-white focus:ring-1 focus:ring-teal-500 rounded-lg py-1 text-slate-700"
                                                         placeholder="0"
                                                     />
                                                 ) : (
@@ -2487,7 +2487,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                         type="number"
                                                         value={stats?.beitou_gi || 0}
                                                         onChange={(e) => db.updateDailyStats(date, { beitou_gi: Number(e.target.value) })}
-                                                        className="w-full text-center text-xs font-bold bg-transparent outline-none focus:bg-white focus:ring-1 focus:ring-teal-500 rounded py-1 text-slate-700"
+                                                        className="w-full text-center text-xs font-bold bg-transparent outline-none focus:bg-white focus:ring-1 focus:ring-teal-500 rounded-lg py-1 text-slate-700"
                                                         placeholder="0"
                                                     />
                                                 ) : (
@@ -2510,7 +2510,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                         type="number"
                                                         value={stats?.beitou_cta || 0}
                                                         onChange={(e) => db.updateDailyStats(date, { beitou_cta: Number(e.target.value) })}
-                                                        className="w-full text-center text-xs font-bold bg-transparent outline-none focus:bg-white focus:ring-1 focus:ring-teal-500 rounded py-1 text-slate-700"
+                                                        className="w-full text-center text-xs font-bold bg-transparent outline-none focus:bg-white focus:ring-1 focus:ring-teal-500 rounded-lg py-1 text-slate-700"
                                                         placeholder="0"
                                                     />
                                                 ) : (
@@ -2533,7 +2533,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                         type="number"
                                                         value={stats?.dazhi_clients || 0}
                                                         onChange={(e) => db.updateDailyStats(date, { dazhi_clients: Number(e.target.value) })}
-                                                        className="w-full text-center text-xs font-bold bg-transparent outline-none focus:bg-white focus:ring-1 focus:ring-teal-500 rounded py-1 text-slate-700"
+                                                        className="w-full text-center text-xs font-bold bg-transparent outline-none focus:bg-white focus:ring-1 focus:ring-teal-500 rounded-lg py-1 text-slate-700"
                                                         placeholder="0"
                                                     />
                                                 ) : (
@@ -2556,7 +2556,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                         type="number"
                                                         value={stats?.dazhi_gi || 0}
                                                         onChange={(e) => db.updateDailyStats(date, { dazhi_gi: Number(e.target.value) })}
-                                                        className="w-full text-center text-xs font-bold bg-transparent outline-none focus:bg-white focus:ring-1 focus:ring-teal-500 rounded py-1 text-slate-700"
+                                                        className="w-full text-center text-xs font-bold bg-transparent outline-none focus:bg-white focus:ring-1 focus:ring-teal-500 rounded-lg py-1 text-slate-700"
                                                         placeholder="0"
                                                     />
                                                 ) : (
@@ -3123,14 +3123,14 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                                                     {suffix && <span className="text-[9px] text-teal-700 bg-teal-50 px-1.5 py-0.5 rounded-md border border-teal-100/50 tracking-wider font-bold whitespace-nowrap">{suffix}</span>}
                                                                                 </div>
                                                                                 {s.workTime && (
-                                                                                    <div className="shrink-0 text-[10px] font-bold text-slate-500 bg-slate-50/80 px-1.5 py-0.5 rounded flex items-center gap-1 shadow-[inset_0_1px_1px_rgba(0,0,0,0.02)] border border-slate-100/50">
+                                                                                    <div className="shrink-0 text-[10px] font-bold text-slate-500 bg-slate-50/80 px-1.5 py-0.5 rounded-lg flex items-center gap-1 shadow-[inset_0_1px_1px_rgba(0,0,0,0.02)] border border-slate-100/50">
                                                                                         <Clock size={10} className="text-slate-400"/> {s.workTime}
                                                                                     </div>
                                                                                 )}
                                                                             </div>
                                                                             <div className="flex flex-wrap gap-1.5">
-                                                                                {s.task && <span className={`text-[10px] px-2 py-0.5 rounded border font-bold tracking-wide ${s.task.includes('晚班') ? 'text-red-700 bg-red-50/80 border-red-100/50' : 'text-blue-700 bg-blue-50/80 border-blue-100/50'}`}>{s.task}</span>}
-                                                                                {s.note && <span className="text-[10px] text-amber-700 bg-amber-50/80 px-1.5 py-0.5 rounded border border-amber-100/50 font-bold break-words flex flex-wrap items-center gap-1 leading-tight w-full"><span className="text-amber-500 shrink-0">📝</span> <span>{s.note}</span></span>}
+                                                                                {s.task && <span className={`text-[10px] px-2 py-0.5 rounded-lg border font-bold tracking-wide ${s.task.includes('晚班') ? 'text-red-700 bg-red-50/80 border-red-100/50' : 'text-blue-700 bg-blue-50/80 border-blue-100/50'}`}>{s.task}</span>}
+                                                                                {s.note && <span className="text-[10px] text-amber-700 bg-amber-50/80 px-1.5 py-0.5 rounded-lg border border-amber-100/50 font-bold break-words flex flex-wrap items-center gap-1 leading-tight w-full"><span className="text-amber-500 shrink-0">📝</span> <span>{s.note}</span></span>}
                                                                             </div>
                                                                         </div>
                                                                     </div>
@@ -3176,7 +3176,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                 const text = generateBeitouCopyText(currentDate, shifts, doctors, staffShifts, users);
                                                 navigator.clipboard.writeText(text);
                                             }}
-                                            className="px-2 py-1 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded text-xs font-bold flex items-center gap-1 transition-colors"
+                                            className="px-2 py-1 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg text-xs font-bold flex items-center gap-1 transition-colors"
                                         >
                                             <Check size={12} /> 複製
                                         </button>
@@ -3197,7 +3197,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                 const text = generateDazhiCopyText(currentDate, shifts, doctors);
                                                 navigator.clipboard.writeText(text);
                                             }}
-                                            className="px-2 py-1 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded text-xs font-bold flex items-center gap-1 transition-colors"
+                                            className="px-2 py-1 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg text-xs font-bold flex items-center gap-1 transition-colors"
                                         >
                                             <Check size={12} /> 複製
                                         </button>
@@ -3934,7 +3934,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                         }, 0);
                                                         if (fixedCount === 0) return null;
                                                         return (
-                                                            <span className="text-[10px] text-indigo-600 bg-indigo-50 border border-indigo-100 px-1.5 py-0.5 rounded font-medium">
+                                                            <span className="text-[10px] text-indigo-600 bg-indigo-50 border border-indigo-100 px-1.5 py-0.5 rounded-lg font-medium">
                                                                 固定排班: {fixedCount} 天
                                                             </span>
                                                         );
@@ -4036,14 +4036,14 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                          <button 
                                             onClick={() => moveSpecialty(idx, 'up')}
                                             disabled={idx === 0}
-                                            className="p-1.5 rounded hover:bg-slate-100 text-slate-400 disabled:opacity-30 disabled:hover:bg-transparent"
+                                            className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 disabled:opacity-30 disabled:hover:bg-transparent"
                                          >
                                              <ChevronLeft size={16} className="rotate-90"/>
                                          </button>
                                          <button 
                                             onClick={() => moveSpecialty(idx, 'down')}
                                             disabled={idx === tempSpecialties.length - 1}
-                                            className="p-1.5 rounded hover:bg-slate-100 text-slate-400 disabled:opacity-30 disabled:hover:bg-transparent"
+                                            className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 disabled:opacity-30 disabled:hover:bg-transparent"
                                          >
                                              <ChevronLeft size={16} className="-rotate-90"/>
                                          </button>

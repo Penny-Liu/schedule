@@ -2,6 +2,7 @@
 import React from 'react';
 import { Users, FileText, LogOut, LayoutDashboard, Settings, Menu, BarChart3, Stethoscope, CalendarClock, Sliders, Cloud, Calendar, Activity } from 'lucide-react';
 import { User, UserRole, PERMISSIONS } from '../types';
+import { getRoleLabel } from '../services/utils';
 
 interface SidebarProps {
   currentUser: User;
@@ -87,20 +88,6 @@ const Sidebar: React.FC<SidebarProps> = ({ currentUser, onNavigate, currentPage,
       ]
     }
   ];
-  const getRoleLabel = (role: UserRole) => {
-    switch (role) {
-      case UserRole.SUPERVISOR: return '部門主管';
-      case UserRole.SYSTEM_ADMIN: return '系統管理員';
-      case UserRole.SCHEDULER: return '排班管理員';
-      case UserRole.VIEWER: return '瀏覽者';
-      case UserRole.FINANCE: return '財會';
-      case UserRole.PHYSICIAN_ADMIN: return '醫師排班管理';
-      case UserRole.HM_SUPERVISOR: return '健管主管';
-      case UserRole.HM_STAFF: return '健管同仁';
-      case UserRole.RADIOGRAPHER_STAFF: return '放射師';
-      default: return '放射師';
-    }
-  };
 
   return (
     <div className="w-full bg-white border-b border-gray-200 min-h-16 flex items-center justify-between px-4 sticky top-0 z-50 shadow-sm pt-[env(safe-area-inset-top)]">

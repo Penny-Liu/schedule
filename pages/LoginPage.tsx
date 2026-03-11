@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { User, UserRole } from '../types';
 import { db } from '../services/store';
 import { LogIn, User as UserIcon, Lock, ChevronLeft, Shield, Calendar, Activity, Eye, ChevronDown } from 'lucide-react';
+import { getRoleLabel } from '../services/utils';
 
 interface LoginPageProps {
     onLogin: (user: User) => void;
@@ -80,19 +81,6 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
         }
     };
 
-    const getRoleLabel = (role: UserRole) => {
-        switch (role) {
-            case UserRole.SUPERVISOR: return '放射主管';
-            case UserRole.SYSTEM_ADMIN: return '系統管理員';
-            case UserRole.PHYSICIAN_ADMIN: return '醫師排班管理';
-            case UserRole.HM_SUPERVISOR: return '健管主管';
-            case UserRole.HM_STAFF: return '健管同仁';
-            case UserRole.VIEWER: return '瀏覽者';
-            case UserRole.FINANCE: return '財會';
-            case UserRole.RADIOGRAPHER_STAFF: return '放射師';
-            default: return '工作人員';
-        }
-    };
 
     const getRoleIcon = (role: UserRole) => {
          switch (role) {

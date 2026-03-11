@@ -62,10 +62,10 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
             setActiveTab('personal');
         } else if (activeTab === 'health_mgmt' && !canManageHealthMgmt) {
             setActiveTab('personal');
-        } else if (activeTab === 'system' && !(isSupervisorOrAdmin || isHR)) {
+        } else if (activeTab === 'system' && !isSupervisorOrAdmin) {
             setActiveTab('personal');
         }
-    }, [activeTab, isSupervisorOrAdmin, canManageHealthMgmt, isHR]);
+    }, [activeTab, isSupervisorOrAdmin, canManageHealthMgmt]);
 
     // Template blocks state: [Block1, Block2, Block3]
     const [templateBlocks, setTemplateBlocks] = useState<string[]>(['', '', '']);
@@ -684,7 +684,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
                         <Calendar size={18} /> 健管設定
                     </button>
                 )}
-                {(isSupervisorOrAdmin || isHR) && (
+                {isSupervisorOrAdmin && (
                     <button
                         onClick={() => setActiveTab('system')}
                         className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-2 ${
@@ -806,12 +806,12 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
                                                         </p>
                                                     </div>
 
-                                                    <div className="grid grid-cols-2 gap-2 bg-slate-50 p-3 rounded border border-slate-200 mb-3">
+                                                    <div className="grid grid-cols-2 gap-2 bg-slate-50 p-3 rounded-lg border border-slate-200 mb-3">
                                                         <div>
                                                             <label className="text-xs font-bold text-slate-500 mb-1 block">生效日期 (從這天起)</label>
                                                             <input
                                                                 type="date"
-                                                                className="w-full text-sm border border-slate-300 rounded px-2 py-1"
+                                                                className="w-full text-sm border border-slate-300 rounded-lg px-2 py-1"
                                                                 value={newAnchor.effective}
                                                                 onChange={e => setNewAnchor({ ...newAnchor, effective: e.target.value })}
                                                             />
@@ -820,7 +820,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
                                                             <label className="text-xs font-bold text-slate-500 mb-1 block">新的循環基準日 (Day 1)</label>
                                                             <input
                                                                 type="date"
-                                                                className="w-full text-sm border border-slate-300 rounded px-2 py-1"
+                                                                className="w-full text-sm border border-slate-300 rounded-lg px-2 py-1"
                                                                 value={newAnchor.anchor}
                                                                 onChange={e => setNewAnchor({ ...newAnchor, anchor: e.target.value })}
                                                             />
@@ -828,7 +828,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
                                                         <button
                                                             type="button"
                                                             onClick={handleAddAnchor}
-                                                            className="col-span-2 mt-1 bg-teal-600 text-white text-xs font-bold py-1.5 rounded hover:bg-teal-700 transition-colors flex items-center justify-center gap-1"
+                                                            className="col-span-2 mt-1 bg-teal-600 text-white text-xs font-bold py-1.5 rounded-lg hover:bg-teal-700 transition-colors flex items-center justify-center gap-1"
                                                         >
                                                             <Plus size={14} /> 新增重置點
                                                         </button>
@@ -917,7 +917,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
                                                 <input
                                                     type="month"
                                                     id="forceCleanMonth"
-                                                    className="border border-gray-300 rounded px-2 text-sm"
+                                                    className="border border-gray-300 rounded-lg px-2 text-sm"
                                                 />
                                                 <button
                                                     type="button"
@@ -1147,7 +1147,7 @@ BMD :{{bmd}}
                                                             navigator.clipboard.writeText(v);
                                                             alert(`已複製 ${v}`);
                                                         }}
-                                                        className="bg-white border border-slate-300 px-2 py-1 rounded hover:bg-slate-100 transition"
+                                                        className="bg-white border border-slate-300 px-2 py-1 rounded-lg hover:bg-slate-100 transition"
                                                     >
                                                         {v}
                                                     </button>
@@ -1330,13 +1330,13 @@ BMD :{{bmd}}
                                                     min="1"
                                                     value={batchConfig.frequency}
                                                     onChange={e => setBatchConfig({ ...batchConfig, frequency: e.target.value })}
-                                                    className="w-16 bg-white border border-gray-300 rounded px-2 py-1 text-sm outline-none focus:border-blue-500 text-center"
+                                                    className="w-16 bg-white border border-gray-300 rounded-lg px-2 py-1 text-sm outline-none focus:border-blue-500 text-center"
                                                 />
                                                 <span>個月的 第</span>
                                                 <select
                                                     value={batchConfig.nth}
                                                     onChange={e => setBatchConfig({ ...batchConfig, nth: e.target.value })}
-                                                    className="bg-white border border-gray-300 rounded px-2 py-1 text-sm outline-none focus:border-blue-500"
+                                                    className="bg-white border border-gray-300 rounded-lg px-2 py-1 text-sm outline-none focus:border-blue-500"
                                                 >
                                                     <option value="1">1</option>
                                                     <option value="2">2</option>
@@ -1348,7 +1348,7 @@ BMD :{{bmd}}
                                                 <select
                                                     value={batchConfig.weekday}
                                                     onChange={e => setBatchConfig({ ...batchConfig, weekday: e.target.value })}
-                                                    className="bg-white border border-gray-300 rounded px-2 py-1 text-sm outline-none focus:border-blue-500"
+                                                    className="bg-white border border-gray-300 rounded-lg px-2 py-1 text-sm outline-none focus:border-blue-500"
                                                 >
                                                     <option value="1">一</option>
                                                     <option value="2">二</option>
@@ -1365,7 +1365,7 @@ BMD :{{bmd}}
                                                     type="month"
                                                     value={batchConfig.startMonth}
                                                     onChange={e => setBatchConfig({ ...batchConfig, startMonth: e.target.value })}
-                                                    className="w-1/2 border border-gray-300 rounded px-2 py-1 text-sm"
+                                                    className="w-1/2 border border-gray-300 rounded-lg px-2 py-1 text-sm"
                                                     required
                                                 />
                                                 <span className="text-gray-400">~</span>
@@ -1373,7 +1373,7 @@ BMD :{{bmd}}
                                                     type="month"
                                                     value={batchConfig.endMonth}
                                                     onChange={e => setBatchConfig({ ...batchConfig, endMonth: e.target.value })}
-                                                    className="w-1/2 border border-gray-300 rounded px-2 py-1 text-sm"
+                                                    className="w-1/2 border border-gray-300 rounded-lg px-2 py-1 text-sm"
                                                     required
                                                 />
                                             </div>
@@ -1384,10 +1384,10 @@ BMD :{{bmd}}
                                                     value={batchConfig.name}
                                                     onChange={e => setBatchConfig({ ...batchConfig, name: e.target.value })}
                                                     placeholder="事件名稱"
-                                                    className="flex-1 border border-gray-300 rounded px-2 py-1 text-sm"
+                                                    className="flex-1 border border-gray-300 rounded-lg px-2 py-1 text-sm"
                                                     required
                                                 />
-                                                <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1 rounded text-sm font-bold shadow-sm transition-colors whitespace-nowrap">
+                                                <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1 rounded-lg text-sm font-bold shadow-sm transition-colors whitespace-nowrap">
                                                     生成
                                                 </button>
                                             </div>
@@ -1422,9 +1422,9 @@ BMD :{{bmd}}
                                     }).map(h => (
                                         <div key={h.id || `${h.date}-${h.name}`} className="flex justify-between items-center p-3 hover:bg-gray-50 rounded-lg text-sm group">
                                             <div className="flex items-center gap-3">
-                                                <div className="font-mono text-gray-500 font-bold bg-gray-100 px-2 py-0.5 rounded text-xs">{h.date}</div>
+                                                <div className="font-mono text-gray-500 font-bold bg-gray-100 px-2 py-0.5 rounded-lg text-xs">{h.date}</div>
                                                 <div className="font-bold text-gray-800">{h.name}</div>
-                                                <span className={`text-[10px] px-2 py-0.5 rounded font-bold border ${getEventTypeColor(h.type)}`}>
+                                                <span className={`text-[10px] px-2 py-0.5 rounded-lg font-bold border ${getEventTypeColor(h.type)}`}>
                                                     {getEventTypeLabel(h.type)}
                                                 </span>
                                             </div>
@@ -1496,7 +1496,7 @@ BMD :{{bmd}}
                                                                     min="0"
                                                                     value={count}
                                                                     onChange={(e) => handleRequirementChange(station, dayIdx, parseInt(e.target.value) || 0)}
-                                                                    className={`w-10 text-center text-sm rounded py-1 outline-none transition-all font-medium 
+                                                                    className={`w-10 text-center text-sm rounded-lg py-1 outline-none transition-all font-medium 
                                                     ${count > 0 ? 'text-teal-700 bg-teal-50 ring-1 ring-teal-100' : 'text-gray-300 bg-gray-50'} 
                                                     focus:ring-2 focus:ring-teal-500 focus:bg-white`}
                                                                 />

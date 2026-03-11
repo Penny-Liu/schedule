@@ -1822,7 +1822,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                 <label className="text-xs text-gray-500 font-bold block mb-1">開始日期</label>
                                 <input
                                     type="date"
-                                    className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:ring-2 focus:ring-teal-500 outline-none"
+                                    className="w-full text-sm border border-gray-300 rounded-lg px-2 py-1.5 focus:ring-2 focus:ring-teal-500 outline-none"
                                     value={scheduleRange.start}
                                     onChange={(e) => setScheduleRange({ ...scheduleRange, start: e.target.value })}
                                 />
@@ -1831,14 +1831,14 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                 <label className="text-xs text-gray-500 font-bold block mb-1">結束日期</label>
                                 <input
                                     type="date"
-                                    className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:ring-2 focus:ring-teal-500 outline-none"
+                                    className="w-full text-sm border border-gray-300 rounded-lg px-2 py-1.5 focus:ring-2 focus:ring-teal-500 outline-none"
                                     value={scheduleRange.end}
                                     onChange={(e) => setScheduleRange({ ...scheduleRange, end: e.target.value })}
                                 />
                             </div>
                         </div>
 
-                        <div className="bg-purple-50 p-3 rounded text-xs text-purple-800 space-y-1 border border-purple-100">
+                        <div className="bg-purple-50 p-3 rounded-lg text-xs text-purple-800 space-y-1 border border-purple-100">
                             <div className="font-bold mb-1 flex items-center gap-1"><Wand2 size={12} /> 說明：</div>
                             <p>• 此功能僅會自動分配<span className="font-bold">工作崗位</span> (如 CT, MRI)。</p>
                             <p>• 將<span className="font-bold">重新隨機洗牌</span>選定範圍內的自動排班。</p>
@@ -1871,7 +1871,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                 <label className="text-xs text-gray-500 font-bold block mb-1">開始日期</label>
                                 <input
                                     type="date"
-                                    className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:ring-2 focus:ring-indigo-500 outline-none"
+                                    className="w-full text-sm border border-gray-300 rounded-lg px-2 py-1.5 focus:ring-2 focus:ring-indigo-500 outline-none"
                                     value={scheduleRange.start}
                                     onChange={(e) => setScheduleRange({ ...scheduleRange, start: e.target.value })}
                                 />
@@ -1880,7 +1880,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                 <label className="text-xs text-gray-500 font-bold block mb-1">結束日期</label>
                                 <input
                                     type="date"
-                                    className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:ring-2 focus:ring-indigo-500 outline-none"
+                                    className="w-full text-sm border border-gray-300 rounded-lg px-2 py-1.5 focus:ring-2 focus:ring-indigo-500 outline-none"
                                     value={scheduleRange.end}
                                     onChange={(e) => setScheduleRange({ ...scheduleRange, end: e.target.value })}
                                 />
@@ -1898,7 +1898,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                     { id: SPECIAL_ROLES.SCHEDULER, label: '排班', color: 'text-red-700 bg-red-50 border-red-200' },
                                     { id: SPECIAL_ROLES.DAZHI_SUPPORT, label: '大直支援', color: 'text-violet-700 bg-violet-50 border-violet-200' },
                                 ].map(role => (
-                                    <label key={role.id} className={`flex items-center gap-2 p-2 rounded border cursor-pointer hover: opacity-80 transition-all ${specialRolesToSchedule.includes(role.id) ? role.color + ' ring-1 ring-offset-1' : 'bg-white border-gray-200 text-gray-500'} `}>
+                                    <label key={role.id} className={`flex items-center gap-2 p-2 rounded-lg border cursor-pointer hover: opacity-80 transition-all ${specialRolesToSchedule.includes(role.id) ? role.color + ' ring-1 ring-offset-1' : 'bg-white border-gray-200 text-gray-500'} `}>
                                         <input
                                             type="checkbox"
                                             checked={specialRolesToSchedule.includes(role.id)}
@@ -1909,7 +1909,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                     setSpecialRolesToSchedule(specialRolesToSchedule.filter(r => r !== role.id));
                                                 }
                                             }}
-                                            className="rounded text-indigo-600 focus:ring-indigo-500"
+                                            className="rounded-lg text-indigo-600 focus:ring-indigo-500"
                                         />
                                         <span className="text-sm font-bold">{role.label}</span>
                                     </label>
@@ -1917,7 +1917,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                             </div>
                         </div>
 
-                        <div className="bg-purple-50 p-3 rounded text-xs text-purple-800 space-y-1 border border-purple-100">
+                        <div className="bg-purple-50 p-3 rounded-lg text-xs text-purple-800 space-y-1 border border-purple-100">
                             <div className="font-bold mb-1 flex items-center gap-1"><Sparkles size={12} /> 分配原則：</div>
                             <p>1. 優先分配給負責次數較少的人員 (平均分配)。</p>
                             <p>2. 次數相同時，隨機選取 (避免固定順序)。</p>
@@ -2033,7 +2033,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                 {rowConfigs.map((row, idx) => (
                                     <tr key={row.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
                                         <td className={`border-[0.5px] border-gray-400 p-1 font-bold text-gray-800`}>
-                                            <div className={`px-1 py-1 rounded border ${row.colorClass} text-center text-xs whitespace-nowrap`}>
+                                            <div className={`px-1 py-1 rounded-lg border ${row.colorClass} text-center text-xs whitespace-nowrap`}>
                                                 {row.label}
                                             </div>
                                         </td>
@@ -2093,7 +2093,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                         <h2 className="text-lg font-bold text-slate-800 tracking-tight flex items-center gap-2 whitespace-nowrap">
                             {!isMobile && getCycleTitle()}
                             {isCycleConfirmed && (
-                                <span className="bg-red-50 text-red-600 text-[10px] px-1.5 py-0.5 rounded border border-red-100 flex items-center gap-1">
+                                <span className="bg-red-50 text-red-600 text-[10px] px-1.5 py-0.5 rounded-lg border border-red-100 flex items-center gap-1">
                                     <Lock size={10} /> {!isMobile && '已鎖定'}
                                 </span>
                             )}
@@ -2186,7 +2186,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                             {/* Desktop Rolling Nav */}
                             {!isMobile && selectedCycleId === 'rolling' && (
                                 <div className="flex items-center bg-white rounded-md border border-slate-200 p-0.5 shadow-sm gap-1">
-                                    <button type="button" onClick={() => handleNavigate('prev')} className="p-1 hover:bg-slate-50 rounded text-slate-500">
+                                    <button type="button" onClick={() => handleNavigate('prev')} className="p-1 hover:bg-slate-50 rounded-lg text-slate-500">
                                         <ChevronLeft size={14} />
                                     </button>
                                     <div className="relative group px-2 text-xs font-bold text-slate-700 cursor-pointer hover:text-slate-900 flex items-center gap-1">
@@ -2194,7 +2194,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                             <ChevronDown size={10} className="text-slate-400" />
                                         <input type="date" className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10" onChange={handleDateJump} />
                                     </div>
-                                    <button type="button" onClick={() => handleNavigate('next')} className="p-1 hover:bg-slate-50 rounded text-slate-500">
+                                    <button type="button" onClick={() => handleNavigate('next')} className="p-1 hover:bg-slate-50 rounded-lg text-slate-500">
                                         <ChevronRight size={14} />
                                     </button>
                                     </div>
@@ -2559,7 +2559,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
 
                                     return false;
                                 }).map(u => (
-                                    <span key={u.id} className="bg-white border border-slate-200 px-1.5 py-0.5 rounded text-slate-400">
+                                    <span key={u.id} className="bg-white border border-slate-200 px-1.5 py-0.5 rounded-lg text-slate-400">
                                         {u.name}
                                     </span>
                                 ))}
@@ -2578,7 +2578,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                 </div>
                             </div>
                             <div className="text-right">
-                                <div className="text-[10px] text-slate-400 font-medium bg-slate-50 px-2 py-1 rounded border border-slate-100">
+                                <div className="text-[10px] text-slate-400 font-medium bg-slate-50 px-2 py-1 rounded-lg border border-slate-100">
                                     {dateRange.length > 7 ? '完整週期' : '連續週檢視'}
                                 </div>
                             </div>
@@ -2612,7 +2612,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                             {weekDay}
                                         </span>
                                         {event && (
-                                            <span className="text-[9px] mt-1 bg-red-50 text-red-600 px-1 rounded border border-red-100 whitespace-nowrap overflow-hidden max-w-[3rem] text-ellipsis">
+                                            <span className="text-[9px] mt-1 bg-red-50 text-red-600 px-1 rounded-lg border border-red-100 whitespace-nowrap overflow-hidden max-w-[3rem] text-ellipsis">
                                                 {event.name}
                                             </span>
                                         )}
@@ -2643,7 +2643,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                 {specialRoles.length > 0 && (
                                                     <div className="flex flex-wrap gap-1.5">
                                                         {specialRoles.map(role => (
-                                                            <span key={role} className={`px-2 py-0.5 rounded text-xs font-bold border flex items-center gap-1 ${role === SPECIAL_ROLES.OPENING ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                                                            <span key={role} className={`px-2 py-0.5 rounded-lg text-xs font-bold border flex items-center gap-1 ${role === SPECIAL_ROLES.OPENING ? 'bg-blue-50 text-blue-700 border-blue-200' :
                                                                 role === SPECIAL_ROLES.LATE ? 'bg-amber-50 text-amber-700 border-amber-200' :
                                                                     role === SPECIAL_ROLES.ASSIST ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
                                                                         'bg-purple-50 text-purple-700 border-purple-200'
@@ -2849,7 +2849,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                 {/* Sticky Count Column-Adjust Offset for Mobile */}
                                                 <td className={`sticky z-10 bg-white group-hover: bg-slate-50 border-r border-slate-200 p-0 text-center shadow-[4px_0_8px_rgba(0, 0, 0, 0.02)] ${isMobile ? 'left-[50px]' : 'left-[120px]'} `}>
                                                     <div
-                                                        className={`text-[10px] font-bold mx-1.5 py-0.5 rounded border ${isPersonalCycleCustomized ? 'text-amber-700 bg-amber-50 border-amber-300' : 'text-slate-600 bg-slate-100 border-slate-200'}`}
+                                                        className={`text-[10px] font-bold mx-1.5 py-0.5 rounded-lg border ${isPersonalCycleCustomized ? 'text-amber-700 bg-amber-50 border-amber-300' : 'text-slate-600 bg-slate-100 border-slate-200'}`}
                                                         title={isPersonalCycleCustomized && personalCycleData ? `自訂週期: ${personalCycleData.startDate} ~ ${personalCycleData.endDate}` : undefined}
                                                     >
                                                         {workDaysCount}
@@ -2876,7 +2876,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                             ) : (
                                                                 <div className="flex flex-col gap-1 h-full justify-start pt-1 items-center">
                                                                     {isEditMode ? (
-                                                                        <select value={station || ''} onChange={(e) => handleUpdateShift(user.id, date, e.target.value || SYSTEM_OFF, specialRoles)} className="w-full text-[10px] py-1 px-0.5 border border-slate-300 rounded bg-white focus:ring-2 focus:ring-teal-500 outline-none font-medium text-slate-800">
+                                                                        <select value={station || ''} onChange={(e) => handleUpdateShift(user.id, date, e.target.value || SYSTEM_OFF, specialRoles)} className="w-full text-[10px] py-1 px-0.5 border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-teal-500 outline-none font-medium text-slate-800">
                                                                             <option value="">...</option>
                                                                             {userCapableStations.map(s => <option key={s} value={s}>{s}</option>)}
                                                                             <option value={SYSTEM_OFF}>休假</option>
@@ -2886,7 +2886,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                                             <div className={`flex items-center justify-center px-1 py-1 rounded-md shadow-sm border w-full max-w-[50px] ${getStationStyle(station)} `}>
                                                                                 <span className="text-[10px] font-bold truncate tracking-tight">{station}</span>
                                                                                 {isLearning && (
-                                                                                    <span className="text-[9px] bg-white/50 text-slate-900 font-extrabold px-0.5 rounded ml-0.5 leading-none">學</span>
+                                                                                    <span className="text-[9px] bg-white/50 text-slate-900 font-extrabold px-0.5 rounded-lg ml-0.5 leading-none">學</span>
                                                                                 )}
                                                                             </div>
                                                                         ) : (
@@ -2900,7 +2900,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                                             {specialRolesList.map(role => {
                                                                                 const isSelected = specialRoles.includes(role);
                                                                                 return (
-                                                                                    <button key={role} type="button" onClick={() => handleSpecialRoleToggle(user.id, date, role, station || StationDefault.UNASSIGNED, specialRoles)} className={`px-1 py-0.5 text-[9px] rounded border transition-all font-bold ${isSelected ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-slate-400 border-slate-200 hover:border-purple-300 hover:text-purple-500'} `}>{role[0]}</button>
+                                                                                    <button key={role} type="button" onClick={() => handleSpecialRoleToggle(user.id, date, role, station || StationDefault.UNASSIGNED, specialRoles)} className={`px-1 py-0.5 text-[9px] rounded-lg border transition-all font-bold ${isSelected ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-slate-400 border-slate-200 hover:border-purple-300 hover:text-purple-500'} `}>{role[0]}</button>
                                                                                 );
                                                                             })}
                                                                         </div>
@@ -3026,7 +3026,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                                             return (
                                                                                 <div
                                                                                     key={i}
-                                                                                    className={`px-1 py-1 rounded text-sm font-bold shadow-sm flex flex-col items-center w-full max-w-[60px] relative group / chip border ${chipClass} `}
+                                                                                    className={`px-1 py-1 rounded-lg text-sm font-bold shadow-sm flex flex-col items-center w-full max-w-[60px] relative group / chip border ${chipClass} `}
                                                                                 >
                                                                                     <span className="truncate text-xs leading-tight mb-0.5 whitespace-nowrap flex items-center gap-0.5">
                                                                                         {item.user?.name ? formatName(item.user.name) : ''}
@@ -3071,7 +3071,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                                     {isEditMode && (
                                                                         <div className={`mt-1 w-full flex justify-center transition-opacity ${(isMobile && isEditMode) ? 'opacity-100' : 'opacity-0 group-hover/cell:opacity-100'} `}>
                                                                             <div className="relative w-full max-w-[40px]">
-                                                                                <button className="w-full flex justify-center bg-slate-100 hover:bg-slate-200 rounded text-slate-400 text-[10px] border border-slate-200"><Plus size={10} /></button>
+                                                                                <button className="w-full flex justify-center bg-slate-100 hover:bg-slate-200 rounded-lg text-slate-400 text-[10px] border border-slate-200"><Plus size={10} /></button>
                                                                                 <select className="absolute inset-0 opacity-0 cursor-pointer" value="" onChange={(e) => { if (e.target.value) { if (row.type === 'STATION') { handleAddUserToStation(e.target.value, date, row.label); } else { handleAddUserToRole(e.target.value, date, row.label); } } }}>
                                                                                     <option value="">選擇人員</option>
                                                                                     {row.type === 'STATION'
@@ -3180,7 +3180,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                             return (
                                                                 <div 
                                                                     key={s.id} 
-                                                                    className={`flex items-center justify-center relative px-1 py-0.5 rounded text-xs hover:bg-gray-100 transition-colors ${itemStyle}`}
+                                                                    className={`flex items-center justify-center relative px-1 py-0.5 rounded-lg text-xs hover:bg-gray-100 transition-colors ${itemStyle}`}
                                                                     style={{
                                                                         cursor: isSupervisor ? 'pointer' : 'default'
                                                                     }}
@@ -3223,7 +3223,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                         })}
                                                         
                                                         {(currentUser.role === UserRole.SYSTEM_ADMIN || currentUser.role === UserRole.SUPERVISOR) && isEditMode && (
-                                                            <div className="relative w-4 h-4 bg-slate-100 hover:bg-slate-200 rounded text-slate-400 text-[10px] border border-slate-200 flex items-center justify-center">
+                                                            <div className="relative w-4 h-4 bg-slate-100 hover:bg-slate-200 rounded-lg text-slate-400 text-[10px] border border-slate-200 flex items-center justify-center">
                                                                 +
                                                                 <select
                                                                     className="w-full h-full opacity-0 absolute inset-0 cursor-pointer"
@@ -3290,7 +3290,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                             type="number"
                                                             value={stats?.beitou_clients || 0}
                                                             onChange={(e) => db.updateDailyStats(date, { beitou_clients: Number(e.target.value) })}
-                                                            className="w-full text-center text-xs bg-transparent outline-none focus:bg-white focus:ring-1 focus:ring-teal-500 rounded py-1"
+                                                            className="w-full text-center text-xs bg-transparent outline-none focus:bg-white focus:ring-1 focus:ring-teal-500 rounded-lg py-1"
                                                             placeholder="0"
                                                         />
                                                     </td>
@@ -3309,7 +3309,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                             type="number"
                                                             value={stats?.beitou_cta || 0}
                                                             onChange={(e) => db.updateDailyStats(date, { beitou_cta: Number(e.target.value) })}
-                                                            className="w-full text-center text-xs bg-transparent outline-none focus:bg-white focus:ring-1 focus:ring-teal-500 rounded py-1"
+                                                            className="w-full text-center text-xs bg-transparent outline-none focus:bg-white focus:ring-1 focus:ring-teal-500 rounded-lg py-1"
                                                             placeholder="0"
                                                         />
                                                     </td>
@@ -3328,7 +3328,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                             type="number"
                                                             value={stats?.dazhi_clients || 0}
                                                             onChange={(e) => db.updateDailyStats(date, { dazhi_clients: Number(e.target.value) })}
-                                                            className="w-full text-center text-xs bg-transparent outline-none focus:bg-white focus:ring-1 focus:ring-teal-500 rounded py-1"
+                                                            className="w-full text-center text-xs bg-transparent outline-none focus:bg-white focus:ring-1 focus:ring-teal-500 rounded-lg py-1"
                                                             placeholder="0"
                                                         />
                                                     </td>
@@ -3916,7 +3916,7 @@ BMD :{{bmd}}
                 <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
                     <div className="flex justify-between items-center mb-2">
                          <div className="text-xs text-gray-500 font-medium">區塊 1：北投崗位</div>
-                         <button type="button" onClick={() => handleCopy(copyText.section1)} className="text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 px-2 py-1 rounded flex items-center gap-1">
+                         <button type="button" onClick={() => handleCopy(copyText.section1)} className="text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 px-2 py-1 rounded-lg flex items-center gap-1">
                             <Copy size={12} /> 複製
                          </button>
                     </div>
@@ -3931,7 +3931,7 @@ BMD :{{bmd}}
                 <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
                     <div className="flex justify-between items-center mb-2">
                          <div className="text-xs text-gray-500 font-medium">區塊 2：遠群</div>
-                         <button type="button" onClick={() => handleCopy(copyText.section2)} className="text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 px-2 py-1 rounded flex items-center gap-1">
+                         <button type="button" onClick={() => handleCopy(copyText.section2)} className="text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 px-2 py-1 rounded-lg flex items-center gap-1">
                             <Copy size={12} /> 複製
                          </button>
                     </div>
@@ -3946,7 +3946,7 @@ BMD :{{bmd}}
                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
                     <div className="flex justify-between items-center mb-2">
                          <div className="text-xs text-gray-500 font-medium">區塊 3：其它</div>
-                         <button type="button" onClick={() => handleCopy(copyText.section3)} className="text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 px-2 py-1 rounded flex items-center gap-1">
+                         <button type="button" onClick={() => handleCopy(copyText.section3)} className="text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 px-2 py-1 rounded-lg flex items-center gap-1">
                             <Copy size={12} /> 複製
                          </button>
                     </div>
@@ -3961,7 +3961,7 @@ BMD :{{bmd}}
                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
                     <div className="flex justify-between items-center mb-2">
                          <div className="text-xs text-gray-500 font-medium">區塊 4：工作量</div>
-                         <button type="button" onClick={() => handleCopy(copyText.section4)} className="text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 px-2 py-1 rounded flex items-center gap-1">
+                         <button type="button" onClick={() => handleCopy(copyText.section4)} className="text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 px-2 py-1 rounded-lg flex items-center gap-1">
                             <Copy size={12} /> 複製
                          </button>
                     </div>

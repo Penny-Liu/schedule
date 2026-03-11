@@ -1,6 +1,7 @@
 /**
  * Shared utility helpers used across multiple pages and services.
  */
+import type { UserRole } from '../types';
 
 /**
  * Converts a Date object to local ISO string (YYYY-MM-DD),
@@ -49,3 +50,23 @@ export const generateUUID = (): string => {
       return v.toString(16);
   });
 };
+
+/**
+ * Returns a localized Chinese label for a given UserRole.
+ * Single source of truth — used by Sidebar, LoginPage, etc.
+ */
+export const getRoleLabel = (role: UserRole): string => {
+  switch (role) {
+    case 'SUPERVISOR' as UserRole: return '部門主管';
+    case 'SYSTEM_ADMIN' as UserRole: return '系統管理員';
+    case 'SCHEDULER' as UserRole: return '排班管理員';
+    case 'PHYSICIAN_ADMIN' as UserRole: return '醫師排班管理';
+    case 'VIEWER' as UserRole: return '瀏覽者';
+    case 'FINANCE' as UserRole: return '財會';
+    case 'HM_SUPERVISOR' as UserRole: return '健管主管';
+    case 'HM_STAFF' as UserRole: return '健管同仁';
+    case 'RADIOGRAPHER_STAFF' as UserRole: return '放射師';
+    default: return '放射師';
+  }
+};
+

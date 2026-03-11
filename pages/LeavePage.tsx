@@ -754,14 +754,14 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
                       {isSwap && <ArrowRightLeft size={12} className="text-gray-400" />}
                       {targetUser && <span className="text-blue-600">{targetUser.name}</span>}
                     </div>
-                    <div className={`text-xs font-medium flex items-center gap-1 mt-0.5 px-2 py-0.5 rounded border w-fit ${getTypeStyles(leave.type)}`}>
+                    <div className={`text-xs font-medium flex items-center gap-1 mt-0.5 px-2 py-0.5 rounded-lg border w-fit ${getTypeStyles(leave.type)}`}>
                       {getTypeIcon(leave.type)}
                       <span>{leave.type}</span>
                       {leave.roleToSwap && <span className="text-gray-600 font-normal">({leave.roleToSwap})</span>}
                     </div>
                   </div>
                 </div>
-                <div className={`px-2 py-0.5 rounded text-[10px] font-bold border tracking-wide ${getStatusColor(leave.status)} ${isProcessed ? 'scale-90 origin-right' : ''} `}>
+                <div className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border tracking-wide ${getStatusColor(leave.status)} ${isProcessed ? 'scale-90 origin-right' : ''} `}>
                   {leave.status}
                 </div>
               </div>
@@ -804,7 +804,7 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
                           const conflictUserName = u?.name || '未知同仁';
 
                           return (
-                            <li key={c.id} className="bg-white p-2 rounded border border-red-100 shadow-sm">
+                            <li key={c.id} className="bg-white p-2 rounded-lg border border-red-100 shadow-sm">
                               {/* Resolved Dates */}
                               {resolved.length > 0 && (
                                 <div className="flex items-start gap-1 text-green-600 mb-1">
@@ -857,7 +857,7 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
                             </>
                           )}
                         </div>
-                        <span className="text-teal-600 bg-white px-1.5 py-0.5 rounded border border-teal-100 shadow-sm">{days} 天</span>
+                        <span className="text-teal-600 bg-white px-1.5 py-0.5 rounded-lg border border-teal-100 shadow-sm">{days} 天</span>
                       </div>
 
                       {/* Show Return Date for Swap Shift */}
@@ -867,7 +867,7 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
                             <ArrowRightLeft size={10} />
                             <span>換假: {leave.returnDate} <span className="text-xs opacity-75">{getWeekday(leave.returnDate)}</span></span>
                           </div>
-                          <span className="text-[10px] bg-white px-1 py-0.5 rounded border border-indigo-100">互換</span>
+                          <span className="text-[10px] bg-white px-1 py-0.5 rounded-lg border border-indigo-100">互換</span>
                         </div>
                       )}
                     </div>
@@ -885,7 +885,7 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
                     <div className="flex items-center gap-2">
                       <span>{leave.startDate}</span>
                       {leave.startDate !== leave.endDate && <span>~ {leave.endDate}</span>}
-                      <span className="bg-slate-100 px-1 rounded text-slate-500">{days}天</span>
+                      <span className="bg-slate-100 px-1 rounded-lg text-slate-500">{days}天</span>
                     </div>
                     {leave.returnDate && (
                       <div className="flex items-center gap-1 text-indigo-400">
