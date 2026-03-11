@@ -2733,6 +2733,20 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                                 }
                                                             }
 
+                                                            // Custom sort for GI station
+                                                            if (stationName === 'GI') {
+                                                                displayShifts.sort((a, b) => {
+                                                                    const getWeight = (st: string) => {
+                                                                        const s = st.toUpperCase();
+                                                                        if (s === 'GI1') return 1;
+                                                                        if (s === 'GI2') return 2;
+                                                                        if (s === 'GI') return 3;
+                                                                        return 4;
+                                                                    };
+                                                                    return getWeight(a.scheduled_station || a.station || '') - getWeight(b.scheduled_station || b.station || '');
+                                                                });
+                                                            }
+
                                                             const isToday = date === toLocalISOString(new Date());
 
                                                             // Background color logic
@@ -2997,6 +3011,21 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                     suffix = '(大直)';
                                                 }
                                             }
+
+                                            // Custom sort for GI station
+                                            if (st === 'GI') {
+                                                displayShifts.sort((a, b) => {
+                                                    const getWeight = (stationStr: string) => {
+                                                        const s = stationStr.toUpperCase();
+                                                        if (s === 'GI1') return 1;
+                                                        if (s === 'GI2') return 2;
+                                                        if (s === 'GI') return 3;
+                                                        return 4;
+                                                    };
+                                                    return getWeight(a.scheduled_station || a.station || '') - getWeight(b.scheduled_station || b.station || '');
+                                                });
+                                            }
+
                                                                                         // Get Requirement (sum up if GI)
                                              const dayOfWeek = currentDate.getDay();
                                              let req = 0;
@@ -3323,16 +3352,16 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
 
                         {/* 2. Doctor Workload Analysis */}
                         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                            <h3 className="text-sm font-bold bg-slate-50 px-4 py-2 border-b border-gray-100 flex items-center gap-2 text-slate-700">
-                                <Briefcase size={16} className="text-indigo-600"/> 醫師排班統計 (班數)
+                            <h3 className="text-base font-bold bg-slate-50 px-4 py-3 border-b border-gray-100 flex items-center gap-2 text-slate-700">
+                                <Briefcase size={18} className="text-indigo-600"/> 醫師排班統計 (班數)
                             </h3>
                             <div className="overflow-x-auto">
-                                <table className="w-full text-xs">
+                                <table className="w-full text-sm">
                                     <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-200">
                                         <tr>
-                                            <th className="px-3 py-2 text-left sticky left-0 bg-slate-50 z-10 border-r border-slate-200 shadow-[2px_0_5px_rgba(0,0,0,0.05)] w-32">醫師姓名</th>
-                                            <th className="px-2 py-2 text-center bg-teal-50 text-teal-700 border-r border-teal-100 font-extrabold w-16">週期</th>
-                                            <th className="px-2 py-2 text-center bg-indigo-50 text-indigo-700 border-r border-indigo-100 font-extrabold w-16">總計</th>
+                                            <th className="px-3 py-3 text-left sticky left-0 bg-slate-50 z-10 border-r border-slate-200 shadow-[2px_0_5px_rgba(0,0,0,0.05)] w-32">醫師姓名</th>
+                                            <th className="px-2 py-3 text-center bg-teal-50 text-teal-700 border-r border-teal-100 font-extrabold w-16">週期</th>
+                                            <th className="px-2 py-3 text-center bg-indigo-50 text-indigo-700 border-r border-indigo-100 font-extrabold w-16">總計</th>
                                             {(() => {
                                                 const seen = new Set<string>();
                                                 return stations.filter(st => {
@@ -3343,10 +3372,10 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                 }).map(st => {
                                                     const displayStationName = isGIStation(st.name) ? 'GI' : st.name;
                                                     return (
-                                                        <th key={`doc-head-${displayStationName}-${st.location}`} className="px-2 py-2 text-center min-w-[60px] border-r border-gray-100 font-normal">
+                                                        <th key={`doc-head-${displayStationName}-${st.location}`} className="px-2 py-3 text-center min-w-[60px] border-r border-gray-100 font-normal">
                                                             <div className="flex flex-col items-center opacity-80">
-                                                                <span>{displayStationName}</span>
-                                                                <span className={`text-[8px] px-1 rounded-full mt-0.5 text-white ${LOCATION_COLORS[st.location]?.split(' ')[0] || 'bg-gray-400'}`}>
+                                                                <span className="font-bold">{displayStationName}</span>
+                                                                <span className={`text-[10px] px-1.5 py-0.5 rounded-full mt-0.5 text-white ${LOCATION_COLORS[st.location]?.split(' ')[0] || 'bg-gray-400'}`}>
                                                                     {st.location}
                                                                 </span>
                                                             </div>
@@ -3394,32 +3423,40 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
 
                                             const docShifts = shifts.filter(s => s.doctorId === doc.id && currentCycleRange.includes(s.date));
                                             // Only count shifts that match displayed stations AND count as actual work
-                                            const total = docShifts.filter(s => {
-                                                const stName = s.station || s.scheduled_station || '';
-                                                if (!isActualWork(stName)) return false;
-                                                return stations.some(station => {
-                                                    const displayStationName = isGIStation(station.name) ? 'GI' : station.name;
+                                            // Calculate total by summing up the logic used for individual columns
+                                            let total = 0;
+                                            const seenTotal = new Set<string>();
+                                            stations.filter(st => {
+                                                const key = `${isGIStation(st.name) ? 'GI' : st.name}-${st.location}`;
+                                                if (seenTotal.has(key)) return false;
+                                                seenTotal.add(key);
+                                                return true;
+                                            }).forEach(st => {
+                                                const displayStationName = isGIStation(st.name) ? 'GI' : st.name;
+                                                const count = docShifts.filter(s => {
+                                                    const sStation = s.scheduled_station || s.station || '';
                                                     if (displayStationName === 'GI') {
-                                                        return isGIStation(stName) && s.location === station.location;
+                                                        return isGIStation(sStation) && s.location === st.location;
                                                     }
-                                                    return (stName === station.name) && s.location === station.location;
-                                                });
-                                            }).length;
+                                                    return sStation === displayStationName && s.location === st.location;
+                                                }).length;
+                                                total += count;
+                                            });
                                             
                                             // Skip doctors with 0 shifts if list is too long? No, show all.
                                             
                                             return (
                                                 <tr key={doc.id} className="hover:bg-slate-50 transition-colors">
-                                                    <td className="px-3 py-2 text-left sticky left-0 bg-white z-10 border-r border-slate-100 font-bold text-slate-700 shadow-[2px_0_5px_rgba(0,0,0,0.05)]">
+                                                    <td className="px-3 py-3 text-left sticky left-0 bg-white z-10 border-r border-slate-100 font-bold text-slate-700 shadow-[2px_0_5px_rgba(0,0,0,0.05)] text-base">
                                                         <div className="flex flex-col">
                                                             <span>{doc.name}</span>
-                                                            {savedCycle?.memo && <span className="text-[9px] text-amber-600 font-normal leading-tight">{savedCycle.memo}</span>}
+                                                            {savedCycle?.memo && <span className="text-xs text-amber-600 font-normal leading-tight mt-0.5">{savedCycle.memo}</span>}
                                                         </div>
                                                     </td>
-                                                    <td className="px-2 py-2 text-center bg-teal-50/20 text-teal-700 text-[10px] border-r border-teal-50">
+                                                    <td className="px-2 py-3 text-center bg-teal-50/20 text-teal-700 text-xs border-r border-teal-50 whitespace-nowrap">
                                                         {savedCycle ? `${savedCycle.startDate.slice(5)}~${savedCycle.endDate.slice(5)}` : '全月'}
                                                     </td>
-                                                    <td className="px-2 py-2 text-center bg-indigo-50/30 text-indigo-700 font-bold border-r border-indigo-50">
+                                                    <td className="px-2 py-3 text-center bg-indigo-50/30 text-indigo-700 font-bold border-r border-indigo-50 text-base">
                                                         {total}
                                                     </td>
                                                     {(() => {
@@ -3440,130 +3477,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                             }).length;
                                                             
                                                             return (
-                                                                <td key={`${doc.id}-${displayStationName}-${st.location}`} className={`px-2 py-2 text-center border-r border-gray-50 ${count > 0 ? 'font-bold text-slate-700 bg-slate-50' : 'text-gray-200'}`}>
-                                                                    {count > 0 ? count : '-'}
-                                                                </td>
-                                                            );
-                                                        });
-                                                    })()}
-                                                </tr>
-                                            );
-                                        })}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-
-                        {/* 3. Technologist Workload Analysis (New) */}
-                        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mt-6">
-                            <h3 className="text-sm font-bold bg-slate-50 px-4 py-2 border-b border-gray-100 flex items-center gap-2 text-slate-700">
-                                <Users size={16} className="text-teal-600"/> 放射師排班統計 (上班天數)
-                            </h3>
-                            <div className="overflow-x-auto">
-                                <table className="w-full text-xs text-center border-collapse">
-                                    <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-200">
-                                        <tr>
-                                            <th className="px-3 py-2 text-left sticky left-0 bg-slate-50 z-10 border-r border-slate-200 shadow-[2px_0_5px_rgba(0,0,0,0.05)] w-32">放射師姓名</th>
-                                            <th className="px-2 py-2 text-center bg-teal-50 text-teal-700 border-r border-teal-100 font-extrabold w-16">週期</th>
-                                            <th className="px-2 py-2 text-center bg-indigo-50 text-indigo-700 border-r border-indigo-100 font-extrabold w-12">總天數</th>
-                                            {(() => {
-                                                const seen = new Set<string>();
-                                                return stations.filter(st => {
-                                                    const key = `${isGIStation(st.name) ? 'GI' : st.name}-${st.location}`;
-                                                    if (seen.has(key)) return false;
-                                                    seen.add(key);
-                                                    return true;
-                                                }).map(st => {
-                                                    const displayStationName = isGIStation(st.name) ? 'GI' : st.name;
-                                                    return (
-                                                        <th key={`tech-head-${displayStationName}-${st.location}`} className="px-2 py-2 text-center min-w-[50px] border-r border-gray-100 font-normal">
-                                                            <div className="flex flex-col items-center opacity-80">
-                                                                <span>{displayStationName}</span>
-                                                                <span className={`text-[8px] px-1 rounded-full mt-0.5 text-white ${LOCATION_COLORS[st.location]?.split(' ')[0] || 'bg-gray-400'}`}>
-                                                                    {st.location}
-                                                                </span>
-                                                            </div>
-                                                        </th>
-                                                    );
-                                                });
-                                            })()}
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-gray-100">
-                                        {radiographers.map(user => {
-                                            const monthKey = currentCycle && currentCycle.name.match(/^\d{4}\/\d{2}$/) 
-                                                ? currentCycle.name.replace('/', '-') 
-                                                : (currentCycle ? currentCycle.startDate.slice(0, 7) : `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`);
-                                            
-                                            const savedCycle = user.personalCycles?.[monthKey];
-                                            
-                                            let currentCycleRange = dateRange;
-                                            
-                                            if (savedCycle) {
-                                                const start = savedCycle.startDate;
-                                                const end = savedCycle.endDate;
-                                                const tempRange = [];
-                                                const [sY, sM, sD] = start.split('-').map(Number);
-                                                const [eY, eM, eD] = end.split('-').map(Number);
-                                                const startDate = new Date(sY, sM - 1, sD);
-                                                const endDate = new Date(eY, eM - 1, eD);
-                                                
-                                                for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
-                                                    tempRange.push(toLocalISOString(d));
-                                                }
-                                                currentCycleRange = tempRange;
-                                            }
-
-                                            const isActualWork = (station?: string) => {
-                                                if (!station) return false;
-                                                const sNormalized = station.trim().toUpperCase();
-                                                if (sNormalized === '' || sNormalized === '未分配' || sNormalized === 'UNASSIGNED') return false;
-                                                if (sNormalized === '休假' || sNormalized.startsWith('休')) return false;
-                                                if (sNormalized === 'X' || sNormalized === 'SYSTEMOFF') return false;
-                                                return true;
-                                            };
-
-                                            const userShifts = (staffShifts as any[]).filter(s => s.userId === user.id && currentCycleRange.includes(s.date));
-                                            
-                                            const totalWorkDays = currentCycleRange.filter(date => {
-                                                const shift = userShifts.find(s => s.date === date);
-                                                if (shift) return isActualWork(shift.station);
-                                                return db.getUserStatusOnDate(user.id, date) === 'WORK';
-                                            }).length;
-
-                                            return (
-                                                <tr key={user.id} className="hover:bg-slate-50 transition-colors">
-                                                    <td className="px-3 py-2 text-left sticky left-0 bg-white z-10 border-r border-slate-200 font-bold text-slate-700 shadow-[2px_0_5px_rgba(0,0,0,0.05)]">
-                                                        <div className="flex flex-col">
-                                                            <span>{user.name}</span>
-                                                            {savedCycle?.memo && <span className="text-[9px] text-amber-600 font-normal leading-tight">{savedCycle.memo}</span>}
-                                                        </div>
-                                                    </td>
-                                                    <td className={`px-2 py-2 text-center text-[10px] border-r ${savedCycle ? 'bg-amber-50 text-amber-700 border-amber-100' : 'bg-teal-50/20 text-teal-700 border-teal-50'}`}>
-                                                        {savedCycle ? `${savedCycle.startDate.slice(5)}~${savedCycle.endDate.slice(5)}` : (currentCycle ? '本週期' : '全月')}
-                                                    </td>
-                                                    <td className={`px-2 py-2 text-center font-bold border-r ${savedCycle ? 'bg-amber-50/50 text-amber-800 border-amber-100' : 'bg-indigo-50/30 text-indigo-700 border-indigo-50'}`}>
-                                                        {totalWorkDays}
-                                                    </td>
-                                                    {(() => {
-                                                        const seen = new Set<string>();
-                                                        return stations.filter(st => {
-                                                            const key = `${isGIStation(st.name) ? 'GI' : st.name}-${st.location}`;
-                                                            if (seen.has(key)) return false;
-                                                            seen.add(key);
-                                                            return true;
-                                                        }).map(st => {
-                                                            const displayStationName = isGIStation(st.name) ? 'GI' : st.name;
-                                                            const count = userShifts.filter(s => {
-                                                                const sStation = s.station || '';
-                                                                if (displayStationName === 'GI') {
-                                                                    return isGIStation(sStation) && s.location === st.location;
-                                                                }
-                                                                return sStation === displayStationName && s.location === st.location;
-                                                            }).length;
-                                                            
-                                                            return (
-                                                                <td key={`${user.id}-${displayStationName}-${st.location}`} className={`px-2 py-2 text-center border-r border-gray-50 ${count > 0 ? 'font-bold text-slate-700 bg-slate-50' : 'text-gray-200'}`}>
+                                                                <td key={`${doc.id}-${displayStationName}-${st.location}`} className={`px-2 py-3 text-center border-r border-gray-50 text-base ${count > 0 ? 'font-bold text-slate-700 bg-slate-50/50' : 'text-gray-300'}`}>
                                                                     {count > 0 ? count : '-'}
                                                                 </td>
                                                             );
