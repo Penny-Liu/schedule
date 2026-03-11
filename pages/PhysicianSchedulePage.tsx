@@ -1937,7 +1937,14 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                         className="bg-transparent text-amber-800 font-bold outline-none cursor-pointer"
                                         title="快排崗位"
                                     >
-                                        {Array.from(new Set(stations.map(s => s.name))).map(name => (
+                                        {Array.from(new Set(stations.map(s => s.name))).sort((a, b) => {
+                                            const order = ['影像', '遠班', '遠距', '支援', 'GI1', 'GI2', 'GI', '麻醉', '行政', '耳鼻喉科', '眼科', '婦科'];
+                                            let idxA = order.indexOf(a);
+                                            let idxB = order.indexOf(b);
+                                            if (idxA === -1) idxA = 999;
+                                            if (idxB === -1) idxB = 999;
+                                            return idxA - idxB;
+                                        }).map(name => (
                                             <option key={name} value={name}>{name}</option>
                                         ))}
                                     </select>
@@ -3678,7 +3685,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                 
                                 {/* Quick Task Buttons */}
                                 <div className="flex gap-2 flex-wrap">
-                                    {['晚班', '電台', '行政', '董事會'].map(taskName => (
+                                    {['晚班', '電台', '行政', '子抹','董事會'].map(taskName => (
                                         <button
                                             key={taskName}
                                             type="button"

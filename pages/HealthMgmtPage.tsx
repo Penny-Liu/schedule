@@ -65,8 +65,16 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
       setShifts(db.getHealthMgmtShifts());
       setHmStations(db.getHealthMgmtStations());
       setHmTasks(db.getHealthMgmtTasks());
-      setHmCycles(db.getHealthMgmtCycles());
+      const cycles = db.getHealthMgmtCycles();
+      setHmCycles(cycles);
       setHolidays(db.getHolidays());
+
+      // Auto-select current cycle if not already set or if it's 'month'
+      const todayStr = toLocalISOString(new Date());
+      const currentCycle = cycles.find(c => todayStr >= c.startDate && todayStr <= c.endDate);
+      if (currentCycle) {
+        setSelectedCycleId(currentCycle.id);
+      }
     };
     loadData();
     const unsubscribe = db.subscribe(loadData);
@@ -203,6 +211,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
 
           const dateCounts: Record<string, number> = {};
           hmStations.forEach(st => dateCounts[st] = 0);
+          const roleCounts: Record<string, number> = { '主控': 0, '輔控': 0, '晚班': 0 };
 
           dateRange.forEach(date => {
               const shift = shifts.find(s => s.userId === staff.id && s.date === date);
@@ -222,6 +231,12 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                   if (dateCounts[stationLabel] !== undefined) {
                       dateCounts[stationLabel]++;
                   }
+
+                  // Count specific roles in both station and task
+                  const combinedText = `${shift.station} ${shift.task || ''}`;
+                  if (combinedText.includes('主控')) roleCounts['主控']++;
+                  if (combinedText.includes('輔控')) roleCounts['輔控']++;
+                  if (combinedText.includes('晚班')) roleCounts['晚班']++;
               }
           });
 
@@ -229,6 +244,10 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
           row['平日'] = weekdayWorkDays;
           row['假日班'] = holidayWorkDays;
           
+          Object.entries(roleCounts).forEach(([role, count]) => {
+              row[role] = count;
+          });
+
           hmStations.forEach(st => {
               row[st] = dateCounts[st];
           });
@@ -238,8 +257,12 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
 
       const ws = utils.json_to_sheet(data);
       const wb = utils.book_new();
+      
+      // Add range info as a comment or header row? User wants to "know" it.
+      // Let's enhance the filename and add a row at the top.
+      const rangeStr = `${dateRange[0]} ~ ${dateRange[dateRange.length - 1]} (${dateRange.length}天)`;
       utils.book_append_sheet(wb, ws, "健管排班統計");
-      writeFile(wb, `健管排班統計_${label}.xlsx`);
+      writeFile(wb, `健管排班統計_${label}_${rangeStr}.xlsx`);
   };
 
   const handleExportScheduleExcel = async () => {
@@ -300,16 +323,21 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
       const doc = new jsPDF('l', 'mm', 'a4');
       let fontName = 'helvetica';
 
-      // Font loading logic similar to PhysicianSchedulePage
+      // Font loading logic synchronized with PhysicianSchedulePage
       try {
-        const pathsToTry = ['/schedule/fonts/jf-openhuninn-2.1.ttf', '/fonts/jf-openhuninn-2.1.ttf'];
+        const pathsToTry = [
+          '/schedule/fonts/jf-openhuninn-2.1.ttf',
+          '/fonts/jf-openhuninn-2.1.ttf'
+        ];
         let response: Response | null = null;
         for (const path of pathsToTry) {
           try {
             const res = await fetch(path);
-            if (res.ok && res.headers.get('content-type')?.includes('font')) { response = res; break; }
-            // Or just check if ok and size > 0
-            if (res.ok) { response = res; break; }
+            const type = res.headers.get('content-type');
+            if (res.ok && (!type || !type.includes('text/html'))) { 
+              response = res; 
+              break; 
+            }
           } catch (e) {}
         }
 
@@ -318,13 +346,20 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
           const reader = new FileReader();
           await new Promise((resolve, reject) => {
             reader.onloadend = () => {
-              const base64 = (reader.result as string).split('base64,')[1];
-              doc.addFileToVFS('jf-openhuninn-2.1.ttf', base64);
-              doc.addFont('jf-openhuninn-2.1.ttf', 'OpenHuninn', 'normal');
-              doc.setFont('OpenHuninn');
-              fontName = 'OpenHuninn';
-              resolve(true);
+              const base64data = reader.result as string;
+              if (base64data && base64data.includes('base64,')) {
+                const content = base64data.split('base64,')[1];
+                doc.addFileToVFS('jf-openhuninn-2.1.ttf', content);
+                doc.addFont('jf-openhuninn-2.1.ttf', 'OpenHuninn', 'normal');
+                doc.addFont('jf-openhuninn-2.1.ttf', 'OpenHuninn', 'bold');
+                doc.setFont('OpenHuninn');
+                fontName = 'OpenHuninn';
+                resolve(true);
+              } else {
+                reject('Invalid data');
+              }
             };
+            reader.onerror = reject;
             reader.readAsDataURL(blob);
           });
         }
@@ -549,8 +584,8 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                 </button>
               </div>
 
-              {hmCycles.length > 0 && (
-                <div className="flex items-center gap-2 bg-white p-1 rounded-xl shadow-sm border px-3">
+              <div className="flex flex-col md:flex-row md:items-center gap-2">
+                <div className="flex items-center gap-2 bg-white p-1 rounded-xl shadow-sm border px-3 h-[42px]">
                   <Calendar size={16} className="text-teal-600" />
                   <select 
                     className="text-sm font-bold text-gray-700 bg-transparent border-none outline-none focus:ring-0 cursor-pointer"
@@ -565,7 +600,17 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                     </optgroup>
                   </select>
                 </div>
-              )}
+
+                {/* Cycle Meta Info */}
+                <div className="flex items-center gap-2 px-4 py-2 bg-emerald-50 border border-emerald-100 rounded-xl h-[42px]">
+                  <Search size={14} className="text-emerald-500" />
+                  <span className="text-xs font-medium text-emerald-800 whitespace-nowrap">
+                    {dateRange[0]} ~ {dateRange[dateRange.length - 1]} 
+                    <span className="mx-2 text-emerald-300">|</span>
+                    共 {dateRange.length} 天
+                  </span>
+                </div>
+              </div>
             </div>
 
             {/* Quick Schedule Toolbar */}
@@ -644,7 +689,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
             <table className="text-sm border-collapse w-auto">
               <thead className="relative z-50">
                 <tr className="bg-slate-50 backdrop-blur border-b border-slate-200">
-                  <th className="p-3 text-left font-bold text-slate-600 w-32 sticky left-0 top-0 bg-slate-50 backdrop-blur z-50 border-r border-slate-200 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">人員</th>
+                  <th className="p-3 text-left font-bold text-slate-600 w-32 sticky left-0 top-0 bg-slate-50 backdrop-blur z-50 border-r border-slate-200 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">人員 (天數)</th>
                   {dateRange.map(date => {
                       const d = new Date(date);
                       const isWeekend = d.getDay() === 0 || d.getDay() === 6;
@@ -670,6 +715,9 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                     <td className="p-0 border-r border-slate-200 sticky left-0 bg-white z-30 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
                         <div className="p-3 font-bold text-slate-800 flex items-center min-w-[128px]">
                             {staff.name}
+                            <span className="ml-2 text-xs text-gray-400 font-normal whitespace-nowrap">
+                                ({shifts.filter(s => s.userId === staff.id && dateRange.includes(s.date) && (s.station || s.task)).length})
+                            </span>
                         </div>
                     </td>
                     {dateRange.map(date => {
@@ -847,7 +895,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
             <div className="p-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
                 <div className="flex items-center gap-4">
                     <h3 className="font-bold text-gray-700">
-                        建管排班統計 ({selectedCycleId === 'month' ? toLocalISOString(currentDate).substring(0, 7) : currentCycle?.name})
+                        健管排班統計 ({selectedCycleId === 'month' ? toLocalISOString(currentDate).substring(0, 7) : currentCycle?.name})
                     </h3>
                     {selectedCycleId === 'month' && (
                         <div className="flex items-center gap-1 bg-white border rounded-lg px-2 py-1">
