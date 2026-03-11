@@ -2069,41 +2069,65 @@ BMD :{{bmd}}
     async assignDoctor(doctorId: string, date: string, station: string, workTime?: string, note?: string, location?: string, task?: string) {
         // Remove existing shift for this doctor on this date if any
         let shift = this.doctorShifts.find(s => s.doctorId === doctorId && s.date === date);
+        const oldStation = shift ? shift.station : undefined;
+        
+        let targetId: string;
         
         if (shift) {
+            targetId = shift.id;
             shift.station = station;
             shift.workTime = workTime;
             shift.note = note;
             shift.location = location;
             shift.task = task;
-            try {
-                // Keep scheduled_station as is
+        } else {
+            targetId = generateUUID();
+            shift = { id: targetId, doctorId, date, station, workTime, note, location, task };
+            this.doctorShifts.push(shift);
+        }
+        
+        try {
+            // Check for existing records in DB to prevent duplicates on partial fetch
+            const { data: existing, error: fetchError } = await supabase
+                .from('doctor_shifts')
+                .select('id')
+                .eq('doctor_id', doctorId)
+                .eq('date', date);
+                
+            if (fetchError) throw fetchError;
+            
+            if (existing && existing.length > 0) {
+                targetId = existing[0].id;
+                shift.id = targetId; // Sync local ID
+                
                 await supabase.from('doctor_shifts')
                     .update({ station, work_time: workTime, note, location, task })
-                    .eq('id', shift.id);
-            } catch(e) { console.warn('Supabase update failed, using local'); }
-        } else {
-            shift = { id: generateUUID(), doctorId, date, station, workTime, note, location, task };
-            this.doctorShifts.push(shift);
-            try {
+                    .eq('id', targetId);
+                    
+                // Clean up duplicates
+                if (existing.length > 1) {
+                    const idsToDelete = existing.slice(1).map(e => e.id);
+                    await supabase.from('doctor_shifts').delete().in('id', idsToDelete);
+                }
+            } else {
                 await supabase.from('doctor_shifts').insert({ 
-                    id: shift.id,
-                    doctor_id: shift.doctorId, // Map camelCase to snake_case for DB
-                    date: shift.date,
-                    station: shift.station,
-                    work_time: shift.workTime,
-                    note: shift.note,
-                    location: shift.location,
-                    task: shift.task
+                    id: targetId,
+                    doctor_id: doctorId,
+                    date: date,
+                    station: station,
+                    work_time: workTime,
+                    note: note,
+                    location: location,
+                    task: task
                 });
-            } catch(e) { console.warn('Supabase insert failed, using local'); }
-        }
+            }
+        } catch(e) { console.warn('Supabase operation failed, using local', e); }
         
         // Auto-pair Gynecology + Explanation
         await this.autoPairGynecologyWithExplanation(doctorId, date, station);
         
         // **影像雲同步**: 若站別確實有異動，清除雲班表該醫師當日的助理與校對
-        if (shift && shift.station !== station) {
+        if (oldStation !== undefined && oldStation !== station) {
             await this.clearCloudScheduleHelpers(date, doctorId);
         }
 
@@ -2114,50 +2138,25 @@ BMD :{{bmd}}
     // This updates 'scheduled_station' column, leaving 'station' (Manpower Allocation) untouched if possible
     async assignDoctorSchedule(doctorId: string, date: string, scheduledStation: string, workTime?: string, note?: string, location?: string, task?: string) {
         let shift = this.doctorShifts.find(s => s.doctorId === doctorId && s.date === date);
+        const oldScheduledStation = shift ? shift.scheduled_station : undefined;
         
+        let targetId: string;
+
         if (shift) {
+            targetId = shift.id;
             shift.scheduled_station = scheduledStation;
             // Also update other metadata if provided
             if (workTime !== undefined) shift.workTime = workTime;
             if (note !== undefined) shift.note = note;
             if (location !== undefined) shift.location = location;
             if (task !== undefined) shift.task = task;
-
-            try {
-                // **影像雲同步**: 若排定站別確實有異動，清除雲班表該醫師當日的助理與校對
-                if (shift.scheduled_station !== scheduledStation) {
-                    await this.clearCloudScheduleHelpers(date, doctorId);
-                }
-
-                const { error } = await supabase.from('doctor_shifts')
-                    .update({ 
-                        scheduled_station: scheduledStation, 
-                        work_time: workTime, 
-                        note, 
-                        location, 
-                        task 
-                    })
-                    .eq('id', shift.id);
-                
-                if (error) {
-                    console.error('[Store] Update Error:', error);
-                    alert(`儲存失敗: ${error.message}\n請確認已執行 SQL 腳本 (add_scheduled_station_column.sql)`);
-                }
-            } catch(e) { console.warn('Supabase update failed, using local', e); }
         } else {
-            // New shift from Schedule View
-            // Default 'station' (Allocation) to something? Or leave empty?
-            // If empty, it won't show in Dashboard (which is Good/Expected until assigned)
-            // Or default to 'Unassigned'? 
-            // Let's set station to 'Unassigned' or similar if not provided, to avoid DB constraint if any
-            // Assuming 'station' is NOT NULL in DB? Schema check? Usually users make it text.
-            // Let's assume we can set it to a placeholder if new.
-            
+            targetId = generateUUID();
             shift = { 
-                id: generateUUID(), 
+                id: targetId, 
                 doctorId, 
                 date, 
-                station: '未分配', // Default allocation
+                station: '未分配', 
                 scheduled_station: scheduledStation,
                 workTime, 
                 note, 
@@ -2165,26 +2164,66 @@ BMD :{{bmd}}
                 task 
             };
             this.doctorShifts.push(shift);
-            try {
-                const { error } = await supabase.from('doctor_shifts').insert({ 
-                    id: shift.id,
-                    doctor_id: shift.doctorId, 
-                    date: shift.date,
+        }
+
+        try {
+            const { data: existing, error: fetchError } = await supabase
+                .from('doctor_shifts')
+                .select('id')
+                .eq('doctor_id', doctorId)
+                .eq('date', date);
+                
+            if (fetchError) throw fetchError;
+
+            if (existing && existing.length > 0) {
+                targetId = existing[0].id;
+                shift.id = targetId; 
+
+                const dbUpdates: any = { scheduled_station: scheduledStation };
+                if (workTime !== undefined) dbUpdates.work_time = workTime;
+                if (note !== undefined) dbUpdates.note = note;
+                if (location !== undefined) dbUpdates.location = location;
+                if (task !== undefined) dbUpdates.task = task;
+
+                const { error: updateError } = await supabase.from('doctor_shifts')
+                    .update(dbUpdates)
+                    .eq('id', targetId);
+                
+                if (updateError) {
+                    console.error('[Store] Update Error:', updateError);
+                    alert(`儲存失敗: ${updateError.message}\n請確認已執行 SQL 腳本`);
+                }
+
+                if (existing.length > 1) {
+                    const idsToDelete = existing.slice(1).map(e => e.id);
+                    await supabase.from('doctor_shifts').delete().in('id', idsToDelete);
+                }
+            } else {
+                const { error: insertError } = await supabase.from('doctor_shifts').insert({ 
+                    id: targetId,
+                    doctor_id: doctorId, 
+                    date: date,
                     station: shift.station,
-                    scheduled_station: shift.scheduled_station,
-                    work_time: shift.workTime,
-                    note: shift.note,
-                    location: shift.location,
-                    task: shift.task,
+                    scheduled_station: scheduledStation,
+                    work_time: workTime,
+                    note: note,
+                    location: location,
+                    task: task,
                     is_auto_generated: false
                 }); 
                 
-                if (error) {
-                    console.error('[Store] Insert Error:', error);
-                    alert(`新增失敗: ${error.message}\n請確認已執行 SQL 腳本 (add_scheduled_station_column.sql)`);
+                if (insertError) {
+                    console.error('[Store] Insert Error:', insertError);
+                    alert(`新增失敗: ${insertError.message}\n請確認已執行 SQL 腳本`);
                 }
-            } catch(e) { console.warn('Supabase insert failed, using local', e); }
+            }
+        } catch(e) { console.warn('Supabase operation failed, using local', e); }
+
+        // **影像雲同步**: 若排定站別確實有異動，清除雲班表該醫師當日的助理與校對
+        if (oldScheduledStation !== undefined && oldScheduledStation !== scheduledStation) {
+            await this.clearCloudScheduleHelpers(date, doctorId);
         }
+
         this.notifyListeners();
     }
     

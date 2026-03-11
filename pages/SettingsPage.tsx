@@ -1604,7 +1604,7 @@ BMD :{{bmd}}
                                 <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
                                     <h3 className="font-bold text-gray-800 flex items-center gap-2">
                                         <Calendar size={16} className="text-gray-400" />
-                                        個管排班週期 (主管專用)
+                                        健管排班週期 (健管主管專用)
                                     </h3>
                                 </div>
                                 
