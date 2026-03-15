@@ -2256,6 +2256,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                             else if (stationName === '排班' && s.specialRoles.includes(SPECIAL_ROLES.SCHEDULER)) match = true;
                                             else if (stationName === '大直') {
                                                 if (s.station?.includes('遠') && s.specialRoles.includes(SPECIAL_ROLES.DAZHI_SUPPORT)) match = true;
+                                                if (s.station === '大直' || s.station?.includes('支援')) match = true; // Added missing direct Dazhi assignments
                                             }
                                             else if (s.station === stationName) match = true;
 

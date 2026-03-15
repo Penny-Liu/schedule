@@ -145,6 +145,7 @@ export interface HealthMgmtShift {
     date: string;
     station: string;
     task?: string; // New: Task assignment (主控/輔控/etc)
+    location?: string; // New: Work location (北投/大直)
     specialRoles?: string[];
 }
 

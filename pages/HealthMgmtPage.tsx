@@ -39,15 +39,19 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
   // Inline Popup State
   const [selectedCell, setSelectedCell] = useState<{ userId: string; date: string } | null>(null);
   const [editingShiftTime, setEditingShiftTime] = useState('');
-  const [editingShiftTask, setEditingShiftTask] = useState(''); // This will map to 'station' (H, G, etc)
-  const [editingShiftSubTask, setEditingShiftSubTask] = useState(''); // This will map to 'task' (主控, 輔控, etc)
+  const [editingShiftTask, setEditingShiftTask] = useState(''); // This will map to 'station' (崗位)
+  const [editingShiftSubTask, setEditingShiftSubTask] = useState(''); // This will map to 'task' (任務)
+  const [editingShiftLocation, setEditingShiftLocation] = useState(''); // New state for 'location'
   const [editingShiftCustomTask, setEditingShiftCustomTask] = useState('');
 
   // Quick Schedule State
   const [isQuickScheduleMode, setIsQuickScheduleMode] = useState(false);
   const [quickScheduleStation, setQuickScheduleStation] = useState('');
   const [quickScheduleTask, setQuickScheduleTask] = useState('');
+  const [quickScheduleLocation, setQuickScheduleLocation] = useState('');
   const [selectedCycleId, setSelectedCycleId] = useState<string>('month');
+
+  const LOCATIONS = ['北投', '大直'];
 
   const isReadOnly = (currentUser.role === UserRole.VIEWER || currentUser.role === UserRole.RADIOGRAPHER_STAFF) && !currentUser.permissions?.includes(PERMISSIONS.EDIT_HEALTH_MGMT);
 
@@ -110,24 +114,25 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
     return dates;
   }, [currentDate, selectedCycleId, currentCycle]);
 
-  const handleUpdateShift = async (userId: string, date: string, station: string, task?: string) => {
+  const handleUpdateShift = async (userId: string, date: string, station: string, task?: string, location?: string) => {
     if (isReadOnly) return;
     try {
         const existing = shifts.find(s => s.userId === userId && s.date === date);
         
         if (existing) {
-            if (!station && !task) {
+            if (!station && !task && !location) {
                 await db.deleteHealthMgmtShift(userId, date);
             } else {
-                await db.upsertHealthMgmtShift({ ...existing, station: station || '', task });
+                await db.upsertHealthMgmtShift({ ...existing, station: station || '', task, location });
             }
-        } else if (station || task) {
+        } else if (station || task || location) {
             const newShift: HealthMgmtShift = {
                 id: generateUUID(),
                 userId,
                 date,
                 station: station || '',
-                task
+                task,
+                location
             };
             await db.upsertHealthMgmtShift(newShift);
         }
@@ -143,8 +148,8 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
       try {
           if (isQuickScheduleMode) {
               // Quick apply
-              // Use quickScheduleStation or quickScheduleTask
-              await handleUpdateShift(userId, date, quickScheduleStation, quickScheduleTask || undefined);
+              // Use quickScheduleStation or quickScheduleTask or quickScheduleLocation
+              await handleUpdateShift(userId, date, quickScheduleStation, quickScheduleTask || undefined, quickScheduleLocation || undefined);
           } else {
               // Open Inline Popup
               setSelectedCell({ userId, date });
@@ -165,10 +170,12 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                   setEditingShiftTask('');
               }
               setEditingShiftSubTask(existing.task || ''); // This is 'task' (任務)
+              setEditingShiftLocation(existing.location || ''); // Load location
           } else {
               setEditingShiftTime('');
               setEditingShiftTask('');
               setEditingShiftSubTask('');
+              setEditingShiftLocation('');
           }
       }
     } catch (err) {
@@ -188,7 +195,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
 
           const finalTask = editingShiftCustomTask || editingShiftSubTask;
 
-          await handleUpdateShift(selectedCell.userId, selectedCell.date, finalStation, finalTask || undefined);
+          await handleUpdateShift(selectedCell.userId, selectedCell.date, finalStation, finalTask || undefined, editingShiftLocation || undefined);
           setSelectedCell(null);
           setEditingShiftCustomTask('');
       } catch (err) {
@@ -667,6 +674,21 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                                     </button>
                                 ))}
                             </div>
+                            <div className="flex items-center gap-1">
+                                <span className="text-[10px] text-gray-400 font-bold mr-2 whitespace-nowrap">地點：</span>
+                                {LOCATIONS.map(loc => (
+                                    <button
+                                        key={loc}
+                                        onClick={() => setQuickScheduleLocation(loc === quickScheduleLocation ? '' : loc)}
+                                        className={"px-2 py-0.5 rounded text-[10px] font-bold transition-colors border whitespace-nowrap " + (quickScheduleLocation === loc 
+                                                ? 'bg-slate-800 text-white border-slate-900'
+                                                : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                                        )}
+                                    >
+                                        {loc}
+                                    </button>
+                                ))}
+                            </div>
                         </div>
                     )}
                 </div>
@@ -747,7 +769,8 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                         if (isQuickScheduleMode) {
                             cellBg = (quickScheduleStation || quickScheduleTask) ? 'hover:bg-indigo-50' : 'hover:bg-red-50';
                         } else if (hasContent) {
-                            if (displayStation.includes('行政')) cellBg = 'bg-white hover:bg-gray-50';
+                            if (shift.location === '大直') cellBg = 'bg-red-50 hover:bg-red-100';
+                            else if (displayStation.includes('行政')) cellBg = 'bg-white hover:bg-gray-50';
                             else if (displayTask.includes('主控') || displayStation.includes('主控')) cellBg = 'bg-teal-100 hover:bg-teal-200';
                             else if (displayTask.includes('排班') || displayStation.includes('排班')) cellBg = 'bg-blue-100 hover:bg-blue-200';
                             else if (displayTask.includes('晚班') || displayStation.includes('晚班')) cellBg = 'bg-[#D7CCC8] hover:bg-[#BCAAA4]';
@@ -764,12 +787,17 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                              {hasContent ? (
                                 <div className="h-full w-full flex flex-col items-center justify-center p-0 overflow-hidden">
                                      <div className="flex flex-col items-center justify-center space-y-0.5 w-full" style={{ transform: 'scale(0.95)', transformOrigin: 'center center' }}>
-                                         <span className={"font-bold block text-sm leading-tight text-center " + (displayTask.includes('晚班') || displayTask.includes('主控') ? 'text-teal-800' : 'text-slate-700')}>
+                                         <span className={"font-bold block text-sm leading-tight text-center " + (shift.location === '大直' ? 'text-red-700' : (displayTask.includes('晚班') || displayTask.includes('主控') ? 'text-teal-800' : 'text-slate-700'))}>
                                              {displayStation}
                                          </span>
                                          {displayTask && (
-                                             <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-1 rounded whitespace-nowrap">
+                                             <span className={"text-[10px] font-bold px-1 rounded whitespace-nowrap " + (shift.location === '大直' ? 'text-red-800 bg-red-100' : 'text-indigo-600 bg-indigo-50')}>
                                                  {displayTask}
+                                             </span>
+                                         )}
+                                         {shift.location && (
+                                             <span className={"text-[10px] font-bold px-1 rounded whitespace-nowrap mt-0.5 " + (shift.location === '大直' ? 'text-white bg-red-500' : 'text-slate-600 bg-slate-200/50')}>
+                                                 {shift.location}
                                              </span>
                                          )}
                                          {time && (
@@ -853,6 +881,24 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                               className={"px-3 py-1.5 rounded-lg text-xs font-bold border transition-all " + (editingShiftSubTask === tk ? 'bg-indigo-500 text-white border-indigo-600 shadow-sm' : 'bg-slate-50 text-gray-600 border-gray-200 hover:border-indigo-300 hover:bg-white')}
                           >
                               {tk}
+                          </button>
+                      ))}
+                  </div>
+              </div>
+
+              <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-gray-500 uppercase flex justify-between">
+                      <span>地點標記 (Location)</span>
+                      {editingShiftLocation && <span className="text-indigo-600 cursor-pointer hover:underline" onClick={() => setEditingShiftLocation('')}>清除</span>}
+                  </label>
+                  <div className="flex flex-wrap gap-1.5 p-1 max-h-[100px] overflow-y-auto">
+                      {LOCATIONS.map(loc => (
+                          <button
+                              key={loc}
+                              onClick={() => setEditingShiftLocation(loc)}
+                              className={"px-3 py-1.5 rounded-lg text-xs font-bold border transition-all " + (editingShiftLocation === loc ? 'bg-slate-800 text-white border-slate-900 shadow-sm' : 'bg-slate-50 text-gray-600 border-gray-200 hover:border-slate-400 hover:bg-white')}
+                          >
+                              {loc}
                           </button>
                       ))}
                   </div>

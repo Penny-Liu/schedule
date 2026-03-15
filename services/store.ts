@@ -314,6 +314,17 @@ class Store {
                 this.healthMgmtShifts = hmShiftsRes.data.map((s: any) => {
                     const mapped = { ...s };
                     this.mapFromDbFields(mapped);
+                    // Unpack location from task if present
+                    let task = mapped.task || '';
+                    let location = undefined;
+                    if (task.includes('@@')) {
+                        const parts = task.split('@@');
+                        task = parts[0];
+                        location = parts[1];
+                    }
+                    if (task === '') task = undefined;
+                    mapped.task = task;
+                    mapped.location = location;
                     return mapped;
                 });
             }
@@ -612,6 +623,18 @@ BMD :{{bmd}}
         if (record.id) this.mapFromDbFields(record);
 
         if (eventType === 'INSERT' || eventType === 'UPDATE') {
+            // Unpack location
+            let task = record.task || '';
+            let location = undefined;
+            if (task.includes('@@')) {
+                const parts = task.split('@@');
+                task = parts[0];
+                location = parts[1];
+            }
+            if (task === '') task = undefined;
+            record.task = task;
+            record.location = location;
+
             const index = this.healthMgmtShifts.findIndex(s => s.id === record.id);
             if (index !== -1) {
                 this.healthMgmtShifts[index] = record as HealthMgmtShift;
@@ -1214,10 +1237,13 @@ BMD :{{bmd}}
         // 2. Remote sync
         try {
             // Prepare DB record with explicit mapping
+            // Pack location into task
+            const packedTask = shift.location ? `${shift.task || ''}@@${shift.location}` : (shift.task || null);
+
             const dbRecord: any = {
                 date: shift.date,
                 station: shift.station || '',
-                task: shift.task || null,
+                task: packedTask,
                 userId: shift.userId // Supabase table uses 'userId' (CamelCase) for this table specifically
             };
 
