@@ -2766,6 +2766,7 @@ BMD :{{bmd}}
 
             const allWorkingUsers = this.users.filter(user => {
                 if (user.isActive === false) return false; // Skip resigned users
+                if (user.isPartTime) return false; // Skip part-time staff for auto-scheduling
                 const status = this.getUserStatusOnDate(user.id, dateStr);
                 if (status !== 'WORK') return false;
                 const existingShift = this.shifts.find(s => s.userId === user.id && s.date === dateStr);

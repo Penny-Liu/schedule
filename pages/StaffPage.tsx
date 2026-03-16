@@ -508,7 +508,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                     )}
                   </select>
                 </div>
-                {(formData.role === UserRole.RADIOGRAPHER_STAFF || formData.role === UserRole.SUPERVISOR || formData.role === UserRole.SYSTEM_ADMIN) && (
+                {(formData.isRadiographer || formData.role === UserRole.SYSTEM_ADMIN) && (
                   <div>
                     <label className="text-xs font-semibold text-gray-500 mb-1 block">組別</label>
                     <select
@@ -524,7 +524,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                   </div>
                 )}
                 {/* Group D index selector */}
-                {formData.groupId === StaffGroup.GROUP_D && (formData.role === UserRole.RADIOGRAPHER_STAFF || formData.role === UserRole.SUPERVISOR || formData.role === UserRole.SYSTEM_ADMIN) && (
+                {formData.groupId === StaffGroup.GROUP_D && (formData.isRadiographer || formData.role === UserRole.SYSTEM_ADMIN) && (
                   <div>
                     <label className="text-xs font-semibold text-gray-500 mb-1 block">
                       D組輪休順序 (Index 0–3)
@@ -572,8 +572,8 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                 </div>
               </div>
 
-              {/* Capabilities Selection (Only for Radiographer related roles) */}
-              {(formData.role === UserRole.RADIOGRAPHER_STAFF || formData.role === UserRole.SUPERVISOR || formData.role === UserRole.SYSTEM_ADMIN) && (
+              {/* Capabilities Selection (Only for Radiographers) */}
+              {(formData.isRadiographer || formData.role === UserRole.SYSTEM_ADMIN) && (
                 <div>
                   <div className="flex justify-between items-center mb-2">
                     <label className="text-xs font-semibold text-gray-500 block">技能與特殊任務資格</label>
