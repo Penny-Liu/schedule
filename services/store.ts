@@ -117,26 +117,31 @@ class Store {
         this.listeners.forEach(l => l());
     }
 
-    // Helper: Fetch all shifts with pagination to bypass 1000-row limit
-    private async fetchAllShifts() {
-        let allShifts: any[] = [];
+    private async fetchPaginated(tableName: string, queryModifier?: (query: any) => any) {
+        let allData: any[] = [];
         let page = 0;
         const pageSize = 1000;
         let hasMore = true;
         let lastError = null;
 
         while (hasMore) {
-            const { data, error } = await supabase
-                .from('shifts')
+            let query = supabase
+                .from(tableName)
                 .select('*')
                 .range(page * pageSize, (page + 1) * pageSize - 1);
+            
+            if (queryModifier) {
+                query = queryModifier(query);
+            }
+
+            const { data, error } = await query;
 
             if (error) {
-                console.error('Error fetching shifts page:', page, error);
+                console.error(`Error fetching ${tableName} page ${page}:`, error);
                 lastError = error;
-                hasMore = false; // Stop on error
+                hasMore = false;
             } else if (data) {
-                allShifts = [...allShifts, ...data];
+                allData = [...allData, ...data];
                 if (data.length < pageSize) {
                     hasMore = false;
                 } else {
@@ -147,74 +152,23 @@ class Store {
             }
         }
 
-        console.log(`[Pagination] Total shifts fetched: ${allShifts.length}`);
-        return { data: allShifts, error: lastError };
+        console.log(`[Pagination] Total ${tableName} fetched: ${allData.length}`);
+        return { data: allData, error: lastError };
+    }
+
+    // Helper: Fetch all shifts with pagination to bypass 1000-row limit
+    private async fetchAllShifts() {
+        return this.fetchPaginated('shifts');
     }
 
     private async fetchAllHealthMgmtShifts() {
-        let allShifts: any[] = [];
-        let page = 0;
-        const pageSize = 1000;
-        let hasMore = true;
-        let lastError = null;
-
-        while (hasMore) {
-            const { data, error } = await supabase
-                .from('health_mgmt_shifts')
-                .select('*')
-                .range(page * pageSize, (page + 1) * pageSize - 1);
-
-            if (error) {
-                console.error('Error fetching HM shifts page:', page, error);
-                lastError = error;
-                hasMore = false;
-            } else if (data) {
-                allShifts = [...allShifts, ...data];
-                if (data.length < pageSize) {
-                    hasMore = false;
-                } else {
-                    page++;
-                }
-            } else {
-                hasMore = false;
-            }
-        }
-
-        console.log(`[Pagination] Total HM shifts fetched: ${allShifts.length}`);
-        return { data: allShifts, error: lastError };
+        return this.fetchPaginated('health_mgmt_shifts');
     }
 
     private async fetchAllDoctorShifts() {
-        let allShifts: any[] = [];
-        let page = 0;
-        const pageSize = 1000;
-        let hasMore = true;
-        let lastError = null;
-
-        while (hasMore) {
-            const { data, error } = await supabase
-                .from('doctor_shifts')
-                .select('*')
-                .range(page * pageSize, (page + 1) * pageSize - 1);
-
-            if (error) {
-                console.error('Error fetching Doctor shifts page:', page, error);
-                lastError = error;
-                hasMore = false;
-            } else {
-                if (data && data.length > 0) {
-                    allShifts = [...allShifts, ...data];
-                    if (data.length < pageSize) hasMore = false;
-                    else page++;
-                } else {
-                    hasMore = false;
-                }
-            }
-        }
-
-        console.log(`[Pagination] Total doctor shifts fetched: ${allShifts.length}`);
-        return { data: allShifts, error: lastError };
+        return this.fetchPaginated('doctor_shifts');
     }
+
 
     // New method to fetch all data from Supabase
     async initializeData(force: boolean = false) {
@@ -229,13 +183,13 @@ class Store {
             // Load Cloud Schedule Data early
             console.log('[Store] Loading data from Supabase...');
             const [usersRes, shiftsRes, leavesRes, settingsRes, doctorsRes, dShiftsRes, hmStaffRes, hmShiftsRes] = await Promise.all([
-                supabase.from('users').select('*'),
+                this.fetchPaginated('users'),
                 this.fetchAllShifts(),
-                supabase.from('leaves').select('*'),
-                supabase.from('settings').select('*'),
-                supabase.from('doctors').select('*'),
+                this.fetchPaginated('leaves'),
+                supabase.from('settings').select('*'), // Settings is usually 1 row
+                this.fetchPaginated('doctors'),
                 this.fetchAllDoctorShifts(),
-                supabase.from('health_mgmt_staff').select('*'),
+                this.fetchPaginated('health_mgmt_staff'),
                 this.fetchAllHealthMgmtShifts()
             ]);
             console.log('[Store] Data loaded. Errors:', {
@@ -2064,15 +2018,8 @@ BMD :{{bmd}}
     }
 
     async refreshDoctorShifts() {
-        const today = new Date();
-        const sixMonthsAgo = new Date(today.getFullYear(), today.getMonth() - 6, 1).toISOString().split('T')[0];
-        const sixMonthsAhead = new Date(today.getFullYear(), today.getMonth() + 6, 28).toISOString().split('T')[0];
-        const { data } = await supabase
-            .from('doctor_shifts')
-            .select('*')
-            .gte('date', sixMonthsAgo)
-            .lte('date', sixMonthsAhead)
-            .limit(10000);
+        console.log('[Store] Refreshing Doctor Shifts...');
+        const { data } = await this.fetchAllDoctorShifts();
         if (data) {
             this.doctorShifts = data.map((s: any) => ({
                 ...s,
@@ -3065,30 +3012,17 @@ BMD :{{bmd}}
         console.log(`[Store] Archiving data before ${beforeDate}...`);
         
         // Fetch Shifts
-        const { data: shifts, error: shiftsError } = await supabase
-            .from('shifts')
-            .select('*')
-            .lt('date', beforeDate)
-            .limit(10000); 
-
+        const { data: shifts, error: shiftsError } = await this.fetchPaginated('shifts', q => q.lt('date', beforeDate));
+        
         if (shiftsError) throw new Error('Failed to fetch shifts: ' + shiftsError.message);
 
         // Fetch Doctor Shifts
-        const { data: doctorShifts, error: docShiftsError } = await supabase
-            .from('doctor_shifts')
-            .select('*')
-            .lt('date', beforeDate)
-            .limit(10000);
+        const { data: doctorShifts, error: docShiftsError } = await this.fetchPaginated('doctor_shifts', q => q.lt('date', beforeDate));
 
         if (docShiftsError) throw new Error('Failed to fetch doctor shifts: ' + docShiftsError.message);
 
         // Fetch Leaves
-        // Filter by end_date ensuring only fully past leaves are archived
-        const { data: leaves, error: leavesError } = await supabase
-            .from('leaves')
-            .select('*')
-            .lt('endDate', beforeDate)
-            .limit(5000);
+        const { data: leaves, error: leavesError } = await this.fetchPaginated('leaves', q => q.lt('endDate', beforeDate));
 
         if (leavesError) throw new Error('Failed to fetch leaves: ' + leavesError.message);
 
