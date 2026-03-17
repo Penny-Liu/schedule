@@ -54,8 +54,15 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
         // Filter Staff Shifts for this date
         const dayStaffShifts = staffShifts.filter(s => s.date === dateKey);
         
-        const mainRads = dayStaffShifts.filter(s => (s.station?.includes('場控') || s.station ==='主' || s.station === '主控') && users.some(u => u.id === s.userId)).map(s => getName(s.userId));
-        const assistRads = dayStaffShifts.filter(s => (s.specialRoles?.includes('輔班') || s.station === '輔控') && users.some(u => u.id === s.userId)).map(s => getName(s.userId));
+        const mainRads = dayStaffShifts.filter(s => {
+            const u = users.find(user => user.id === s.userId);
+            return u?.isRadiographer && (s.station?.includes('場控') || s.station ==='主' || s.station === '主控');
+        }).map(s => getName(s.userId));
+        
+        const assistRads = dayStaffShifts.filter(s => {
+            const u = users.find(user => user.id === s.userId);
+            return u?.isRadiographer && (s.specialRoles?.includes('輔班') || s.station === '輔' || s.station === '輔控');
+        }).map(s => getName(s.userId));
         
         const hmStaff = db.getHealthMgmtStaff();
         const mainHM = db.getHealthMgmtShifts().filter(s => s.date === dateKey && (s.station?.includes('主控') || s.task === '主控')).map(s => {
@@ -66,6 +73,9 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
             const u = hmStaff.find(staff => staff.id === s.userId);
             return u?.alias || u?.name?.slice(-2) || '-';
         });
+
+        const finalMain = mainRads.length > 0 ? mainRads : mainHM;
+        const finalAssist = assistRads.length > 0 ? assistRads : assistHM;
 
         // --- 2. Doctors ---
         const getDocs = (stationName: string) => {
@@ -120,7 +130,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
 
         const lines = [
             `${date.getMonth() + 1}/${date.getDate()} （${['日', '一', '二', '三', '四', '五', '六'][date.getDay()]}）`,
-            `主/輔：${mainRads.join('/') || '無'}/${assistRads.join('/') || '無'}      ${mainHM.join('/') || '無'}/${assistHM.join('/') || '無'}`,
+            `主/輔：${finalMain.join('/') || '無'}/${finalAssist.join('/') || '無'}`,
             `影像：${imgDocs.join('/') || '無'}`,
             `解說：${expDocs.join('/') || '無'}`,
             `支援：${supDocs.join('/') || '無'}`,
@@ -2641,13 +2651,17 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                             const radUsers = db.getUsers();
                                                             const hmStaff = db.getHealthMgmtStaff();
                                                             
-                                                            const radNames = radShifts.map(s => radUsers.find(u => u.id === s.userId)?.name);
+                                                            const radNames = radShifts.map(s => {
+                                                                const u = radUsers.find(u => u.id === s.userId);
+                                                                return u?.isRadiographer ? u.name : null;
+                                                            }).filter(Boolean);
+                                                            
                                                             const hmNames = hmShifts.map(s => {
                                                                 const st = hmStaff.find(u => u.id === s.userId);
                                                                 return st?.name;
-                                                            });
+                                                            }).filter(Boolean);
                                                             
-                                                            const displayList = [...radNames, ...hmNames].filter(Boolean);
+                                                            const displayList = radNames.length > 0 ? radNames : hmNames;
                                                             
                                                             return (
                                                                 <td 
@@ -2669,7 +2683,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                         </td>
                                                         {dateRange.map(date => {
                                                             const radShifts = db.shifts.filter(s => 
-                                                                s.date === date && (s.specialRoles?.includes('輔班') || s.station === '輔控')
+                                                                s.date === date && (s.specialRoles?.includes('輔班') || s.station === '輔' || s.station === '輔控')
                                                             );
                                                             const hmShifts = db.getHealthMgmtShifts().filter(s => 
                                                                 s.date === date && (s.task === '輔控' || s.station?.includes('輔控'))
@@ -2678,13 +2692,17 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                             const radUsers = db.getUsers();
                                                             const hmStaff = db.getHealthMgmtStaff();
                                                             
-                                                            const radNames = radShifts.map(s => radUsers.find(u => u.id === s.userId)?.name);
+                                                            const radNames = radShifts.map(s => {
+                                                                const u = radUsers.find(u => u.id === s.userId);
+                                                                return u?.isRadiographer ? u.name : null;
+                                                            }).filter(Boolean);
+                                                            
                                                             const hmNames = hmShifts.map(s => {
                                                                 const st = hmStaff.find(u => u.id === s.userId);
                                                                 return st?.name;
-                                                            });
+                                                            }).filter(Boolean);
                                                             
-                                                            const displayList = [...radNames, ...hmNames].filter(Boolean);
+                                                            const displayList = radNames.length > 0 ? radNames : hmNames;
                                                             
                                                             return (
                                                                 <td 
@@ -2896,19 +2914,27 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                     const radUsers = db.getUsers();
                                     const hmStaff = db.getHealthMgmtStaff();
 
-                                    const mainRadNames = radShifts.filter(s => (s.station?.includes('場控') || s.station === '主' || s.station === '主控')).map(s => radUsers.find(u => u.id === s.userId)?.name);
-                                    const mainHMNames = hmShifts.filter(s => s.station === '主控' || s.task === '主控' || s.station?.includes('主控')).map(s => {
-                                        const u = hmStaff.find(st => st.id === s.userId);
-                                        return u?.name;
-                                    });
-                                    const mainNamesJoined = [...mainRadNames, ...mainHMNames].filter(Boolean).join(' / ') || '-';
-
-                                    const assistRadNames = radShifts.filter(s => (s.specialRoles?.includes('輔班') || s.station === '輔控')).map(s => radUsers.find(u => u.id === s.userId)?.name);
-                                    const assistHMNames = hmShifts.filter(s => s.station === '輔控' || s.task === '輔控' || s.station?.includes('輔控')).map(s => {
-                                        const u = hmStaff.find(st => st.id === s.userId);
-                                        return u?.name;
-                                    });
-                                    const assistNamesJoined = [...assistRadNames, ...assistHMNames].filter(Boolean).join(' / ') || '-';
+                                     const mainRadNames = radShifts.filter(s => {
+                                         const u = radUsers.find(user => user.id === s.userId);
+                                         return u?.isRadiographer && (s.station?.includes('場控') || s.station === '主' || s.station === '主控');
+                                     }).map(s => radUsers.find(u => u.id === s.userId)?.name).filter(Boolean);
+                                     
+                                     const mainHMNames = hmShifts.filter(s => s.station === '主控' || s.task === '主控' || s.station?.includes('主控')).map(s => {
+                                         const u = hmStaff.find(st => st.id === s.userId);
+                                         return u?.name;
+                                     }).filter(Boolean);
+                                     const mainNamesJoined = (mainRadNames.length > 0 ? mainRadNames : mainHMNames).join(' / ') || '-';
+ 
+                                     const assistRadNames = radShifts.filter(s => {
+                                         const u = radUsers.find(user => user.id === s.userId);
+                                         return u?.isRadiographer && (s.specialRoles?.includes('輔班') || s.station === '輔' || s.station === '輔控');
+                                     }).map(s => radUsers.find(u => u.id === s.userId)?.name).filter(Boolean);
+                                     
+                                     const assistHMNames = hmShifts.filter(s => s.station === '輔控' || s.task === '輔控' || s.station?.includes('輔控')).map(s => {
+                                         const u = hmStaff.find(st => st.id === s.userId);
+                                         return u?.name;
+                                     }).filter(Boolean);
+                                     const assistNamesJoined = (assistRadNames.length > 0 ? assistRadNames : assistHMNames).join(' / ') || '-';
 
                                     return (
                                         <>
