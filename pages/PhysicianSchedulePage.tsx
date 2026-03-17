@@ -74,8 +74,8 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
             return u?.alias || u?.name?.slice(-2) || '-';
         });
 
-        const finalMain = mainRads.length > 0 ? mainRads : mainHM;
-        const finalAssist = assistRads.length > 0 ? assistRads : assistHM;
+        const finalMain = [...mainRads, ...mainHM];
+        const finalAssist = [...assistRads, ...assistHM];
 
         // --- 2. Doctors ---
         const getDocs = (stationName: string) => {
@@ -130,7 +130,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
 
         const lines = [
             `${date.getMonth() + 1}/${date.getDate()} （${['日', '一', '二', '三', '四', '五', '六'][date.getDay()]}）`,
-            `主/輔：${finalMain.join('/') || '無'}/${finalAssist.join('/') || '無'}`,
+            `主/輔：${[...finalMain, ...finalAssist].join('/') || '無'}`,
             `影像：${imgDocs.join('/') || '無'}`,
             `解說：${expDocs.join('/') || '無'}`,
             `支援：${supDocs.join('/') || '無'}`,
@@ -2661,7 +2661,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                                 return st?.name;
                                                             }).filter(Boolean);
                                                             
-                                                            const displayList = radNames.length > 0 ? radNames : hmNames;
+                                                            const displayList = [...radNames, ...hmNames];
                                                             
                                                             return (
                                                                 <td 
@@ -2702,7 +2702,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                                 return st?.name;
                                                             }).filter(Boolean);
                                                             
-                                                            const displayList = radNames.length > 0 ? radNames : hmNames;
+                                                            const displayList = [...radNames, ...hmNames];
                                                             
                                                             return (
                                                                 <td 
@@ -2923,7 +2923,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                          const u = hmStaff.find(st => st.id === s.userId);
                                          return u?.name;
                                      }).filter(Boolean);
-                                     const mainNamesJoined = (mainRadNames.length > 0 ? mainRadNames : mainHMNames).join(' / ') || '-';
+                                     const mainNamesJoined = [...mainRadNames, ...mainHMNames].join(' / ') || '-';
  
                                      const assistRadNames = radShifts.filter(s => {
                                          const u = radUsers.find(user => user.id === s.userId);
@@ -2934,7 +2934,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                          const u = hmStaff.find(st => st.id === s.userId);
                                          return u?.name;
                                      }).filter(Boolean);
-                                     const assistNamesJoined = (assistRadNames.length > 0 ? assistRadNames : assistHMNames).join(' / ') || '-';
+                                     const assistNamesJoined = [...assistRadNames, ...assistHMNames].join(' / ') || '-';
 
                                     return (
                                         <>
