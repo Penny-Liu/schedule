@@ -962,40 +962,40 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                          // Details: 5pt (~1.8mm line height) -> use 2.2mm spacing
                                                   let totalHeight = 0;
                           shifts.forEach((shift: any, idx: number) => {
-                              totalHeight += 2.8; // Name (8pt)
-                              if (shift.locationAbbr) totalHeight += 2.1;
-                              if (shift.time) totalHeight += 2.1;
-                              if (shift.task && !(shift.stationName === '晚班' && shift.task === '晚班')) totalHeight += 2.1; 
-                              if (idx < shifts.length - 1) totalHeight += 0.6; // Spacing between doctors
+                              totalHeight += 2.4; // Name (8pt)
+                              if (shift.locationAbbr) totalHeight += 1.8;
+                              if (shift.time) totalHeight += 1.8;
+                              if (shift.task && !(shift.stationName === '晚班' && shift.task === '晚班')) totalHeight += 1.8; 
+                              if (idx < shifts.length - 1) totalHeight += 0.4; // Spacing between doctors
                           });
                           
-                          let y = data.cell.y + (data.cell.height - totalHeight) / 2 + 2.2; // Baseline adjust
+                          let y = data.cell.y + (data.cell.height - totalHeight) / 2 + 1.8; // Baseline adjust
                          
                          shifts.forEach((shift: any, idx: number) => {
                               doc.setFontSize(8);
                               doc.text(shift.name, x, y, { align: 'center' });
-                              y += 2.8; 
+                              y += 2.4; 
                               
                               if (shift.locationAbbr) {
                                   doc.setFontSize(6);
                                   doc.text(shift.locationAbbr, x, y, { align: 'center' });
-                                  y += 2.1;
+                                  y += 1.8;
                               }
 
                               if (shift.time) {
                                   doc.setFontSize(5);
                                   doc.text(shift.time, x, y, { align: 'center' });
-                                  y += 2.1; 
+                                  y += 1.8; 
                               }
                               
                               if (shift.task && !(shift.stationName === '晚班' && shift.task === '晚班')) {
                                   doc.setFontSize(5);
                                   doc.text(shift.task, x, y, { align: 'center' });
-                                  y += 2.1; 
+                                  y += 1.8; 
                               }
                               
                               if (idx < shifts.length - 1) {
-                                  y += 0.6;
+                                  y += 0.4;
                               }
                          });
                      }
@@ -1117,7 +1117,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                          if (loc === '大直' && stName === '晚班') return;
                                                   const isExpandedLoc = loc === '大直' || loc === '台中';
                           // For Dazhi/Taichung, add 4pt (2.85mm total) vertical padding buffer to minimum height
-                          const dynamicMinHeight = isExpandedLoc ? 6.5 : 4.0;
+                          const dynamicMinHeight = isExpandedLoc ? 5.5 : 3.2;
                           const rowData: any[] = [{ content: stName, styles: { fontStyle: 'bold', minCellHeight: dynamicMinHeight }, location: loc }];
                          
                          dateRange.forEach(date => {
