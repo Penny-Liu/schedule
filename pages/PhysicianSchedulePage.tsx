@@ -1107,31 +1107,46 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                         targetRows.push(radRow, hmRow);
                     }
                     
-                    locStations.forEach(st => {
-                         // Filter out '晚班' for '大直' location as requested
-                         if (st.location === '大直' && st.name === '晚班') return;
-                                                  const isExpandedLoc = st.location === '大直' || st.location === '台中';
+                    const processedStationNames: string[] = [];
+                    locStations.forEach(s => {
+                        const name = isGIStation(s.name) ? 'GI' : s.name;
+                        if (!processedStationNames.includes(name)) processedStationNames.push(name);
+                    });
+
+                    processedStationNames.forEach(stName => {
+                         if (loc === '大直' && stName === '晚班') return;
+                                                  const isExpandedLoc = loc === '大直' || loc === '台中';
                           // For Dazhi/Taichung, add 4pt (2.85mm total) vertical padding buffer to minimum height
                           const dynamicMinHeight = isExpandedLoc ? 6.5 : 4.0;
-                          const rowData: any[] = [{ content: `${st.name}`, styles: { fontStyle: 'bold', minCellHeight: dynamicMinHeight }, location: st.location }];
+                          const rowData: any[] = [{ content: stName, styles: { fontStyle: 'bold', minCellHeight: dynamicMinHeight }, location: loc }];
                          
                          dateRange.forEach(date => {
-                             let assignedShifts = shifts.filter(s => {
-                                 if (s.date !== date || s.location !== st.location) return false;
-                                 if (st.name === '晚班') return s.task?.includes('晚班');
-                                 if (s.scheduled_station === st.name) return true;
-                                 if (st.name === '婦科' && s.scheduled_station === '解說') {
-                                     const doc = doctors.find(d => d.id === s.doctorId);
-                                     return doc?.capabilities?.includes('婦科');
-                                 }
-                                 return false;
-                             });
+                             let assignedShifts: any[] = [];
+                             if (stName === 'GI') {
+                                 ['GI1', 'GI2', 'GI', '腸胃'].forEach(actualSt => {
+                                     const subShifts = shifts.filter(s => 
+                                         s.date === date && s.location === loc && s.scheduled_station === actualSt
+                                     );
+                                     assignedShifts.push(...subShifts);
+                                 });
+                             } else {
+                                 assignedShifts = shifts.filter(s => {
+                                     if (s.date !== date || s.location !== loc) return false;
+                                     if (stName === '晚班') return s.task?.includes('晚班');
+                                     if (s.scheduled_station === stName) return true;
+                                     if (stName === '婦科' && s.scheduled_station === '解說') {
+                                         const doc = doctors.find(d => d.id === s.doctorId);
+                                         return doc?.capabilities?.includes('婦科');
+                                     }
+                                     return false;
+                                 });
+                             }
                              
                              // Follow UI logic for remote crossover
-                             if (assignedShifts.length === 0 && ['遠班', '遠距', '遠'].includes(st.name)) {
-                                 if (st.location === '大直') {
+                             if (assignedShifts.length === 0 && ['遠班', '遠距', '遠'].includes(stName)) {
+                                 if (loc === '大直') {
                                      assignedShifts = shifts.filter(s => s.date === date && s.location === '北投' && ['遠班', '遠距', '遠'].includes(s.scheduled_station || ''));
-                                 } else if (st.location === '北投') {
+                                 } else if (loc === '北投') {
                                      assignedShifts = shifts.filter(s => s.date === date && s.location === '大直' && ['遠班', '遠距', '遠'].includes(s.scheduled_station || ''));
                                  }
                              }
@@ -1155,7 +1170,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                   assignedShifts.forEach((s, idx) => {
                                        totalHeight += 2.8; // Name (8pt)
                                        if (s.workTime) totalHeight += 2.1; 
-                                       const showTask = s.task && !(st.name === '晚班' && s.task === '晚班');
+                                       const showTask = s.task && !(stName === '晚班' && s.task === '晚班');
                                        if (showTask) totalHeight += 2.1;
                                        if (idx < assignedShifts.length - 1) totalHeight += 0.6;
                                   });
@@ -1172,14 +1187,14 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                  rawStationShifts: assignedShifts.map(s => {
                                      const doc = doctors.find(d => d.id === s.doctorId);
                                      // 遠班加上地點縮寫，但移至下一行 (加入 locationAbbr)
-                                     const isRemote = st.name.includes('遠');
+                                     const isRemote = stName.includes('遠');
                                      const locAbbrStr = isRemote && s.location ? s.location : '';
                                      return {
                                          name: doc?.name || '?',
                                          time: formatTimeShort(s.workTime),
                                          task: s.task,
                                          locationAbbr: locAbbrStr,
-                                         stationName: st.name
+                                         stationName: stName
                                      };
                                  })
                              });
