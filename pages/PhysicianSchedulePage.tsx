@@ -796,7 +796,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                     halign: 'center',
                     lineWidth: 0.2,
                     lineColor: [0, 0, 0],
-                    minCellHeight: 4.0
+                    minCellHeight: 3.2
                 },
                 headStyles: {
                     fillColor: [66, 66, 66],
@@ -1164,18 +1164,18 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                    return doc?.name || '?';
                              }).join('\n');
                               
-                              let cellStyles: any = { minCellHeight: 4.0 };
+                              let cellStyles: any = { minCellHeight: 3.2 };
                               if (assignedShifts.length > 0) {
                                   let totalHeight = 0;
                                   assignedShifts.forEach((s, idx) => {
-                                       totalHeight += 2.8; // Name (8pt)
-                                       if (s.workTime) totalHeight += 2.1; 
+                                       totalHeight += 2.4; // Name (8pt)
+                                       if (s.workTime) totalHeight += 1.8; 
                                        const showTask = s.task && !(stName === '晚班' && s.task === '晚班');
-                                       if (showTask) totalHeight += 2.1;
-                                       if (idx < assignedShifts.length - 1) totalHeight += 0.6;
+                                       if (showTask) totalHeight += 1.8;
+                                       if (idx < assignedShifts.length - 1) totalHeight += 0.4;
                                   });
-                                  // For Dazhi/Taichung, 4pt top + 4pt bottom padding is approx 2.85mm buffer
-                                  const paddingBuffer = isExpandedLoc ? 2.85 : 0.5;
+                                  // For Dazhi/Taichung, padding buffer
+                                  const paddingBuffer = isExpandedLoc ? 1.5 : 0.3;
                                   cellStyles = { minCellHeight: Math.max(totalHeight + paddingBuffer, dynamicMinHeight) }; 
                               } else {
                                   cellStyles = { minCellHeight: dynamicMinHeight };
