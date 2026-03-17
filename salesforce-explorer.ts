@@ -41,6 +41,14 @@ async function main() {
 
         if (tokenData.error) {
             console.error("❌ 登入失敗:", tokenData.error_description || tokenData.error);
+            console.error("原始錯誤資訊:", JSON.stringify(tokenData, null, 2));
+            
+            if (tokenData.error === 'invalid_grant' && !password?.includes(tokenData.error_description)) {
+                console.log("\n💡 小提醒：");
+                console.log("1. 如果你是第一次連線，請確認密碼後面有『緊接著』加上 Security Token (中間不要有空格或點)。");
+                console.log("2. 如果你是在 .env 裡面的密碼中間加了點 (.) 或是空格，請嘗試把它拿掉。");
+                console.log("3. 請確認該帳號在 Salesforce 網頁版是可以正常登入的。");
+            }
             return;
         }
 

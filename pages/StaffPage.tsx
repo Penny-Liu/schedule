@@ -85,7 +85,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
     isActive: true, // New
     resignationDate: '', // New
     groupIndex: 0,
-    permissions: []
+    permissions: [PERMISSIONS.VIEW_PHYSICIAN]
   });
 
   const resetForm = () => {
@@ -105,7 +105,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
       isHealthMgmt: false,
       resignationDate: '',
       groupIndex: 0,
-      permissions: []
+      permissions: [PERMISSIONS.VIEW_PHYSICIAN]
     });
     setEditingId(null);
   };
@@ -622,7 +622,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                   <div className="flex justify-between items-center mb-2">
                     <label className="text-xs font-semibold text-gray-500 block">功能權限控管</label>
                   </div>
-                  <div className="bg-gray-50 rounded-lg p-3 border border-gray-100 space-y-4 max-h-64 overflow-y-auto custom-scrollbar">
+                  <div className="bg-gray-50 rounded-lg p-3 border border-gray-100 space-y-4 max-h-[500px] overflow-y-auto custom-scrollbar">
                     {[
                       {
                         title: '放射師業務',
@@ -638,9 +638,13 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                           PERMISSIONS.MANAGE_DOCTORS
                         ]
                       },
-                      {
+                       {
                         title: '健管業務',
                         perms: [PERMISSIONS.VIEW_HEALTH_MGMT, PERMISSIONS.EDIT_HEALTH_MGMT]
+                      },
+                      {
+                        title: '麻護業務',
+                        perms: [PERMISSIONS.VIEW_ANESTHESIA, PERMISSIONS.EDIT_ANESTHESIA]
                       },
                       {
                         title: '影像雲',

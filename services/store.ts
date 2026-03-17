@@ -1,5 +1,5 @@
 
-import { User, Shift, HealthMgmtShift, LeaveRequest, SystemSettings, StationDefault, SYSTEM_OFF, RosterCycle, DateEventType, Holiday, LeaveStatus, LeaveType, StaffGroup, SPECIAL_ROLES, CycleAnchor, DailyManpowerStats, Doctor, WeekdaySetting, DoctorShift, ReportAssistant, CloudScheduleEntry, UserRole, PERMISSIONS, HealthMgmtStaff } from '../types';
+import { User, Shift, HealthMgmtShift, LeaveRequest, SystemSettings, StationDefault, SYSTEM_OFF, RosterCycle, DateEventType, Holiday, LeaveStatus, LeaveType, StaffGroup, SPECIAL_ROLES, CycleAnchor, DailyManpowerStats, Doctor, WeekdaySetting, DoctorShift, ReportAssistant, CloudScheduleEntry, UserRole, PERMISSIONS, HealthMgmtStaff, AnesthesiaStaff, AnesthesiaShift } from '../types';
 import { MOCK_USERS, MOCK_LEAVES, MOCK_DOCTORS } from './mockData';
 import { supabase } from './supabaseClient';
 import { generateUUID } from './utils';
@@ -20,7 +20,8 @@ export const getPermissionsByRole = (role: UserRole): string[] => {
                 PERMISSIONS.VIEW_PHYSICIAN,
                 PERMISSIONS.VIEW_STATS,
                 PERMISSIONS.EDIT_SETTINGS,
-                PERMISSIONS.VIEW_HEALTH_MGMT
+                PERMISSIONS.VIEW_HEALTH_MGMT,
+                PERMISSIONS.VIEW_ANESTHESIA
             ];
         case UserRole.PHYSICIAN_ADMIN:
         case UserRole.SCHEDULER:
@@ -37,6 +38,8 @@ export const getPermissionsByRole = (role: UserRole): string[] => {
                 PERMISSIONS.VIEW_CLOUD_SCHEDULE,
                 PERMISSIONS.VIEW_HEALTH_MGMT,
                 PERMISSIONS.EDIT_HEALTH_MGMT,
+                PERMISSIONS.VIEW_ANESTHESIA,
+                PERMISSIONS.EDIT_ANESTHESIA,
                 PERMISSIONS.VIEW_STAFF, // Allow HM Supervisor to view staff list
                 PERMISSIONS.EDIT_SETTINGS
             ];
@@ -68,8 +71,10 @@ import { toLocalISOString, countNonSundayDays } from './utils';
 class Store {
     users: User[] = [];
     healthMgmtStaff: HealthMgmtStaff[] = [];
+    anesthesiaStaff: AnesthesiaStaff[] = [];
     shifts: Shift[] = [];
     healthMgmtShifts: HealthMgmtShift[] = [];
+    anesthesiaShifts: AnesthesiaShift[] = [];
     leaves: LeaveRequest[] = [];
     settings: SystemSettings = {
         stations: Object.values(StationDefault),
@@ -182,7 +187,7 @@ class Store {
 
             // Load Cloud Schedule Data early
             console.log('[Store] Loading data from Supabase...');
-            const [usersRes, shiftsRes, leavesRes, settingsRes, doctorsRes, dShiftsRes, hmStaffRes, hmShiftsRes] = await Promise.all([
+            const [usersRes, shiftsRes, leavesRes, settingsRes, doctorsRes, dShiftsRes, hmStaffRes, hmShiftsRes, anesthesiaStaffRes, anesthesiaShiftsRes] = await Promise.all([
                 this.fetchPaginated('users'),
                 this.fetchAllShifts(),
                 this.fetchPaginated('leaves'),
@@ -190,7 +195,9 @@ class Store {
                 this.fetchPaginated('doctors'),
                 this.fetchAllDoctorShifts(),
                 this.fetchPaginated('health_mgmt_staff'),
-                this.fetchAllHealthMgmtShifts()
+                this.fetchAllHealthMgmtShifts(),
+                this.fetchPaginated('anesthesia_staff'),
+                this.fetchPaginated('anesthesia_shifts')
             ]);
             console.log('[Store] Data loaded. Errors:', {
                 users: usersRes.error,
@@ -374,7 +381,28 @@ class Store {
                     id: hm.id,
                     name: hm.name,
                     alias: hm.alias,
-                    isActive: hm.is_active
+                    isActive: hm.is_active,
+                    role: hm.role || 'VIEWER'
+                }));
+            }
+
+            if (anesthesiaStaffRes.data) {
+                this.anesthesiaStaff = anesthesiaStaffRes.data.map((as: any) => ({
+                    id: as.id,
+                    name: as.name,
+                    alias: as.alias,
+                    isActive: as.is_active,
+                    locations: as.locations || [],
+                    role: as.role || 'VIEWER'
+                }));
+            }
+
+            if (anesthesiaShiftsRes.data) {
+                this.anesthesiaShifts = anesthesiaShiftsRes.data.map((s: any) => ({
+                    ...s,
+                    userId: s.user_id,
+                    workTime: s.work_time,
+                    scheduled_station: s.scheduled_station
                 }));
             }
 
@@ -539,6 +567,8 @@ BMD :{{bmd}}
             .on('postgres_changes', { event: '*', schema: 'public', table: 'doctor_shifts' }, (payload) => this.handleRealtimeDoctorShiftUpdate(payload))
             .on('postgres_changes', { event: '*', schema: 'public', table: 'leaves' }, (payload) => this.handleRealtimeLeaveUpdate(payload))
             .on('postgres_changes', { event: '*', schema: 'public', table: 'settings' }, (payload) => this.handleRealtimeSettingsUpdate(payload))
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'anesthesia_staff' }, (payload) => this.handleRealtimeAnesStaffUpdate(payload))
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'anesthesia_shifts' }, (payload) => this.handleRealtimeAnesShiftUpdate(payload))
             .subscribe((status) => {
                 if (status === 'SUBSCRIBED') {
                     console.log('[Realtime] Subscribed to all database changes');
@@ -569,6 +599,42 @@ BMD :{{bmd}}
             this.shifts = this.shifts.filter(s => s.id !== oldRecord.id);
             this.notifyListeners();
         }
+    }
+
+    private handleRealtimeAnesStaffUpdate(payload: any) {
+        const { eventType, new: newRecord, old: oldRecord } = payload;
+        if (eventType === 'INSERT' || eventType === 'UPDATE') {
+            const mapped = {
+                id: newRecord.id,
+                name: newRecord.name,
+                alias: newRecord.alias,
+                isActive: newRecord.is_active,
+                locations: newRecord.locations || [],
+                role: newRecord.role
+            };
+            const index = this.anesthesiaStaff.findIndex(s => s.id === mapped.id);
+            if (index !== -1) this.anesthesiaStaff[index] = mapped; else this.anesthesiaStaff.push(mapped);
+        } else if (eventType === 'DELETE') {
+            this.anesthesiaStaff = this.anesthesiaStaff.filter(s => s.id !== oldRecord.id);
+        }
+        this.notifyListeners();
+    }
+
+    private handleRealtimeAnesShiftUpdate(payload: any) {
+        const { eventType, new: newRecord, old: oldRecord } = payload;
+        if (eventType === 'INSERT' || eventType === 'UPDATE') {
+            const mapped = {
+                ...newRecord,
+                userId: newRecord.user_id,
+                workTime: newRecord.work_time,
+                scheduled_station: newRecord.scheduled_station
+            };
+            const index = this.anesthesiaShifts.findIndex(s => s.id === mapped.id);
+            if (index !== -1) this.anesthesiaShifts[index] = mapped; else this.anesthesiaShifts.push(mapped);
+        } else if (eventType === 'DELETE') {
+            this.anesthesiaShifts = this.anesthesiaShifts.filter(s => s.id !== oldRecord.id);
+        }
+        this.notifyListeners();
     }
 
     private handleRealtimeHMShiftUpdate(payload: any) {
@@ -612,7 +678,11 @@ BMD :{{bmd}}
         if (eventType === 'INSERT' || eventType === 'UPDATE') {
             const index = this.healthMgmtStaff.findIndex(s => s.id === newRecord.id);
             if (index !== -1) {
-                this.healthMgmtStaff[index] = newRecord as HealthMgmtStaff;
+                this.healthMgmtStaff[index] = {
+                    ...newRecord,
+                    isActive: newRecord.is_active,
+                    role: newRecord.role
+                } as HealthMgmtStaff;
             } else {
                 this.healthMgmtStaff.push(newRecord as HealthMgmtStaff);
             }
@@ -1003,7 +1073,8 @@ BMD :{{bmd}}
             id: staff.id,
             name: staff.name,
             alias: staff.alias,
-            is_active: staff.isActive
+            is_active: staff.isActive,
+            role: staff.role || 'VIEWER'
         });
         if (error) {
             console.error('Failed to add health mgmt staff to Supabase:', error);
@@ -1021,6 +1092,7 @@ BMD :{{bmd}}
         if (updates.name !== undefined) dbUpdates.name = updates.name;
         if (updates.alias !== undefined) dbUpdates.alias = updates.alias;
         if (updates.isActive !== undefined) dbUpdates.is_active = updates.isActive;
+        if (updates.role !== undefined) dbUpdates.role = updates.role;
 
         if (Object.keys(dbUpdates).length > 0) {
             const { error } = await supabase.from('health_mgmt_staff').update(dbUpdates).eq('id', id);
@@ -1048,6 +1120,111 @@ BMD :{{bmd}}
             }
             this.notifyListeners();
         }
+    }
+
+    // --- Anesthesia Staff Management ---
+    getAnesthesiaStaff() {
+        return [...this.anesthesiaStaff];
+    }
+
+    async addAnesthesiaStaff(staff: AnesthesiaStaff) {
+        console.log('[Store] Adding anesthesia staff:', staff);
+        const { error } = await supabase.from('anesthesia_staff').insert({
+            id: staff.id,
+            name: staff.name,
+            alias: staff.alias,
+            is_active: staff.isActive,
+            locations: staff.locations || [],
+            role: staff.role || 'VIEWER'
+        });
+        if (error) {
+            console.error('[Store] addAnesthesiaStaff Supabase error:', error);
+            throw error;
+        }
+        console.log('[Store] addAnesthesiaStaff success');
+        this.anesthesiaStaff.push(staff);
+        this.notifyListeners();
+    }
+
+    async updateAnesthesiaStaff(id: string, updates: Partial<AnesthesiaStaff>) {
+        console.log('[Store] Updating anesthesia staff:', id, updates);
+        const dbUpdates: any = {};
+        if (updates.name !== undefined) dbUpdates.name = updates.name;
+        if (updates.alias !== undefined) dbUpdates.alias = updates.alias;
+        if (updates.isActive !== undefined) dbUpdates.is_active = updates.isActive;
+        if (updates.locations !== undefined) dbUpdates.locations = updates.locations;
+        if (updates.role !== undefined) dbUpdates.role = updates.role;
+
+        const { error } = await supabase.from('anesthesia_staff').update(dbUpdates).eq('id', id);
+        if (error) {
+            console.error('[Store] updateAnesthesiaStaff Supabase error:', error);
+            throw error;
+        }
+        console.log('[Store] updateAnesthesiaStaff success');
+
+        const index = this.anesthesiaStaff.findIndex(s => s.id === id);
+        if (index !== -1) {
+            this.anesthesiaStaff[index] = { ...this.anesthesiaStaff[index], ...updates };
+            this.notifyListeners();
+        }
+    }
+
+    async deleteAnesthesiaStaff(id: string) {
+        // Soft delete
+        const staff = this.anesthesiaStaff.find(s => s.id === id);
+        if (staff) {
+            staff.isActive = false;
+            const { error } = await supabase
+                .from('anesthesia_staff')
+                .update({ is_active: false })
+                .eq('id', id);
+            
+            if (error) {
+                console.error('Failed to soft delete anesthesia staff in Supabase:', error);
+                throw error;
+            }
+            this.notifyListeners();
+        }
+    }
+
+    // --- Anesthesia Shifts ---
+    getAnesthesiaShifts() {
+        return [...this.anesthesiaShifts];
+    }
+
+    async assignAnesthesiaShift(userId: string, date: string, station: string, location?: string, task?: string, workTime?: string, note?: string) {
+        let shift = this.anesthesiaShifts.find(s => s.userId === userId && s.date === date);
+        const id = shift ? shift.id : generateUUID();
+
+        if (station === '') {
+            // Delete if station is empty
+            if (shift) {
+                const { error } = await supabase.from('anesthesia_shifts').delete().eq('id', id);
+                if (error) throw error;
+                this.anesthesiaShifts = this.anesthesiaShifts.filter(s => s.id !== id);
+            }
+        } else {
+            const dbData = {
+                id,
+                user_id: userId,
+                date,
+                station,
+                location,
+                task,
+                work_time: workTime,
+                note
+            };
+
+            const { error } = await supabase.from('anesthesia_shifts').upsert(dbData);
+            if (error) throw error;
+
+            if (shift) {
+                Object.assign(shift, { station, location, task, workTime, note });
+            } else {
+                this.anesthesiaShifts.push({ id, userId, date, station, location, task, workTime, note });
+            }
+        }
+        this.notifyListeners();
     }
 
     // -------------------------------------------------------------------------------- //

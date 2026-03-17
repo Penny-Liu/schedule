@@ -33,6 +33,8 @@ export const PERMISSIONS = {
   EDIT_SETTINGS: 'settings_edit',
   VIEW_HEALTH_MGMT: 'health_mgmt_view',
   EDIT_HEALTH_MGMT: 'health_mgmt_edit',
+  VIEW_ANESTHESIA: 'anesthesia_view',
+  EDIT_ANESTHESIA: 'anesthesia_edit',
 };
 
 export const PERMISSION_LABELS: Record<string, string> = {
@@ -49,6 +51,8 @@ export const PERMISSION_LABELS: Record<string, string> = {
   [PERMISSIONS.EDIT_SETTINGS]: '系統設定權限',
   [PERMISSIONS.VIEW_HEALTH_MGMT]: '查看健管排班',
   [PERMISSIONS.EDIT_HEALTH_MGMT]: '編輯健管排班',
+  [PERMISSIONS.VIEW_ANESTHESIA]: '查看麻護排班',
+  [PERMISSIONS.EDIT_ANESTHESIA]: '編輯麻護排班',
 };
 
 export interface HealthMgmtStaff {
@@ -56,6 +60,16 @@ export interface HealthMgmtStaff {
     name: string;
     alias?: string;
     isActive: boolean;
+    role?: 'ADMIN' | 'VIEWER';
+}
+
+export interface AnesthesiaStaff {
+    id: string;
+    name: string;
+    alias?: string;
+    isActive: boolean;
+    locations?: string[];
+    role?: 'ADMIN' | 'VIEWER';
 }
 
 export interface User {
@@ -147,6 +161,17 @@ export interface HealthMgmtShift {
     task?: string; // New: Task assignment (主控/輔控/etc)
     location?: string; // New: Work location (北投/大直)
     specialRoles?: string[];
+}
+
+export interface AnesthesiaShift {
+    id: string;
+    userId: string;
+    date: string;
+    station: string;
+    task?: string; 
+    location?: string;
+    workTime?: string;
+    note?: string;
 }
 
 export enum LeaveType {

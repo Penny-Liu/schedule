@@ -1,8 +1,8 @@
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { db } from '../services/store';
 import { Doctor, UserRole, DoctorStationConfig, DateEventType, DoctorShift, PERMISSIONS } from '../types';
-import { ChevronLeft, ChevronRight, Download, Lock, RefreshCw, Save, Unlock, User, UserPlus, X, Calendar as CalendarIcon, Clock, Filter, Sliders, ArrowUpDown, Wand2, BarChart2, Check, AlertCircle, Plus, LayoutGrid, List as ListIcon, Trash2, Briefcase, FileText, MapPin, FileSpreadsheet, CalendarClock, Star, Shield, Users } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronDown, Download, Lock, RefreshCw, Save, Unlock, User, UserPlus, X, Calendar as CalendarIcon, Clock, Filter, Sliders, ArrowUpDown, Wand2, BarChart2, Check, AlertCircle, Plus, LayoutGrid, List as ListIcon, Trash2, Briefcase, FileText, MapPin, FileSpreadsheet, CalendarClock, Star, Shield, Users } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import ConfirmModal from '../components/ConfirmModal';
@@ -232,6 +232,16 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
     };
 
     const [currentDate, setCurrentDate] = useState(new Date());
+    const dateInputRef = useRef<HTMLInputElement>(null);
+
+    const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const val = e.target.value;
+        if (val) {
+            const [y, m, d] = val.split('-').map(Number);
+            const newDate = new Date(y, m - 1, d);
+            setCurrentDate(newDate);
+        }
+    };
     const currentYearMonth = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
     const [isLocked, setIsLocked] = useState(db.isMonthLocked(currentYearMonth));
     
@@ -368,6 +378,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
     const [assignModal, setAssignModal] = useState<{ station: string, location: string, date: string } | null>(null);
     const [showAutoScheduleConfirm, setShowAutoScheduleConfirm] = useState(false);
     const [isAutoScheduling, setIsAutoScheduling] = useState(false);
+    const [isManpowerStatsExpanded, setIsManpowerStatsExpanded] = useState(false);
     
     // Target Days Modal State
     const [showTargetDaysModal, setShowTargetDaysModal] = useState(false);
@@ -1859,12 +1870,24 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                         >
                             <ChevronLeft size={20} />
                         </button>
-                        <span className="px-4 font-mono font-bold text-gray-700 min-w-[100px] text-center">
+                        <div 
+                            className="relative px-3 font-mono font-bold text-gray-700 min-w-[100px] text-center cursor-pointer hover:bg-slate-50 transition-colors flex items-center gap-1.5 group select-none"
+                            onClick={() => dateInputRef.current?.showPicker ? dateInputRef.current.showPicker() : dateInputRef.current?.click()}
+                            title="點擊切換日期"
+                        >
                            {viewMode === 'daily' || (isMobile && (viewMode === 'personnel' || viewMode === 'station'))
                                 ? `${toLocalISOString(currentDate)} (${['日', '一', '二', '三', '四', '五', '六'][currentDate.getDay()]})`
                                 : `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`
                            }
-                        </span>
+                           <CalendarIcon size={14} className="text-gray-400 group-hover:text-blue-500" />
+                           <input 
+                                ref={dateInputRef}
+                                type="date"
+                                className="absolute opacity-0 invisible"
+                                value={toLocalISOString(currentDate)}
+                                onChange={handleDateChange}
+                           />
+                        </div>
                         <button 
                             onClick={() => {
                                 const newDate = new Date(currentDate);
@@ -1886,7 +1909,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
 
                     <button 
                         onClick={() => setCurrentDate(new Date())}
-                        className="px-2 py-1 bg-slate-100 text-slate-600 rounded-lg text-xs font-bold hover:bg-slate-200 transition-colors border border-slate-200"
+                        className="px-3 py-1 bg-slate-100 text-slate-600 rounded-lg text-sm font-bold hover:bg-slate-200 transition-colors border border-slate-200"
                     >
                         {viewMode === 'daily' || (isMobile && (viewMode === 'personnel' || viewMode === 'station')) ? '今天' : '本月'}
                     </button>
@@ -1902,7 +1925,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                     setIsQuickExcludeMode(newVal);
                                     if (newVal) setIsQuickAssignMode(false);
                                 }}
-                                className={`ml-1 px-2 py-1 rounded-lg text-xs font-bold transition-all border flex items-center gap-1 ${
+                                className={`ml-1 px-3 py-1 rounded-lg text-sm font-bold transition-all border flex items-center gap-1 ${
                                     isQuickExcludeMode 
                                     ? 'bg-red-500 text-white border-red-600 shadow-md animate-pulse' 
                                     : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
@@ -1917,8 +1940,9 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                     const newVal = !isQuickAssignMode;
                                     setIsQuickAssignMode(newVal);
                                     if (newVal) setIsQuickExcludeMode(false); 
+                                    if (setIsAutoScheduling) setIsAutoScheduling(false);
                                 }}
-                                className={`ml-1 px-2 py-1 rounded-lg text-xs font-bold transition-all border flex items-center gap-1 ${
+                                className={`ml-1 px-3 py-1 rounded-lg text-sm font-bold transition-all border flex items-center gap-1 ${
                                     isQuickAssignMode 
                                     ? 'bg-amber-500 text-white border-amber-600 shadow-md' 
                                     : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
@@ -2428,7 +2452,18 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                             </thead>
                             <tbody className="divide-y divide-slate-100">
                                 {/* --- Manpower Stats Rows --- */}
-                                <tr className="bg-slate-50 border-t-2 border-slate-200">
+                                <tr className="bg-slate-100/50 border-t-2 border-slate-200 cursor-pointer hover:bg-slate-100 transition-colors" onClick={() => setIsManpowerStatsExpanded(!isManpowerStatsExpanded)}>
+                                    <td colSpan={dateRange.length + 1} className="py-1.5 px-3">
+                                        <div className="flex items-center gap-2 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                                            {isManpowerStatsExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                                            客戶與檢查統計 (北投/大直)
+                                            {!isManpowerStatsExpanded && <span className="text-[10px] font-normal lowercase text-slate-400 ml-2">(點擊展開詳細數據)</span>}
+                                        </div>
+                                    </td>
+                                </tr>
+                                {isManpowerStatsExpanded && (
+                                    <>
+                                        <tr className="bg-slate-50">
                                     <td className={`sticky left-0 z-10 bg-slate-50/95 backdrop-blur border-r border-slate-200 shadow-[4px_0_8px_rgba(0,0,0,0.02)] ${isMobile ? 'p-1 w-[85px] min-w-[85px]' : 'p-2'}`}>
                                         <div className="text-[10px] font-bold text-slate-600 flex items-center justify-end pr-2">北投客戶數</div>
                                     </td>
@@ -2566,6 +2601,8 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                         );
                                     })}
                                 </tr>
+                                </>
+                                )}
                                 {LOCATIONS.map(location => {
                                     // Filter stations that belong to this location
                                     const locationStations = stations.filter(s => s.location === location);
@@ -2632,7 +2669,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                         </td>
                                                         {dateRange.map(date => {
                                                             const radShifts = db.shifts.filter(s => 
-                                                                s.date === date && (s.specialRoles?.includes('輔班') || s.station === '輔' || s.station === '輔控')
+                                                                s.date === date && (s.specialRoles?.includes('輔班') || s.station === '輔控')
                                                             );
                                                             const hmShifts = db.getHealthMgmtShifts().filter(s => 
                                                                 s.date === date && (s.task === '輔控' || s.station?.includes('輔控'))
