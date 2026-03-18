@@ -970,40 +970,40 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                          // Details: 5pt (~1.8mm line height) -> use 2.2mm spacing
                                                   let totalHeight = 0;
                           shifts.forEach((shift: any, idx: number) => {
-                              totalHeight += 2.4; // Name (8pt)
-                              if (shift.locationAbbr) totalHeight += 1.8;
-                              if (shift.time) totalHeight += 1.8;
-                              if (shift.task && !(shift.stationName === '晚班' && shift.task === '晚班')) totalHeight += 1.8; 
-                              if (idx < shifts.length - 1) totalHeight += 0.4; // Spacing between doctors
+                              totalHeight += 2.8; // Name (8pt)
+                              if (shift.locationAbbr) totalHeight += 2.0;
+                              if (shift.time) totalHeight += 2.0;
+                              if (shift.task && !(shift.stationName === '晚班' && shift.task === '晚班')) totalHeight += 2.0; 
+                              if (idx < shifts.length - 1) totalHeight += 0.8; // Spacing between doctors
                           });
                           
-                          let y = data.cell.y + (data.cell.height - totalHeight) / 2 + 1.8; // Baseline adjust
+                          let y = data.cell.y + (data.cell.height - totalHeight) / 2 + 2.2; // Baseline adjust
                          
                          shifts.forEach((shift: any, idx: number) => {
                               doc.setFontSize(8);
                               doc.text(shift.name, x, y, { align: 'center' });
-                              y += 2.4; 
+                              y += 2.8; 
                               
                               if (shift.locationAbbr) {
                                   doc.setFontSize(6);
                                   doc.text(shift.locationAbbr, x, y, { align: 'center' });
-                                  y += 1.8;
+                                  y += 2.0;
                               }
 
                               if (shift.time) {
                                   doc.setFontSize(5);
                                   doc.text(shift.time, x, y, { align: 'center' });
-                                  y += 1.8; 
+                                  y += 2.0; 
                               }
                               
                               if (shift.task && !(shift.stationName === '晚班' && shift.task === '晚班')) {
                                   doc.setFontSize(5);
                                   doc.text(shift.task, x, y, { align: 'center' });
-                                  y += 1.8; 
+                                  y += 2.0; 
                               }
                               
                               if (idx < shifts.length - 1) {
-                                  y += 0.4;
+                                  y += 0.8;
                               }
                          });
                      }
@@ -1180,14 +1180,14 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                               if (assignedShifts.length > 0) {
                                   let totalHeight = 0;
                                   assignedShifts.forEach((s, idx) => {
-                                       totalHeight += 2.4; // Name (8pt)
-                                       if (s.workTime) totalHeight += 1.8; 
+                                       totalHeight += 2.8; // Name (8pt)
+                                       if (s.workTime) totalHeight += 2.0; 
                                        const showTask = s.task && !(stName === '晚班' && s.task === '晚班');
-                                       if (showTask) totalHeight += 1.8;
-                                       if (idx < assignedShifts.length - 1) totalHeight += 0.4;
+                                       if (showTask) totalHeight += 2.0;
+                                       if (idx < assignedShifts.length - 1) totalHeight += 0.8;
                                   });
                                   // For Dazhi/Taichung, padding buffer
-                                  const paddingBuffer = isExpandedLoc ? 1.5 : 0.3;
+                                  const paddingBuffer = isExpandedLoc ? 0.4 : 0.2;
                                   cellStyles = { minCellHeight: Math.max(totalHeight + paddingBuffer, dynamicMinHeight) }; 
                               } else {
                                   cellStyles = { minCellHeight: dynamicMinHeight };
@@ -1277,14 +1277,16 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                  let displayStation = (hasGynecology && hasExplanation) ? '解+婦' : st;
                                  if (displayStation === '耳鼻喉科') displayStation = 'ENT';
                                  
-                                 let h = 2.8;
-                                 if(shift.workTime) h += 2.2;
-                                 if(shift.task) h += 2.2;
-                                 // Location is now inline, so no extra height needed
+                                 let dynamicH = 3.2; // Base height for Station
+                                 if (shift.workTime) dynamicH += 2.2;
+                                 if (shift.task) dynamicH += 2.2;
+
+                                 const padding = 0.2; 
+                                 const finalHeight = Math.max(dynamicH + padding, 3.5);
 
                                  rowData.push({
                                      content: displayStation, 
-                                     styles: { minCellHeight: 8.1 }, // Adjusted height as requested
+                                     styles: { minCellHeight: finalHeight }, 
                                      rawShift: {
                                          station: displayStation,
                                          time: formatTimeShort(shift.workTime),
