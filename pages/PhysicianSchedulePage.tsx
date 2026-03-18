@@ -2091,26 +2091,6 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                         </>
                     )}
 
-                    {/* Daily View: Auto-Schedule Day, Clear Day */}
-                    {viewMode === 'daily' && canEdit && (
-                        <>
-                             <button 
-                                onClick={handleAutoScheduleDay}
-                                disabled={isAutoScheduling}
-                                className="ml-1 flex items-center gap-1 px-3 py-1 bg-gradient-to-r from-teal-500 to-emerald-600 text-white hover:opacity-90 rounded-lg text-xs font-bold transition-all shadow-md shadow-teal-200 disabled:opacity-50"
-                            >
-                                <Wand2 size={14} />
-                                今日一鍵排班
-                            </button>
-                            <button 
-                                onClick={handleClearDay}
-                                className="ml-1 flex items-center gap-1 px-3 py-1 bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700 rounded-lg text-xs font-bold transition-all border border-red-200"
-                            >
-                                <Trash2 size={14} />
-                                清空今日
-                            </button>
-                        </>
-                    )}
 
                     {/* Station View: Limited Actions or Future Expansion */}
                     {viewMode === 'station' && canEdit && (
