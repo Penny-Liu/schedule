@@ -791,7 +791,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                 styles: {
                     font: fontName,
                     fontSize: 7, 
-                    cellPadding: 1.0, 
+                    cellPadding: 0.3, 
                     valign: 'middle',
                     halign: 'center',
                     lineWidth: 0.2,
@@ -1024,12 +1024,16 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                             content: loc,
                             colSpan: dateRange.length + 1,
                             styles: {
-                                fillColor: [220, 235, 255], // Unified light blue
+                                fillColor: loc === '北投' ? [59, 130, 246] : 
+                                           loc === '大直' ? [161, 136, 127] :
+                                           loc === '台中' ? [249, 115, 22] :
+                                           [139, 92, 246], // Matching Excel colors
+                                textColor: [255, 255, 255],
                                 fontStyle: 'bold',
                                 halign: 'center',
-                                fontSize: 10,
+                                fontSize: 14,
                                 cellPadding: 0.5,
-                                minCellHeight: 5.0 
+                                minCellHeight: 8.0 
                             }
                         }
                     ];
