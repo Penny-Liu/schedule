@@ -66,6 +66,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
   // Quick Schedule State (Anesthesia)
   const [isAnesQuickScheduleMode, setIsAnesQuickScheduleMode] = useState(false);
   const [quickAnesStation, setQuickAnesStation] = useState('');
+  const [quickAnesLocation, setQuickAnesLocation] = useState('');
   const [isAnesStaffManagementExpanded, setIsAnesStaffManagementExpanded] = useState(false);
   const [selectedCycleId, setSelectedCycleId] = useState<string>('month');
 
@@ -975,7 +976,14 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                                     {['休', 'V', '麻', '清除'].map(st => (
                                         <button
                                             key={st}
-                                            onClick={() => setQuickAnesStation(st === quickAnesStation ? '' : st)}
+                                            onClick={() => {
+                                                const newSt = st === quickAnesStation ? '' : st;
+                                                setQuickAnesStation(newSt);
+                                                // Default logic: If Off or V, clear location
+                                                if (newSt === '休' || newSt === 'V' || newSt === '清除') {
+                                                    setQuickAnesLocation('');
+                                                }
+                                            }}
                                             className={"px-3 py-1.5 rounded-lg text-xs font-bold border transition-all " + (
                                                 quickAnesStation === st 
                                                     ? st === '清除' ? 'bg-red-600 text-white border-red-700 shadow-sm' : 'bg-teal-600 text-white border-teal-700 shadow-sm'
@@ -983,6 +991,23 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                                             )}
                                         >
                                             {st}
+                                        </button>
+                                    ))}
+
+                                    <div className="h-6 w-px bg-gray-200 mx-1" />
+
+                                    {LOCATIONS.map(loc => (
+                                        <button
+                                            key={loc}
+                                            disabled={quickAnesStation === '休' || quickAnesStation === 'V' || quickAnesStation === '清除'}
+                                            onClick={() => setQuickAnesLocation(loc === quickAnesLocation ? '' : loc)}
+                                            className={"px-2.5 py-1.5 rounded-lg text-xs font-bold border transition-all disabled:opacity-30 disabled:cursor-not-allowed " + (
+                                                quickAnesLocation === loc 
+                                                    ? 'bg-slate-700 text-white border-slate-800 shadow-sm' 
+                                                    : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                                            )}
+                                        >
+                                            {loc}
                                         </button>
                                     ))}
                                     {quickAnesStation && (
