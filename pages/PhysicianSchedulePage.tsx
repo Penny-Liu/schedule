@@ -1185,6 +1185,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                        const showTask = s.task && !(stName === '晚班' && s.task === '晚班');
                                        if (showTask) totalHeight += 2.0;
                                        if (idx < assignedShifts.length - 1) totalHeight += 0.8;
+                                        if (stName.includes('遠') && s.location) totalHeight += 2.0;
                                   });
                                   // For Dazhi/Taichung, padding buffer
                                   const paddingBuffer = isExpandedLoc ? 0.4 : 0.2;
