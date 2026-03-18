@@ -1127,9 +1127,9 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
 
                     processedStationNames.forEach(stName => {
                          if (loc === '大直' && stName === '晚班') return;
-                                                  const isExpandedLoc = loc === '大直' || loc === '台中';
+                                                  // const isExpandedLoc = loc === '大直' || loc === '台中';
                           // For Dazhi/Taichung, add 4pt (2.85mm total) vertical padding buffer to minimum height
-                          const dynamicMinHeight = isExpandedLoc ? 5.5 : 3.2;
+                          const dynamicMinHeight = 5.5;
                           const rowData: any[] = [{ content: stName, styles: { fontStyle: 'bold', minCellHeight: dynamicMinHeight }, location: loc }];
                          
                          dateRange.forEach(date => {
@@ -1188,7 +1188,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                         if (stName.includes('遠') && s.location) totalHeight += 2.0;
                                   });
                                   // For Dazhi/Taichung, padding buffer
-                                  const paddingBuffer = isExpandedLoc ? 0.4 : 0.2;
+                                  const paddingBuffer = 0.4;
                                   cellStyles = { minCellHeight: Math.max(totalHeight + paddingBuffer, dynamicMinHeight) }; 
                               } else {
                                   cellStyles = { minCellHeight: dynamicMinHeight };
