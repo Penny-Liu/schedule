@@ -3760,83 +3760,121 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                         </div>
                         
                         <div className="p-2 overflow-y-auto">
-                            {/* 1. Recommended (Matches Capability) */}
-                            <div className="mb-2">
-                                <div className="text-xs font-bold text-teal-600 uppercase px-3 py-1.5 bg-teal-50/50 rounded-lg mb-1 mx-2">
-                                    具備此技能之醫師
-                                </div>
-                                <div className="grid grid-cols-2 gap-2 p-2">
-                                    {doctors.filter(d => {
-                                        // User Request: Only full-time doctors for '晚班'
-                                        if (assignModal.station === '晚班' && d.isPartTime) return false;
-                                        
-                                        // User Request: Only doctors with an EXISTING station on that day
-                                        // User Request: Only doctors with an EXISTING station on that day
-                                        const s = shifts.find(shift => shift.doctorId === d.id && shift.date === assignModal.date);
-                                        const assignedSt = s?.scheduled_station || s?.station;
-                                        const hasWorkingStation = assignedSt && !['X', 'OFF', '休假', 'Unassigned', '未分配'].includes(assignedSt);
-                                        if (!hasWorkingStation) return false;
+                            {(() => {
+                                const skilledDocs = doctors.filter(d => {
+                                    if (assignModal.station === '晚班' && d.isPartTime) return false;
+                                    return d.capabilities?.includes(assignModal.station);
+                                });
 
-                                        return d.capabilities?.includes(assignModal.station);
-                                    }).map(doc => {
-                                        const isAlreadyAssigned = shifts.some(s => s.doctorId === doc.id && s.date === assignModal.date);
-                                        return (
-                                            <button 
-                                                key={doc.id}
-                                                onClick={() => handleAssignDoctor(doc.id)}
-                                                className={`flex items-center gap-2 p-2 rounded-lg border transition-all text-left ${isAlreadyAssigned ? 'bg-gray-50 border-gray-200 opacity-60' : 'bg-white border-teal-100 hover:border-teal-300 hover:shadow-md hover:bg-teal-50/30'}`}
-                                            >
-                                                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-xs shrink-0 bg-teal-500`}>
-                                                    {doc.alias}
-                                                </div>
-                                                <div className="min-w-0">
-                                                    <div className="font-bold text-gray-700 text-sm truncate">{doc.name}</div>
-                                                    {isAlreadyAssigned && <div className="text-[10px] text-red-400">已有排班</div>}
-                                                </div>
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-                            </div>
+                                const scheduledSkilled: { doc: Doctor, stationName: string }[] = [];
+                                const unscheduledSkilled: Doctor[] = [];
 
-                            {/* 2. Others */}
-                            <div>
-                                <div className="text-xs font-bold text-gray-400 uppercase px-3 py-1.5 rounded-lg mb-1 mx-2">
-                                    其他醫師
-                                </div>
-                                <div className="grid grid-cols-2 gap-2 p-2">
-                                    {doctors.filter(d => {
-                                        // User Request: Only full-time doctors for '晚班'
-                                        if (assignModal.station === '晚班' && d.isPartTime) return false;
-                                        
-                                        // User Request: Only doctors with an EXISTING station on that day
-                                        // User Request: Only doctors with an EXISTING station on that day
-                                        const s = shifts.find(shift => shift.doctorId === d.id && shift.date === assignModal.date);
-                                        const assignedSt = s?.scheduled_station || s?.station;
-                                        const hasWorkingStation = assignedSt && !['X', 'OFF', '休假', 'Unassigned', '未分配'].includes(assignedSt);
-                                        if (!hasWorkingStation) return false;
+                                skilledDocs.forEach(d => {
+                                    // Use activeShifts which handles simulation mode correctly
+                                    const s = activeShifts.find(shift => shift.doctorId === d.id && shift.date === assignModal.date);
+                                    const assignedSt = s?.scheduled_station || s?.station;
+                                    const isWorking = assignedSt && !['X', 'OFF', '休假', 'Unassigned', '未分配'].includes(assignedSt);
+                                    if (isWorking) {
+                                        scheduledSkilled.push({ doc: d, stationName: assignedSt });
+                                    } else {
+                                        unscheduledSkilled.push(d);
+                                    }
+                                });
 
-                                        return !d.capabilities?.includes(assignModal.station);
-                                    }).map(doc => {
-                                        const isAlreadyAssigned = shifts.some(s => s.doctorId === doc.id && s.date === assignModal.date);
-                                        return (
-                                            <button 
-                                                key={doc.id}
-                                                onClick={() => handleAssignDoctor(doc.id)}
-                                                className={`flex items-center gap-2 p-2 rounded-lg border transition-all text-left ${isAlreadyAssigned ? 'bg-gray-50 border-gray-200 opacity-60' : 'bg-slate-50 border-slate-100 hover:border-gray-300 hover:bg-white'}`}
-                                            >
-                                                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-xs shrink-0 bg-gray-400`}>
-                                                    {doc.alias}
+                                const otherDocs = doctors.filter(d => {
+                                    if (assignModal.station === '晚班' && d.isPartTime) return false;
+                                    return !d.capabilities?.includes(assignModal.station);
+                                });
+
+                                return (
+                                    <>
+                                        {/* 1. Unscheduled Skilled (Priority) */}
+                                        {unscheduledSkilled.length > 0 && (
+                                            <div className="mb-4">
+                                                <div className="text-[11px] font-black text-emerald-600 uppercase px-3 py-1 bg-emerald-50 rounded-md mb-2 mx-1 tracking-wider flex items-center gap-1">
+                                                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                                    可指派 (具備技能)
                                                 </div>
-                                                <div className="min-w-0">
-                                                    <div className="font-bold text-gray-600 text-sm truncate">{doc.name}</div>
-                                                     {isAlreadyAssigned && <div className="text-[10px] text-red-400">已有排班</div>}
+                                                <div className="grid grid-cols-2 gap-2 p-1">
+                                                    {unscheduledSkilled.map(doc => (
+                                                        <button 
+                                                            key={doc.id}
+                                                            onClick={() => handleAssignDoctor(doc.id)}
+                                                            className="flex items-center gap-2 p-2 rounded-lg border border-emerald-100 bg-white hover:border-emerald-400 hover:shadow-md hover:bg-emerald-50/30 transition-all text-left group"
+                                                        >
+                                                            <div className="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-xs shrink-0 bg-emerald-500 group-hover:scale-110 transition-transform">
+                                                                {doc.alias}
+                                                            </div>
+                                                            <div className="min-w-0">
+                                                                <div className="font-bold text-gray-700 text-sm truncate">{doc.name}</div>
+                                                                <div className="text-[10px] text-emerald-500 font-medium">空閒中</div>
+                                                            </div>
+                                                        </button>
+                                                    ))}
                                                 </div>
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-                            </div>
+                                            </div>
+                                        )}
+
+                                        {/* 2. Scheduled Skilled (Need Swap/Reassign) */}
+                                        {scheduledSkilled.length > 0 && (
+                                            <div className="mb-4">
+                                                <div className="text-[11px] font-black text-orange-600 uppercase px-3 py-1 bg-orange-50 rounded-md mb-2 mx-1 tracking-wider">
+                                                    已排班 (具備技能)
+                                                </div>
+                                                <div className="grid grid-cols-2 gap-2 p-1">
+                                                    {scheduledSkilled.map(({ doc, stationName }) => (
+                                                        <button 
+                                                            key={doc.id}
+                                                            onClick={() => handleAssignDoctor(doc.id)}
+                                                            className="flex items-center gap-2 p-2 rounded-lg border border-orange-100 bg-orange-50/20 hover:border-orange-400 hover:bg-orange-50/40 transition-all text-left"
+                                                        >
+                                                            <div className="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-xs shrink-0 bg-orange-400">
+                                                                {doc.alias}
+                                                            </div>
+                                                            <div className="min-w-0">
+                                                                <div className="font-bold text-gray-700 text-sm truncate">{doc.name}</div>
+                                                                <div className="text-[10px] text-orange-500 font-bold whitespace-nowrap overflow-hidden text-ellipsis">已排在: {stationName}</div>
+                                                            </div>
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* 3. Others (Fallback) */}
+                                        {otherDocs.length > 0 && (
+                                            <div>
+                                                <div className="text-[11px] font-bold text-gray-400 uppercase px-3 py-1 rounded-md mb-2 mx-1 tracking-wider">
+                                                    其他醫師
+                                                </div>
+                                                <div className="grid grid-cols-2 gap-2 p-1">
+                                                    {otherDocs.map(doc => {
+                                                        const s = activeShifts.find(shift => shift.doctorId === doc.id && shift.date === assignModal.date);
+                                                        const assignedSt = s?.scheduled_station || s?.station;
+                                                        const isWorking = assignedSt && !['X', 'OFF', '休假', 'Unassigned', '未分配'].includes(assignedSt);
+                                                        
+                                                        return (
+                                                            <button 
+                                                                key={doc.id}
+                                                                onClick={() => handleAssignDoctor(doc.id)}
+                                                                className={`flex items-center gap-2 p-2 rounded-lg border transition-all text-left ${isWorking ? 'bg-gray-50 border-gray-100 opacity-60' : 'bg-white border-gray-100 hover:border-gray-300'}`}
+                                                            >
+                                                                <div className="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-xs shrink-0 bg-gray-300">
+                                                                    {doc.alias}
+                                                                </div>
+                                                                <div className="min-w-0">
+                                                                    <div className="font-bold text-gray-400 text-sm truncate">{doc.name}</div>
+                                                                    {isWorking && <div className="text-[10px] text-gray-400">已排: {assignedSt}</div>}
+                                                                </div>
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </>
+                                );
+                            })()}
                         </div>
                     </div>
                 </div>
