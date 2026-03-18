@@ -655,18 +655,20 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
               // Quick apply
               // Use quickScheduleStation or quickScheduleTask or quickScheduleLocation
               const staff = anesthesiaStaff.find(s => s.id === userId);
-              let targetLocation = currentSectionLoc;
+              let targetLocation = quickAnesLocation;
               
-              // Handle "Clear" (清除) action
-              if (quickAnesStation === '清除') {
-                  await handleUpdateAnesShift(userId, date, '', '', '');
-                  return;
+              // If no manual location selected in toolbar, use staff's home base if it's a "麻" shift
+              if (!targetLocation && quickAnesStation === '麻') {
+                  if (staff?.locations && staff.locations.length > 0) {
+                       targetLocation = staff.locations[0]; // Primary location
+                  } else {
+                       targetLocation = currentSectionLoc;
+                  }
               }
 
-              // Auto-location logic: If staff only has one location, use it.
-              // Otherwise use the current section's location.
-              if (staff?.locations && staff.locations.length === 1) {
-                  targetLocation = staff.locations[0];
+              // If station is Off or V, force location to be empty
+              if (quickAnesStation === '休' || quickAnesStation === 'V') {
+                  targetLocation = '';
               }
               
               await handleUpdateAnesShift(userId, date, quickAnesStation, targetLocation, '');
