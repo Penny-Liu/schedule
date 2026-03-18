@@ -815,11 +815,19 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                         const dateStr = dateRange[data.column.index - 1];
                         const d = new Date(dateStr);
                         if (d.getDay() === 0 || d.getDay() === 6) {
-                            data.cell.styles.textColor = [255, 100, 100]; 
+                            data.cell.styles.textColor = [255, 0, 0]; 
                         }
                     }
                     // Body Styling
                     if (data.section === 'body') {
+                         // Apply light gray background to weekends for both views
+                         if (data.column.index > 0) {
+                              const dateStr = dateRange[data.column.index - 1];
+                              const d = new Date(dateStr);
+                              if (d.getDay() === 0 || d.getDay() === 6) {
+                                  data.cell.styles.fillColor = [245, 245, 245];
+                              }
+                         }
                          if (viewMode === 'station') {
                             // User requested to compare without background colors
                             /*
@@ -1032,8 +1040,8 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                 fontStyle: 'bold',
                                 halign: 'center',
                                 fontSize: 14,
-                                cellPadding: 0.5,
-                                minCellHeight: 8.0 
+                                cellPadding: 0.1,
+                                minCellHeight: 6.5 
                             }
                         }
                     ];
