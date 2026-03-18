@@ -3761,25 +3761,34 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                         
                         <div className="p-2 overflow-y-auto">
                             {(() => {
+                                const dayOfWeek = new Date(assignModal.date).getDay();
                                 const skilledDocs = doctors.filter(d => {
                                     if (assignModal.station === '晚班' && d.isPartTime) return false;
                                     return d.capabilities?.includes(assignModal.station);
                                 });
 
-                                const scheduledSkilled: { doc: Doctor, stationName: string }[] = [];
-                                const unscheduledSkilled: Doctor[] = [];
+                                const scheduledSkilled: { doc: Doctor, stationName: string, isUnavailable: boolean, offReason?: string }[] = [];
+                                const unscheduledSkilled: { doc: Doctor, isUnavailable: boolean, offReason?: string }[] = [];
 
                                 skilledDocs.forEach(d => {
-                                    // Use activeShifts which handles simulation mode correctly
                                     const s = activeShifts.find(shift => shift.doctorId === d.id && shift.date === assignModal.date);
                                     const assignedSt = s?.scheduled_station || s?.station;
                                     const isWorking = assignedSt && !['X', 'OFF', '休假', 'Unassigned', '未分配'].includes(assignedSt);
+                                    
+                                    const isExcluded = assignedSt === 'X';
+                                    const isPermanentlyOff = d.excludedDays?.includes(dayOfWeek);
+                                    const isUnavailable = isExcluded || isPermanentlyOff;
+                                    const offReason = isExcluded ? '當天禁排' : (isPermanentlyOff ? '固定不報到' : undefined);
+
                                     if (isWorking) {
-                                        scheduledSkilled.push({ doc: d, stationName: assignedSt });
+                                        scheduledSkilled.push({ doc: d, stationName: assignedSt, isUnavailable, offReason });
                                     } else {
-                                        unscheduledSkilled.push(d);
+                                        unscheduledSkilled.push({ doc: d, isUnavailable, offReason });
                                     }
                                 });
+
+                                // Sort Unscheduled: Available first, then Unavailable
+                                unscheduledSkilled.sort((a, b) => (a.isUnavailable === b.isUnavailable ? 0 : a.isUnavailable ? 1 : -1));
 
                                 const otherDocs = doctors.filter(d => {
                                     if (assignModal.station === '晚班' && d.isPartTime) return false;
@@ -3796,18 +3805,24 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                     可指派 (具備技能)
                                                 </div>
                                                 <div className="grid grid-cols-2 gap-2 p-1">
-                                                    {unscheduledSkilled.map(doc => (
+                                                    {unscheduledSkilled.map(({ doc, isUnavailable, offReason }) => (
                                                         <button 
                                                             key={doc.id}
                                                             onClick={() => handleAssignDoctor(doc.id)}
-                                                            className="flex items-center gap-2 p-2 rounded-lg border border-emerald-100 bg-white hover:border-emerald-400 hover:shadow-md hover:bg-emerald-50/30 transition-all text-left group"
+                                                            className={`flex items-center gap-2 p-2 rounded-lg border transition-all text-left group ${
+                                                                isUnavailable 
+                                                                    ? 'bg-gray-50 border-gray-100 opacity-40 grayscale pointer-events-none' 
+                                                                    : 'bg-white border-emerald-100 hover:border-emerald-400 hover:shadow-md hover:bg-emerald-50/30'
+                                                            }`}
                                                         >
-                                                            <div className="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-xs shrink-0 bg-emerald-500 group-hover:scale-110 transition-transform">
+                                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-xs shrink-0 ${isUnavailable ? 'bg-gray-400' : 'bg-emerald-500 group-hover:scale-110'}`}>
                                                                 {doc.alias}
                                                             </div>
                                                             <div className="min-w-0">
-                                                                <div className="font-bold text-gray-700 text-sm truncate">{doc.name}</div>
-                                                                <div className="text-[10px] text-emerald-500 font-medium">空閒中</div>
+                                                                <div className={`font-bold text-sm truncate ${isUnavailable ? 'text-gray-400' : 'text-gray-700'}`}>{doc.name}</div>
+                                                                <div className={`text-[10px] font-medium ${isUnavailable ? 'text-gray-400' : 'text-emerald-500'}`}>
+                                                                    {offReason || '空閒中'}
+                                                                </div>
                                                             </div>
                                                         </button>
                                                     ))}
@@ -3822,18 +3837,24 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                     已排班 (具備技能)
                                                 </div>
                                                 <div className="grid grid-cols-2 gap-2 p-1">
-                                                    {scheduledSkilled.map(({ doc, stationName }) => (
+                                                    {scheduledSkilled.map(({ doc, stationName, isUnavailable, offReason }) => (
                                                         <button 
                                                             key={doc.id}
                                                             onClick={() => handleAssignDoctor(doc.id)}
-                                                            className="flex items-center gap-2 p-2 rounded-lg border border-orange-100 bg-orange-50/20 hover:border-orange-400 hover:bg-orange-50/40 transition-all text-left"
+                                                            className={`flex items-center gap-2 p-2 rounded-lg border transition-all text-left ${
+                                                                isUnavailable 
+                                                                    ? 'bg-gray-50 border-gray-100 opacity-40 grayscale pointer-events-none' 
+                                                                    : 'border-orange-100 bg-orange-50/20 hover:border-orange-400 hover:bg-orange-50/40'
+                                                            }`}
                                                         >
-                                                            <div className="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-xs shrink-0 bg-orange-400">
+                                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-xs shrink-0 ${isUnavailable ? 'bg-gray-400' : 'bg-orange-400'}`}>
                                                                 {doc.alias}
                                                             </div>
                                                             <div className="min-w-0">
-                                                                <div className="font-bold text-gray-700 text-sm truncate">{doc.name}</div>
-                                                                <div className="text-[10px] text-orange-500 font-bold whitespace-nowrap overflow-hidden text-ellipsis">已排在: {stationName}</div>
+                                                                <div className={`font-bold text-sm truncate ${isUnavailable ? 'text-gray-400' : 'text-gray-700'}`}>{doc.name}</div>
+                                                                <div className={`text-[10px] font-bold whitespace-nowrap overflow-hidden text-ellipsis ${isUnavailable ? 'text-gray-400' : 'text-orange-500'}`}>
+                                                                    {offReason ? offReason : `已排在: ${stationName}`}
+                                                                </div>
                                                             </div>
                                                         </button>
                                                     ))}
@@ -3853,18 +3874,29 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                         const assignedSt = s?.scheduled_station || s?.station;
                                                         const isWorking = assignedSt && !['X', 'OFF', '休假', 'Unassigned', '未分配'].includes(assignedSt);
                                                         
+                                                        const isExcluded = assignedSt === 'X';
+                                                        const isPermanentlyOff = doc.excludedDays?.includes(dayOfWeek);
+                                                        const isUnavailable = isExcluded || isPermanentlyOff;
+                                                        const offReason = isExcluded ? '當天禁排' : (isPermanentlyOff ? '固定不報到' : undefined);
+
                                                         return (
                                                             <button 
                                                                 key={doc.id}
                                                                 onClick={() => handleAssignDoctor(doc.id)}
-                                                                className={`flex items-center gap-2 p-2 rounded-lg border transition-all text-left ${isWorking ? 'bg-gray-50 border-gray-100 opacity-60' : 'bg-white border-gray-100 hover:border-gray-300'}`}
+                                                                className={`flex items-center gap-2 p-2 rounded-lg border transition-all text-left ${
+                                                                    isUnavailable 
+                                                                        ? 'bg-gray-50 border-gray-100 opacity-40 grayscale pointer-events-none' 
+                                                                        : isWorking ? 'bg-gray-50 border-gray-100 opacity-60' : 'bg-white border-gray-100 hover:border-gray-300'
+                                                                }`}
                                                             >
                                                                 <div className="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-xs shrink-0 bg-gray-300">
                                                                     {doc.alias}
                                                                 </div>
                                                                 <div className="min-w-0">
                                                                     <div className="font-bold text-gray-400 text-sm truncate">{doc.name}</div>
-                                                                    {isWorking && <div className="text-[10px] text-gray-400">已排: {assignedSt}</div>}
+                                                                    <div className="text-[10px] text-gray-400 truncate">
+                                                                        {offReason || (isWorking ? `已排: ${assignedSt}` : '')}
+                                                                    </div>
                                                                 </div>
                                                             </button>
                                                         );
