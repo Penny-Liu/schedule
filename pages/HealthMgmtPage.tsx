@@ -758,7 +758,14 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                 const staffRow = [staff.name];
                 dateRange.forEach(date => {
                     const shift = anesthesiaShifts.find(s => s.userId === staff.id && s.date === date && s.location === loc);
-                    staffRow.push(shift ? (shift.task ? `${shift.station}\n(${shift.task})` : shift.station) : '');
+                    if (shift) {
+                        let cellText = shift.station;
+                        if (shift.task) cellText += `\n(${shift.task})`;
+                        if (shift.location) cellText += `\n[${shift.location}]`;
+                        staffRow.push(cellText);
+                    } else {
+                        staffRow.push('');
+                    }
                 });
                 
                 // Vacation Stats Column
@@ -1085,6 +1092,11 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                                                                     {shift.station}
                                                                 </span>
                                                                 {shift.task && <span className={`text-[8px] leading-tight opacity-80 truncate w-full ${(shift.station === '休' || shift.station === 'V') ? 'text-slate-400' : 'text-teal-600'}`}>{shift.task}</span>}
+                                                                {shift.location && (
+                                                                    <span className={`text-[7px] leading-none mt-0.5 opacity-70 px-1 rounded truncate ${shift.location === '大直' ? 'bg-red-100 text-red-600 font-bold' : 'bg-slate-100 text-slate-500'}`}>
+                                                                        {shift.location}
+                                                                    </span>
+                                                                )}
                                                             </div>
                                                         ) : (
                                                             <div className="h-full w-full opacity-0 hover:opacity-10 dark:hover:opacity-20 flex items-center justify-center">+</div>
