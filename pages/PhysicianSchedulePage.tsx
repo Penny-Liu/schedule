@@ -791,7 +791,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                 styles: {
                     font: fontName,
                     fontSize: 7, 
-                    cellPadding: 0.3, 
+                    cellPadding: 0.1, 
                     valign: 'middle',
                     halign: 'center',
                     lineWidth: 0.2,
