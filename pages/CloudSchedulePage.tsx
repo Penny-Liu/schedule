@@ -267,6 +267,22 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
                 // 影像 (北投影像)
                 { label: '影像', color: [239, 246, 255], getter: (date) => getDocs(date, '北投', '影像') },
 
+                // 遠班 (北投遠距)
+                { label: '遠班', color: [255, 255, 255], getter: (date) => {
+                    return shifts
+                        .filter(s => s.date === date && ((s.scheduled_station || '').includes('遠') || (s.station || '').includes('遠') || (s.task || '').includes('遠')))
+                        .map(s => radiologists.find(d => d.id === s.doctorId)?.name || '')
+                        .filter(Boolean).join('\n');
+                }},
+
+                // 支援 (北投支援)
+                { label: '支援', color: [255, 255, 255], getter: (date) => {
+                    return shifts
+                        .filter(s => s.date === date && ((s.scheduled_station || '').includes('支援') || (s.station || '').includes('支援') || (s.task || '').includes('支援')))
+                        .map(s => radiologists.find(d => d.id === s.doctorId)?.name || '')
+                        .filter(Boolean).join('\n');
+                }},
+
                 // 報告助理打 (雲班表助理資料) - 格式: 醫師代稱-助理名稱
                 { label: '報告助理', color: [240, 253, 250], getter: (date) => {
                     const entryList = entries.filter(e => e.date === date && e.assistantIds.length > 0);
@@ -417,6 +433,8 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
                 { label: '台積電', color: 'FFFFF9C4', getter: (d: string) => { const f = getDocs(d, '台積電', ''); if (f) return f; return TSMC_DEFAULT[new Date(d).getDay()] || ''; } },
                 { label: '大直', color: 'FFFAF5FF', getter: (d: string) => shifts.filter(s => s.date === d && s.location === '大直').map(s => radiologists.find(r => r.id === s.doctorId)?.name || '').filter(Boolean).join('\n') },
                 { label: '影像', color: 'FFEFF6FF', getter: (d: string) => getDocs(d, '北投', '影像') },
+                { label: '遠班', color: 'FFFFFFFF', getter: (d: string) => shifts.filter(s => s.date === d && ((s.scheduled_station || '').includes('遠') || (s.station || '').includes('遠') || (s.task || '').includes('遠'))).map(r => radiologists.find(d => d.id === r.doctorId)?.name || '').filter(Boolean).join('\n') },
+                { label: '支援', color: 'FFFFFFFF', getter: (d: string) => shifts.filter(s => s.date === d && ((s.scheduled_station || '').includes('支援') || (s.station || '').includes('支援') || (s.task || '').includes('支援'))).map(r => radiologists.find(d => d.id === r.doctorId)?.name || '').filter(Boolean).join('\n') },
                 { label: '報告助理', color: 'FFF0FDF5', getter: (d: string) => { const el = entries.filter(e => e.date === d && e.assistantIds.length > 0); return el.flatMap(e => { const da = radiologists.find(r => r.id === e.doctorId)?.alias || radiologists.find(r => r.id === e.doctorId)?.name || ''; return e.assistantIds.map(aid => { const an = assistants.find(a => a.id === aid)?.name || ''; return an ? `${da}-${an}` : ''; }).filter(Boolean); }).join('\n'); } },
                 { label: '報告核對', color: 'FFF0FDF5', getter: (d: string) => { const el = entries.filter(e => e.date === d && e.proofreaderUserId); return el.map(e => { const da = radiologists.find(r => r.id === e.doctorId)?.alias || radiologists.find(r => r.id === e.doctorId)?.name || ''; const ra = radiographers.find(u => u.id === e.proofreaderUserId)?.alias || radiographers.find(u => u.id === e.proofreaderUserId)?.name || ''; return ra ? `${da}-${ra}` : ''; }).filter(Boolean).join('\n'); } },
             ];
@@ -773,6 +791,35 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
                                             })}
                                         </tr>
                                     ))}
+                                    {/* Summary Rows for 遠班 and 支援 */}
+                                    <tr className="bg-slate-50 border-t-2 border-slate-200">
+                                        <td colSpan={3} className="px-2 py-2 text-right font-bold text-slate-600 sticky left-0 z-20 bg-slate-50 border-r">遠班醫師</td>
+                                        {visibleDates.map(date => {
+                                            const names = shifts
+                                                .filter(s => s.date === date && ((s.scheduled_station || '').includes('遠') || (s.station || '').includes('遠') || (s.task || '').includes('遠')))
+                                                .map(s => radiologists.find(d => d.id === s.doctorId)?.name || '')
+                                                .filter(Boolean);
+                                            return (
+                                                <td key={`remote-${date}`} className="px-1 py-2 text-center text-[11px] font-bold text-slate-800 border-r border-slate-100 align-top whitespace-pre-wrap">
+                                                    {names.join('\n') || '-'}
+                                                </td>
+                                            );
+                                        })}
+                                    </tr>
+                                    <tr className="bg-slate-50 border-t border-slate-200">
+                                        <td colSpan={3} className="px-2 py-2 text-right font-bold text-slate-600 sticky left-0 z-20 bg-slate-50 border-r">支援醫師</td>
+                                        {visibleDates.map(date => {
+                                            const names = shifts
+                                                .filter(s => s.date === date && ((s.scheduled_station || '').includes('支援') || (s.station || '').includes('支援') || (s.task || '').includes('支援')))
+                                                .map(s => radiologists.find(d => d.id === s.doctorId)?.name || '')
+                                                .filter(Boolean);
+                                            return (
+                                                <td key={`support-${date}`} className="px-1 py-2 text-center text-[11px] font-bold text-slate-800 border-r border-slate-100 align-top whitespace-pre-wrap">
+                                                    {names.join('\n') || '-'}
+                                                </td>
+                                            );
+                                        })}
+                                    </tr>
                                 </tbody>
                             </table>
                         </div>
