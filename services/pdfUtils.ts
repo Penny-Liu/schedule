@@ -7,7 +7,9 @@ import jsPDF from 'jspdf';
  * @returns The font name to use: 'OpenHuninn' if loaded, 'helvetica' as fallback.
  */
 export async function loadChineseFontToDoc(doc: jsPDF): Promise<string> {
+    const baseUrl = (import.meta as any).env?.BASE_URL || '/';
     const pathsToTry = [
+        `${baseUrl}fonts/jf-openhuninn-2.1.ttf`.replace(/\/+/g, '/'),
         '/schedule/fonts/jf-openhuninn-2.1.ttf',
         '/fonts/jf-openhuninn-2.1.ttf',
     ];

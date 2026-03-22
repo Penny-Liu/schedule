@@ -2276,8 +2276,9 @@ BMD :{{bmd}}
         // Auto-pair Gynecology + Explanation
         await this.autoPairGynecologyWithExplanation(doctorId, date, station);
         
-        // **影像雲同步**: 若站別確實有異動，清除雲班表該醫師當日的助理與校對
-        if (oldStation !== undefined && oldStation !== station) {
+        // **影像雲同步**: 智慧連動 - 僅在地點變動或從「影像類任務」換成「非影像任務」時才清除
+        const isStillImaging = this.shouldPreserveCloudSchedule(shift, { station, location, task });
+        if (oldStation !== undefined && oldStation !== station && !isStillImaging) {
             await this.clearCloudScheduleHelpers(date, doctorId);
         }
 
@@ -2369,8 +2370,9 @@ BMD :{{bmd}}
             }
         } catch(e) { console.warn('Supabase operation failed, using local', e); }
 
-        // **影像雲同步**: 若排定站別確實有異動，清除雲班表該醫師當日的助理與校對
-        if (oldScheduledStation !== undefined && oldScheduledStation !== scheduledStation) {
+        // **影像雲同步**: 智慧連動 - 僅在地點變動或任務性質改變時才清除
+        const isStillImaging = this.shouldPreserveCloudSchedule(shift, { scheduled_station: scheduledStation, location, task });
+        if (oldScheduledStation !== undefined && oldScheduledStation !== scheduledStation && !isStillImaging) {
             await this.clearCloudScheduleHelpers(date, doctorId);
         }
 
@@ -3333,6 +3335,32 @@ BMD :{{bmd}}
         return [...this.cloudScheduleEntries];
     }
 
+    private isImagingRelated(station?: string, task?: string): boolean {
+        if (!station && !task) return false;
+        const s = (station || '').toLowerCase();
+        const t = (task || '').toLowerCase();
+        // 影像相關站別與任務關鍵字
+        const keywords = ['影像', '支援', '遠', 'ct', 'mr', 'us', '解說', 'bmd', 'remote'];
+        return keywords.some(k => s.includes(k) || t.includes(k));
+    }
+
+    private shouldPreserveCloudSchedule(oldShift: DoctorShift | undefined, newShift: any): boolean {
+        if (!oldShift) return true;
+        
+        // 1. 地點異動 -> 清除 (安全性考量，避免助理跨點指派錯誤)
+        if (oldShift.location !== newShift.location) return false;
+
+        // 2. 判斷新舊任務是否皆屬「影像/雲班表」範疇
+        const wasImaging = this.isImagingRelated(oldShift.scheduled_station || oldShift.station, oldShift.task);
+        const isImaging = this.isImagingRelated(newShift.scheduled_station || newShift.station || newShift.scheduled_station, newShift.task);
+
+        // 如果原本是影像任務，且新任務也是影像任務，則保留
+        if (wasImaging && isImaging) return true;
+
+        // 3. 其餘情況 (例如改到休假、行政) 則維持清除
+        return false;
+    }
+
     getCloudScheduleEntry(date: string, doctorId: string): CloudScheduleEntry | undefined {
         return this.cloudScheduleEntries.find(e => e.date === date && e.doctorId === doctorId);
     }
@@ -3427,7 +3455,7 @@ BMD :{{bmd}}
         try {
             const [assistantsRes, entriesRes] = await Promise.all([
                 supabase.from('report_assistants').select('*'), // 移除排序以防欄位錯誤
-                supabase.from('cloud_schedule_entries').select('*')
+                this.fetchPaginated('cloud_schedule_entries')
             ]);
             
             console.log('[DEBUG] assistantsRes raw:', { 
