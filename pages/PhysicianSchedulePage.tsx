@@ -413,6 +413,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
     const [showSpecialtyOrderModal, setShowSpecialtyOrderModal] = useState(false);
     const [tempSpecialties, setTempSpecialties] = useState<string[]>([]);
     const [specialtyOrder, setSpecialtyOrder] = useState<string[]>(db.settings.doctorSpecialties || []);
+    const [holidays, setHolidays] = useState(() => db.getHolidays());
 
     const handleOpenSpecialtyOrder = () => {
         // Ensure we have the latest list from DB + any derived ones from loaded doctors
@@ -482,6 +483,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
             setShifts(db.getDoctorShifts());
             setStaffShifts(db.shifts);
             setIsLocked(db.isMonthLocked(currentYearMonth));
+            setHolidays(db.getHolidays());
         };
 
         const unsubscribe = db.subscribe(handleDataChange);
@@ -491,6 +493,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
             setDoctors(db.getDoctors());
             setShifts(db.getDoctorShifts());
             setStaffShifts(db.shifts);
+            setHolidays(db.getHolidays());
         });
 
         return () => unsubscribe();
@@ -805,6 +808,21 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                     fontSize: 8,
                     minCellHeight: 4.0 
                 },
+                columnStyles: (() => {
+                    const pageWidth = doc.internal.pageSize.width;
+                    const marginX = 2; // margin: 2 (left/right)
+                    const nameWidth = viewMode === 'station' ? 22 : 16; 
+                    const availableDateWidth = pageWidth - (marginX * 2) - nameWidth;
+                    const dateWidth = availableDateWidth / dateRange.length;
+
+                    const styles: Record<number, any> = {
+                        0: { cellWidth: nameWidth, halign: 'center' } // Unified halign to center as requested
+                    };
+                    dateRange.forEach((_, i) => {
+                        styles[i + 1] = { cellWidth: dateWidth };
+                    });
+                    return styles;
+                })(),
                 didDrawPage: (data: any) => {
                     drawHeaders();
                 },
@@ -814,7 +832,8 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                     if (data.section === 'head' && data.column.index > 0) {
                         const dateStr = dateRange[data.column.index - 1];
                         const d = new Date(dateStr);
-                        if (d.getDay() === 0 || d.getDay() === 6) {
+                        const isHoliday = holidays.some(h => h.date === dateStr && (h.type === 'NATIONAL' || h.type === 'CLOSED'));
+                        if (d.getDay() === 0 || d.getDay() === 6 || isHoliday) {
                             data.cell.styles.textColor = [255, 0, 0]; 
                         }
                     }
@@ -824,7 +843,8 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                          if (data.column.index > 0) {
                               const dateStr = dateRange[data.column.index - 1];
                               const d = new Date(dateStr);
-                              if (d.getDay() === 0 || d.getDay() === 6) {
+                              const isHoliday = holidays.some(h => h.date === dateStr && (h.type === 'NATIONAL' || h.type === 'CLOSED'));
+                              if (d.getDay() === 0 || d.getDay() === 6 || isHoliday) {
                                   data.cell.styles.fillColor = [245, 245, 245];
                               }
                          }
@@ -1262,15 +1282,19 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
 
                 // Push to outer bodyRows
                 bodyRows = sortedDoctors.map(doc => {
-                    const rowData: any[] = [{ content: doc.name, styles: { fontStyle: 'bold', fontSize: 9, cellPadding: { top: 0.2, bottom: 0.2, left: 0, right: 0 } } }];
+                    const fixedHeight = 8.0;
+                    const rowData: any[] = [{ content: doc.name, styles: { fontStyle: 'bold', fontSize: 9, minCellHeight: fixedHeight, cellPadding: { top: 0.2, bottom: 0.2, left: 0, right: 0 } } }];
                     dateRange.forEach(date => {
                          const shift = shifts.find(s => s.doctorId === doc.id && s.date === date);
                          const isExcluded = doc.excludedDays?.includes(new Date(date).getDay());
                          
+                         // Set a consistent height for all cells in Personnel View
+                         // (Base: 3.2, Max Task/Time: +2.2 +2.2 = 7.6, Padding: 0.2 -> ~8.0)
+
                          if (shift) {
                              const st = shift.scheduled_station;
                              if (st === 'X') {
-                                 rowData.push('X');
+                                 rowData.push({ content: 'X', styles: { minCellHeight: fixedHeight } });
                              } else if (st) {
                                  const allShiftsForDate = shifts.filter(s => s.doctorId === doc.id && s.date === date);
                                  const hasGynecology = allShiftsForDate.some(s => s.scheduled_station === '婦科');
@@ -1278,16 +1302,9 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                  let displayStation = (hasGynecology && hasExplanation) ? '解+婦' : st;
                                  if (displayStation === '耳鼻喉科') displayStation = 'ENT';
                                  
-                                 let dynamicH = 3.2; // Base height for Station
-                                 if (shift.workTime) dynamicH += 2.2;
-                                 if (shift.task) dynamicH += 2.2;
-
-                                 const padding = 0.2; 
-                                 const finalHeight = Math.max(dynamicH + padding, 3.5);
-
                                  rowData.push({
                                      content: displayStation, 
-                                     styles: { minCellHeight: finalHeight }, 
+                                     styles: { minCellHeight: fixedHeight }, 
                                      rawShift: {
                                          station: displayStation,
                                          time: formatTimeShort(shift.workTime),
@@ -1296,12 +1313,12 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                      }
                                  });
                              } else {
-                                 rowData.push('');
+                                 rowData.push({ content: '', styles: { minCellHeight: fixedHeight } });
                              }
                          } else if (isExcluded) {
-                             rowData.push('X');
+                             rowData.push({ content: 'X', styles: { minCellHeight: fixedHeight } });
                          } else {
-                             rowData.push('');
+                             rowData.push({ content: '', styles: { minCellHeight: fixedHeight } });
                          }
                     });
                     return rowData;

@@ -24,6 +24,7 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
     const [entries, setEntries] = useState<CloudScheduleEntry[]>(() => db.getCloudScheduleEntries());
     const [doctors, setDoctors] = useState<Doctor[]>(() => db.getDoctors());
     const [shifts, setShifts] = useState(() => db.doctorShifts);
+    const [holidays, setHolidays] = useState(() => db.getHolidays());
 
     // Local dirty tracking: key (date_doctorId) -> partial entry
     const [dirtyEntries, setDirtyEntries] = useState<Record<string, { assistantIds: string[]; proofreaderUserId?: string }>>({});
@@ -64,6 +65,7 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
             setEntries([...db.getCloudScheduleEntries()]);
             setDoctors([...db.getDoctors()]);
             setShifts([...db.doctorShifts]);
+            setHolidays([...db.getHolidays()]);
         });
         return () => {
             window.removeEventListener('resize', handleResize);
@@ -328,8 +330,9 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
                 const headerRow = [{ content: '' }].concat(
                     dates.map(date => {
                         const d = new Date(date);
+                        const isHoliday = holidays.some(h => h.date === date && (h.type === 'NATIONAL' || h.type === 'CLOSED'));
                         const isWknd = d.getDay() === 0 || d.getDay() === 6;
-                        return { content: `${d.getDate()}\n${weekDays[d.getDay()]}`, styles: { textColor: isWknd ? [200, 50, 50] : [255, 255, 255] } };
+                        return { content: `${d.getDate()}\n${weekDays[d.getDay()]}`, styles: { textColor: (isWknd || isHoliday) ? [200, 50, 50] : [255, 255, 255] } };
                     })
                 );
 
@@ -374,8 +377,10 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
                             }
                             if (data.column.index > 0) {
                                 const date = dates[data.column.index - 1];
-                                const dow = new Date(date).getDay();
-                                if ((dow === 0 || dow === 6) && data.cell.styles.fillColor?.join?.(',') === '255,255,255') {
+                                const d = new Date(date);
+                                const isHoliday = holidays.some(h => h.date === date && (h.type === 'NATIONAL' || h.type === 'CLOSED'));
+                                const dow = d.getDay();
+                                if ((dow === 0 || dow === 6 || isHoliday) && data.cell.styles.fillColor?.join?.(',') === '255,255,255') {
                                     data.cell.styles.fillColor = [248, 248, 248];
                                 }
                             }
