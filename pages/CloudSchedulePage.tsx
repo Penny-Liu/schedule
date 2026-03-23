@@ -102,6 +102,16 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
         }
     }, [currentDate, viewMode]);
 
+    const isShiftEmpty = (s: any) => {
+        if (!s) return true;
+        const station = (s.scheduled_station || s.station || '').trim();
+        const task = (s.task || '').trim();
+        const note = (s.note || '').trim();
+        // A shift is empty if it has no station (or placeholder stations) AND no task AND no note
+        if ((!station || station === '未分配' || station === 'X' || station === 'OFF') && !task && !note) return true;
+        return false;
+    };
+
     // Get effective entry for a date + doctor (dirty overrides persisted)
     const getEntry = (date: string, doctorId: string) => {
         const key = `${date}_${doctorId}`;
@@ -289,7 +299,7 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
                         if (e.date !== date || e.assistantIds.length === 0) return false;
                         // 行政班醫師過濾：若無指定校對則不呈現
                         const docShift = shifts.find(s => s.date === date && s.doctorId === e.doctorId);
-                        if (!docShift) return false; // 醫師當日無排班則不呈現
+                        if (!docShift || isShiftEmpty(docShift)) return false; // 醫師當日無排班則不呈現
                         const isAdmin = (docShift?.scheduled_station || docShift?.station || '').includes('行政');
                         if (isAdmin && !e.proofreaderUserId) return false;
                         return true;
@@ -299,8 +309,10 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
                         const doc = radiologists.find(d => d.id === e.doctorId);
                         const docAlias = doc?.alias || doc?.name || '';
                         e.assistantIds.forEach(aid => {
-                            const asstName = assistants.find(a => a.id === aid)?.name || '';
-                            if (asstName) lines.push(`${docAlias}-${asstName}`);
+                            const asst = assistants.find(a => a.id === aid);
+                            if (asst && asst.isActive !== false) { // Filter inactive assistants
+                                lines.push(`${docAlias}-${asst.name}`);
+                            }
                         });
                     });
                     return lines.join('\n');
@@ -311,7 +323,8 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
                     // 已包含 proofreaderUserId 檢查，符合「除非有校對才呈現」且醫師需有排班
                     const entryList = entries.filter(e => {
                         if (e.date !== date || !e.proofreaderUserId) return false;
-                        return shifts.some(s => s.date === date && s.doctorId === e.doctorId);
+                        const docShift = shifts.find(s => s.date === date && s.doctorId === e.doctorId);
+                        return docShift && !isShiftEmpty(docShift);
                     });
                     const lines: string[] = [];
                     entryList.forEach(e => {
@@ -451,17 +464,17 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
                     const el = entries.filter(e => {
                         if (e.date !== d || e.assistantIds.length === 0) return false;
                         const docShift = shifts.find(s => s.date === d && s.doctorId === e.doctorId);
-                        if (!docShift) return false; // 醫師當日無排班則不呈現
+                        if (!docShift || isShiftEmpty(docShift)) return false; // 醫師當日無排班則不呈現
                         const isAdmin = (docShift?.scheduled_station || docShift?.station || '').includes('行政');
                         if (isAdmin && !e.proofreaderUserId) return false;
                         return true;
                     }); 
                     return el.flatMap(e => { 
                         const da = radiologists.find(r => r.id === e.doctorId)?.alias || radiologists.find(r => r.id === e.doctorId)?.name || ''; 
-                        return e.assistantIds.map(aid => { const an = assistants.find(a => a.id === aid)?.name || ''; return an ? `${da}-${an}` : ''; }).filter(Boolean); 
+                        return e.assistantIds.map(aid => { const asst = assistants.find(a => a.id === aid); return (asst && asst.isActive !== false) ? `${da}-${asst.name}` : ''; }).filter(Boolean); 
                     }).join('\n'); 
                 }},
-                { label: '報告核對', color: 'FFF0FDF5', getter: (d: string) => { const el = entries.filter(e => { if (e.date !== d || !e.proofreaderUserId) return false; return shifts.some(s => s.date === d && s.doctorId === e.doctorId); }); return el.map(e => { const da = radiologists.find(r => r.id === e.doctorId)?.alias || radiologists.find(r => r.id === e.doctorId)?.name || ''; const ra = radiographers.find(u => u.id === e.proofreaderUserId)?.alias || radiographers.find(u => u.id === e.proofreaderUserId)?.name || ''; return ra ? `${da}-${ra}` : ''; }).filter(Boolean).join('\n'); } },
+                { label: '報告核對', color: 'FFF0FDF5', getter: (d: string) => { const el = entries.filter(e => { if (e.date !== d || !e.proofreaderUserId) return false; const docShift = shifts.find(s => s.date === d && s.doctorId === e.doctorId); return docShift && !isShiftEmpty(docShift); }); return el.map(e => { const da = radiologists.find(r => r.id === e.doctorId)?.alias || radiologists.find(r => r.id === e.doctorId)?.name || ''; const ra = radiographers.find(u => u.id === e.proofreaderUserId)?.alias || radiographers.find(u => u.id === e.proofreaderUserId)?.name || ''; return ra ? `${da}-${ra}` : ''; }).filter(Boolean).join('\n'); } },
 
             ];
 
@@ -749,7 +762,7 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
 
                                                 return (
                                                     <td key={date} className={`p-1 align-top border-r border-slate-100 ${bgColor} relative group transition-colors hover:bg-slate-50`}>
-                                                        {!docShift ? (
+                                                        {(!docShift || isShiftEmpty(docShift)) ? (
                                                             <div className="h-full w-full min-h-[50px] flex items-center justify-center text-[10px] text-slate-300">沒班</div>
                                                         ) : !isEditable ? (
                                                             <div className="h-full w-full min-h-[50px] flex flex-col items-center justify-center text-[10px] leading-tight">
