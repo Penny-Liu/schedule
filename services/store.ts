@@ -2279,7 +2279,13 @@ BMD :{{bmd}}
         // **影像雲同步**: 智慧連動 - 僅在地點變動或從「影像類任務」換成「非影像任務」時才清除
         const isStillImaging = this.shouldPreserveCloudSchedule(shift, { station, location, task });
         if (oldStation !== undefined && oldStation !== station && !isStillImaging) {
-            await this.clearCloudScheduleHelpers(date, doctorId);
+            // 如果新任務完全不是影像類（例如「行政」或「未分配」），則直接刪除該表記錄以防統計誤差
+            const isNone = !station || station === '未分配' || station === 'X';
+            if (isNone) {
+                await this.deleteCloudScheduleEntry(date, doctorId);
+            } else {
+                await this.clearCloudScheduleHelpers(date, doctorId);
+            }
         }
 
         this.notifyListeners();
@@ -2373,7 +2379,13 @@ BMD :{{bmd}}
         // **影像雲同步**: 智慧連動 - 僅在地點變動或任務性質改變時才清除
         const isStillImaging = this.shouldPreserveCloudSchedule(shift, { scheduled_station: scheduledStation, location, task });
         if (oldScheduledStation !== undefined && oldScheduledStation !== scheduledStation && !isStillImaging) {
-            await this.clearCloudScheduleHelpers(date, doctorId);
+            // 如果新任務完全不是影像類（例如「行政」或「未分配」），則直接刪除該表記錄以防統計誤差
+            const isNone = !scheduledStation || scheduledStation === '未分配' || scheduledStation === 'X';
+            if (isNone) {
+                await this.deleteCloudScheduleEntry(date, doctorId);
+            } else {
+                await this.clearCloudScheduleHelpers(date, doctorId);
+            }
         }
 
         this.notifyListeners();
@@ -2578,17 +2590,26 @@ BMD :{{bmd}}
     async clearDoctorShifts(startDate: string, endDate: string) {
         // Optimistic
         this.doctorShifts = this.doctorShifts.filter(s => s.date < startDate || s.date > endDate);
+        this.cloudScheduleEntries = this.cloudScheduleEntries.filter(e => e.date < startDate || e.date > endDate);
         this.notifyListeners();
         
         try {
-            const { error } = await supabase.from('doctor_shifts')
+            // Delete associated shifts
+            const { error: e1 } = await supabase.from('doctor_shifts')
+                .delete()
+                .gte('date', startDate)
+                .lte('date', endDate);
+
+            // Delete associated cloud schedule entries
+            const { error: e2 } = await supabase.from('cloud_schedule_entries')
                 .delete()
                 .gte('date', startDate)
                 .lte('date', endDate);
             
-            if (error) throw error;
+            if (e1) console.error('Failed to clear doctor shifts:', e1);
+            if (e2) console.error('Failed to clear cloud schedule entries:', e2);
         } catch (e) {
-            console.error('Failed to clear shifts:', e);
+            console.error('Failed to clear data range:', e);
         }
     }
 

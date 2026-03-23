@@ -289,6 +289,7 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
                         if (e.date !== date || e.assistantIds.length === 0) return false;
                         // 行政班醫師過濾：若無指定校對則不呈現
                         const docShift = shifts.find(s => s.date === date && s.doctorId === e.doctorId);
+                        if (!docShift) return false; // 醫師當日無排班則不呈現
                         const isAdmin = (docShift?.scheduled_station || docShift?.station || '').includes('行政');
                         if (isAdmin && !e.proofreaderUserId) return false;
                         return true;
@@ -307,8 +308,11 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
 
                 // 報告核對 - 格式: 醫師代稱-放射師代稱
                 { label: '報告核對', color: [240, 253, 250], getter: (date) => {
-                    // 已包含 proofreaderUserId 檢查，符合「除非有校對才呈現」
-                    const entryList = entries.filter(e => e.date === date && e.proofreaderUserId);
+                    // 已包含 proofreaderUserId 檢查，符合「除非有校對才呈現」且醫師需有排班
+                    const entryList = entries.filter(e => {
+                        if (e.date !== date || !e.proofreaderUserId) return false;
+                        return shifts.some(s => s.date === date && s.doctorId === e.doctorId);
+                    });
                     const lines: string[] = [];
                     entryList.forEach(e => {
                         const doc = radiologists.find(d => d.id === e.doctorId);
@@ -447,6 +451,7 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
                     const el = entries.filter(e => {
                         if (e.date !== d || e.assistantIds.length === 0) return false;
                         const docShift = shifts.find(s => s.date === d && s.doctorId === e.doctorId);
+                        if (!docShift) return false; // 醫師當日無排班則不呈現
                         const isAdmin = (docShift?.scheduled_station || docShift?.station || '').includes('行政');
                         if (isAdmin && !e.proofreaderUserId) return false;
                         return true;
@@ -456,7 +461,7 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
                         return e.assistantIds.map(aid => { const an = assistants.find(a => a.id === aid)?.name || ''; return an ? `${da}-${an}` : ''; }).filter(Boolean); 
                     }).join('\n'); 
                 }},
-                { label: '報告核對', color: 'FFF0FDF5', getter: (d: string) => { const el = entries.filter(e => e.date === d && e.proofreaderUserId); return el.map(e => { const da = radiologists.find(r => r.id === e.doctorId)?.alias || radiologists.find(r => r.id === e.doctorId)?.name || ''; const ra = radiographers.find(u => u.id === e.proofreaderUserId)?.alias || radiographers.find(u => u.id === e.proofreaderUserId)?.name || ''; return ra ? `${da}-${ra}` : ''; }).filter(Boolean).join('\n'); } },
+                { label: '報告核對', color: 'FFF0FDF5', getter: (d: string) => { const el = entries.filter(e => { if (e.date !== d || !e.proofreaderUserId) return false; return shifts.some(s => s.date === d && s.doctorId === e.doctorId); }); return el.map(e => { const da = radiologists.find(r => r.id === e.doctorId)?.alias || radiologists.find(r => r.id === e.doctorId)?.name || ''; const ra = radiographers.find(u => u.id === e.proofreaderUserId)?.alias || radiographers.find(u => u.id === e.proofreaderUserId)?.name || ''; return ra ? `${da}-${ra}` : ''; }).filter(Boolean).join('\n'); } },
 
             ];
 
