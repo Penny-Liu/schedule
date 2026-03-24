@@ -103,6 +103,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
   // const [localStaff, setLocalStaff] = useState<HealthMgmtStaff[]>([]);
 
   useEffect(() => {
+    let isInitialLoad = true;
     const loadData = () => {
       setHealthMgmtStaff(db.getHealthMgmtStaff());
       setShifts(db.getHealthMgmtShifts());
@@ -114,11 +115,14 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
       setAnesthesiaStaff(db.getAnesthesiaStaff());
       setAnesthesiaShifts(db.getAnesthesiaShifts());
 
-      // Auto-select current cycle if not already set or if it's 'month'
-      const todayStr = toLocalISOString(new Date());
-      const currentCycle = cycles.find(c => todayStr >= c.startDate && todayStr <= c.endDate);
-      if (currentCycle) {
-        setSelectedCycleId(currentCycle.id);
+      if (isInitialLoad) {
+          // Auto-select current cycle if not already set or if it's 'month'
+          const todayStr = toLocalISOString(new Date());
+          const currentCycle = cycles.find(c => todayStr >= c.startDate && todayStr <= c.endDate);
+          if (currentCycle) {
+            setSelectedCycleId(currentCycle.id);
+          }
+          isInitialLoad = false;
       }
     };
     loadData();
