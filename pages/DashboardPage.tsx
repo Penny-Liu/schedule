@@ -1462,6 +1462,8 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
 
     const getCandidatesForRole = (role: string, dateStr: string) => {
         return users.filter(user => {
+            if (user.isPartTime) return false; // Skip part-time
+            if (user.isRadiographer === false) return false; // Skip non-radiographers
             const isCertified = user.capabilities?.includes(role);
             const isLearning = user.learningCapabilities?.includes(role);
             const isExcluded = user.excludedCapabilities?.includes(role);
@@ -2100,6 +2102,28 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                     >
                                         <Sparkles size={12} /> <span className="hidden lg:inline">特殊</span>
                                     </button>
+                                    
+                                    {currentUser.role === UserRole.SYSTEM_ADMIN && (
+                                        <button
+                                            onClick={async () => {
+                                                if(confirm('確定要清除這個週期內所有非放射師(含行政、健管)的排班紀錄嗎？')) {
+                                                    setIsProcessing(true);
+                                                    try {
+                                                        const deleted = await db.cleanupNonRadiographerShifts(scheduleRange.start, scheduleRange.end);
+                                                        alert(`清除完成，共刪除 ${deleted} 筆錯誤紀錄。`);
+                                                    } catch (e) {
+                                                        alert('清除失敗');
+                                                    }
+                                                    setIsProcessing(false);
+                                                }
+                                            }}
+                                            disabled={isProcessing}
+                                            className="px-2.5 py-1 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm bg-red-50 text-red-600 border border-red-200 hover:bg-red-100"
+                                            title="清除非放射師(行政/健管)被錯誤排入的班表"
+                                        >
+                                            <span className="hidden lg:inline">清除錯誤排班(非放射師)</span>
+                                        </button>
+                                    )}
                                 </>
                             )}
 

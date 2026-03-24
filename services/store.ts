@@ -519,6 +519,44 @@ BMD :{{bmd}}
         }
     }
 
+    // [New] Cleanup Tool for Non-Radiographer Shifts
+    async cleanupNonRadiographerShifts(startDate: string, endDate: string) {
+        console.log(`Cleaning up non-radiographer shifts from ${startDate} to ${endDate}...`);
+        try {
+            // Find all users who are NOT radiographers
+            const nonRadUserIds = this.users.filter(u => u.isRadiographer === false).map(u => u.id);
+            if (nonRadUserIds.length === 0) return 0;
+
+            // Find all shifts in the range belonging to these users
+            const shiftsToDelete = this.shifts.filter(s => 
+                s.date >= startDate && 
+                s.date <= endDate && 
+                nonRadUserIds.includes(s.userId)
+            );
+
+            if (shiftsToDelete.length === 0) return 0;
+
+            const idsToDelete = shiftsToDelete.map(s => s.id);
+            console.log(`Found ${idsToDelete.length} invalid shifts to delete.`);
+
+            // Delete in chunks
+            const chunkSize = 200;
+            for (let i = 0; i < idsToDelete.length; i += chunkSize) {
+                const chunk = idsToDelete.slice(i, i + chunkSize);
+                const { error: delError } = await supabase.from('shifts').delete().in('id', chunk);
+                if (delError) console.error('Delete chunk failed:', delError);
+            }
+
+            // Refresh Local State
+            this.shifts = this.shifts.filter(s => !idsToDelete.includes(s.id));
+            this.notifyListeners();
+            return idsToDelete.length;
+        } catch (e) {
+            console.error('Non-radiographer cleanup failed:', e);
+            throw e;
+        }
+    }
+
     // [New] Force Clear Data for Specific Month (Nuclear Option)
     async forceClearMonth(yearMonth: string) {
         // yearMonth format: "YYYY-MM"
@@ -1058,6 +1096,24 @@ BMD :{{bmd}}
                 console.error('Failed to soft delete user in Supabase:', error);
                 throw error;
             }
+
+            // [User Request] Cascade delete: Remove all shifts associated with this user
+            try {
+                const { error: shiftDelError } = await supabase
+                    .from('shifts')
+                    .delete()
+                    .eq('user_id', id);
+                    
+                if (shiftDelError) {
+                    console.error('Failed to delete user shifts in Supabase:', shiftDelError);
+                } else {
+                    // Remove from local state
+                    this.shifts = this.shifts.filter(s => s.userId !== id);
+                }
+            } catch (e) {
+                console.error('Cascade delete shifts exception:', e);
+            }
+
             this.notifyListeners();
         }
     }
@@ -2914,6 +2970,7 @@ BMD :{{bmd}}
             const allWorkingUsers = this.users.filter(user => {
                 if (user.isActive === false) return false; // Skip resigned users
                 if (user.isPartTime) return false; // Skip part-time staff for auto-scheduling
+                if (user.isRadiographer === false) return false; // Skip non-radiographers
                 const status = this.getUserStatusOnDate(user.id, dateStr);
                 if (status !== 'WORK') return false;
                 const existingShift = this.shifts.find(s => s.userId === user.id && s.date === dateStr);
@@ -3109,13 +3166,18 @@ BMD :{{bmd}}
 
                 const candidates = shuffledUsers.filter(u => {
                     if (u.isActive === false) return false; // Skip resigned users
+                    if (u.isRadiographer === false) return false; // Skip non-radiographers (e.g. admins)
+                    if (u.isPartTime) return false; // Skip part-time staff
                     
                     // a. Must be WORKING
                     const status = this.getUserStatusOnDate(u.id, dateStr);
                     if (status !== 'WORK') return false;
 
-                    // b. Must have Capability
-                    if (u.capabilities && u.capabilities.length > 0 && !u.capabilities.includes(role)) {
+                    // b. Must have Capability for the Role
+                    // User Request: Users must explicitly have the role checked in user management.
+                    const isCertified = u.capabilities?.includes(role);
+                    const isLearning = u.learningCapabilities?.includes(role);
+                    if (!isCertified && !isLearning) {
                         return false;
                     }
 
@@ -3125,34 +3187,37 @@ BMD :{{bmd}}
                     if (shift && shift.station === SYSTEM_OFF) return false;
 
                     if (shift) {
-                        // STRICT RULE: No Special Role Overlaps GENERALLY, BUT...
-                        // EXCEPTION: 'Opening' (開機) and 'Assist' (輔班) CAN coexist.
-                        if (shift.specialRoles.length > 0) {
-                            const existing = shift.specialRoles;
-                            const isOpening = existing.includes(SPECIAL_ROLES.OPENING);
-                            const isAssist = existing.includes(SPECIAL_ROLES.ASSIST);
-                            const targetIsOpening = role === SPECIAL_ROLES.OPENING;
-                            const targetIsAssist = role === SPECIAL_ROLES.ASSIST;
-
-                            // If existing is exactly [Opening] and target is Assist -> Allow for now
-                            // If existing is exactly [Assist] and target is Opening -> Allow for now
-                            // Note: We need to check if existing has OTHER roles interfering.
-                            // Simplified: If existing has anything other than Opening/Assist, reject.
-                            const hasOtherRoles = existing.some(r => r !== SPECIAL_ROLES.OPENING && r !== SPECIAL_ROLES.ASSIST);
-                            if (hasOtherRoles) return false;
-
-                            // Now check compatible pair
-                            const isCompatible = (isOpening && targetIsAssist) || (isAssist && targetIsOpening);
-                            if (!isCompatible) return false;
-
-                            // If compatible, we allow it (and will append later)
+                        const existing = shift.specialRoles || [];
+                        const station = shift.station || '';
+                        
+                        // 1. STATION CONFLICTS (崗位衝突)
+                        // User Request: 開機/晚班不能是「場控」、「遠班」、「大直」 (and by extension logic, generally remote/admin roles usually avoid special roles)
+                        if (station.includes('場控') || station.includes('遠') || station.includes('大直')) {
+                            return false; // Cannot assign opening/late to these stations
                         }
 
-                        // STRICT RULE: Conflict with specific Stations
-                        // If manually assigned to '場控', '遠距', '大直', '遠班', CANNOT have special roles
-                        const station = shift.station || '';
-                        if (station.includes('場控') || station.includes('遠')) {
-                            return false;
+                        // 2. SPECIAL ROLE CONFLICTS (特殊任務互斥衝突)
+                        if (existing.length > 0) {
+                            // Target: OPENING (開機)
+                            if (role === SPECIAL_ROLES.OPENING) {
+                                // 可以跟輔班 (ASSIST) 並存，但不能跟 晚班(LATE)、排班(SCHEDULER)
+                                if (existing.includes(SPECIAL_ROLES.LATE) || existing.includes(SPECIAL_ROLES.SCHEDULER)) return false;
+                            }
+                            // Target: LATE (晚班)
+                            else if (role === SPECIAL_ROLES.LATE) {
+                                // 不能跟 開機(OPENING)、輔班(ASSIST)、排班(SCHEDULER)
+                                if (existing.includes(SPECIAL_ROLES.OPENING) || existing.includes(SPECIAL_ROLES.ASSIST) || existing.includes(SPECIAL_ROLES.SCHEDULER)) return false;
+                            }
+                            // Target: ASSIST (輔班)
+                            else if (role === SPECIAL_ROLES.ASSIST) {
+                                // 可以跟開機並存，但不能跟晚班、排班
+                                if (existing.includes(SPECIAL_ROLES.LATE) || existing.includes(SPECIAL_ROLES.SCHEDULER)) return false;
+                            }
+                            // Target: SCHEDULER (排班)
+                            else if (role === SPECIAL_ROLES.SCHEDULER) {
+                                // 排班不能跟開機、晚班、輔班
+                                if (existing.includes(SPECIAL_ROLES.OPENING) || existing.includes(SPECIAL_ROLES.LATE) || existing.includes(SPECIAL_ROLES.ASSIST)) return false;
+                            }
                         }
                     }
 
