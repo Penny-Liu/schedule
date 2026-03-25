@@ -102,6 +102,39 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
         }
     }, [currentDate, viewMode]);
 
+    // cleanup invalid entries (doctor Banned/OFF/Not Beitou)
+    useEffect(() => {
+        if (!isEditing && entries.length > 0 && shifts.length > 0) {
+            const invalidEntries = entries.filter(e => {
+                if (!visibleDates.includes(e.date)) return false;
+                const dShift = shifts.find(s => s.date === e.date && s.doctorId === e.doctorId);
+                return !isRelevantShift(dShift);
+            });
+            
+            if (invalidEntries.length > 0) {
+                console.log('[CloudSchedule] Cleaning up invalid entries:', invalidEntries);
+                invalidEntries.forEach(e => {
+                    db.deleteCloudScheduleEntry(e.date, e.doctorId).catch(err => console.error('Cleanup fail:', err));
+                });
+            }
+        }
+    }, [visibleDates, entries, shifts, isEditing]);
+
+    const isRelevantShift = (s: any) => {
+        if (!s) return false;
+        const station = (s.scheduled_station || s.station || '').toLowerCase();
+        const location = (s.location || '').toLowerCase();
+        
+        // Exclude Banned, OFF, Dazhi, Taichung
+        if (station.includes('禁排') || station.includes('off') || location.includes('大直') || location.includes('台中') || station.includes('大直') || station.includes('台中')) return false;
+        
+        // Allow if Remote OR (Imaging/Support)
+        const isRemote = station.includes('遠') || station.includes('remote');
+        const isImagingOrSupport = station.includes('影像') || station.includes('支援');
+        
+        return isRemote || isImagingOrSupport;
+    };
+
     const isShiftEmpty = (s: any) => {
         if (!s) return true;
         const station = (s.scheduled_station || s.station || '').trim();
@@ -297,7 +330,8 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
                 { label: '報告助理', color: [240, 253, 250], getter: (date) => {
                     const entryList = entries.filter(e => {
                         if (e.date !== date || e.assistantIds.length === 0) return false;
-                        return true;
+                        const dShift = shifts.find(s => s.date === date && s.doctorId === e.doctorId);
+                        return isRelevantShift(dShift);
                     });
                     const lines: string[] = [];
                     entryList.forEach(e => {
@@ -315,7 +349,11 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
 
                 // 報告核對 - 格式: 醫師代稱-放射師代稱
                 { label: '報告核對', color: [240, 253, 250], getter: (date) => {
-                    const entryList = entries.filter(e => e.date === date && !!e.proofreaderUserId);
+                    const entryList = entries.filter(e => {
+                        if (e.date !== date || !e.proofreaderUserId) return false;
+                        const dShift = shifts.find(s => s.date === date && s.doctorId === e.doctorId);
+                        return isRelevantShift(dShift);
+                    });
                     const lines: string[] = [];
                     entryList.forEach(e => {
                         const doc = radiologists.find(d => d.id === e.doctorId);
@@ -451,13 +489,24 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
                 { label: '遠班', color: 'FFFFFFFF', getter: (d: string) => shifts.filter(s => s.date === d && ((s.scheduled_station || '').includes('遠') || (s.station || '').includes('遠') || (s.task || '').includes('遠'))).map(r => radiologists.find(d => d.id === r.doctorId)?.name || '').filter(Boolean).join('\n') },
                 { label: '支援', color: 'FFFFFFFF', getter: (d: string) => shifts.filter(s => s.date === d && ((s.scheduled_station || '').includes('支援') || (s.station || '').includes('支援') || (s.task || '').includes('支援'))).map(r => radiologists.find(d => d.id === r.doctorId)?.name || '').filter(Boolean).join('\n') },
                 { label: '報告助理', color: 'FFF0FDF5', getter: (d: string) => { 
-                    const el = entries.filter(e => e.date === d && e.assistantIds.length > 0);
+                    const el = entries.filter(e => {
+                        if (e.date !== d || e.assistantIds.length === 0) return false;
+                        const dShift = shifts.find(s => s.date === d && s.doctorId === e.doctorId);
+                        return isRelevantShift(dShift);
+                    });
                     return el.flatMap(e => { 
                         const da = radiologists.find(r => r.id === e.doctorId)?.alias || radiologists.find(r => r.id === e.doctorId)?.name || ''; 
                         return e.assistantIds.map(aid => { const asst = assistants.find(a => a.id === aid); return (asst && asst.isActive !== false) ? `${da}-${asst.name}` : ''; }).filter(Boolean); 
                     }).join('\n'); 
                 }},
-                { label: '報告核對', color: 'FFF0FDF5', getter: (d: string) => { const el = entries.filter(e => e.date === d && !!e.proofreaderUserId); return el.map(e => { const da = radiologists.find(r => r.id === e.doctorId)?.alias || radiologists.find(r => r.id === e.doctorId)?.name || ''; const ra = radiographers.find(u => u.id === e.proofreaderUserId)?.alias || radiographers.find(u => u.id === e.proofreaderUserId)?.name || ''; return ra ? `${da}-${ra}` : ''; }).filter(Boolean).join('\n'); } },
+                { label: '報告核對', color: 'FFF0FDF5', getter: (d: string) => { 
+                    const el = entries.filter(e => {
+                        if (e.date !== d || !e.proofreaderUserId) return false;
+                        const dShift = shifts.find(s => s.date === d && s.doctorId === e.doctorId);
+                        return isRelevantShift(dShift);
+                    });
+                    return el.map(e => {
+ const da = radiologists.find(r => r.id === e.doctorId)?.alias || radiologists.find(r => r.id === e.doctorId)?.name || ''; const ra = radiographers.find(u => u.id === e.proofreaderUserId)?.alias || radiographers.find(u => u.id === e.proofreaderUserId)?.name || ''; return ra ? `${da}-${ra}` : ''; }).filter(Boolean).join('\n'); } },
 
             ];
 
@@ -742,6 +791,17 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
                                                 const isDirty = !!dirtyEntries[key];
                                                 const isSaving = savingKeys.has(key);
                                                 const proofreader = radiographers.find(u => u.id === entry.proofreaderUserId);
+                                                
+                                                // Exclude visibility if doctor is Banned, OFF, or in a different location
+                                                const isIrrelevant = !isRelevantShift(docShift);
+                                                
+                                                if (isIrrelevant) {
+                                                    return (
+                                                        <td key={date} className={`p-1 align-middle text-center border-r border-slate-100 bg-slate-100/50 text-slate-300 font-bold text-[10px]`}>
+                                                            {docShift?.scheduled_station || (docShift?.location ? `${docShift.location}` : '') || 'OFF'}
+                                                        </td>
+                                                    );
+                                                }
 
                                                 return (
                                                     <td key={date} className={`p-1 align-top border-r border-slate-100 ${bgColor} relative group transition-colors hover:bg-slate-50`}>

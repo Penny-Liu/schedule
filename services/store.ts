@@ -3510,8 +3510,8 @@ BMD :{{bmd}}
         }
     }
 
-    /** 當醫師取消排班，將影像雲班表完全刪除 */
-    private async deleteCloudScheduleEntry(date: string, doctorId: string) {
+    /** 當醫師取消排班或變更為禁排，將影像雲班表完全刪除 */
+    public async deleteCloudScheduleEntry(date: string, doctorId: string) {
         const existingEntry = this.cloudScheduleEntries.find(e => e.date === date && e.doctorId === doctorId);
         if (existingEntry) {
             this.cloudScheduleEntries = this.cloudScheduleEntries.filter(e => 

@@ -94,6 +94,7 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
     const users = db.getUsers().filter(u => u.isRadiographer === true);
     const shifts = db.getShifts('', '');
     const cloudSchedule = db.getCloudScheduleEntries();
+    const doctorShifts = db.doctorShifts;
 
     // ── Default dates for a month (already moved up) ──
 
@@ -170,7 +171,22 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
             effectiveRange.forEach(dateStr => {
                 // Cloud Proofreading count should be independent of OFF status
                 const cloudShifts = cloudSchedule.filter(cs => {
-                    return cs.date === dateStr && cs.proofreaderUserId === user.id;
+                    if (cs.date !== dateStr || cs.proofreaderUserId !== user.id) return false;
+                    
+                    const dShift = doctorShifts.find(s => s.date === dateStr && s.doctorId === cs.doctorId);
+                    if (!dShift) return false;
+
+                    const station = (dShift.scheduled_station || dShift.station || '').toLowerCase();
+                    const location = (dShift.location || '').toLowerCase();
+                    
+                    // Exclude Banned, OFF, Dazhi, Taichung
+                    if (station.includes('禁排') || station.includes('off') || location.includes('大直') || location.includes('台中') || station.includes('大直') || station.includes('台中')) return false;
+                    
+                    // Allow if Remote OR (Beitou AND (Imaging/Support))
+                    const isRemote = station.includes('遠') || station.includes('remote');
+                    const isImagingOrSupport = station.includes('影像') || station.includes('支援');
+                    
+                    return isRemote || isImagingOrSupport;
                 });
                 stats.proofreader += cloudShifts.length;
 
