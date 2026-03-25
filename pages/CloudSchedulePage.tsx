@@ -102,23 +102,6 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
         }
     }, [currentDate, viewMode]);
 
-    // cleanup invalid entries (doctor Banned/OFF/Not Beitou)
-    useEffect(() => {
-        if (!isEditing && entries.length > 0 && shifts.length > 0) {
-            const invalidEntries = entries.filter(e => {
-                if (!visibleDates.includes(e.date)) return false;
-                const dShift = shifts.find(s => s.date === e.date && s.doctorId === e.doctorId);
-                return !isRelevantShift(dShift);
-            });
-            
-            if (invalidEntries.length > 0) {
-                console.log('[CloudSchedule] Cleaning up invalid entries:', invalidEntries);
-                invalidEntries.forEach(e => {
-                    db.deleteCloudScheduleEntry(e.date, e.doctorId).catch(err => console.error('Cleanup fail:', err));
-                });
-            }
-        }
-    }, [visibleDates, entries, shifts, isEditing]);
 
     const isRelevantShift = (s: any) => {
         if (!s) return false;
@@ -796,9 +779,18 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
                                                 const isIrrelevant = !isRelevantShift(docShift);
                                                 
                                                 if (isIrrelevant) {
+                                                    const assignedRad = radiographers.find(u => u.id === entry.proofreaderUserId);
+                                                    const assignedAsstNames = entry.assistantIds.map(id => assistants.find(a => a.id === id)?.name).filter(Boolean).join(', ');
+                                                    
                                                     return (
-                                                        <td key={date} className={`p-1 align-middle text-center border-r border-slate-100 bg-slate-100/50 text-slate-300 font-bold text-[10px]`}>
-                                                            {docShift?.scheduled_station || (docShift?.location ? `${docShift.location}` : '') || 'OFF'}
+                                                        <td key={date} className="p-1 align-top border-r border-slate-100 bg-slate-100/30 relative grayscale opacity-60">
+                                                            <div className="flex flex-col min-h-[50px] gap-1 items-center justify-center relative w-full pt-1">
+                                                                <div className="text-[10px] font-bold text-slate-400 line-through text-center leading-tight">
+                                                                    {docShift?.scheduled_station || (docShift?.location ? `${docShift.location}` : '') || 'OFF'}
+                                                                </div>
+                                                                {assignedAsstNames && <div className="text-[9px] text-slate-400 text-center truncate italic">{assignedAsstNames}</div>}
+                                                                {assignedRad && <div className="text-[9px] font-bold text-slate-400 text-center italic">{assignedRad.alias || assignedRad.name}</div>}
+                                                            </div>
                                                         </td>
                                                     );
                                                 }
