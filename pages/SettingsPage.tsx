@@ -30,7 +30,12 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
     const [hmTasks, setHmTasks] = useState<string[]>(db.getHealthMgmtTasks());
     const [newHmTask, setNewHmTask] = useState('');
     const [hmCycles, setHmCycles] = useState<RosterCycle[]>(db.getHealthMgmtCycles());
-    const [newHmCycle, setNewHmCycle] = useState<Partial<RosterCycle>>({ name: '', startDate: '', endDate: '' });
+    const [newHmCycle, setNewHmCycle] = useState<Partial<RosterCycle>>({ 
+        name: '', 
+        startDate: '', 
+        endDate: '', 
+        location: (currentUser.healthMgmtLocation === '北投' || currentUser.healthMgmtLocation === '大直') ? currentUser.healthMgmtLocation : '北投' 
+    });
 
     // Password Change State
     const [passwordData, setPasswordData] = useState({ old: '', new: '', confirm: '' });
@@ -202,16 +207,22 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
 
     const handleAddHmCycle = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!newHmCycle.name || !newHmCycle.startDate || !newHmCycle.endDate) return;
+        if (!newHmCycle.name || !newHmCycle.startDate || !newHmCycle.endDate || !newHmCycle.location) return;
         const cycle: RosterCycle = {
             id: generateUUID(),
             name: newHmCycle.name,
             startDate: newHmCycle.startDate,
-            endDate: newHmCycle.endDate
+            endDate: newHmCycle.endDate,
+            location: newHmCycle.location
         };
         await db.addHealthMgmtCycle(cycle);
         setHmCycles(db.getHealthMgmtCycles());
-        setNewHmCycle({ name: '', startDate: '', endDate: '' });
+        setNewHmCycle({ 
+            name: '', 
+            startDate: '', 
+            endDate: '', 
+            location: (currentUser.healthMgmtLocation === '北投' || currentUser.healthMgmtLocation === '大直') ? currentUser.healthMgmtLocation : '北投' 
+        });
     };
 
     const handleDeleteHmCycle = async (id: string) => {
@@ -1669,6 +1680,20 @@ BMD :{{bmd}}
                                                     required
                                                 />
                                             </div>
+                                            {(!currentUser.healthMgmtLocation || currentUser.healthMgmtLocation === '全部') && (
+                                                <div className="flex-[0.8]">
+                                                    <label className="text-xs font-semibold text-gray-500 mb-1 block">所屬院區</label>
+                                                    <select
+                                                        value={newHmCycle.location}
+                                                        onChange={(e) => setNewHmCycle({ ...newHmCycle, location: e.target.value })}
+                                                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 outline-none shadow-sm transition-all bg-white"
+                                                        required
+                                                    >
+                                                        <option value="北投">北投</option>
+                                                        <option value="大直">大直</option>
+                                                    </select>
+                                                </div>
+                                            )}
                                         </div>
 
                                         {/* Duration Display */}
@@ -1686,16 +1711,28 @@ BMD :{{bmd}}
                                 </div>
 
                                 <div className="p-2 overflow-y-auto max-h-[350px]">
-                                    {hmCycles.map(cycle => (
-                                        <div key={cycle.id} className="group p-3 hover:bg-gray-50 rounded-lg transition-colors border border-transparent hover:border-gray-200 mb-1">
+                                    {hmCycles
+                                        .filter(cycle => {
+                                            if (currentUser.healthMgmtLocation && currentUser.healthMgmtLocation !== '全部') {
+                                                return cycle.location === currentUser.healthMgmtLocation || !cycle.location; // Also show cycles without location for backward compatibility
+                                            }
+                                            return true;
+                                        })
+                                        .map(cycle => (
+                                        <div key={cycle.id} className={`group p-3 hover:bg-gray-50 rounded-lg transition-colors border ${cycle.location === '大直' ? 'border-rose-100 bg-rose-50/10' : 'border-teal-100 bg-teal-50/10'} mb-2`}>
                                             <div className="flex justify-between items-center">
                                                 <div className="flex items-center gap-3">
-                                                    <div className="p-2 bg-teal-50 text-teal-600 rounded-lg">
+                                                    <div className={`p-2 rounded-lg ${cycle.location === '大直' ? 'bg-rose-50 text-rose-600' : 'bg-teal-50 text-teal-600'}`}>
                                                         <Calendar size={18} />
                                                     </div>
                                                     <div>
-                                                        <div className="text-sm font-bold text-gray-800">{formatCycleName(cycle.name)}</div>
-                                                        <div className="text-xs text-gray-500 mt-0.5 flex items-center gap-1 font-medium">
+                                                        <div className="flex items-center gap-2 block mb-0.5">
+                                                            <span className="text-sm font-bold text-gray-800">{formatCycleName(cycle.name)}</span>
+                                                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${cycle.location === '大直' ? 'bg-rose-50 text-rose-600 border-rose-100' : 'bg-teal-50 text-teal-600 border-teal-100'}`}>
+                                                                {cycle.location || '北投'}專區
+                                                            </span>
+                                                        </div>
+                                                        <div className="text-xs text-gray-500 flex items-center gap-1 font-medium">
                                                             {cycle.startDate} ~ {cycle.endDate}
                                                             <span className="text-gray-300">|</span>
                                                             <span className="text-gray-400">
@@ -1713,7 +1750,12 @@ BMD :{{bmd}}
                                             </div>
                                         </div>
                                     ))}
-                                    {hmCycles.length === 0 && (
+                                    {hmCycles.filter(cycle => {
+                                            if (currentUser.healthMgmtLocation && currentUser.healthMgmtLocation !== '全部') {
+                                                return cycle.location === currentUser.healthMgmtLocation || !cycle.location;
+                                            }
+                                            return true;
+                                        }).length === 0 && (
                                         <div className="p-8 text-center text-gray-400 italic text-sm">
                                             尚未設定健管週期
                                         </div>

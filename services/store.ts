@@ -382,7 +382,8 @@ class Store {
                     name: hm.name,
                     alias: hm.alias,
                     isActive: hm.is_active,
-                    role: hm.role || 'VIEWER'
+                    role: hm.role || 'VIEWER',
+                    location: hm.location
                 }));
             }
 
@@ -719,10 +720,18 @@ BMD :{{bmd}}
                 this.healthMgmtStaff[index] = {
                     ...newRecord,
                     isActive: newRecord.is_active,
-                    role: newRecord.role
+                    role: newRecord.role,
+                    location: newRecord.location
                 } as HealthMgmtStaff;
             } else {
-                this.healthMgmtStaff.push(newRecord as HealthMgmtStaff);
+                this.healthMgmtStaff.push({
+                    id: newRecord.id,
+                    name: newRecord.name,
+                    alias: newRecord.alias,
+                    isActive: newRecord.is_active,
+                    role: newRecord.role || 'VIEWER',
+                    location: newRecord.location
+                });
             }
             this.notifyListeners();
         } else if (eventType === 'DELETE') {
@@ -1004,6 +1013,7 @@ BMD :{{bmd}}
             'isRadiographer': 'is_radiographer',
             'isPartTime': 'is_part_time',
             'isHealthMgmt': 'is_health_mgmt',
+            'healthMgmtLocation': 'health_mgmt_location',
             'isActive': 'is_active',
             'resignationDate': 'resignation_date',
             'groupIndex': 'group_index',
@@ -1037,6 +1047,7 @@ BMD :{{bmd}}
             'is_radiographer': 'isRadiographer',
             'is_part_time': 'isPartTime',
             'is_health_mgmt': 'isHealthMgmt',
+            'health_mgmt_location': 'healthMgmtLocation',
             'is_active': 'isActive',
             'resignation_date': 'resignationDate',
             'group_index': 'groupIndex',
@@ -1130,7 +1141,8 @@ BMD :{{bmd}}
             name: staff.name,
             alias: staff.alias,
             is_active: staff.isActive,
-            role: staff.role || 'VIEWER'
+            role: staff.role || 'VIEWER',
+            location: staff.location
         });
         if (error) {
             console.error('Failed to add health mgmt staff to Supabase:', error);
@@ -1149,6 +1161,7 @@ BMD :{{bmd}}
         if (updates.alias !== undefined) dbUpdates.alias = updates.alias;
         if (updates.isActive !== undefined) dbUpdates.is_active = updates.isActive;
         if (updates.role !== undefined) dbUpdates.role = updates.role;
+        if (updates.location !== undefined) dbUpdates.location = updates.location;
 
         if (Object.keys(dbUpdates).length > 0) {
             const { error } = await supabase.from('health_mgmt_staff').update(dbUpdates).eq('id', id);

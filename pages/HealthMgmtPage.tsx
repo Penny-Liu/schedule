@@ -46,6 +46,9 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
   const [editingAnesStaffLocations, setEditingAnesStaffLocations] = useState<string[]>([]);
   const [newStaffRole, setNewStaffRole] = useState<'ADMIN' | 'VIEWER'>('VIEWER');
   const [editingStaffRole, setEditingStaffRole] = useState<'ADMIN' | 'VIEWER'>('VIEWER');
+  const [newStaffLocation, setNewStaffLocation] = useState<'北投' | '大直'>('北投');
+  const [editingStaffLocation, setEditingStaffLocation] = useState<'北投' | '大直'>('北投');
+  const [adminLocationView, setAdminLocationView] = useState<'全部' | '北投' | '大直'>('全部');
   const [newAnesStaffRole, setNewAnesStaffRole] = useState<'ADMIN' | 'VIEWER'>('VIEWER');
   const [editingAnesStaffRole, setEditingAnesStaffRole] = useState<'ADMIN' | 'VIEWER'>('VIEWER');
 
@@ -90,10 +93,38 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
     return true;
   }, [currentUser, anesthesiaStaff]);
 
-  // Filtered staff list based on reactive state
+  const currentUserLocation = useMemo(() => {
+    // If user has a hardcoded location restriction, use it immediately
+    if (currentUser.healthMgmtLocation && currentUser.healthMgmtLocation !== '全部') {
+       return currentUser.healthMgmtLocation;
+    }
+    if (currentUser.role === UserRole.SYSTEM_ADMIN || currentUser.permissions?.includes(PERMISSIONS.EDIT_HEALTH_MGMT)) {
+      return adminLocationView;
+    }
+    const matchingStaff = healthMgmtStaff.find(s => s.name === currentUser.name || s.alias === currentUser.name);
+    if (matchingStaff && matchingStaff.location) {
+        return matchingStaff.location;
+    }
+    return '全部'; // Fallback
+  }, [currentUser, healthMgmtStaff, adminLocationView]);
+
+  // Filtered staff list based on reactive state and location
   const activeHealthMgmtStaff = useMemo(() => {
-      return healthMgmtStaff.filter(s => s.isActive !== false);
-  }, [healthMgmtStaff]);
+      let staff = healthMgmtStaff.filter(s => s.isActive !== false);
+      if (currentUserLocation !== '全部') {
+          staff = staff.filter(s => s.location === currentUserLocation || !s.location);
+      }
+      return staff;
+  }, [healthMgmtStaff, currentUserLocation]);
+
+  const filteredHmCycles = useMemo(() => {
+      return hmCycles.filter(cycle => {
+          if (currentUserLocation !== '全部') {
+              return cycle.location === currentUserLocation || !cycle.location;
+          }
+          return true;
+      });
+  }, [hmCycles, currentUserLocation]);
 
   const activeAnesthesiaStaff = useMemo(() => {
       return anesthesiaStaff.filter(s => s.isActive !== false);
@@ -131,8 +162,18 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
   }, []);
 
   const currentCycle = useMemo(() => {
-    return hmCycles.find(c => c.id === selectedCycleId);
-  }, [selectedCycleId, hmCycles]);
+    return filteredHmCycles.find(c => c.id === selectedCycleId);
+  }, [selectedCycleId, filteredHmCycles]);
+
+  // Auto-switch to "month" view if the selected cycle is not available in the current location
+  useEffect(() => {
+     if (selectedCycleId !== 'month') {
+         const isValid = filteredHmCycles.some(c => c.id === selectedCycleId);
+         if (!isValid) {
+             setSelectedCycleId('month');
+         }
+     }
+  }, [filteredHmCycles, selectedCycleId]);
 
   const dateRange = useMemo(() => {
     if (selectedCycleId !== 'month' && currentCycle) {
@@ -319,7 +360,8 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
       const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
       const link = document.createElement('a');
       link.href = URL.createObjectURL(blob);
-      link.download = `健管排班統計_${label}.xlsx`;
+      const locPrefix = currentUserLocation !== '全部' ? `${currentUserLocation}_` : '';
+      link.download = `${locPrefix}健管排班統計_${label}.xlsx`;
       link.click();
       URL.revokeObjectURL(link.href);
   };
@@ -388,7 +430,8 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
       const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
       const link = document.createElement('a');
       link.href = URL.createObjectURL(blob);
-      link.download = `健管排班表_${label}.xlsx`;
+      const locPrefix = currentUserLocation !== '全部' ? `${currentUserLocation}_` : '';
+      link.download = `${locPrefix}健管排班表_${label}.xlsx`;
       link.click();
     } catch (error) {
       console.error('Excel export failed:', error);
@@ -405,9 +448,10 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
         ? `${currentDate.getFullYear()}年${currentDate.getMonth() + 1}月`
         : currentCycle?.name || '週期排班';
 
+      const locPrefixTitle = currentUserLocation !== '全部' ? `${currentUserLocation} ` : '';
       doc.setFont(fontName);
       doc.setFontSize(16);
-      doc.text(`健管排班表 - ${label}`, 14, 15);
+      doc.text(`${locPrefixTitle}健管排班表 - ${label}`, 14, 15);
       doc.setFontSize(10);
       doc.text(`匯出日期: ${new Date().toLocaleDateString('zh-TW')}`, 280, 15, { align: 'right' });
 
@@ -450,7 +494,8 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
         }
       });
 
-      doc.save(`健管排班表_${label}.pdf`);
+      const locPrefixFile = currentUserLocation !== '全部' ? `${currentUserLocation}_` : '';
+      doc.save(`${locPrefixFile}健管排班表_${label}.pdf`);
     } catch (error) {
       console.error('PDF export failed:', error);
       alert('匯出 PDF 失敗');
@@ -512,12 +557,14 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
               name: newStaffName.trim(),
               alias: newStaffAlias.trim() || undefined,
               isActive: true,
-              role: newStaffRole
+              role: newStaffRole,
+              location: currentUserLocation === '全部' ? newStaffLocation : (currentUserLocation === '北投' || currentUserLocation === '大直' ? currentUserLocation : newStaffLocation)
           };
           await db.addHealthMgmtStaff(newStaff);
           setNewStaffName('');
           setNewStaffAlias('');
           setNewStaffRole('VIEWER');
+          setNewStaffLocation('北投');
       } catch (err: any) {
           setError(err.message || '新增失敗，請重試');
       } finally {
@@ -540,13 +587,15 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
               name: editingStaffName.trim(), 
               alias: editingStaffAlias.trim() || undefined,
               isActive: editingStaffIsActive,
-              role: editingStaffRole
+              role: editingStaffRole,
+              location: currentUserLocation === '全部' ? editingStaffLocation : (currentUserLocation === '北投' || currentUserLocation === '大直' ? currentUserLocation : editingStaffLocation)
           });
           setEditingId(null);
           setEditingStaffName('');
           setEditingStaffAlias('');
           setEditingStaffIsActive(true);
           setEditingStaffRole('VIEWER');
+          setEditingStaffLocation('北投');
       } catch (err: any) {
           setError(err.message || '更新失敗，請重試');
       } finally {
@@ -561,6 +610,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
     setEditingStaffAlias(staff.alias || '');
     setEditingStaffIsActive(staff.isActive);
     setEditingStaffRole(staff.role || 'VIEWER');
+    setEditingStaffLocation((staff.location as any) || '北投');
     setActiveTab('staff');
   };
 
@@ -849,6 +899,27 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
           <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
             <LayoutDashboard className="text-teal-600" size={24} />
             健管業務管理
+            {(currentUser.role === UserRole.SYSTEM_ADMIN || currentUser.permissions?.includes(PERMISSIONS.EDIT_HEALTH_MGMT)) && 
+             (!currentUser.healthMgmtLocation || currentUser.healthMgmtLocation === '全部') && (
+                <select 
+                    value={adminLocationView} 
+                    onChange={e => setAdminLocationView(e.target.value as any)}
+                    className="ml-2 text-sm font-bold bg-white border border-gray-200 text-teal-700 py-1 px-2 rounded-lg outline-none focus:ring-2 focus:ring-teal-500"
+                >
+                    <option value="全部">全部院區</option>
+                    <option value="北投">北投專區</option>
+                    <option value="大直">大直專區</option>
+                </select>
+            )}
+            {(currentUserLocation !== '全部') && 
+             !(
+                 (currentUser.role === UserRole.SYSTEM_ADMIN || currentUser.permissions?.includes(PERMISSIONS.EDIT_HEALTH_MGMT)) && 
+                 (!currentUser.healthMgmtLocation || currentUser.healthMgmtLocation === '全部')
+             ) && (
+                 <span className="ml-2 text-sm font-bold bg-teal-50 text-teal-700 py-1 px-2 rounded-lg border border-teal-100">
+                    {currentUserLocation}專區
+                 </span>
+            )}
           </h2>
           <p className="text-sm text-gray-500">管理健管人員名單與每日排班</p>
         </div>
@@ -889,8 +960,9 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
         </div>
       </div>
 
-      {activeTab === 'anesthesia' ? (
-        <div className="flex flex-col gap-6">
+      <div className="flex-1 overflow-y-auto w-full pr-2 pb-20 custom-scrollbar">
+        {activeTab === 'anesthesia' ? (
+          <div className="flex flex-col gap-6">
           {/* Anesthesia Schedule Grid */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 flex flex-col overflow-hidden">
             <div className="px-3 py-2 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
@@ -909,8 +981,8 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                                     prev.setMonth(prev.getMonth() - 1);
                                     setCurrentDate(prev);
                                 } else {
-                                    const idx = hmCycles.findIndex(c => c.id === selectedCycleId);
-                                    if (idx > 0) setSelectedCycleId(hmCycles[idx-1].id);
+                                    const idx = filteredHmCycles.findIndex(c => c.id === selectedCycleId);
+                                    if (idx < filteredHmCycles.length - 1 && idx !== -1) setSelectedCycleId(filteredHmCycles[idx+1].id);
                                 }
                             }} className="p-1.5 hover:bg-slate-50 text-gray-600 border-r border-gray-200 transition-colors">
                                 <ChevronLeft size={18} />
@@ -927,8 +999,8 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                                     next.setMonth(next.getMonth() + 1);
                                     setCurrentDate(next);
                                 } else {
-                                    const idx = hmCycles.findIndex(c => c.id === selectedCycleId);
-                                    if (idx < hmCycles.length - 1 && idx !== -1) setSelectedCycleId(hmCycles[idx+1].id);
+                                    const idx = filteredHmCycles.findIndex(c => c.id === selectedCycleId);
+                                    if (idx > 0) setSelectedCycleId(filteredHmCycles[idx-1].id);
                                 }
                             }} className="p-1.5 hover:bg-slate-50 text-gray-600 border-l border-gray-200 transition-colors">
                                 <ChevronRight size={18} />
@@ -944,7 +1016,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                           >
                             <option value="month">按月份檢視</option>
                             <optgroup label="自定義週期">
-                              {hmCycles.map(c => (
+                              {filteredHmCycles.map(c => (
                                 <option key={c.id} value={c.id}>{c.name}</option>
                               ))}
                             </optgroup>
@@ -1385,8 +1457,8 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                     const prev = new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1);
                     setCurrentDate(prev);
                   } else {
-                    const idx = hmCycles.findIndex(c => c.id === selectedCycleId);
-                    if (idx > 0) setSelectedCycleId(hmCycles[idx-1].id);
+                    const idx = filteredHmCycles.findIndex(c => c.id === selectedCycleId);
+                    if (idx < filteredHmCycles.length - 1 && idx !== -1) setSelectedCycleId(filteredHmCycles[idx+1].id);
                   }
                 }} className="p-1.5 hover:bg-gray-50 rounded text-gray-500 transition-colors border-r">
                    <ChevronLeft size={18} />
@@ -1402,8 +1474,8 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                     const next = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1);
                     setCurrentDate(next);
                   } else {
-                    const idx = hmCycles.findIndex(c => c.id === selectedCycleId);
-                    if (idx < hmCycles.length - 1 && idx !== -1) setSelectedCycleId(hmCycles[idx+1].id);
+                    const idx = filteredHmCycles.findIndex(c => c.id === selectedCycleId);
+                    if (idx > 0) setSelectedCycleId(filteredHmCycles[idx-1].id);
                   }
                 }} className="p-1.5 hover:bg-gray-50 rounded text-gray-500 transition-colors border-l">
                   <ChevronRight size={18} />
@@ -1420,7 +1492,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                   >
                     <option value="month">按月份檢視</option>
                     <optgroup label="自定義週期">
-                      {hmCycles.map(c => (
+                      {filteredHmCycles.map(c => (
                         <option key={c.id} value={c.id}>{c.name}</option>
                       ))}
                     </optgroup>
@@ -1839,9 +1911,9 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
           <div className="p-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
             <h3 className="font-bold text-gray-700">健管人員名單</h3>
           </div>
-          <div className="p-6 max-w-lg">
-              <form onSubmit={editingId ? updateStaff : addStaff} className="flex flex-wrap gap-2 items-end mb-6 bg-gray-50 p-4 rounded-xl border border-gray-100">
-                  <div className="flex-[2] flex flex-col gap-1">
+          <div className="p-6">
+              <form onSubmit={editingId ? updateStaff : addStaff} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 items-end mb-8 bg-gray-50 p-5 rounded-xl border border-gray-100">
+                  <div className="flex flex-col gap-1 lg:col-span-2 xl:col-span-1">
                       <label className="text-[10px] font-bold text-teal-600 uppercase pl-1">姓名</label>
                       <input
                           type="text"
@@ -1851,7 +1923,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                           className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-teal-500 outline-none"
                       />
                   </div>
-                  <div className="flex-1 flex flex-col gap-1">
+                  <div className="flex flex-col gap-1">
                       <label className="text-[10px] font-bold text-teal-600 uppercase pl-1">簡稱</label>
                       <input
                           type="text"
@@ -1861,7 +1933,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                           className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-teal-500 outline-none"
                       />
                   </div>
-                  <div className="flex-1 flex flex-col gap-1">
+                  <div className="flex flex-col gap-1">
                       <label className="text-[10px] font-bold text-teal-600 uppercase pl-1">權限</label>
                       <select
                           value={editingId ? editingStaffRole : newStaffRole}
@@ -1872,63 +1944,138 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                           <option value="ADMIN">可管理</option>
                       </select>
                   </div>
-                  <button
-                      type="submit"
-                      disabled={isSaving || isHmReadOnly}
-                      className="whitespace-nowrap bg-teal-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-teal-700 transition-colors disabled:opacity-50 h-[42px]"
-                  >
-                      {editingId ? '儲存更新' : '新增人員'}
-                  </button>
-                  {editingId && (
-                      <button 
-                          type="button" 
-                          onClick={() => { setEditingId(null); setEditingStaffName(''); setEditingStaffAlias(''); setEditingStaffIsActive(true); setEditingStaffRole('VIEWER'); }}
-                          className="px-4 py-2 text-gray-500 hover:bg-gray-200 rounded-lg font-bold transition-colors"
-                      >
-                          取消
-                      </button>
+                  {(currentUserLocation === '全部') && (
+                      <div className="flex flex-col gap-1">
+                          <label className="text-[10px] font-bold text-teal-600 uppercase pl-1">所屬院區</label>
+                          <select
+                              value={editingId ? editingStaffLocation : newStaffLocation}
+                              onChange={e => editingId ? setEditingStaffLocation(e.target.value as any) : setNewStaffLocation(e.target.value as any)}
+                              className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-teal-500 outline-none bg-white font-bold"
+                          >
+                              <option value="北投">北投</option>
+                              <option value="大直">大直</option>
+                          </select>
+                      </div>
                   )}
+                  <div className="flex gap-2 lg:col-span-2 xl:col-span-2">
+                      <button
+                          type="submit"
+                          disabled={isSaving || isHmReadOnly}
+                          className="w-full flex-1 whitespace-nowrap bg-teal-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-teal-700 transition-colors disabled:opacity-50 h-[42px]"
+                      >
+                          {editingId ? '儲存更新' : '新增人員'}
+                      </button>
+                      {editingId && (
+                          <button 
+                              type="button" 
+                              onClick={() => { setEditingId(null); setEditingStaffName(''); setEditingStaffAlias(''); setEditingStaffIsActive(true); setEditingStaffRole('VIEWER'); }}
+                              className="px-4 py-2 flex-1 text-gray-500 hover:bg-gray-200 rounded-lg font-bold transition-colors h-[42px]"
+                          >
+                              取消
+                          </button>
+                      )}
+                  </div>
               </form>
 
               {error && <div className="text-red-500 text-sm font-bold mb-4 p-3 bg-red-50 rounded-lg border border-red-100">{error}</div>}
 
-              <div className="space-y-2">
-                  {activeHealthMgmtStaff.map(staff => (
-                      <div key={staff.id} className="flex justify-between items-center p-3 border border-gray-100 rounded-xl hover:bg-gray-50 transition-colors">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+                  {/* Beitou Section */}
+                  <div className="bg-white rounded-xl border border-teal-100 p-5 shadow-sm">
+                      <h4 className="font-bold text-teal-800 mb-4 flex items-center justify-between border-b border-teal-100 pb-3">
                           <div className="flex items-center gap-2">
-                               <span className="font-bold text-gray-700">{staff.name}</span>
-                               {staff.alias && <span className="text-xs text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">({staff.alias})</span>}
-                               {staff.role === 'ADMIN' && <span className="text-[10px] font-bold px-1.5 py-0.5 bg-indigo-50 text-indigo-600 rounded border border-indigo-100">管理</span>}
+                              <span className="w-2.5 h-5 bg-teal-500 rounded-sm"></span> 北投專區
                           </div>
+                          <span className="text-xs font-bold text-teal-700 bg-teal-50 px-2.5 py-1 rounded-full border border-teal-100">
+                              {activeHealthMgmtStaff.filter(s => s.location !== '大直').length} 人
+                          </span>
+                      </h4>
+                      <div className="space-y-3">
+                          {activeHealthMgmtStaff.filter(s => s.location !== '大直').map(staff => (
+                              <div key={staff.id} className="flex justify-between items-center p-3 border border-teal-50 rounded-xl hover:bg-teal-50/50 transition-colors bg-white shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+                                  <div className="flex items-center gap-2">
+                                       <span className="font-bold text-slate-700">{staff.name}</span>
+                                       {staff.alias && <span className="text-xs text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">({staff.alias})</span>}
+                                       {staff.role === 'ADMIN' && <span className="text-[10px] font-bold px-1.5 py-0.5 bg-indigo-50 text-indigo-600 rounded border border-indigo-100">管理</span>}
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                      {!isHmReadOnly && (
+                                          <>
+                                              <button 
+                                                  onClick={() => handleEditStaff(staff)}
+                                                  className="px-3 py-1.5 text-xs font-bold text-teal-600 bg-teal-50 rounded-lg hover:bg-teal-100 hover:text-teal-700 transition-colors"
+                                              >
+                                                  編輯
+                                              </button>
+                                              <button 
+                                                  onClick={() => setDeleteTargetId(staff.id)}
+                                                  className="px-3 py-1.5 text-xs font-bold text-red-500 bg-red-50 rounded-lg hover:bg-red-100 hover:text-red-700 transition-colors"
+                                              >
+                                                  停用
+                                              </button>
+                                          </>
+                                      )}
+                                  </div>
+                              </div>
+                          ))}
+                          {activeHealthMgmtStaff.filter(s => s.location !== '大直').length === 0 && (
+                              <div className="text-center text-sm text-teal-600/50 py-6 font-bold bg-teal-50/50 rounded-xl border border-teal-100/50">
+                                  目前無北投管理人員
+                              </div>
+                          )}
+                      </div>
+                  </div>
+
+                  {/* Dazhi Section */}
+                  <div className="bg-white rounded-xl border border-rose-100 p-5 shadow-sm">
+                      <h4 className="font-bold text-rose-800 mb-4 flex items-center justify-between border-b border-rose-100 pb-3">
                           <div className="flex items-center gap-2">
-                              {!isHmReadOnly && (
-                                  <>
-                                      <button 
-                                          onClick={() => handleEditStaff(staff)}
-                                          className="px-3 py-1 text-xs font-bold text-teal-600 bg-teal-50 rounded-lg hover:bg-teal-100 transition-colors"
-                                      >
-                                          編輯
-                                      </button>
-                                      <button 
-                                          onClick={() => setDeleteTargetId(staff.id)}
-                                          className="px-3 py-1 text-xs font-bold text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition-colors"
-                                      >
-                                          停用
-                                      </button>
-                                  </>
-                              )}
+                              <span className="w-2.5 h-5 bg-rose-500 rounded-sm"></span> 大直專區
                           </div>
+                          <span className="text-xs font-bold text-rose-700 bg-rose-50 px-2.5 py-1 rounded-full border border-rose-100">
+                              {activeHealthMgmtStaff.filter(s => s.location === '大直').length} 人
+                          </span>
+                      </h4>
+                      <div className="space-y-3">
+                          {activeHealthMgmtStaff.filter(s => s.location === '大直').map(staff => (
+                              <div key={staff.id} className="flex justify-between items-center p-3 border border-rose-50 rounded-xl hover:bg-rose-50/50 transition-colors bg-white shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+                                  <div className="flex items-center gap-2">
+                                       <span className="font-bold text-slate-700">{staff.name}</span>
+                                       {staff.alias && <span className="text-xs text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">({staff.alias})</span>}
+                                       {staff.role === 'ADMIN' && <span className="text-[10px] font-bold px-1.5 py-0.5 bg-indigo-50 text-indigo-600 rounded border border-indigo-100">管理</span>}
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                      {!isHmReadOnly && (
+                                          <>
+                                              <button 
+                                                  onClick={() => handleEditStaff(staff)}
+                                                  className="px-3 py-1.5 text-xs font-bold text-rose-600 bg-rose-50 rounded-lg hover:bg-rose-100 hover:text-rose-700 transition-colors"
+                                              >
+                                                  編輯
+                                              </button>
+                                              <button 
+                                                  onClick={() => setDeleteTargetId(staff.id)}
+                                                  className="px-3 py-1.5 text-xs font-bold text-red-500 bg-red-50 rounded-lg hover:bg-red-100 hover:text-red-700 transition-colors"
+                                              >
+                                                  停用
+                                              </button>
+                                          </>
+                                      )}
+                                  </div>
+                              </div>
+                          ))}
+                          {activeHealthMgmtStaff.filter(s => s.location === '大直').length === 0 && (
+                              <div className="text-center text-sm text-rose-600/50 py-6 font-bold bg-rose-50/50 rounded-xl border border-rose-100/50">
+                                  目前無大直管理人員
+                              </div>
+                          )}
                       </div>
-                  ))}
-                  {activeHealthMgmtStaff.length === 0 && (
-                      <div className="text-center text-gray-400 py-8 font-bold">
-                          目前沒有健管人員，請在上方新增
-                      </div>
-                  )}
+                  </div>
               </div>
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 };

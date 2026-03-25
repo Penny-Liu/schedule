@@ -61,6 +61,7 @@ export interface HealthMgmtStaff {
     alias?: string;
     isActive: boolean;
     role?: 'ADMIN' | 'VIEWER';
+    location?: string;
 }
 
 export interface AnesthesiaStaff {
@@ -92,6 +93,7 @@ export interface User {
   isRadiographer?: boolean; // New: Flag to indicate if user should appear in Radiographer Schedule
   isPartTime?: boolean; // New: Flag for part-time radiographers (hidden in main view)
   isHealthMgmt?: boolean; // New: Flag for health management staff
+  healthMgmtLocation?: '全部' | '北投' | '大直'; // New: Restricts HM_SUPERVISOR/HM_STAFF view and edit location. '全部' allows dropdown.
   groupIndex?: number; // New: Fixed rotation index for Group D (0-based, determines rest day order)
   personalCycles?: Record<string, { startDate: string; endDate: string; memo: string }>; // Per-month cycle adjustments
   permissions?: string[]; // Fine-grained permissions
@@ -214,6 +216,7 @@ export interface RosterCycle {
   startDate: string;
   endDate: string;
   isConfirmed?: boolean; // New: Lock status for the cycle
+  location?: string; // New: Beitou or Dazhi for Health Mgmt Cycles
 }
 
 export enum DateEventType {

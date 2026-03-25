@@ -65,6 +65,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
     isRadiographer: boolean; // New
     isPartTime: boolean; // New
     isHealthMgmt: boolean; // New
+    healthMgmtLocation: '全部' | '北投' | '大直';
     isActive: boolean; // New
     resignationDate: string; // New
     groupIndex: number; // For Group D rotation order
@@ -82,6 +83,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
     isRadiographer: false, // New
     isPartTime: false, // New
     isHealthMgmt: false, // New
+    healthMgmtLocation: '全部',
     isActive: true, // New
     resignationDate: '', // New
     groupIndex: 0,
@@ -103,6 +105,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
       isActive: true,
       isPartTime: false,
       isHealthMgmt: false,
+      healthMgmtLocation: '全部',
       resignationDate: '',
       groupIndex: 0,
       permissions: [PERMISSIONS.VIEW_PHYSICIAN]
@@ -134,6 +137,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
           isRadiographer: formData.isRadiographer,
           isPartTime: formData.isPartTime,
           isHealthMgmt: formData.isHealthMgmt,
+          healthMgmtLocation: formData.healthMgmtLocation,
           isActive: formData.isActive,
           resignationDate: formData.resignationDate,
           groupIndex: formData.groupId === StaffGroup.GROUP_D ? formData.groupIndex : undefined,
@@ -154,6 +158,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
           isRadiographer: formData.isRadiographer,
           isPartTime: formData.isPartTime,
           isHealthMgmt: formData.isHealthMgmt,
+          healthMgmtLocation: formData.healthMgmtLocation,
           isActive: formData.isActive,
           resignationDate: formData.resignationDate,
           groupIndex: formData.groupId === StaffGroup.GROUP_D ? formData.groupIndex : undefined,
@@ -190,6 +195,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
       isRadiographer: user.isRadiographer || false,
       isPartTime: user.isPartTime || false,
       isHealthMgmt: user.isHealthMgmt || false,
+      healthMgmtLocation: user.healthMgmtLocation || '全部',
       isActive: user.isActive !== undefined ? user.isActive : true,
       resignationDate: user.resignationDate || '',
       groupIndex: user.groupIndex ?? 0,
@@ -449,6 +455,20 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                         是否為健管人員 (健管排班)
                      </label>
                   </div>
+                  {formData.isHealthMgmt && (
+                      <div className="flex items-center gap-2 ml-6 mt-1">
+                          <label className="text-xs font-bold text-teal-700">預設管理院區</label>
+                          <select 
+                              value={formData.healthMgmtLocation}
+                              onChange={e => setFormData({ ...formData, healthMgmtLocation: e.target.value as any })}
+                              className="px-2 py-1 text-xs border border-teal-200 rounded text-teal-800 focus:ring-1 focus:ring-teal-500 outline-none"
+                          >
+                              <option value="全部">全部管理 / 跨院</option>
+                              <option value="北投">僅限北投專區</option>
+                              <option value="大直">僅限大直專區</option>
+                          </select>
+                      </div>
+                  )}
               </div>
 
               <div className="flex items-center gap-2 mb-2 bg-gray-50 p-2 rounded border border-gray-100">
