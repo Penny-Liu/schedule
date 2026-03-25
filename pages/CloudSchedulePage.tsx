@@ -297,11 +297,6 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
                 { label: '報告助理', color: [240, 253, 250], getter: (date) => {
                     const entryList = entries.filter(e => {
                         if (e.date !== date || e.assistantIds.length === 0) return false;
-                        // 行政班醫師過濾：若無指定校對則不呈現
-                        const docShift = shifts.find(s => s.date === date && s.doctorId === e.doctorId);
-                        if (!docShift || isShiftEmpty(docShift)) return false; // 醫師當日無排班則不呈現
-                        const isAdmin = (docShift?.scheduled_station || docShift?.station || '').includes('行政');
-                        if (isAdmin && !e.proofreaderUserId) return false;
                         return true;
                     });
                     const lines: string[] = [];
@@ -320,12 +315,7 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
 
                 // 報告核對 - 格式: 醫師代稱-放射師代稱
                 { label: '報告核對', color: [240, 253, 250], getter: (date) => {
-                    // 已包含 proofreaderUserId 檢查，符合「除非有校對才呈現」且醫師需有排班
-                    const entryList = entries.filter(e => {
-                        if (e.date !== date || !e.proofreaderUserId) return false;
-                        const docShift = shifts.find(s => s.date === date && s.doctorId === e.doctorId);
-                        return docShift && !isShiftEmpty(docShift);
-                    });
+                    const entryList = entries.filter(e => e.date === date && !!e.proofreaderUserId);
                     const lines: string[] = [];
                     entryList.forEach(e => {
                         const doc = radiologists.find(d => d.id === e.doctorId);
@@ -461,20 +451,13 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
                 { label: '遠班', color: 'FFFFFFFF', getter: (d: string) => shifts.filter(s => s.date === d && ((s.scheduled_station || '').includes('遠') || (s.station || '').includes('遠') || (s.task || '').includes('遠'))).map(r => radiologists.find(d => d.id === r.doctorId)?.name || '').filter(Boolean).join('\n') },
                 { label: '支援', color: 'FFFFFFFF', getter: (d: string) => shifts.filter(s => s.date === d && ((s.scheduled_station || '').includes('支援') || (s.station || '').includes('支援') || (s.task || '').includes('支援'))).map(r => radiologists.find(d => d.id === r.doctorId)?.name || '').filter(Boolean).join('\n') },
                 { label: '報告助理', color: 'FFF0FDF5', getter: (d: string) => { 
-                    const el = entries.filter(e => {
-                        if (e.date !== d || e.assistantIds.length === 0) return false;
-                        const docShift = shifts.find(s => s.date === d && s.doctorId === e.doctorId);
-                        if (!docShift || isShiftEmpty(docShift)) return false; // 醫師當日無排班則不呈現
-                        const isAdmin = (docShift?.scheduled_station || docShift?.station || '').includes('行政');
-                        if (isAdmin && !e.proofreaderUserId) return false;
-                        return true;
-                    }); 
+                    const el = entries.filter(e => e.date === d && e.assistantIds.length > 0);
                     return el.flatMap(e => { 
                         const da = radiologists.find(r => r.id === e.doctorId)?.alias || radiologists.find(r => r.id === e.doctorId)?.name || ''; 
                         return e.assistantIds.map(aid => { const asst = assistants.find(a => a.id === aid); return (asst && asst.isActive !== false) ? `${da}-${asst.name}` : ''; }).filter(Boolean); 
                     }).join('\n'); 
                 }},
-                { label: '報告核對', color: 'FFF0FDF5', getter: (d: string) => { const el = entries.filter(e => { if (e.date !== d || !e.proofreaderUserId) return false; const docShift = shifts.find(s => s.date === d && s.doctorId === e.doctorId); return docShift && !isShiftEmpty(docShift); }); return el.map(e => { const da = radiologists.find(r => r.id === e.doctorId)?.alias || radiologists.find(r => r.id === e.doctorId)?.name || ''; const ra = radiographers.find(u => u.id === e.proofreaderUserId)?.alias || radiographers.find(u => u.id === e.proofreaderUserId)?.name || ''; return ra ? `${da}-${ra}` : ''; }).filter(Boolean).join('\n'); } },
+                { label: '報告核對', color: 'FFF0FDF5', getter: (d: string) => { const el = entries.filter(e => e.date === d && !!e.proofreaderUserId); return el.map(e => { const da = radiologists.find(r => r.id === e.doctorId)?.alias || radiologists.find(r => r.id === e.doctorId)?.name || ''; const ra = radiographers.find(u => u.id === e.proofreaderUserId)?.alias || radiographers.find(u => u.id === e.proofreaderUserId)?.name || ''; return ra ? `${da}-${ra}` : ''; }).filter(Boolean).join('\n'); } },
 
             ];
 
@@ -762,18 +745,10 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
 
                                                 return (
                                                     <td key={date} className={`p-1 align-top border-r border-slate-100 ${bgColor} relative group transition-colors hover:bg-slate-50`}>
-                                                        {(!docShift || isShiftEmpty(docShift)) ? (
-                                                            <div className="h-full w-full min-h-[50px] flex items-center justify-center text-[10px] text-slate-300">沒班</div>
-                                                        ) : !isEditable ? (
-                                                            <div className="h-full w-full min-h-[50px] flex flex-col items-center justify-center text-[10px] leading-tight">
-                                                                <span className="text-slate-400 truncate w-full text-center">{docShift.location}</span>
-                                                                <span className="text-slate-500 font-bold truncate w-full text-center">{docShift.scheduled_station}</span>
-                                                            </div>
-                                                        ) : (
-                                                            <div className="flex flex-col min-h-[50px] gap-1 items-center justify-center relative w-full pt-1">
-                                                                {/* Task Hint */}
+                                                        <div className="flex flex-col min-h-[50px] gap-1 items-center justify-center relative w-full pt-1">
+                                                            {/* Task Hint */}
                                                                 <div className={`text-[11px] font-bold leading-tight w-full text-center whitespace-normal break-words ${isRemoteTask ? 'text-pink-700' : isSupportTask ? 'text-yellow-700' : isImagingTask ? 'text-sky-700' : 'text-slate-600'}`}>
-                                                                    {docShift.scheduled_station}
+                                                                    {docShift?.scheduled_station || ''}
                                                                 </div>
                                                                                                                                 {isSaving && (
                                                                       <div className="absolute top-0 right-1 flex items-center gap-1 z-20">
@@ -804,7 +779,7 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
                                                                     )}
                                                                 </div>
 
-                                                                {/* Proofreader Select */}
+                                                                 {/* Proofreader Select */}
                                                                 <div className="mt-auto pt-0.5 w-full">
                                                                     {isEditing ? (
                                                                         <select
@@ -819,13 +794,12 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
                                                                         </select>
                                                                     ) : (
                                                                         <div className="text-[11px] font-bold text-indigo-700 w-full text-center whitespace-normal break-words">
-                                                                            {proofreader ? proofreader.name : '-'}
+                                                                            {proofreader?.name || '-'}
                                                                         </div>
                                                                     )}
                                                                 </div>
                                                             </div>
-                                                        )}
-                                                    </td>
+                                                        </td>
                                                 );
                                             })}
                                         </tr>

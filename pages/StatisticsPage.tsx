@@ -93,7 +93,6 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
     // 只統計有勾選為放射師的人員
     const users = db.getUsers().filter(u => u.isRadiographer === true);
     const shifts = db.getShifts('', '');
-    const doctorShifts = db.getDoctorShifts();
     const cloudSchedule = db.getCloudScheduleEntries();
 
     // ── Default dates for a month (already moved up) ──
@@ -169,6 +168,12 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
             }
 
             effectiveRange.forEach(dateStr => {
+                // Cloud Proofreading count should be independent of OFF status
+                const cloudShifts = cloudSchedule.filter(cs => {
+                    return cs.date === dateStr && cs.proofreaderUserId === user.id;
+                });
+                stats.proofreader += cloudShifts.length;
+
                 const status = db.getUserStatusOnDate(user.id, dateStr);
                 if (status === 'OFF') { stats.off++; return; }
 
@@ -196,18 +201,12 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
                 if (roles.includes(SPECIAL_ROLES.LATE)) stats.late++;
                 if (roles.includes(SPECIAL_ROLES.SCHEDULER)) stats.scheduler++;
 
-                const cloudShifts = cloudSchedule.filter(cs => {
-                    if (cs.date !== dateStr || cs.proofreaderUserId !== user.id) return false;
-                    // 額外驗證：該醫師當日是否有排班
-                    return doctorShifts.some(ds => ds.date === dateStr && ds.doctorId === cs.doctorId);
-                });
-                stats.proofreader += cloudShifts.length;
             });
 
             stats.onSite = stats.totalWork - stats.remote;
             return stats;
         });
-    }, [users, dateRange, shifts, doctorShifts, cloudSchedule, cycleMonthKey]);
+    }, [users, dateRange, shifts, cloudSchedule, cycleMonthKey]);
 
     // ── Personal Cycle helpers (already moved up) ──
 

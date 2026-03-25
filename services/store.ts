@@ -2233,23 +2233,6 @@ BMD :{{bmd}}
         }
     }
 
-    async seedMockDoctors() {
-        // Check if we already have these specific mock doctors to avoid duplicates if partial load
-        if (this.doctors.length > 0) return;
-
-        console.log('[Store] Seeding mock doctors from mockData...');
-        
-        for (const doc of MOCK_DOCTORS) {
-            // We use the ID from mock data to ensure consistency across reloads if using local mock mode
-            // But addDoctor generates a new UUID normally. 
-            // For seeding consistency, we'll manually push or ensure Supabase insert uses these IDs if possible, 
-            // but addDoctor currently generates randomUUID. 
-            // Let's just pass the data to addDoctor for now, realizing IDs might change on fresh DB.
-            // Actually, to respect the user's wish for "static" mock data, let's try to preserve these IDs if possible
-            // OR just let addDoctor handle it. For simplicity, we use addDoctor.
-            await this.addDoctor(doc.name, doc.alias, doc.capabilities, doc.locations);
-        }
-    }
 
 
 

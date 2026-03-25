@@ -36,209 +36,146 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
     
     // --- Copy Text Generators ---
     const generateBeitouCopyText = (date: Date, shifts: any[], doctors: Doctor[], staffShifts: any[], users: any[]) => {
-        const dateStr = `${propsToLocalISOString(date)} (${['日', '一', '二', '三', '四', '五', '六'][date.getDay()]})`;
-        const dateKey = propsToLocalISOString(date);
-        
-        // Helper to resolve Radiographer Name
+        const dateStr = propsToLocalISOString(date);
+        const dayShifts = shifts.filter(s => s.date === dateStr && (s.location === '北投' || !s.location));
+        const dayStaffShifts = staffShifts.filter(s => s.date === dateStr);
+        const dayHMShifts = db.getHealthMgmtShifts().filter(s => s.date === dateStr);
+        const hmStaff = db.getHealthMgmtStaff();
+
         const getName = (userId: string) => {
             const u = users.find(user => user.id === userId);
             if (!u) return '';
-             // If alias is purely English (e.g., "K"), use last 2 chars of name instead
-            if (u.alias && /^[A-Za-z]+$/.test(u.alias)) {
-                 return u.name.slice(-2);
-            }
+            if (u.alias && /^[A-Za-z]+$/.test(u.alias)) return u.name.slice(-2);
             return u.alias || u.name.slice(-2);
         };
-        
-        // --- 1. Radiographers (Main/Assist/Support/Admin) ---
-        // Filter Staff Shifts for this date
-        const dayStaffShifts = staffShifts.filter(s => s.date === dateKey);
-        
+
         const mainRads = dayStaffShifts.filter(s => {
             const u = users.find(user => user.id === s.userId);
-            return u?.isRadiographer && (s.station?.includes('場控') || s.station ==='主' || s.station === '主控');
+            return u?.isRadiographer && (s.station?.includes('場控') || s.station === '主' || s.station === '主控');
         }).map(s => getName(s.userId));
         
         const assistRads = dayStaffShifts.filter(s => {
             const u = users.find(user => user.id === s.userId);
             return u?.isRadiographer && (s.specialRoles?.includes('輔班') || s.station === '輔' || s.station === '輔控');
         }).map(s => getName(s.userId));
-        
-        const hmStaff = db.getHealthMgmtStaff();
-        const mainHM = db.getHealthMgmtShifts().filter(s => s.date === dateKey && (s.station?.includes('主控') || s.task === '主控')).map(s => {
-            const u = hmStaff.find(staff => staff.id === s.userId);
-            return u?.alias || u?.name?.slice(-2) || '-';
+
+        const getHM = (loc: string, type: '主' | '輔') => {
+            return dayHMShifts.filter(s => {
+                const isType = type === '主' ? (s.station?.includes('主控') || s.task === '主控') : (s.station?.includes('輔控') || s.task === '輔控');
+                if (!isType) return false;
+                const u = hmStaff.find(st => st.id === s.userId);
+                return (s.location || u?.location || '北投') === loc;
+            }).map(s => {
+                const u = hmStaff.find(st => st.id === s.userId);
+                return u?.alias || u?.name?.slice(-2) || '-';
+            });
+        };
+
+        const mainHM = getHM('北投', '主');
+        const assistHM = getHM('北投', '輔');
+
+        const getDocs = (station: string) => dayShifts.filter(s => (s.scheduled_station === station || s.station === station)).map(s => {
+            const d = doctors.find(doc => doc.id === s.doctorId);
+            return d?.alias || d?.name || '?';
         });
-        const assistHM = db.getHealthMgmtShifts().filter(s => s.date === dateKey && (s.station?.includes('輔控') || s.task === '輔控')).map(s => {
-            const u = hmStaff.find(staff => staff.id === s.userId);
-            return u?.alias || u?.name?.slice(-2) || '-';
+
+        const giDocsArr = dayShifts.filter(s => isGIStation(s.scheduled_station || s.station || '')).map(s => {
+            const d = doctors.find(doc => doc.id === s.doctorId);
+            return d?.alias || d?.name || '?';
         });
 
-        const finalMain = [...mainRads, ...mainHM];
-        const finalAssist = [...assistRads, ...assistHM];
+        const stats = db.getDailyStats(dateStr);
+        const dayNames = ['日', '一', '二', '三', '四', '五', '六'];
 
-        // --- 2. Doctors ---
-        const getDocs = (stationName: string) => {
-            return shifts
-                .filter(s => s.date === dateKey && s.location === '北投' && (s.scheduled_station === stationName || s.station === stationName))
-                .map(s => {
-                    const d = doctors.find(doc => doc.id === s.doctorId);
-                    return d?.alias || d?.name || '?';
-                });
-        };
-        
-        const getGIDocs = () => {
-             return shifts
-                .filter(s => s.date === dateKey && s.location === '北投' && ((s.scheduled_station || '').includes('GI') || (s.station || '').includes('GI') || (s.scheduled_station || '').includes('腸胃') || (s.station || '').includes('腸胃')))
-                .map(s => {
-                    const d = doctors.find(doc => doc.id === s.doctorId);
-                    return d?.alias || d?.name || '?';
-                });
-        };
-
-        const getSupportDocs = () => {
-            return shifts
-                .filter(s => s.date === dateKey && s.location === '北投' && s.scheduled_station === '支援')
-                .map(s => {
-                    const d = doctors.find(doc => doc.id === s.doctorId);
-                    return d?.alias || d?.name || '?';
-                });
-        };
-
-        const getAdminDocs = () => {
-             return shifts
-                .filter(s => s.date === dateKey && s.location === '北投' && s.scheduled_station === '行政')
-                .map(s => {
-                    const d = doctors.find(doc => doc.id === s.doctorId);
-                    return d?.alias || d?.name || '?';
-                });
-        };
-
-        const imgDocs = getDocs('影像');
-        const expDocs = getDocs('解說');
-        const supDocs = getSupportDocs();
-        const adminDocs = getAdminDocs();
-        const giDocs = getGIDocs();
-
-        // --- 3. Stats ---
-        const manualStats = db.getDailyStats(dateKey); // { beitou_clients, beitou_mr, beitou_gi, ... }
-        const mrCount = manualStats?.beitou_mr || 0;
-        const giCount = manualStats?.beitou_gi || 0;
-        
-        // Total Count: Refer to Beitou Clients (User Request)
-        const totalCount = manualStats?.beitou_clients || 0;
-
-        const lines = [
-            `${date.getMonth() + 1}/${date.getDate()} （${['日', '一', '二', '三', '四', '五', '六'][date.getDay()]}）`,
-            `主/輔：${[...finalMain, ...finalAssist].join('/') || '無'}`,
-            `影像：${imgDocs.join('/') || '無'}`,
-            `解說：${expDocs.join('/') || '無'}`,
-            `支援：${supDocs.join('/') || '無'}`,
-            `GI：${giDocs.join('/') || '無'}`,
-            `行政：${adminDocs.join('/') || '無'}`,
-            `總人數 : ${totalCount}人`,
-            `MR：${mrCount} 人`,
-            `GI：${giCount} 台`
-        ];
-
-        return lines.join('\n');
+        return `${date.getMonth() + 1}/${date.getDate()} （${dayNames[date.getDay()]}）
+主/輔：${mainRads.join('/') || '-'}/${assistRads.join('/') || '-'}  ${mainHM.join('/') || '-'}/${assistHM.join('/') || '-'}
+影像：${getDocs('影像').join('/') || '無'}
+解說：${getDocs('解說').join('/') || '無'}
+支援：${getDocs('支援').join('/') || '無'}
+GI：${giDocsArr.join('/') || '無'}
+行政：${getDocs('行政').join('/') || '無'}
+總人數 : ${stats?.beitou_clients || 0}人
+MR：${stats?.beitou_mr || 0} 人
+GI：${stats?.beitou_gi || 0} 台`;
     };
 
     const generateDazhiCopyText = (date: Date, shifts: any[], doctors: Doctor[]) => {
-        const dateKey = propsToLocalISOString(date);
+        const dateStr = propsToLocalISOString(date);
+        const dayShifts = shifts.filter(s => s.date === dateStr && s.location === '大直');
+        const dayHMShifts = db.getHealthMgmtShifts().filter(s => s.date === dateStr);
+        const hmStaff = db.getHealthMgmtStaff();
+        const stats = db.getDailyStats(dateStr);
 
-        const getFullDocs = (stationName: string) => {
-            return shifts
-                .filter(s => s.date === dateKey && s.location === '大直' && (s.scheduled_station === stationName || s.station === stationName))
-                .map(s => {
-                    const d = doctors.find(doc => doc.id === s.doctorId);
-                    let suffix = ' 醫師'; // Default suffix
-                    if (s.scheduled_station === '腸胃' && d?.name === '梁程超') suffix = ' 院長 醫師'; // Example mimic
-                    
-                    // Specific logic: if "Remote" (遠距), append "(北投)"
-                    if (['遠班', '遠距', '遠'].includes(s.scheduled_station || '')) return `${d?.name} 醫師 (北投)`;
-                    
-                    return `${d?.name}${suffix}`;
-                });
-        };
-        
-        // Special handler for imaging line: get "遠班" doctors regardless of location
+        const getDocs = (station: string) => dayShifts.filter(s => s.scheduled_station === station).map(s => {
+            const d = doctors.find(doc => doc.id === s.doctorId);
+            return d?.name || '?';
+        });
+
         const getRemoteDocs = () => {
-            return shifts
-                .filter(s => {
-                    if (s.date !== dateKey) return false;
-                    const station = s.scheduled_station || s.station;
-                    return ['遠班', '遠距', '遠'].includes(station);
-                })
+            return shifts.filter(s => s.date === dateStr && ['遠班', '遠距', '遠'].includes(s.scheduled_station || s.station || ''))
                 .map(s => {
                     const d = doctors.find(doc => doc.id === s.doctorId);
-                    // Append (北投) if location is 北投
-                    if (s.location === '北投') {
-                        return `${d?.name} 醫師 (北投)`;
-                    }
-                    return `${d?.name} 醫師`;
+                    return `${d?.name} 醫師${s.location === '北投' ? ' (北投)' : ''}`;
                 });
         };
-        
-        // Specific Stations
-        // User Request: Imaging line shows "遠班" doctors, with (北投) suffix if location is 北投
+
         const imgDocs = getRemoteDocs();
-        const expDocs = getFullDocs('解說');
-        const giDocs = shifts
-            .filter(s => s.date === dateKey && s.location === '大直' && isGIStation(s.scheduled_station || s.station || ''))
-            .map(s => {
-                const d = doctors.find(doc => doc.id === s.doctorId);
-                let suffix = ' 醫師';
-                return `${d?.name}${suffix}`;
-            });
-        const anesthDocs = [...getFullDocs('麻醫'), ...getFullDocs('麻醉')];
-
-        // 3-Specialty
-        const getSpecDocs = (station: string) => {
-             return shifts
-                .filter(s => s.date === dateKey && s.location === '大直' && (s.scheduled_station === station || s.station === station))
-                .map(s => {
-                    const d = doctors.find(doc => doc.id === s.doctorId);
-                    return d?.name || '';
-                }).join('、');
-        };
-        let gynDocs = getSpecDocs('婦科');
+        const expDocs = getDocs('解說');
+        const giShifts = dayShifts.filter(s => isGIStation(s.scheduled_station || s.station || ''));
+        // Maintain a stable order for GI doctors based on the station name (GI1, GI2...)
+        const sortedGIShifts = [...giShifts].sort((a,b) => (a.scheduled_station || '').localeCompare(b.scheduled_station || ''));
+        const giDocsNames = sortedGIShifts.map(s => doctors.find(doc => doc.id === s.doctorId)?.name || '?');
         
-        // Smart Fill: If Dazhi Gynecology is empty, check if any Explanation doctor on that day can cover it
-        if (!gynDocs) {
-            // User Request: Only consider Explanation doctors WORKING IN DAZHI
-            const expShifts = shifts.filter(s => 
-                s.date === dateKey && 
-                s.location === '大直' && // Added Location Check
-                (s.scheduled_station === '解說' || s.station === '解說')
-            );
-            
-            // Find first doctor who has '婦科' in capabilities
-            const capableDoc = expShifts
-                .map(s => doctors.find(d => d.id === s.doctorId))
-                .find(doc => doc?.capabilities?.includes('婦科'));
+        const anesShifts = db.getAnesthesiaShifts().filter(s => s.date === dateStr && s.location === '大直');
+        const anesStaffNames = anesShifts.map(s => db.getAnesthesiaStaff().find(as => as.id === s.userId)?.name).filter(Boolean);
+        const anesDocNames = dayShifts.filter(s => (s.scheduled_station || '').includes('麻')).map(s => doctors.find(d => d.id === s.doctorId)?.name).filter(Boolean);
+        const allAnes = Array.from(new Set([...anesStaffNames, ...anesDocNames]));
 
-            if (capableDoc) {
-                gynDocs = capableDoc.name;
+        const getSpec = (st: string) => {
+            let res = getDocs(st).join('、');
+            if (!res && st === '婦科') {
+                const expShifts = dayShifts.filter(s => s.scheduled_station === '解說');
+                const doc = expShifts.map(s => doctors.find(d => d.id === s.doctorId)).find(d => d?.capabilities?.includes('婦科'));
+                if (doc) res = doc.name;
             }
-        }
+            return res || '-';
+        };
 
-        const entDocs = getSpecDocs('耳鼻喉科');
-        const eyeDocs = getSpecDocs('眼科');
+        const dayNames = ['日', '一', '二', '三', '四', '五', '六'];
 
-        const lines = [
-            `${date.getMonth() + 1}/${date.getDate()}(${['日', '一', '二', '三', '四', '五', '六'][date.getDay()]})`,
-            `影像 : ${imgDocs.join('、')}`,
-            `解說 : ${expDocs.join('、')}`,
-            `腸胃：${giDocs.join('、')}`,
-            `麻醫：${anesthDocs.join('、')}`,
-            `3科會診醫師(09:00~12:00)`,
-            `婦科：${gynDocs}`,
-            `耳鼻喉科：${entDocs}`,
-            `眼科：${eyeDocs}`
-        ];
+        return `${date.getMonth() + 1}/${date.getDate()} （${dayNames[date.getDay()]}）
+健檢客戶： ${stats?.dazhi_clients || 0} 位
+(腸胃：${stats?.dazhi_gi || 0} / 心超： )
+代謝客戶：   位
 
-         return lines.filter(l => l !== '').join('\n');
+影像 : ${imgDocs.join('、') || '-'}
+解說 : ${expDocs.join('、') || '-'} 醫師
+腸胃：${giDocsNames.join(' 醫師、') || '-'} 醫師
+麻醫：${allAnes.map(n => n + ' 醫師').join('、') || '-'}
+
+3科會診醫師(09:00~12:00)
+婦科：${getSpec('婦科')}
+耳鼻喉科：${getSpec('耳鼻喉科')}
+眼科：${getSpec('眼科')}
+
+放射
+
+營養諮詢
+
+線上：
+
+
+供餐：
+
+腸胃鏡：${giDocsNames.map(n => n + '醫師').join('、') || '-'}
+${giDocsNames.length}線 ${stats?.dazhi_gi || 0}台 (第一台 :   ，第二台 : ，最後一台 :     ，麻評  位)
+
+${giDocsNames.map((n, i) => `診${i+1}：${n} 醫師(08：00)
+主跟：
+麻護：`).join('\n\n')}
+
+POR：
+流+洗：`;
     };
 
     const [currentDate, setCurrentDate] = useState(new Date());
@@ -790,33 +727,34 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
             const tableConfig: any = {
                 theme: 'grid',
                 rowPageBreak: 'avoid',
-                tableLineWidth: 0.2,
+                tableLineWidth: 0.3,
                 styles: {
                     font: fontName,
-                    fontSize: 7, 
-                    cellPadding: 0.1, 
+                    fontSize: viewMode === 'station' ? 8 : 7, 
+                    cellPadding: viewMode === 'station' ? { top: 0.5, right: 0.3, bottom: 0.5, left: 0.3 } : 0.1, 
                     valign: 'middle',
                     halign: 'center',
                     lineWidth: 0.2,
-                    lineColor: [0, 0, 0],
-                    minCellHeight: 3.2
+                    lineColor: [180, 180, 180],
+                    minCellHeight: viewMode === 'station' ? 5.0 : 3.2
                 },
                 headStyles: {
-                    fillColor: [66, 66, 66],
+                    fillColor: viewMode === 'station' ? [30, 41, 59] : [66, 66, 66],
                     textColor: [255, 255, 255],
                     font: fontName,
-                    fontSize: 8,
-                    minCellHeight: 4.0 
+                    fontSize: viewMode === 'station' ? 8 : 8,
+                    cellPadding: viewMode === 'station' ? { top: 1.5, right: 0.5, bottom: 1.5, left: 0.5 } : 0.1,
+                    minCellHeight: viewMode === 'station' ? 6.0 : 4.0 
                 },
                 columnStyles: (() => {
                     const pageWidth = doc.internal.pageSize.width;
                     const marginX = 2; // margin: 2 (left/right)
-                    const nameWidth = viewMode === 'station' ? 22 : 16; 
+                    const nameWidth = viewMode === 'station' ? 17 : 16; 
                     const availableDateWidth = pageWidth - (marginX * 2) - nameWidth;
                     const dateWidth = availableDateWidth / dateRange.length;
 
                     const styles: Record<number, any> = {
-                        0: { cellWidth: nameWidth, halign: 'center' } // Unified halign to center as requested
+                        0: { cellWidth: nameWidth, halign: 'center', fontStyle: 'bold' }
                     };
                     dateRange.forEach((_, i) => {
                         styles[i + 1] = { cellWidth: dateWidth };
@@ -986,44 +924,60 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                          const x = data.cell.x + data.cell.width / 2;
                          
                          // Calculate Height for Centering
-                         // Name: 8pt (~2.8mm line height) -> use 3.2mm spacing
-                         // Details: 5pt (~1.8mm line height) -> use 2.2mm spacing
-                                                  let totalHeight = 0;
+                         // Name: 10pt (~3.5mm line height)
+                         // Details: 7pt (~2.5mm line height)
+                         let totalHeight = 0;
                           shifts.forEach((shift: any, idx: number) => {
                               totalHeight += 2.8; // Name (8pt)
-                              if (shift.locationAbbr) totalHeight += 2.0;
-                              if (shift.time) totalHeight += 2.0;
-                              if (shift.task && !(shift.stationName === '晚班' && shift.task === '晚班')) totalHeight += 2.0; 
-                              if (idx < shifts.length - 1) totalHeight += 0.8; // Spacing between doctors
+                              if (shift.locationAbbr) totalHeight += 2.3;
+                              if (shift.time) totalHeight += 2.3;
+                              if (shift.task && !(shift.stationName === '晚班' && shift.task === '晚班')) totalHeight += 2.3; 
+                              if (idx < shifts.length - 1) totalHeight += 1.5; // Spacing between doctors
                           });
                           
                           let y = data.cell.y + (data.cell.height - totalHeight) / 2 + 2.2; // Baseline adjust
                          
                          shifts.forEach((shift: any, idx: number) => {
-                              doc.setFontSize(8);
+                              doc.setFontSize(8); // 8pt doctor name
+                              doc.setTextColor(15, 23, 42);  // Near-black for name
                               doc.text(shift.name, x, y, { align: 'center' });
                               y += 2.8; 
                               
                               if (shift.locationAbbr) {
-                                  doc.setFontSize(6);
+                                  doc.setFontSize(7);
+                                  doc.setTextColor(100, 100, 100);
                                   doc.text(shift.locationAbbr, x, y, { align: 'center' });
-                                  y += 2.0;
+                                  doc.setTextColor(0, 0, 0);
+                                  y += 2.3;
                               }
 
                               if (shift.time) {
-                                  doc.setFontSize(5);
+                                  doc.setFontSize(7);
+                                  doc.setTextColor(80, 80, 80);
                                   doc.text(shift.time, x, y, { align: 'center' });
-                                  y += 2.0; 
+                                  doc.setTextColor(0, 0, 0);
+                                  y += 2.3; 
                               }
                               
                               if (shift.task && !(shift.stationName === '晚班' && shift.task === '晚班')) {
-                                  doc.setFontSize(5);
+                                  doc.setFontSize(7);
+                                  if (shift.task === '晚班') {
+                                      doc.setTextColor(220, 0, 0); 
+                                  } else {
+                                      doc.setTextColor(0, 0, 200); 
+                                  }
                                   doc.text(shift.task, x, y, { align: 'center' });
-                                  y += 2.0; 
+                                  doc.setTextColor(0, 0, 0); 
+                                  y += 2.3; 
                               }
                               
                               if (idx < shifts.length - 1) {
-                                  y += 0.8;
+                                  // Draw a thin separator line between doctors
+                                  doc.setDrawColor(200, 200, 200);
+                                  doc.setLineWidth(0.2);
+                                  doc.line(data.cell.x + 3, y + 0.5, data.cell.x + data.cell.width - 3, y + 0.5);
+                                  doc.setDrawColor(0, 0, 0);
+                                  y += 1.5;
                               }
                          });
                      }
@@ -1047,21 +1001,22 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                     if (locStations.length === 0) return;
                     
                     // Location Header Row
+                    const locBg = loc === '北投' ? [37, 99, 235] : 
+                                  loc === '大直' ? [120, 95, 85] :
+                                  loc === '台中' ? [217, 90, 15] :
+                                  [109, 60, 220];
                     const locationHeaderRow: any[] = [
                         {
                             content: loc,
                             colSpan: dateRange.length + 1,
                             styles: {
-                                fillColor: loc === '北投' ? [59, 130, 246] : 
-                                           loc === '大直' ? [161, 136, 127] :
-                                           loc === '台中' ? [249, 115, 22] :
-                                           [139, 92, 246], // Matching Excel colors
+                                fillColor: locBg,
                                 textColor: [255, 255, 255],
                                 fontStyle: 'bold',
                                 halign: 'center',
-                                fontSize: 14,
-                                cellPadding: 0.1,
-                                minCellHeight: 6.5 
+                                fontSize: 11,
+                                cellPadding: { top: 1.5, right: 4, bottom: 1.5, left: 4 },
+                                minCellHeight: 6.0 
                             }
                         }
                     ];
@@ -1079,7 +1034,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                         const radRow: any[] = [
                             {
                                 content: '主/輔 (放射)',
-                                styles: { fontStyle: 'bold', halign: 'center', fontSize: 7, minCellHeight: 4.0 }
+                                styles: { fontStyle: 'bold', halign: 'center', fontSize: 8, minCellHeight: 5.0 }
                             }
                         ];
                         
@@ -1087,7 +1042,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                         const hmRow: any[] = [
                             {
                                 content: '主/輔 (健管)',
-                                styles: { fontStyle: 'bold', halign: 'center', fontSize: 6, minCellHeight: 4.0 }
+                                styles: { fontStyle: 'bold', halign: 'center', fontSize: 8, minCellHeight: 5.0 }
                             }
                         ];
 
@@ -1135,14 +1090,14 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                             const radAssist = getRadNames(radAssistShifts) || '-';
                             radRow.push({
                                 content: `${radMain}/${radAssist}`,
-                                styles: { halign: 'center', fontSize: 7, minCellHeight: 4.0 }
+                                styles: { halign: 'center', fontSize: 8, minCellHeight: 5.0 }
                             });
 
                             const hmMain = getHMNames(hmMainShifts) || '-';
                             const hmAssist = getHMNames(hmAssistShifts) || '-';
                             hmRow.push({
                                 content: `${hmMain}/${hmAssist}`,
-                                styles: { halign: 'center', fontSize: 7, minCellHeight: 4.0 }
+                                styles: { halign: 'center', fontSize: 8, minCellHeight: 5.0 }
                             });
                         });
                         
@@ -1156,7 +1111,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                         const hmRow: any[] = [
                             {
                                 content: '主/輔 (健管)',
-                                styles: { fontStyle: 'bold', halign: 'center', fontSize: 6, minCellHeight: 4.0 }
+                                styles: { fontStyle: 'bold', halign: 'center', fontSize: 8, minCellHeight: 5.0 }
                             }
                         ];
 
@@ -1190,7 +1145,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                             const hmAssist = getHMNames(hmAssistShifts) || '-';
                             hmRow.push({
                                 content: `${hmMain}/${hmAssist}`,
-                                styles: { halign: 'center', fontSize: 7, minCellHeight: 4.0 }
+                                styles: { halign: 'center', fontSize: 8, minCellHeight: 5.0 }
                             });
                         });
                         
@@ -1205,10 +1160,11 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
 
                     processedStationNames.forEach(stName => {
                          if (loc === '大直' && stName === '晚班') return;
-                                                  // const isExpandedLoc = loc === '大直' || loc === '台中';
-                          // For Dazhi/Taichung, add 4pt (2.85mm total) vertical padding buffer to minimum height
-                          const dynamicMinHeight = 5.5;
-                          const rowData: any[] = [{ content: stName, styles: { fontStyle: 'bold', minCellHeight: dynamicMinHeight }, location: loc }];
+                          // Minimum cell height for each station row
+                          const dynamicMinHeight = 5.0;
+                          // Station name cell: subtle background
+                          const stationNameBg = stName === '晚班' ? [255, 240, 240] : [248, 250, 252];
+                          const rowData: any[] = [{ content: stName, styles: { fontStyle: 'bold', fontSize: 8, minCellHeight: dynamicMinHeight, fillColor: stationNameBg, textColor: stName === '晚班' ? [200, 0, 0] : [30, 41, 59] }, location: loc }];
                          
                          dateRange.forEach(date => {
                              let assignedShifts: any[] = [];
@@ -1254,19 +1210,19 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                    return doc?.name || '?';
                              }).join('\n');
                               
-                              let cellStyles: any = { minCellHeight: 3.2 };
+                              let cellStyles: any = { minCellHeight: dynamicMinHeight };
                               if (assignedShifts.length > 0) {
                                   let totalHeight = 0;
                                   assignedShifts.forEach((s, idx) => {
                                        totalHeight += 2.8; // Name (8pt)
-                                       if (s.workTime) totalHeight += 2.0; 
+                                       if (s.workTime) totalHeight += 2.3; 
                                        const showTask = s.task && !(stName === '晚班' && s.task === '晚班');
-                                       if (showTask) totalHeight += 2.0;
-                                       if (idx < assignedShifts.length - 1) totalHeight += 0.8;
-                                        if (stName.includes('遠') && s.location) totalHeight += 2.0;
+                                       if (showTask) totalHeight += 2.3;
+                                       if (idx < assignedShifts.length - 1) totalHeight += 1.5;
+                                        if (stName.includes('遠') && s.location) totalHeight += 2.3;
                                   });
-                                  // For Dazhi/Taichung, padding buffer
-                                  const paddingBuffer = 0.4;
+                                  const hasAnyTask = assignedShifts.some(s => s.task && !(stName === '晚班' && s.task === '晚班'));
+                                  const paddingBuffer = hasAnyTask ? 2.5 : 1.0;
                                   cellStyles = { minCellHeight: Math.max(totalHeight + paddingBuffer, dynamicMinHeight) }; 
                               } else {
                                   cellStyles = { minCellHeight: dynamicMinHeight };
@@ -1526,58 +1482,78 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                 locRow.height = 24; // Increased height for larger font
                 currentRowIndex++;
 
-                // Beitou Special Rows: Main -> Assistant -> Late
-                if (locationName === '北投') {
-                    // Use Radiographer Shifts (from db.shifts)
-                    const radShifts = (db as any).shifts || [];
-                    const users = (db as any).users || [];
+                // Specialized Rows (Main/Assistant/Late)
+                const healthMgmtStaff = db.getHealthMgmtStaff();
+                const allHMShifts = db.getHealthMgmtShifts();
+                const radShifts = db.shifts || [];
+                const radUsers = db.getUsers();
 
-                    // 1. Main Shift (場控)
+                if (locationName === '北投') {
+                    // 1. Main Shift (主班) - Combined Rad and HM
                     const rowMain = sheet1.getRow(currentRowIndex);
-                    rowMain.getCell(1).value = '場控';
+                    rowMain.getCell(1).value = '主班';
                     rowMain.getCell(1).border = borderStyle;
                     rowMain.getCell(1).alignment = alignCenter;
 
                     dateRange.forEach((dateStr, colIdx) => {
-                        const mainShift = radShifts.find((s: any) => s.date === dateStr && s.station?.includes('場控'));
-                        const mainUser = mainShift ? users.find((u: any) => u.id === mainShift.userId) : null;
-                        
+                        const dayRadShifts = radShifts.filter(s => s.date === dateStr && (s.station?.includes('場控') || s.station === '主' || s.station === '主控'));
+                        const dayHMShifts = allHMShifts.filter(s => {
+                            if (s.date !== dateStr) return false;
+                            if (!(s.task === '主控' || s.station?.includes('主控'))) return false;
+                            const st = healthMgmtStaff.find(u => u.id === s.userId);
+                            const effectiveLoc = s.location || st?.location || '北投';
+                            return effectiveLoc === '北投';
+                        });
+
+                        const names = [
+                            ...dayRadShifts.map(s => radUsers.find(u => u.id === s.userId)?.name),
+                            ...dayHMShifts.map(s => healthMgmtStaff.find(u => u.id === s.userId)?.name)
+                        ].filter(Boolean);
+
                         const cell = rowMain.getCell(colIdx + 2);
-                        cell.value = mainUser?.name || '';
+                        cell.value = names.join('\n');
                         cell.border = borderStyle;
                         cell.alignment = alignCenter;
-                        cell.font = { ...fontBase, bold: false }; // No Bold
+                        cell.font = { ...fontBase, bold: false };
                     });
                     currentRowIndex++;
 
-                    // 2. Assistant Shift (輔班)
+                    // 2. Assistant Shift (輔班) - Combined Rad and HM
                     const rowAssist = sheet1.getRow(currentRowIndex);
                     rowAssist.getCell(1).value = '輔班';
                     rowAssist.getCell(1).border = borderStyle;
                     rowAssist.getCell(1).alignment = alignCenter;
 
                     dateRange.forEach((dateStr, colIdx) => {
-                        const assistShift = radShifts.find((s: any) => s.date === dateStr && s.specialRoles?.includes('輔班'));
-                        const assistUser = assistShift ? users.find((u: any) => u.id === assistShift.userId) : null;
-                        
+                        const dayRadShifts = radShifts.filter(s => s.date === dateStr && (s.specialRoles?.includes('輔班') || s.station === '輔' || s.station === '輔控'));
+                        const dayHMShifts = allHMShifts.filter(s => {
+                            if (s.date !== dateStr) return false;
+                            if (!(s.task === '輔控' || s.station?.includes('輔控'))) return false;
+                            const st = healthMgmtStaff.find(u => u.id === s.userId);
+                            const effectiveLoc = s.location || st?.location || '北投';
+                            return effectiveLoc === '北投';
+                        });
+
+                        const names = [
+                            ...dayRadShifts.map(s => radUsers.find(u => u.id === s.userId)?.name),
+                            ...dayHMShifts.map(s => healthMgmtStaff.find(u => u.id === s.userId)?.name)
+                        ].filter(Boolean);
+
                         const cell = rowAssist.getCell(colIdx + 2);
-                        cell.value = assistUser?.name ? `${assistUser.name}(輔)` : ''; // Keep (輔)? User requested split, maybe just name is fine? Keeping specific suffix if useful or just name. Let's just use name since row title is '輔班'.
-                        // Actually, let's keep name only for cleaner look since row header says it.
-                        cell.value = assistUser?.name || '';
+                        cell.value = names.join('\n');
                         cell.border = borderStyle;
                         cell.alignment = alignCenter;
                         cell.font = { ...fontBase, size: 9 };
                     });
                     currentRowIndex++;
 
-                    // 3. Late Shift (晚班) - Moved here
+                    // 3. Late Shift (晚班)
                     const rowLate = sheet1.getRow(currentRowIndex);
                     rowLate.getCell(1).value = '晚班';
                     rowLate.getCell(1).border = borderStyle;
                     rowLate.getCell(1).alignment = alignCenter;
 
                     dateRange.forEach((dateStr, colIdx) => {
-                         // Find shifts with task '晚班' in this location (Multiple doctors possible)
                          const lateShifts = locShifts.filter(s => s.date === dateStr && s.task?.includes('晚班'));
                          const date = new Date(dateStr);
                          const isWeekend = date.getDay() === 0 || date.getDay() === 6;
@@ -1586,17 +1562,76 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                          if (isWeekend) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF5F5F5' } };
 
                          if (lateShifts.length > 0) {
-                             const contentParts = lateShifts.map(lateShift => {
+                             const richText: any[] = [];
+                             lateShifts.forEach((lateShift, idx) => {
                                  const doc = doctors.find(d => d.id === lateShift.doctorId);
                                  const name = doc?.name || '?';
                                  const time = formatTimeForExcel(lateShift.workTime || (lateShift as any).work_time || '');
-                                 return [name, time].filter(Boolean).join('\n');
+                                 
+                                 richText.push({ text: name });
+                                 if (time) richText.push({ text: '\n' + time });
+                                 
+                                 // Task is always "晚班" here, color it red
+                                 richText.push({ text: '\n晚班', font: { color: { argb: 'FFFF0000' } } });
+                                 
+                                 if (idx < lateShifts.length - 1) {
+                                     richText.push({ text: '\n\n' }); // Double newline between doctors
+                                 }
                              });
 
-                             cell.value = contentParts.join('\n'); // Single newline
+                             cell.value = { richText };
                              cell.alignment = alignCenter;
-                             cell.font = { ...fontBase, bold: false }; // No Bold
                          }
+                    });
+                    currentRowIndex++;
+                } else if (locationName === '大直') {
+                    // 1. Main Shift (主控 - 大直)
+                    const rowMain = sheet1.getRow(currentRowIndex);
+                    rowMain.getCell(1).value = '主控';
+                    rowMain.getCell(1).border = borderStyle;
+                    rowMain.getCell(1).alignment = alignCenter;
+
+                    dateRange.forEach((dateStr, colIdx) => {
+                        const dayHMShifts = allHMShifts.filter(s => {
+                            if (s.date !== dateStr) return false;
+                            if (!(s.task === '主控' || s.station?.includes('主控'))) return false;
+                            const st = healthMgmtStaff.find(u => u.id === s.userId);
+                            const effectiveLoc = s.location || st?.location || '北投';
+                            return effectiveLoc === '大直';
+                        });
+
+                        const names = dayHMShifts.map(s => healthMgmtStaff.find(u => u.id === s.userId)?.name).filter(Boolean);
+
+                        const cell = rowMain.getCell(colIdx + 2);
+                        cell.value = names.join('\n');
+                        cell.border = borderStyle;
+                        cell.alignment = alignCenter;
+                        cell.font = { ...fontBase, bold: false };
+                    });
+                    currentRowIndex++;
+
+                    // 2. Assistant Shift (輔控 - 大直)
+                    const rowAssist = sheet1.getRow(currentRowIndex);
+                    rowAssist.getCell(1).value = '輔控';
+                    rowAssist.getCell(1).border = borderStyle;
+                    rowAssist.getCell(1).alignment = alignCenter;
+
+                    dateRange.forEach((dateStr, colIdx) => {
+                        const dayHMShifts = allHMShifts.filter(s => {
+                            if (s.date !== dateStr) return false;
+                            if (!(s.task === '輔控' || s.station?.includes('輔控'))) return false;
+                            const st = healthMgmtStaff.find(u => u.id === s.userId);
+                            const effectiveLoc = s.location || st?.location || '北投';
+                            return effectiveLoc === '大直';
+                        });
+
+                        const names = dayHMShifts.map(s => healthMgmtStaff.find(u => u.id === s.userId)?.name).filter(Boolean);
+
+                        const cell = rowAssist.getCell(colIdx + 2);
+                        cell.value = names.join('\n');
+                        cell.border = borderStyle;
+                        cell.alignment = alignCenter;
+                        cell.font = { ...fontBase, size: 9 };
                     });
                     currentRowIndex++;
                 }
@@ -1637,28 +1672,46 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                             return s.scheduled_station === station;
                         });
                         
-                        if (stationShifts.length > 0) {
-                            const contentParts = stationShifts.map(shift => {
-                                const doc = doctors.find(d => d.id === shift.doctorId);
-                                const name = doc?.name || doc?.alias || '?';
-                                
-                                // User Request: Station View also needs Work Time and Task
-                                const time = formatTimeForExcel(shift.workTime || (shift as any).work_time || '');
-                                const task = (shift.task && !shift.task.includes('固定')) ? `(${shift.task})` : '';
+                         if (stationShifts.length > 0) {
+                             const richText: any[] = [];
+                             stationShifts.forEach((shift, idx) => {
+                                 const doc = doctors.find(d => d.id === shift.doctorId);
+                                 const name = doc?.name || doc?.alias || '?';
+                                 const time = formatTimeForExcel(shift.workTime || (shift as any).work_time || '');
+                                 
+                                 // User Request: Station View also needs Work Time and Task
+                                 const showTaskValue = shift.task && !shift.task.includes('固定');
+                                 const task = showTaskValue ? `(${shift.task})` : '';
 
-                                return [name, time, task].filter(l => l && l.trim() !== '').join('\n');
-                            });
+                                 const baseColor = (isSimulationMode && shift.isAutoGenerated) ? 'FFD97706' : undefined;
 
-                            cell.value = contentParts.join('\n'); // Single newline
-                            cell.alignment = alignCenter;
-                            cell.font = { ...fontBase, bold: false }; // No Bold
-                            
-                            // Check if ANY shift is simulated for coloring (simplified logic: if any is simulated, mark cell or part? 
-                            // Since we don't have rich text per part here easily without complex construction, let's just color orange if ANY is simulated)
-                            if (isSimulationMode && stationShifts.some(s => s.isAutoGenerated)) {
-                                cell.font = { ...fontBase, color: { argb: 'FFD97706' }, bold: false }; // Keep no bold
-                            }
-                        }
+                                 richText.push({ 
+                                     text: name, 
+                                     font: baseColor ? { color: { argb: baseColor } } : undefined 
+                                 });
+                                 if (time) {
+                                     richText.push({ 
+                                         text: '\n' + time, 
+                                         font: baseColor ? { color: { argb: baseColor } } : undefined 
+                                     });
+                                 }
+                                 
+                                 if (task) {
+                                     const taskColor = shift.task === '晚班' ? 'FFFF0000' : 'FF0000FF'; // Red for Evening, Blue for others
+                                     richText.push({ 
+                                         text: '\n' + task, 
+                                         font: { color: { argb: taskColor } } 
+                                     });
+                                 }
+
+                                 if (idx < stationShifts.length - 1) {
+                                     richText.push({ text: '\n\n' }); // Double newline between doctors
+                                 }
+                             });
+
+                             cell.value = { richText };
+                             cell.alignment = alignCenter;
+                         }
                     });
                     currentRowIndex++;
                 });
@@ -2704,6 +2757,9 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                     
                                     if (locationStations.length === 0) return null; // Skip empty locations
 
+                                    const radUsers = db.getUsers();
+                                    const hmStaff = db.getHealthMgmtStaff();
+
                                     return (
                                         <React.Fragment key={location}>
                                             {/* Location Header */}
@@ -2736,9 +2792,6 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                                 const effectiveLoc = s.location || st?.location || '北投';
                                                                 return effectiveLoc === '北投';
                                                             });
-                                                            
-                                                            const radUsers = db.getUsers();
-                                                            const hmStaff = db.getHealthMgmtStaff();
                                                             
                                                             const radNames = radShifts.map(s => {
                                                                 const u = radUsers.find(u => u.id === s.userId);
@@ -2781,9 +2834,6 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                                 const effectiveLoc = s.location || st?.location || '北投';
                                                                 return effectiveLoc === '北投';
                                                             });
-                                                            
-                                                            const radUsers = db.getUsers();
-                                                            const hmStaff = db.getHealthMgmtStaff();
                                                             
                                                             const radNames = radShifts.map(s => {
                                                                 const u = radUsers.find(u => u.id === s.userId);
@@ -2829,7 +2879,6 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                                 return effectiveLoc === '大直';
                                                             });
                                                             
-                                                            const hmStaff = db.getHealthMgmtStaff();
                                                             const hmNames = hmShifts.map(s => {
                                                                 const st = hmStaff.find(u => u.id === s.userId);
                                                                 return st?.name;
@@ -2862,7 +2911,6 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                                 return effectiveLoc === '大直';
                                                             });
                                                             
-                                                            const hmStaff = db.getHealthMgmtStaff();
                                                             const hmNames = hmShifts.map(s => {
                                                                 const st = hmStaff.find(u => u.id === s.userId);
                                                                 return st?.name;
@@ -2882,6 +2930,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                     </tr>
                                                 </>
                                             )}
+                
 
                                             {(() => {
                                                 const PRESCRIBED_ORDER: Record<string, string[]> = {
@@ -3053,7 +3102,8 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                         })}
                                                     </tr>
                                                 );
-                                            })})()}
+                                            });
+                                        })()}
                                         </React.Fragment>
                                     );
                                 })}
@@ -3066,135 +3116,141 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                 
                 {viewMode === 'daily' && (
                     <div className="flex flex-col gap-8 pb-10">
-                        {/* Main/Assistant Shift Display */}
-                        <div className="bg-gradient-to-r from-amber-50 via-orange-50/50 to-amber-50 border border-amber-200/80 rounded-2xl p-4 shadow-[0_2px_10px_rgba(251,191,36,0.15)] relative overflow-hidden">
-                            <div className="absolute top-0 left-0 w-1.5 h-full bg-gradient-to-b from-amber-400 to-orange-400"></div>
-                            <div className="flex flex-col sm:flex-row gap-4 ml-2">
-                                {(() => {
-                                    const dateStr = toLocalISOString(currentDate);
-                                    const radShifts = db.shifts.filter(s => s.date === dateStr);
-                                    const hmShifts = db.getHealthMgmtShifts().filter(s => s.date === dateStr);
-                                    
-                                    const radUsers = db.getUsers();
-                                    const hmStaff = db.getHealthMgmtStaff();
+                        {(() => {
+                            const stations = db.settings.doctorStations || [];
+                            return LOCATIONS.map(loc => {
+                                const rawLocStations = stations.filter(s => s.location === loc);
+                                if (rawLocStations.length === 0) return null;
 
-                                     const mainRadNames = radShifts.filter(s => {
-                                         const u = radUsers.find(user => user.id === s.userId);
-                                         return u?.isRadiographer && (s.station?.includes('場控') || s.station === '主' || s.station === '主控');
-                                     }).map(s => radUsers.find(u => u.id === s.userId)?.name).filter(Boolean);
-                                     
-                                     const mainHMNames = hmShifts.filter(s => s.station === '主控' || s.task === '主控' || s.station?.includes('主控')).map(s => {
-                                         const u = hmStaff.find(st => st.id === s.userId);
-                                         return u?.name;
-                                     }).filter(Boolean);
-                                     const mainNamesJoined = [...mainRadNames, ...mainHMNames].join(' / ') || '-';
- 
-                                     const assistRadNames = radShifts.filter(s => {
-                                         const u = radUsers.find(user => user.id === s.userId);
-                                         return u?.isRadiographer && (s.specialRoles?.includes('輔班') || s.station === '輔' || s.station === '輔控');
-                                     }).map(s => radUsers.find(u => u.id === s.userId)?.name).filter(Boolean);
-                                     
-                                     const assistHMNames = hmShifts.filter(s => s.station === '輔控' || s.task === '輔控' || s.station?.includes('輔控')).map(s => {
-                                         const u = hmStaff.find(st => st.id === s.userId);
-                                         return u?.name;
-                                     }).filter(Boolean);
-                                     const assistNamesJoined = [...assistRadNames, ...assistHMNames].join(' / ') || '-';
-
-                                    return (
-                                        <>
-                                            <div className="flex-1 flex items-center gap-3 bg-white/80 backdrop-blur-sm rounded-xl px-4 py-2.5 border border-amber-100 shadow-[0_1px_2px_rgba(0,0,0,0.02)] transition-transform hover:scale-[1.02]">
-                                                <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center text-amber-600 shadow-sm ring-2 ring-white">
-                                                    <Star size={18} className="fill-amber-500"/>
-                                                </div>
-                                                <div>
-                                                    <div className="text-[10px] font-bold text-amber-600/80 uppercase tracking-widest mb-0.5">主班 (場控)</div>
-                                                    <div className="text-[15px] font-black text-amber-900">{mainNamesJoined}</div>
-                                                </div>
-                                            </div>
-                                            <div className="flex-1 flex items-center gap-3 bg-white/80 backdrop-blur-sm rounded-xl px-4 py-2.5 border border-orange-100 shadow-[0_1px_2px_rgba(0,0,0,0.02)] transition-transform hover:scale-[1.02]">
-                                                <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center text-orange-600 shadow-sm ring-2 ring-white">
-                                                    <Shield size={18} className="fill-orange-400"/>
-                                                </div>
-                                                <div>
-                                                    <div className="text-[10px] font-bold text-orange-600/80 uppercase tracking-widest mb-0.5">輔班</div>
-                                                    <div className="text-[15px] font-black text-orange-900">{assistNamesJoined}</div>
-                                                </div>
-                                            </div>
-                                        </>
-                                    );
-                                })()}
-                            </div>
-                        </div>
-
-                        {LOCATIONS.map(loc => {
-                            const rawLocStations = stations.filter(s => s.location === loc);
-                            if (rawLocStations.length === 0) return null;
-
-                            // Merge GI stations for Daily View cards
-                            const locStations: DoctorStationConfig[] = [];
-                            const seenGI = new Set<string>();
-                            rawLocStations.forEach(s => {
-                                if (isGIStation(s.name)) {
-                                    if (!seenGI.has(loc)) {
-                                        locStations.push({ ...s, name: 'GI' });
-                                        seenGI.add(loc);
+                                // Merge GI stations for Daily View cards
+                                const locStations: DoctorStationConfig[] = [];
+                                const seenGI = new Set<string>();
+                                rawLocStations.forEach(s => {
+                                    if (isGIStation(s.name)) {
+                                        if (!seenGI.has(loc)) {
+                                            locStations.push({ ...s, name: 'GI' });
+                                            seenGI.add(loc);
+                                        }
+                                    } else {
+                                        locStations.push(s);
                                     }
-                                } else {
-                                    locStations.push(s);
-                                }
-                            });
+                                });
 
-                            return (
-                                <div key={loc} className="space-y-4">
-                                    <div className="flex items-center gap-4 border-b border-gray-200 pb-2">
-                                        <h2 className={`font-bold text-base px-4 py-1 rounded-full text-white shadow-md ${LOCATION_COLORS[loc]?.split(' ')[0] || 'bg-gray-500'}`}>
-                                            {loc}區
-                                        </h2>
-                                        {(() => {
-                                            const stats = db.getDailyStats(toLocalISOString(currentDate));
-                                            if (loc === '北投') {
-                                                return (
-                                                    <div className="flex flex-wrap items-center gap-3">
-                                                        <div className="flex items-center gap-1.5 bg-slate-100 px-3 py-1.5 rounded-full border border-slate-200 shadow-sm">
-                                                            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">北投客戶數</span>
-                                                            <span className="text-base font-black text-slate-800">{stats?.beitou_clients || 0}</span>
+                                return (
+                                    <div key={loc} className="space-y-4">
+                                        <div className="flex items-center gap-4 border-b border-gray-200 pb-2">
+                                            <h2 className={`font-bold text-base px-4 py-1 rounded-full text-white shadow-md ${LOCATION_COLORS[loc]?.split(' ')[0] || 'bg-gray-500'}`}>
+                                                {loc}區
+                                            </h2>
+                                            {(() => {
+                                                const stats = db.getDailyStats(toLocalISOString(currentDate));
+                                                if (loc === '北投') {
+                                                    return (
+                                                        <div className="flex flex-wrap items-center gap-3">
+                                                            <div className="flex items-center gap-1.5 bg-slate-100 px-3 py-1.5 rounded-full border border-slate-200 shadow-sm">
+                                                                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">北投客戶數</span>
+                                                                <span className="text-base font-black text-slate-800">{stats?.beitou_clients || 0}</span>
+                                                            </div>
+                                                            <div className="flex items-center gap-1.5 bg-blue-50 px-3 py-1.5 rounded-full border border-blue-100 shadow-sm">
+                                                                <span className="text-[11px] font-bold text-blue-500 uppercase tracking-wider">MR 數</span>
+                                                                <span className="text-base font-black text-blue-700">{stats?.beitou_mr || 0}</span>
+                                                            </div>
+                                                            <div className="flex items-center gap-1.5 bg-emerald-50 px-3 py-1.5 rounded-full border border-emerald-100 shadow-sm">
+                                                                <span className="text-[11px] font-bold text-emerald-500 uppercase tracking-wider">GI(北投)</span>
+                                                                <span className="text-base font-black text-emerald-700">{stats?.beitou_gi || 0}</span>
+                                                            </div>
+                                                            <div className="flex items-center gap-1.5 bg-amber-50 px-3 py-1.5 rounded-full border border-amber-100 shadow-sm">
+                                                                <span className="text-[11px] font-bold text-amber-600 uppercase tracking-wider">CTA 數</span>
+                                                                <span className="text-base font-black text-amber-700">{stats?.beitou_cta || 0}</span>
+                                                            </div>
                                                         </div>
-                                                        <div className="flex items-center gap-1.5 bg-blue-50 px-3 py-1.5 rounded-full border border-blue-100 shadow-sm">
-                                                            <span className="text-[11px] font-bold text-blue-500 uppercase tracking-wider">MR 數</span>
-                                                            <span className="text-base font-black text-blue-700">{stats?.beitou_mr || 0}</span>
+                                                    );
+                                                }
+                                                if (loc === '大直') {
+                                                    return (
+                                                        <div className="flex flex-wrap items-center gap-3">
+                                                            <div className="flex items-center gap-1.5 bg-slate-100 px-3 py-1.5 rounded-full border border-slate-200 shadow-sm">
+                                                                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">大直客戶數</span>
+                                                                <span className="text-base font-black text-slate-800">{stats?.dazhi_clients || 0}</span>
+                                                            </div>
+                                                            <div className="flex items-center gap-1.5 bg-emerald-50 px-3 py-1.5 rounded-full border border-emerald-100 shadow-sm">
+                                                                <span className="text-[11px] font-bold text-emerald-500 uppercase tracking-wider">GI(大直)</span>
+                                                                <span className="text-base font-black text-emerald-700">{stats?.dazhi_gi || 0}</span>
+                                                            </div>
                                                         </div>
-                                                        <div className="flex items-center gap-1.5 bg-emerald-50 px-3 py-1.5 rounded-full border border-emerald-100 shadow-sm">
-                                                            <span className="text-[11px] font-bold text-emerald-500 uppercase tracking-wider">GI(北投)</span>
-                                                            <span className="text-base font-black text-emerald-700">{stats?.beitou_gi || 0}</span>
-                                                        </div>
-                                                        <div className="flex items-center gap-1.5 bg-amber-50 px-3 py-1.5 rounded-full border border-amber-100 shadow-sm">
-                                                            <span className="text-[11px] font-bold text-amber-600 uppercase tracking-wider">CTA 數</span>
-                                                            <span className="text-base font-black text-amber-700">{stats?.beitou_cta || 0}</span>
-                                                        </div>
-                                                    </div>
-                                                );
-                                            }
-                                            if (loc === '大直') {
-                                                return (
-                                                    <div className="flex flex-wrap items-center gap-3">
-                                                        <div className="flex items-center gap-1.5 bg-slate-100 px-3 py-1.5 rounded-full border border-slate-200 shadow-sm">
-                                                            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">大直客戶數</span>
-                                                            <span className="text-base font-black text-slate-800">{stats?.dazhi_clients || 0}</span>
-                                                        </div>
-                                                        <div className="flex items-center gap-1.5 bg-emerald-50 px-3 py-1.5 rounded-full border border-emerald-100 shadow-sm">
-                                                            <span className="text-[11px] font-bold text-emerald-500 uppercase tracking-wider">GI(大直)</span>
-                                                            <span className="text-base font-black text-emerald-700">{stats?.dazhi_gi || 0}</span>
-                                                        </div>
-                                                    </div>
-                                                );
-                                            }
-                                            return null;
-                                        })()}
-                                        <div className="flex-1 h-px bg-gray-100"></div>
-                                    </div>
-                                    
-                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                                        {locStations.map(config => {
+                                                    );
+                                                }
+                                                return null;
+                                            })()}
+                                            <div className="flex-1 h-px bg-gray-100"></div>
+                                        </div>
+
+                                        {/* Main/Assistant (Rad + HM Staff) Row for this Location - Skip for Taichung */}
+                                        {loc !== '台中' && (
+                                            <div className="flex flex-col md:flex-row gap-4 mb-4">
+                                                {(() => {
+                                                    const dateStr = toLocalISOString(currentDate);
+                                                    const radShifts = db.shifts.filter(s => s.date === dateStr);
+                                                    const hmShifts = db.getHealthMgmtShifts().filter(s => s.date === dateStr);
+                                                    const radUsers = db.getUsers();
+                                                    const hmStaff = db.getHealthMgmtStaff();
+                                                    
+                                                    const locMainRadNames = radShifts.filter(s => {
+                                                        const u = radUsers.find(user => user.id === s.userId);
+                                                        const effectiveLoc = s.location || '北投';
+                                                        return u?.isRadiographer && effectiveLoc === loc && (s.station?.includes('場控') || s.station === '主' || s.station === '主控');
+                                                    }).map(s => radUsers.find(u => u.id === s.userId)?.name).filter(Boolean);
+                                                    
+                                                    const locMainHMNames = hmShifts.filter(s => {
+                                                        const u = hmStaff.find(st => st.id === s.userId);
+                                                        const effectiveLoc = s.location || u?.location || '北投';
+                                                        return effectiveLoc === loc && (s.station === '主控' || s.task === '主控' || s.station?.includes('主控'));
+                                                    }).map(s => hmStaff.find(u => u.id === s.userId)?.name).filter(Boolean);
+                                                    
+                                                    const locMainNamesJoined = [...locMainRadNames, ...locMainHMNames].join(' / ') || '-';
+                                                    
+                                                    const locAssistRadNames = radShifts.filter(s => {
+                                                        const u = radUsers.find(user => user.id === s.userId);
+                                                        const effectiveLoc = s.location || '北投';
+                                                        return u?.isRadiographer && effectiveLoc === loc && (s.specialRoles?.includes('輔班') || s.station === '輔' || s.station === '輔控');
+                                                    }).map(s => radUsers.find(u => u.id === s.userId)?.name).filter(Boolean);
+                                                    
+                                                    const locAssistHMNames = hmShifts.filter(s => {
+                                                        const u = hmStaff.find(st => st.id === s.userId);
+                                                        const effectiveLoc = s.location || u?.location || '北投';
+                                                        return effectiveLoc === loc && (s.station === '輔控' || s.task === '輔控' || s.station?.includes('輔控'));
+                                                    }).map(s => hmStaff.find(u => u.id === s.userId)?.name).filter(Boolean);
+                                                    
+                                                    const locAssistNamesJoined = [...locAssistRadNames, ...locAssistHMNames].join(' / ') || '-';
+
+                                                    return (
+                                                        <>
+                                                            <div className="flex-1 flex items-center gap-3 bg-gradient-to-br from-white to-amber-50/50 border border-amber-200/60 rounded-xl p-3 shadow-sm">
+                                                                <div className="w-10 h-10 rounded-full bg-amber-50 flex items-center justify-center text-amber-500 shadow-sm ring-1 ring-amber-100">
+                                                                    <Star size={18} className="fill-amber-400"/>
+                                                                </div>
+                                                                <div>
+                                                                    <div className="text-[10px] font-bold text-amber-600/80 uppercase tracking-widest mb-0.5">主班 (場控)</div>
+                                                                    <div className="text-[15px] font-black text-amber-900">{locMainNamesJoined}</div>
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex-1 flex items-center gap-3 bg-gradient-to-br from-white to-orange-50/50 border border-orange-200/60 rounded-xl p-3 shadow-sm">
+                                                                <div className="w-10 h-10 rounded-full bg-orange-50 flex items-center justify-center text-orange-500 shadow-sm ring-1 ring-orange-100">
+                                                                    <Shield size={18} className="fill-orange-400"/>
+                                                                </div>
+                                                                <div>
+                                                                    <div className="text-[10px] font-bold text-orange-600/80 uppercase tracking-widest mb-0.5">輔控</div>
+                                                                    <div className="text-[15px] font-black text-orange-900">{locAssistNamesJoined}</div>
+                                                                </div>
+                                                            </div>
+                                                        </>
+                                                    );
+                                                })()}
+                                            </div>
+                                        )}
+
+                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                                            {locStations.map(config => {
                                             const st = config.name;
                                             // User Request: Daily View restore original (do not show Late Shift card)
                                             if (st === '晚班') return null;
@@ -3408,10 +3464,11 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                 </div>
                                             );
                                         })}
+                                        </div>
                                     </div>
-                                </div>
-                            );
-                        })}
+                                );
+                            });
+                        })()}
                     </div>
                 )}
 

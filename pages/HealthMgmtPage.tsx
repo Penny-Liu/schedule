@@ -1742,7 +1742,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                       <span>崗位分配 (H, G, 櫃台...)</span>
                       {editingShiftTask && <span className="text-teal-600 cursor-pointer hover:underline" onClick={() => setEditingShiftTask('')}>清除</span>}
                   </label>
-                  <div className="flex flex-wrap gap-1.5 p-1 max-h-[100px] overflow-y-auto">
+                  <div className="flex flex-wrap gap-1.5 p-1 max-h-[300px] overflow-y-auto custom-scrollbar">
                       {hmStations.map(st => (
                           <button
                               key={st}
@@ -1760,7 +1760,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                       <span>業務任務 (主控, 輔控...)</span>
                       {editingShiftSubTask && <span className="text-indigo-600 cursor-pointer hover:underline" onClick={() => setEditingShiftSubTask('')}>清除</span>}
                   </label>
-                  <div className="flex flex-wrap gap-1.5 p-1 max-h-[100px] overflow-y-auto">
+                  <div className="flex flex-wrap gap-1.5 p-1 max-h-[300px] overflow-y-auto custom-scrollbar">
                       {hmTasks.map(tk => (
                           <button
                               key={tk}
@@ -1778,7 +1778,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                       <span>地點標記 (Location)</span>
                       {editingShiftLocation && <span className="text-indigo-600 cursor-pointer hover:underline" onClick={() => setEditingShiftLocation('')}>清除</span>}
                   </label>
-                  <div className="flex flex-wrap gap-1.5 p-1 max-h-[100px] overflow-y-auto">
+                  <div className="flex flex-wrap gap-1.5 p-1 max-h-[300px] overflow-y-auto custom-scrollbar">
                       {LOCATIONS.map(loc => (
                           <button
                               key={loc}
