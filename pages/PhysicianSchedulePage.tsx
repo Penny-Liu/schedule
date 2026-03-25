@@ -1098,8 +1098,8 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                             const radMainShifts = dayRadShifts.filter(s => s.station?.includes('場控') || s.station === '主' || s.station === '主控');
                             const radAssistShifts = dayRadShifts.filter(s => s.specialRoles?.includes('輔班') || s.station === '輔控');
 
-                            const hmMainShifts = dayHMShifts.filter(s => s.station === '主控' || s.task === '主控' || s.station?.includes('主控'));
-                            const hmAssistShifts = dayHMShifts.filter(s => s.station === '輔控' || s.task === '輔控' || s.station?.includes('輔控'));
+                            const hmMainShifts = dayHMShifts.filter(s => (s.station === '主控' || s.task === '主控' || s.station?.includes('主控')) && (!s.location || s.location === '北投'));
+                            const hmAssistShifts = dayHMShifts.filter(s => (s.station === '輔控' || s.task === '輔控' || s.station?.includes('輔控')) && (!s.location || s.location === '北投'));
 
                             const getRadNames = (shifts: any[]) => {
                                 return shifts
@@ -1137,6 +1137,44 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                         });
                         
                         targetRows.push(radRow, hmRow);
+                    }
+                    
+                    // Add Health Mgmt Main/Assistant Rows for Dazhi
+                    if (loc === '大直') {
+                        const isHM = (userId: string) => healthMgmtStaff.some(s => s.id === userId);
+                        
+                        const hmRow: any[] = [
+                            {
+                                content: '主/輔 (健管)',
+                                styles: { fontStyle: 'bold', halign: 'center', fontSize: 6, minCellHeight: 4.0 }
+                            }
+                        ];
+
+                        dateRange.forEach(date => {
+                            const dayHMShifts = db.getHealthMgmtShifts().filter(s => s.date === date);
+                            
+                            const hmMainShifts = dayHMShifts.filter(s => (s.station === '主控' || s.task === '主控' || s.station?.includes('主控')) && s.location === '大直');
+                            const hmAssistShifts = dayHMShifts.filter(s => (s.station === '輔控' || s.task === '輔控' || s.station?.includes('輔控')) && s.location === '大直');
+
+                            const getHMNames = (shifts: any[]) => {
+                                return shifts
+                                    .map(s => {
+                                        const u = healthMgmtStaff.find(st => st.id === s.userId);
+                                        return u?.alias || u?.name?.slice(-2) || '-';
+                                    })
+                                    .filter(n => n !== '-')
+                                    .join('/');
+                            };
+
+                            const hmMain = getHMNames(hmMainShifts) || '-';
+                            const hmAssist = getHMNames(hmAssistShifts) || '-';
+                            hmRow.push({
+                                content: `${hmMain}/${hmAssist}`,
+                                styles: { halign: 'center', fontSize: 7, minCellHeight: 4.0 }
+                            });
+                        });
+                        
+                        targetRows.push(hmRow);
                     }
                     
                     const processedStationNames: string[] = [];
@@ -2672,7 +2710,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                                 s.date === date && (s.station?.includes('場控') || s.station === '主' || s.station === '主控')
                                                             );
                                                             const hmShifts = db.getHealthMgmtShifts().filter(s => 
-                                                                s.date === date && (s.task === '主控' || s.station?.includes('主控'))
+                                                                s.date === date && (s.task === '主控' || s.station?.includes('主控')) && (!s.location || s.location === '北投')
                                                             );
                                                             
                                                             const radUsers = db.getUsers();
@@ -2713,7 +2751,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                                 s.date === date && (s.specialRoles?.includes('輔班') || s.station === '輔' || s.station === '輔控')
                                                             );
                                                             const hmShifts = db.getHealthMgmtShifts().filter(s => 
-                                                                s.date === date && (s.task === '輔控' || s.station?.includes('輔控'))
+                                                                s.date === date && (s.task === '輔控' || s.station?.includes('輔控')) && (!s.location || s.location === '北投')
                                                             );
                                                             
                                                             const radUsers = db.getUsers();
@@ -2737,6 +2775,69 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                                     className="p-1 border-r border-amber-50 text-center text-[11px] font-normal text-amber-900"
                                                                 >
                                                                     {displayList.length > 0 ? displayList.map((name, i) => (
+                                                                        <div key={`${name}-${i}`} className="leading-tight py-0.5">{name}</div>
+                                                                    )) : '-'}
+                                                                </td>
+                                                            );
+                                                        })}
+                                                    </tr>
+                                                </>
+                                            )}
+
+                                            {/* Main/Assistant Shift Rows (only for Dazhi Health Mgmt) */}
+                                            {location === '大直' && (
+                                                <>
+                                                    {/* Main Shift (主控 - 大直) */}
+                                                    <tr className="bg-amber-50/30 border-b border-amber-100 group hover:bg-amber-50/50 transition-colors">
+                                                        <td className={`sticky left-0 z-10 bg-amber-50/80 backdrop-blur border-r border-amber-200 shadow-[4px_0_8px_rgba(0,0,0,0.02)] ${isMobile ? 'p-1 w-[85px] min-w-[85px]' : 'p-2'}`}>
+                                                            <div className="text-xs font-bold text-amber-800 flex items-center justify-end pr-2">主控</div>
+                                                        </td>
+                                                        {dateRange.map(date => {
+                                                            const hmShifts = db.getHealthMgmtShifts().filter(s => 
+                                                                s.date === date && (s.task === '主控' || s.station?.includes('主控')) && s.location === '大直'
+                                                            );
+                                                            
+                                                            const hmStaff = db.getHealthMgmtStaff();
+                                                            const hmNames = hmShifts.map(s => {
+                                                                const st = hmStaff.find(u => u.id === s.userId);
+                                                                return st?.name;
+                                                            }).filter(Boolean);
+                                                            
+                                                            return (
+                                                                <td 
+                                                                    key={date} 
+                                                                    className="p-1 border-r border-amber-50 text-center text-[11px] font-normal text-amber-900"
+                                                                >
+                                                                    {hmNames.length > 0 ? hmNames.map((name, i) => (
+                                                                        <div key={`${name}-${i}`} className="leading-tight py-0.5">{name}</div>
+                                                                    )) : '-'}
+                                                                </td>
+                                                            );
+                                                        })}
+                                                    </tr>
+
+                                                    {/* Assistant Shift (輔控 - 大直) */}
+                                                    <tr className="bg-amber-50/30 border-b border-amber-100 group hover:bg-amber-50/50 transition-colors">
+                                                        <td className={`sticky left-0 z-10 bg-amber-50/80 backdrop-blur border-r border-amber-200 shadow-[4px_0_8px_rgba(0,0,0,0.02)] ${isMobile ? 'p-1 w-[85px] min-w-[85px]' : 'p-2'}`}>
+                                                            <div className="text-xs font-bold text-amber-800 flex items-center justify-end pr-2">輔控</div>
+                                                        </td>
+                                                        {dateRange.map(date => {
+                                                            const hmShifts = db.getHealthMgmtShifts().filter(s => 
+                                                                s.date === date && (s.task === '輔控' || s.station?.includes('輔控')) && s.location === '大直'
+                                                            );
+                                                            
+                                                            const hmStaff = db.getHealthMgmtStaff();
+                                                            const hmNames = hmShifts.map(s => {
+                                                                const st = hmStaff.find(u => u.id === s.userId);
+                                                                return st?.name;
+                                                            }).filter(Boolean);
+                                                            
+                                                            return (
+                                                                <td 
+                                                                    key={date} 
+                                                                    className="p-1 border-r border-amber-50 text-center text-[11px] font-normal text-amber-900"
+                                                                >
+                                                                    {hmNames.length > 0 ? hmNames.map((name, i) => (
                                                                         <div key={`${name}-${i}`} className="leading-tight py-0.5">{name}</div>
                                                                     )) : '-'}
                                                                 </td>
