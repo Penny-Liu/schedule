@@ -118,6 +118,18 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
         return isRemote || isImagingOrSupport;
     };
 
+    const workloadStats = useMemo(() => {
+        const stats: Record<string, number> = {};
+        entries.forEach(e => {
+            if (!visibleDates.includes(e.date) || !e.proofreaderUserId) return;
+            const dShift = shifts.find(s => s.date === e.date && s.doctorId === e.doctorId);
+            if (isRelevantShift(dShift)) {
+                stats[e.proofreaderUserId] = (stats[e.proofreaderUserId] || 0) + 1;
+            }
+        });
+        return stats;
+    }, [visibleDates, entries, shifts]);
+
     const isShiftEmpty = (s: any) => {
         if (!s) return true;
         const station = (s.scheduled_station || s.station || '').trim();
@@ -859,6 +871,33 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
                             </table>
                         </div>
                     )}
+                    
+                    {/* Workload Summary */}
+                    <div className="mt-4">
+                        <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+                            <div className="flex items-center gap-2 mb-3">
+                                <UserCheck size={18} className="text-indigo-500" />
+                                <h4 className="text-sm font-bold text-slate-700">放射師目前校對總數</h4>
+                                <span className="text-[10px] text-slate-400 font-normal ml-2">(僅計算北投影像/支援及遠班)</span>
+                            </div>
+                            <div className="flex flex-wrap gap-3">
+                                {radiographers.map(r => {
+                                    const count = workloadStats[r.id] || 0;
+                                    return (
+                                        <div key={r.id} className="flex items-center gap-2 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl transition-all hover:border-indigo-200 hover:bg-white">
+                                            <div className="w-5 h-5 rounded-full bg-indigo-100 flex items-center justify-center text-[10px] font-bold text-indigo-600">
+                                                {r.alias?.charAt(0) || r.name.charAt(0)}
+                                            </div>
+                                            <span className="text-xs font-bold text-slate-600">{r.alias || r.name}</span>
+                                            <span className={`text-sm font-black px-2 py-0.5 rounded-lg ${count > 0 ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-500'}`}>
+                                                {count}
+                                            </span>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 {/* Manage Assistants Side Panel */}
