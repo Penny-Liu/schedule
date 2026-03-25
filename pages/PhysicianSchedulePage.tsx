@@ -1098,8 +1098,18 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                             const radMainShifts = dayRadShifts.filter(s => s.station?.includes('場控') || s.station === '主' || s.station === '主控');
                             const radAssistShifts = dayRadShifts.filter(s => s.specialRoles?.includes('輔班') || s.station === '輔控');
 
-                            const hmMainShifts = dayHMShifts.filter(s => (s.station === '主控' || s.task === '主控' || s.station?.includes('主控')) && (!s.location || s.location === '北投'));
-                            const hmAssistShifts = dayHMShifts.filter(s => (s.station === '輔控' || s.task === '輔控' || s.station?.includes('輔控')) && (!s.location || s.location === '北投'));
+                            const hmMainShifts = dayHMShifts.filter(s => {
+                                if (!(s.station === '主控' || s.task === '主控' || s.station?.includes('主控'))) return false;
+                                const st = healthMgmtStaff.find(u => u.id === s.userId);
+                                const effectiveLoc = s.location || st?.location || '北投';
+                                return effectiveLoc === '北投';
+                            });
+                            const hmAssistShifts = dayHMShifts.filter(s => {
+                                if (!(s.station === '輔控' || s.task === '輔控' || s.station?.includes('輔控'))) return false;
+                                const st = healthMgmtStaff.find(u => u.id === s.userId);
+                                const effectiveLoc = s.location || st?.location || '北投';
+                                return effectiveLoc === '北投';
+                            });
 
                             const getRadNames = (shifts: any[]) => {
                                 return shifts
@@ -1153,8 +1163,18 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                         dateRange.forEach(date => {
                             const dayHMShifts = db.getHealthMgmtShifts().filter(s => s.date === date);
                             
-                            const hmMainShifts = dayHMShifts.filter(s => (s.station === '主控' || s.task === '主控' || s.station?.includes('主控')) && s.location === '大直');
-                            const hmAssistShifts = dayHMShifts.filter(s => (s.station === '輔控' || s.task === '輔控' || s.station?.includes('輔控')) && s.location === '大直');
+                            const hmMainShifts = dayHMShifts.filter(s => {
+                                if (!(s.station === '主控' || s.task === '主控' || s.station?.includes('主控'))) return false;
+                                const st = healthMgmtStaff.find(u => u.id === s.userId);
+                                const effectiveLoc = s.location || st?.location || '北投';
+                                return effectiveLoc === '大直';
+                            });
+                            const hmAssistShifts = dayHMShifts.filter(s => {
+                                if (!(s.station === '輔控' || s.task === '輔控' || s.station?.includes('輔控'))) return false;
+                                const st = healthMgmtStaff.find(u => u.id === s.userId);
+                                const effectiveLoc = s.location || st?.location || '北投';
+                                return effectiveLoc === '大直';
+                            });
 
                             const getHMNames = (shifts: any[]) => {
                                 return shifts
@@ -2709,9 +2729,13 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                             const radShifts = db.shifts.filter(s => 
                                                                 s.date === date && (s.station?.includes('場控') || s.station === '主' || s.station === '主控')
                                                             );
-                                                            const hmShifts = db.getHealthMgmtShifts().filter(s => 
-                                                                s.date === date && (s.task === '主控' || s.station?.includes('主控')) && (!s.location || s.location === '北投')
-                                                            );
+                                                            const hmShifts = db.getHealthMgmtShifts().filter(s => {
+                                                                if (s.date !== date) return false;
+                                                                if (!(s.task === '主控' || s.station?.includes('主控'))) return false;
+                                                                const st = hmStaff.find(u => u.id === s.userId);
+                                                                const effectiveLoc = s.location || st?.location || '北投';
+                                                                return effectiveLoc === '北投';
+                                                            });
                                                             
                                                             const radUsers = db.getUsers();
                                                             const hmStaff = db.getHealthMgmtStaff();
@@ -2750,9 +2774,13 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                             const radShifts = db.shifts.filter(s => 
                                                                 s.date === date && (s.specialRoles?.includes('輔班') || s.station === '輔' || s.station === '輔控')
                                                             );
-                                                            const hmShifts = db.getHealthMgmtShifts().filter(s => 
-                                                                s.date === date && (s.task === '輔控' || s.station?.includes('輔控')) && (!s.location || s.location === '北投')
-                                                            );
+                                                            const hmShifts = db.getHealthMgmtShifts().filter(s => {
+                                                                if (s.date !== date) return false;
+                                                                if (!(s.task === '輔控' || s.station?.includes('輔控'))) return false;
+                                                                const st = hmStaff.find(u => u.id === s.userId);
+                                                                const effectiveLoc = s.location || st?.location || '北投';
+                                                                return effectiveLoc === '北投';
+                                                            });
                                                             
                                                             const radUsers = db.getUsers();
                                                             const hmStaff = db.getHealthMgmtStaff();
@@ -2793,9 +2821,13 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                             <div className="text-xs font-bold text-amber-800 flex items-center justify-end pr-2">主控</div>
                                                         </td>
                                                         {dateRange.map(date => {
-                                                            const hmShifts = db.getHealthMgmtShifts().filter(s => 
-                                                                s.date === date && (s.task === '主控' || s.station?.includes('主控')) && s.location === '大直'
-                                                            );
+                                                            const hmShifts = db.getHealthMgmtShifts().filter(s => {
+                                                                if (s.date !== date) return false;
+                                                                if (!(s.task === '主控' || s.station?.includes('主控'))) return false;
+                                                                const st = hmStaff.find(u => u.id === s.userId);
+                                                                const effectiveLoc = s.location || st?.location || '北投';
+                                                                return effectiveLoc === '大直';
+                                                            });
                                                             
                                                             const hmStaff = db.getHealthMgmtStaff();
                                                             const hmNames = hmShifts.map(s => {
@@ -2822,9 +2854,13 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
                                                             <div className="text-xs font-bold text-amber-800 flex items-center justify-end pr-2">輔控</div>
                                                         </td>
                                                         {dateRange.map(date => {
-                                                            const hmShifts = db.getHealthMgmtShifts().filter(s => 
-                                                                s.date === date && (s.task === '輔控' || s.station?.includes('輔控')) && s.location === '大直'
-                                                            );
+                                                            const hmShifts = db.getHealthMgmtShifts().filter(s => {
+                                                                if (s.date !== date) return false;
+                                                                if (!(s.task === '輔控' || s.station?.includes('輔控'))) return false;
+                                                                const st = hmStaff.find(u => u.id === s.userId);
+                                                                const effectiveLoc = s.location || st?.location || '北投';
+                                                                return effectiveLoc === '大直';
+                                                            });
                                                             
                                                             const hmStaff = db.getHealthMgmtStaff();
                                                             const hmNames = hmShifts.map(s => {
