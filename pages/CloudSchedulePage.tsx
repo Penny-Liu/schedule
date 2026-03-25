@@ -781,15 +781,14 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
                                                 if (isIrrelevant) {
                                                     const assignedRad = radiographers.find(u => u.id === entry.proofreaderUserId);
                                                     const assignedAsstNames = entry.assistantIds.map(id => assistants.find(a => a.id === id)?.name).filter(Boolean).join(', ');
-                                                    
-                                                    return (
+                                                                                                        return (
                                                         <td key={date} className="p-1 align-top border-r border-slate-100 bg-slate-100/30 relative grayscale opacity-60">
                                                             <div className="flex flex-col min-h-[50px] gap-1 items-center justify-center relative w-full pt-1">
-                                                                <div className="text-[10px] font-bold text-slate-400 line-through text-center leading-tight">
+                                                                <div className="text-[10px] font-bold text-slate-400 text-center leading-tight">
                                                                     {docShift?.scheduled_station || (docShift?.location ? `${docShift.location}` : '') || 'OFF'}
                                                                 </div>
-                                                                {assignedAsstNames && <div className="text-[9px] text-slate-400 text-center truncate italic">{assignedAsstNames}</div>}
-                                                                {assignedRad && <div className="text-[9px] font-bold text-slate-400 text-center italic">{assignedRad.alias || assignedRad.name}</div>}
+                                                                {assignedAsstNames && <div className="text-[9px] text-slate-400 text-center truncate italic line-through">{assignedAsstNames}</div>}
+                                                                {assignedRad && <div className="text-[9px] font-bold text-slate-400 text-center italic line-through">{assignedRad.alias || assignedRad.name}</div>}
                                                             </div>
                                                         </td>
                                                     );
