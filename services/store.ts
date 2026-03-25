@@ -357,10 +357,6 @@ class Store {
                 }));
                 console.log('[Store] Doctors loaded with settings:', loadedDoctors.map((d: any) => ({ name: d.name, weekdaySettings: d.weekdaySettings })));
                 this.doctors = loadedDoctors;
-            } else {
-                 // Auto-seed if empty
-                 console.log('[Store] Doctors table empty, seeding mock data...');
-                 await this.seedMockDoctors();
             }
 
             if (dShiftsRes.data) {
