@@ -3780,8 +3780,8 @@ POR：
 
             {/* Edit Modal (Existing) */}
             {selectedCell && (
-                <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm border border-gray-100 animate-in zoom-in-95 duration-200 overflow-hidden">
+                <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-4">
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm border border-gray-100 animate-in zoom-in-95 duration-200 overflow-hidden flex flex-col max-h-[95vh] sm:max-h-[90vh]">
                         <div className="px-5 py-4 border-b border-gray-100 flex justify-between items-center bg-teal-50/50">
                             <div>
                                 <h3 className="font-bold text-gray-800 text-lg">
@@ -3796,7 +3796,7 @@ POR：
                             </button>
                         </div>
                         
-                        <div className="p-5 space-y-4">
+                        <div className="p-5 space-y-4 flex-1 overflow-y-auto">
                             {/* Station Selection */}
                             <div className="space-y-1.5">
                                 <label className="text-xs font-bold text-gray-500 uppercase flex justify-between">
@@ -4339,8 +4339,8 @@ POR：
             )}
             {/* Doctor Memo Modal */}
             {memoModal && (
-                <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-in fade-in duration-200">
-                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-gray-100 animate-in zoom-in-95 duration-200">
+                <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-[100] flex items-center justify-center p-2 sm:p-4 animate-in fade-in duration-200">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md border border-gray-100 animate-in zoom-in-95 duration-200 flex flex-col max-h-[95vh] overflow-hidden">
                         <div className="bg-purple-600 px-6 py-4 flex justify-between items-center">
                             <h3 className="text-white font-bold flex items-center gap-2">
                                 <FileText size={20} />
@@ -4351,7 +4351,7 @@ POR：
                             </button>
                         </div>
                         
-                        <div className="p-6">
+                        <div className="p-6 flex-1 overflow-y-auto">
                             <label className="block text-xs font-bold text-gray-500 uppercase mb-2 tracking-wider">備忘內容</label>
                             <textarea
                                 className="w-full h-32 p-4 border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none resize-none text-sm text-gray-700 placeholder-gray-400 bg-slate-50"
