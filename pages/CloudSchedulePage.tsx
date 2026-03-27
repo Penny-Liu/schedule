@@ -5,7 +5,7 @@ import { db } from '../services/store';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import ExcelJS from 'exceljs';
-import { Cloud, ChevronLeft, ChevronRight, Plus, Pencil, Trash2, Check, X, UserCheck, Save, AlertCircle, Loader2 } from 'lucide-react';
+import { Cloud, ChevronLeft, ChevronRight, Plus, Pencil, Trash2, Check, X, UserCheck, Save, AlertCircle, Loader2, Eye, EyeOff, Filter } from 'lucide-react';
 import ConfirmModal from '../components/ConfirmModal';
 import { loadChineseFontToDoc } from '../services/pdfUtils';
 
@@ -41,13 +41,26 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
     const [newColor, setNewColor] = useState(PALETTE[0]);
     const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
+    const currentYearMonth = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
+    const [hiddenDoctorIdsCloud, setHiddenDoctorIdsCloud] = useState<string[]>([]);
+    
+    useEffect(() => {
+        const saved = localStorage.getItem(`hiddenDoctorIdsCloud_${currentYearMonth}`);
+        setHiddenDoctorIdsCloud(saved ? JSON.parse(saved) : []);
+    }, [currentYearMonth]);
+
+    useEffect(() => {
+        if (hiddenDoctorIdsCloud.length >= 0) {
+            localStorage.setItem(`hiddenDoctorIdsCloud_${currentYearMonth}`, JSON.stringify(hiddenDoctorIdsCloud));
+        }
+    }, [hiddenDoctorIdsCloud, currentYearMonth]);
+
+    const [isFilterModalOpenCloud, setIsFilterModalOpenCloud] = useState(false);
+    const [doctorSearchQueryCloud, setDoctorSearchQueryCloud] = useState('');
+
     const radiographers = db.getUsers().filter(u => u.isRadiographer && u.isActive !== false);
 
-    const radiologists = useMemo(() => {
-        return doctors
-            .filter(d => d.specialty === '放射科' || d.specialty === '影像醫學部')
-            .sort((a, b) => (a.displayOrder || 999) - (b.displayOrder || 999));
-    }, [doctors]);
+// Empty - moved below visibleDates
 
     // Subscribe store
     useEffect(() => {
@@ -139,6 +152,12 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
         if ((!station || station === '未分配' || station === 'X' || station === 'OFF') && !task && !note) return true;
         return false;
     };
+
+    const radiologists = useMemo(() => {
+        return doctors
+            .filter(d => (d.specialty === '放射科' || d.specialty === '影像醫學部') && !hiddenDoctorIdsCloud.includes(d.id))
+            .sort((a, b) => (a.displayOrder || 999) - (b.displayOrder || 999));
+    }, [doctors, hiddenDoctorIdsCloud]);
 
     // Get effective entry for a date + doctor (dirty overrides persisted)
     const getEntry = (date: string, doctorId: string) => {
@@ -679,6 +698,25 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
                                 >
                                     <UserCheck size={15} /> 管理助理
                                 </button>
+                                
+                                <div className="h-6 w-px bg-slate-200 mx-1"></div>
+
+                                <button 
+                                    onClick={() => setIsFilterModalOpenCloud(true)}
+                                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm font-bold border transition-all shadow-sm ${
+                                        hiddenDoctorIdsCloud.length > 0
+                                        ? 'bg-amber-100 text-amber-700 border-amber-300' 
+                                        : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
+                                    }`}
+                                >
+                                    <Filter size={15} />
+                                    <span className="hidden lg:inline">過濾醫師</span>
+                                    {hiddenDoctorIdsCloud.length > 0 && (
+                                        <span className="bg-amber-500 text-white text-[10px] px-1.5 rounded-full ml-0.5">
+                                            {doctors.filter(d => d.specialty === '放射科' || d.specialty === '影像醫學部').length - hiddenDoctorIdsCloud.length}/{doctors.filter(d => d.specialty === '放射科' || d.specialty === '影像醫學部').length}
+                                        </span>
+                                    )}
+                                </button>
                             </div>
                         )}
                     </div>
@@ -995,6 +1033,130 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
                     </div>
                 )}
             </div>
+            {/* Doctor Visibility Filter Modal */}
+            {isFilterModalOpenCloud && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg border border-slate-200 flex flex-col max-h-[90vh] overflow-hidden">
+                        {/* Header */}
+                        <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-white sticky top-0 z-10">
+                            <div className="flex items-center gap-2">
+                                <div className="p-2 bg-amber-50 rounded-lg">
+                                    <Filter size={20} className="text-amber-600" />
+                                </div>
+                                <div>
+                                    <h3 className="font-bold text-slate-800">醫師顯示過濾器 (影像雲)</h3>
+                                    <p className="text-xs text-slate-400">勾選要在畫面上顯示的醫師</p>
+                                </div>
+                            </div>
+                            <button onClick={() => setIsFilterModalOpenCloud(false)} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-xl transition-all">
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        {/* Search & Bulk Actions */}
+                        <div className="p-4 bg-slate-50 border-b border-slate-100 gap-3 flex flex-col">
+                            <div className="relative">
+                                <Filter size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                                <input 
+                                    type="text" 
+                                    placeholder="搜尋醫師姓名..."
+                                    className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-teal-500 outline-none"
+                                    value={doctorSearchQueryCloud}
+                                    onChange={(e) => setDoctorSearchQueryCloud(e.target.value)}
+                                />
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                                <button 
+                                    onClick={() => setHiddenDoctorIdsCloud([])}
+                                    className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-50 transition-all"
+                                >
+                                    顯示全部
+                                </button>
+                                <button 
+                                    onClick={() => {
+                                        const radioDocs = doctors.filter(d => d.specialty === '放射科' || d.specialty === '影像醫學部');
+                                        const hasRelevantShiftIds = new Set(
+                                            visibleDates.flatMap(date => 
+                                                radioDocs.filter(doc => {
+                                                    const dShift = shifts.find(s => s.date === date && s.doctorId === doc.id);
+                                                    return isRelevantShift(dShift);
+                                                }).map(doc => doc.id)
+                                            )
+                                        );
+                                        
+                                        const idsToHide = radioDocs.map(d => d.id).filter(id => !hasRelevantShiftIds.has(id));
+                                        setHiddenDoctorIdsCloud(idsToHide);
+                                    }}
+                                    className="px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-lg text-xs font-bold text-amber-700 hover:bg-amber-100 transition-all"
+                                >
+                                    僅顯示有班醫師
+                                </button>
+                                <button 
+                                    onClick={() => {
+                                        const radioDocs = doctors.filter(d => d.specialty === '放射科' || d.specialty === '影像醫學部');
+                                        setHiddenDoctorIdsCloud(radioDocs.map(d => d.id));
+                                    }}
+                                    className="px-3 py-1.5 bg-slate-200 border border-slate-300 rounded-lg text-xs font-bold text-slate-700 hover:bg-slate-300 transition-all"
+                                >
+                                    全部隱藏
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* List */}
+                        <div className="flex-1 overflow-y-auto p-2 scrollbar-thin scrollbar-thumb-slate-200">
+                            <div className="grid grid-cols-1 gap-1">
+                                {doctors.filter(d => 
+                                    (d.specialty === '放射科' || d.specialty === '影像醫學部') &&
+                                    (d.name.includes(doctorSearchQueryCloud) || (d.alias || '').includes(doctorSearchQueryCloud))
+                                ).map(doc => {
+                                    const isVisible = !hiddenDoctorIdsCloud.includes(doc.id);
+                                    return (
+                                        <label 
+                                            key={doc.id} 
+                                            className={`flex items-center justify-between p-3 rounded-xl cursor-pointer transition-all ${
+                                                isVisible ? 'bg-sky-50/50 hover:bg-sky-50 border border-sky-100' : 'bg-white hover:bg-slate-50 border border-transparent'
+                                            }`}
+                                        >
+                                            <div className="flex items-center gap-3">
+                                                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${isVisible ? 'bg-sky-100 text-sky-700' : 'bg-slate-100 text-slate-400'}`}>
+                                                    {doc.alias || doc.name.charAt(0)}
+                                                </div>
+                                                <div>
+                                                    <div className={`font-bold text-sm ${isVisible ? 'text-sky-900' : 'text-slate-500'}`}>{doc.name}</div>
+                                                    <div className="text-[10px] text-slate-400">{doc.specialty}</div>
+                                                </div>
+                                            </div>
+                                            <input 
+                                                type="checkbox" 
+                                                className="w-5 h-5 rounded-lg border-slate-300 text-sky-600 focus:ring-sky-500"
+                                                checked={isVisible}
+                                                onChange={() => {
+                                                    if (isVisible) {
+                                                        setHiddenDoctorIdsCloud([...hiddenDoctorIdsCloud, doc.id]);
+                                                    } else {
+                                                        setHiddenDoctorIdsCloud(hiddenDoctorIdsCloud.filter(id => id !== doc.id));
+                                                    }
+                                                }}
+                                            />
+                                        </label>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
+                        {/* Footer */}
+                        <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end">
+                            <button 
+                                onClick={() => setIsFilterModalOpenCloud(false)}
+                                className="px-6 py-2 bg-slate-800 text-white rounded-xl font-bold hover:bg-slate-900 transition-all shadow-lg shadow-slate-200"
+                            >
+                                完成
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

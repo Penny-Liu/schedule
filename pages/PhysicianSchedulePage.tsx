@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { db } from '../services/store';
 import { Doctor, UserRole, DoctorStationConfig, DateEventType, DoctorShift, PERMISSIONS } from '../types';
-import { ChevronLeft, ChevronRight, ChevronDown, Download, Lock, RefreshCw, Save, Unlock, User, UserPlus, X, Calendar as CalendarIcon, Clock, Filter, Sliders, ArrowUpDown, Wand2, BarChart2, Check, AlertCircle, Plus, LayoutGrid, List as ListIcon, Trash2, Briefcase, FileText, MapPin, FileSpreadsheet, CalendarClock, Star, Shield, Users } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronDown, Download, Lock, RefreshCw, Save, Unlock, User, UserPlus, X, Calendar as CalendarIcon, Clock, Filter, Sliders, ArrowUpDown, Wand2, BarChart2, Check, AlertCircle, Plus, LayoutGrid, List as ListIcon, Trash2, Briefcase, FileText, MapPin, FileSpreadsheet, CalendarClock, Star, Shield, Users, Eye, EyeOff } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import ConfirmModal from '../components/ConfirmModal';
@@ -287,6 +287,19 @@ POR：
         return { station: '影像', location: '北投', workTime: '', task: '' };
     });
 
+    const [hiddenDoctorIds, setHiddenDoctorIds] = useState<string[]>([]);
+    
+    useEffect(() => {
+        const saved = localStorage.getItem(`hiddenDoctorIds_${currentYearMonth}`);
+        setHiddenDoctorIds(saved ? JSON.parse(saved) : []);
+    }, [currentYearMonth]);
+
+    useEffect(() => {
+        if (hiddenDoctorIds.length >= 0) {
+            localStorage.setItem(`hiddenDoctorIds_${currentYearMonth}`, JSON.stringify(hiddenDoctorIds));
+        }
+    }, [hiddenDoctorIds, currentYearMonth]);
+
     const updateQuickAssignData = (data: Partial<{ station: string, location: string, workTime: string, task: string }>) => {
         setQuickAssignData(prev => {
             const next = { ...prev, ...data };
@@ -294,6 +307,10 @@ POR：
             return next;
         });
     };
+
+
+    const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
+    const [doctorSearchQuery, setDoctorSearchQuery] = useState('');
 
     const [requirements, setRequirements] = useState(db.getStationRequirements());
 
@@ -336,7 +353,6 @@ POR：
     const [isSimulationMode, setIsSimulationMode] = useState(false);
     const [memoModal, setMemoModal] = useState<{ date: string; content: string } | null>(null);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-
     // Filter shifts for display/logic depending on simulation mode
     const activeShifts = useMemo(() => {
         if (isSimulationMode) {
@@ -345,6 +361,10 @@ POR：
         }
         return shifts;
     }, [shifts, isSimulationMode]);
+
+    const filteredDoctorsForDisplay = useMemo(() => {
+        return doctors.filter(doc => !hiddenDoctorIds.includes(doc.id));
+    }, [doctors, hiddenDoctorIds]);
 
     // Specialty Order Modal State
     const [showSpecialtyOrderModal, setShowSpecialtyOrderModal] = useState(false);
@@ -2082,6 +2102,25 @@ POR：
                         {viewMode === 'daily' || (isMobile && (viewMode === 'personnel' || viewMode === 'station')) ? '今天' : '本月'}
                     </button>
 
+                    {(viewMode === 'personnel' || viewMode === 'station') && (
+                        <button 
+                            onClick={() => setIsFilterModalOpen(true)}
+                            className={`px-3 py-1 rounded-lg text-sm font-bold border transition-all flex items-center gap-1.5 ${
+                                hiddenDoctorIds.length > 0
+                                ? 'bg-amber-100 text-amber-700 border-amber-300 shadow-sm' 
+                                : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
+                            }`}
+                        >
+                            <Filter size={14} />
+                            <span className="hidden sm:inline">過濾醫師</span>
+                            {hiddenDoctorIds.length > 0 && (
+                                <span className="bg-amber-500 text-white text-[10px] px-1.5 rounded-full ml-0.5">
+                                    {doctors.length - hiddenDoctorIds.length}/{doctors.length}
+                                </span>
+                            )}
+                        </button>
+                    )}
+
                     {/* View Specific Actions */}
                     
                     {/* Personnel View: Sort, Reorder, Quick Modes */}
@@ -2324,7 +2363,7 @@ POR：
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
-                                {doctors.map(doc => (
+                                {filteredDoctorsForDisplay.map(doc => (
                                     <tr key={doc.id} className="group hover:bg-slate-50/50 transition-colors">
                                         <td className="p-0 border-r border-slate-200 sticky left-0 bg-white z-30 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
                                             <div className="p-3 font-bold text-slate-800 flex items-center gap-2 min-w-[128px]">
@@ -3249,8 +3288,8 @@ POR：
                                             </div>
                                         )}
 
-                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                                            {locStations.map(config => {
+                                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                                        {locStations.map(config => {
                                             const st = config.name;
                                             // User Request: Daily View restore original (do not show Late Shift card)
                                             if (st === '晚班') return null;
@@ -4410,6 +4449,127 @@ POR：
                                     </button>
                                 </div>
                             </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Doctor Visibility Filter Modal */}
+            {isFilterModalOpen && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg border border-slate-200 flex flex-col max-h-[90vh] overflow-hidden">
+                        {/* Header */}
+                        <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-white sticky top-0 z-10">
+                            <div className="flex items-center gap-2">
+                                <div className="p-2 bg-amber-50 rounded-lg">
+                                    <Filter size={20} className="text-amber-600" />
+                                </div>
+                                <div>
+                                    <h3 className="font-bold text-slate-800">醫師顯示過濾器</h3>
+                                    <p className="text-xs text-slate-400">勾選要在畫面上顯示的醫師</p>
+                                </div>
+                            </div>
+                            <button onClick={() => setIsFilterModalOpen(false)} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-xl transition-all">
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        {/* Search & Bulk Actions */}
+                        <div className="p-4 bg-slate-50 border-b border-slate-100 gap-3 flex flex-col">
+                            <div className="relative">
+                                <Filter size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                                <input 
+                                    type="text" 
+                                    placeholder="搜尋醫師姓名..."
+                                    className="w-full pl-9 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-teal-500 outline-none"
+                                    value={doctorSearchQuery}
+                                    onChange={(e) => setDoctorSearchQuery(e.target.value)}
+                                />
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                                <button 
+                                    onClick={() => setHiddenDoctorIds([])}
+                                    className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-50 transition-all"
+                                >
+                                    顯示全部
+                                </button>
+                                <button 
+                                    onClick={() => {
+                                        const currentShifts = isSimulationMode ? (simulatedShifts || []) : activeShifts;
+                                        const hasShiftIds = new Set(currentShifts.filter(s => 
+                                            dateRange.includes(s.date) && 
+                                            s.scheduled_station && 
+                                            s.scheduled_station !== 'OFF' &&
+                                            s.scheduled_station !== 'X' &&
+                                            s.scheduled_station !== ''
+                                        ).map(s => s.doctorId));
+                                        
+                                        const idsToHide = doctors.map(d => d.id).filter(id => !hasShiftIds.has(id));
+                                        setHiddenDoctorIds(idsToHide);
+                                    }}
+                                    className="px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-lg text-xs font-bold text-amber-700 hover:bg-amber-100 transition-all"
+                                >
+                                    僅顯示有班醫師
+                                </button>
+                                <button 
+                                    onClick={() => setHiddenDoctorIds(doctors.map(d => d.id))}
+                                    className="px-3 py-1.5 bg-slate-200 border border-slate-300 rounded-lg text-xs font-bold text-slate-700 hover:bg-slate-300 transition-all"
+                                >
+                                    全部隱藏
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* List */}
+                        <div className="flex-1 overflow-y-auto p-2 scrollbar-thin scrollbar-thumb-slate-200">
+                            <div className="grid grid-cols-1 gap-1">
+                                {doctors.filter(d => 
+                                    d.name.includes(doctorSearchQuery) || 
+                                    (d.alias || '').includes(doctorSearchQuery)
+                                ).map(doc => {
+                                    const isVisible = !hiddenDoctorIds.includes(doc.id);
+                                    return (
+                                        <label 
+                                            key={doc.id} 
+                                            className={`flex items-center justify-between p-3 rounded-xl cursor-pointer transition-all ${
+                                                isVisible ? 'bg-teal-50/50 hover:bg-teal-50 border border-teal-100' : 'bg-white hover:bg-slate-50 border border-transparent'
+                                            }`}
+                                        >
+                                            <div className="flex items-center gap-3">
+                                                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${isVisible ? 'bg-teal-100 text-teal-700' : 'bg-slate-100 text-slate-400'}`}>
+                                                    {doc.alias || doc.name.charAt(0)}
+                                                </div>
+                                                <div>
+                                                    <div className={`font-bold text-sm ${isVisible ? 'text-teal-900' : 'text-slate-500'}`}>{doc.name}</div>
+                                                    <div className="text-[10px] text-slate-400">{doc.specialty}</div>
+                                                </div>
+                                            </div>
+                                            <input 
+                                                type="checkbox" 
+                                                className="w-5 h-5 rounded-lg border-slate-300 text-teal-600 focus:ring-teal-500"
+                                                checked={isVisible}
+                                                onChange={() => {
+                                                    if (isVisible) {
+                                                        setHiddenDoctorIds([...hiddenDoctorIds, doc.id]);
+                                                    } else {
+                                                        setHiddenDoctorIds(hiddenDoctorIds.filter(id => id !== doc.id));
+                                                    }
+                                                }}
+                                            />
+                                        </label>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
+                        {/* Footer */}
+                        <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end">
+                            <button 
+                                onClick={() => setIsFilterModalOpen(false)}
+                                className="px-6 py-2 bg-slate-800 text-white rounded-xl font-bold hover:bg-slate-900 transition-all shadow-lg shadow-slate-200"
+                            >
+                                完成
+                            </button>
                         </div>
                     </div>
                 </div>
