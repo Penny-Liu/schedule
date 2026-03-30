@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { User, Shift, HealthMgmtShift, UserRole, PERMISSIONS, StaffGroup, HealthMgmtStaff, RosterCycle, AnesthesiaStaff, AnesthesiaShift } from '../types';
 import { db } from '../services/store';
 import { Users, LayoutDashboard, Calendar, ArrowLeft, ArrowRight, X, Lock, Unlock, UserPlus, Save, Trash2, FileSpreadsheet, BarChart3, Download, Search, ChevronLeft, ChevronRight, Zap, ChevronDown, ChevronUp, UserSearch, Stethoscope, Syringe, ConciergeBell, Apple, Microscope, Pill, Clock } from 'lucide-react';
@@ -2215,6 +2215,7 @@ const HMTodayView: React.FC<{
     anesStaff: AnesthesiaStaff[];
 }> = ({ date, onDateChange, location, shifts, anesthesiaShifts, staff, anesStaff }) => {
     const dateStr = toLocalISOString(date);
+    const dateInputRef = useRef<HTMLInputElement>(null);
 
     const filteredShifts = useMemo(() => shifts.filter(s => s.date === dateStr), [shifts, dateStr]);
     const filteredAnes = useMemo(() => anesthesiaShifts.filter(s => s.date === dateStr), [anesthesiaShifts, dateStr]);
@@ -2334,20 +2335,25 @@ const HMTodayView: React.FC<{
                 <div className="flex items-center gap-4">
                     <div className="relative group/date">
                         <input 
+                            ref={dateInputRef}
                             type="date" 
-                            className="absolute inset-0 opacity-0 cursor-pointer z-10"
+                            className="absolute inset-0 opacity-0 invisible"
                             onChange={(e) => onDateChange(new Date(e.target.value))}
+                            value={dateStr}
                         />
-                        <button className="flex items-center gap-2 px-5 py-2.5 bg-slate-900 text-white rounded-2xl text-sm font-black hover:bg-slate-800 transition-all shadow-lg shadow-slate-200 group-hover/date:scale-105">
+                        <button 
+                            onClick={() => dateInputRef.current?.showPicker ? dateInputRef.current.showPicker() : dateInputRef.current?.click()}
+                            className="flex items-center gap-2 px-5 py-2.5 bg-slate-900 text-white rounded-2xl text-sm font-black hover:bg-slate-800 transition-all shadow-lg shadow-slate-200 group-hover/date:scale-105 active:scale-95"
+                        >
                             <Calendar size={16} /> 跳轉日期
                         </button>
                     </div>
                     <button 
                         onClick={() => onDateChange(new Date())}
-                        className="w-11 h-11 flex items-center justify-center bg-teal-50 text-teal-600 rounded-2xl border border-teal-100 hover:bg-teal-600 hover:text-white transition-all shadow-sm hover:shadow-teal-100"
+                        className="px-6 py-2.5 bg-teal-50 text-teal-600 rounded-2xl border border-teal-100 hover:bg-teal-600 hover:text-white transition-all shadow-sm hover:shadow-teal-100 font-black text-sm active:scale-95"
                         title="回到今天"
                     >
-                        <Zap size={18} fill="currentColor" />
+                        今日
                     </button>
                 </div>
             </div>
