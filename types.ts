@@ -62,6 +62,7 @@ export interface HealthMgmtStaff {
     isActive: boolean;
     role?: 'ADMIN' | 'VIEWER';
     location?: string;
+    displayOrder?: number;
 }
 
 export interface AnesthesiaStaff {
@@ -71,6 +72,7 @@ export interface AnesthesiaStaff {
     isActive: boolean;
     locations?: string[];
     role?: 'ADMIN' | 'VIEWER';
+    displayOrder?: number;
 }
 
 export interface User {
@@ -161,8 +163,9 @@ export interface HealthMgmtShift {
     userId: string;
     date: string;
     station: string;
-    task?: string; // New: Task assignment (主控/輔控/etc)
-    location?: string; // New: Work location (北投/大直)
+    task?: string; 
+    time?: string; // New: Working hours (e.g. "07:30-15:30")
+    location?: string; 
     specialRoles?: string[];
 }
 
@@ -218,6 +221,7 @@ export interface RosterCycle {
   endDate: string;
   isConfirmed?: boolean; // New: Lock status for the cycle
   location?: string; // New: Beitou or Dazhi for Health Mgmt Cycles
+  staffOrder?: string[];
 }
 
 export enum DateEventType {
@@ -320,7 +324,9 @@ export interface SystemSettings {
   lockedMonths?: string[]; // New: List of locked months (YYYY-MM)
   healthMgmtStations?: string[]; // New: List of health management stations
   healthMgmtTasks?: string[]; // New: List of health management tasks
+  healthMgmtTimes?: string[]; // Global fallback
+  healthMgmtStationsByLocation?: Record<string, string[]>; // New: Location-based stations
+  healthMgmtTasksByLocation?: Record<string, string[]>; // New: Location-based tasks
+  healthMgmtTimesByLocation?: Record<string, string[]>; // New: Location-based times
   healthMgmtCycles?: RosterCycle[]; // New: Independent cycles for HM
 }
-
-

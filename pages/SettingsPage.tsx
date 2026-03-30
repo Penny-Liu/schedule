@@ -25,10 +25,13 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
     const [anchors, setAnchors] = useState<CycleAnchor[]>(db.getCycleAnchors());
 
     const [newAnchor, setNewAnchor] = useState({ effective: '', anchor: '' });
-    const [hmStations, setHmStations] = useState<string[]>(db.getHealthMgmtStations());
+    const [hmLocation, setHmLocation] = useState<'北投' | '大直'>((currentUser.healthMgmtLocation === '大直') ? '大直' : '北投');
+    const [hmStations, setHmStations] = useState<string[]>(db.getHealthMgmtStations((currentUser.healthMgmtLocation === '大直') ? '大直' : '北投'));
     const [newHmStation, setNewHmStation] = useState('');
-    const [hmTasks, setHmTasks] = useState<string[]>(db.getHealthMgmtTasks());
+    const [hmTasks, setHmTasks] = useState<string[]>(db.getHealthMgmtTasks((currentUser.healthMgmtLocation === '大直') ? '大直' : '北投'));
     const [newHmTask, setNewHmTask] = useState('');
+    const [hmTimes, setHmTimes] = useState<string[]>(db.getHealthMgmtTimes((currentUser.healthMgmtLocation === '大直') ? '大直' : '北投'));
+    const [newHmTime, setNewHmTime] = useState('');
     const [hmCycles, setHmCycles] = useState<RosterCycle[]>(db.getHealthMgmtCycles());
     const [newHmCycle, setNewHmCycle] = useState<Partial<RosterCycle>>({ 
         name: '', 
@@ -107,8 +110,9 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
             setHolidays(db.getHolidays());
             setCycleStartDate(db.getCycleStartDate());
             setAnchors(db.getCycleAnchors());
-            setHmStations(db.getHealthMgmtStations());
-            setHmTasks(db.getHealthMgmtTasks());
+            setHmStations(db.getHealthMgmtStations(hmLocation));
+            setHmTasks(db.getHealthMgmtTasks(hmLocation));
+            setHmTimes(db.getHealthMgmtTimes(hmLocation));
             setHmCycles(db.getHealthMgmtCycles());
             
             const currentTemplate = db.settings.lineCopyTemplate || '';
@@ -119,8 +123,9 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
 
         const unsubscribe = db.subscribe(loadData);
         loadData();
+        setNewHmCycle(prev => ({ ...prev, location: hmLocation }));
         return () => unsubscribe();
-    }, []);
+    }, [hmLocation]);
 
 
 
@@ -178,7 +183,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
         if (newHmStation && !hmStations.includes(newHmStation)) {
             const updated = [...hmStations, newHmStation];
             setHmStations(updated);
-            db.updateHealthMgmtStations(updated);
+            db.updateHealthMgmtStations(updated, hmLocation);
             setNewHmStation('');
         }
     };
@@ -186,7 +191,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
     const handleDeleteHmStation = async (name: string) => {
         const updated = hmStations.filter(s => s !== name);
         setHmStations(updated);
-        await db.updateHealthMgmtStations(updated);
+        await db.updateHealthMgmtStations(updated, hmLocation);
     };
 
     const handleAddHmTask = async (e: React.FormEvent) => {
@@ -196,13 +201,29 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
         const updated = [...hmTasks, newHmTask.trim()];
         setHmTasks(updated);
         setNewHmTask('');
-        await db.updateHealthMgmtTasks(updated);
+        await db.updateHealthMgmtTasks(updated, hmLocation);
     };
 
     const handleDeleteHmTask = async (name: string) => {
         const updated = hmTasks.filter(t => t !== name);
         setHmTasks(updated);
-        await db.updateHealthMgmtTasks(updated);
+        await db.updateHealthMgmtTasks(updated, hmLocation);
+    };
+
+    const handleAddHmTime = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!newHmTime.trim()) return;
+        if (hmTimes.includes(newHmTime.trim())) return;
+        const updated = [...hmTimes, newHmTime.trim()].sort();
+        setHmTimes(updated);
+        setNewHmTime('');
+        await db.updateHealthMgmtTimes(updated, hmLocation);
+    };
+
+    const handleDeleteHmTime = async (time: string) => {
+        const updated = hmTimes.filter(t => t !== time);
+        setHmTimes(updated);
+        await db.updateHealthMgmtTimes(updated, hmLocation);
     };
 
     const handleAddHmCycle = async (e: React.FormEvent) => {
@@ -1542,13 +1563,32 @@ BMD :{{bmd}}
 
                 {activeTab === 'health_mgmt' && (
                     <>
+                        {/* Location Selector for Settings */}
+                        {(!currentUser.healthMgmtLocation || currentUser.healthMgmtLocation === '全部') && (
+                            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-1 mb-6 flex gap-1 w-fit mx-auto">
+                                {['北投', '大直'].map((loc) => (
+                                    <button
+                                        key={loc}
+                                        onClick={() => setHmLocation(loc as any)}
+                                        className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${
+                                            hmLocation === loc
+                                                ? 'bg-teal-600 text-white shadow-md'
+                                                : 'text-gray-500 hover:bg-gray-50'
+                                        }`}
+                                    >
+                                        {loc} 院區設定
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+
                         {/* Health Management Station Management */}
                         {canManageHealthMgmt && (
                             <div className="bg-white rounded-xl shadow-[0_2px_12px_rgba(0,0,0,0.03)] border border-gray-100 overflow-hidden flex flex-col h-fit">
                                 <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
                                     <div>
                                         <h3 className="font-bold text-gray-800 flex items-center gap-2">
-                                            健管排班崗位管理 (主管專用)
+                                            {hmLocation}健管崗位管理 (主管專用)
                                             <span className="text-xs font-semibold text-gray-500 px-2 py-0.5 bg-white border rounded-full">{hmStations.length}</span>
                                         </h3>
                                     </div>
@@ -1589,13 +1629,60 @@ BMD :{{bmd}}
                             </div>
                         )}
 
+                        {/* Health Management Work Time Management */}
+                        {canManageHealthMgmt && (
+                            <div className="bg-white rounded-xl shadow-[0_2px_12px_rgba(0,0,0,0.03)] border border-gray-100 overflow-hidden flex flex-col h-fit">
+                                <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+                                    <div>
+                                        <h3 className="font-bold text-gray-800 flex items-center gap-2">
+                                            {hmLocation}健管上班時間管理 (主管專用)
+                                            <span className="text-xs font-semibold text-gray-500 px-2 py-0.5 bg-white border rounded-full">{hmTimes.length}</span>
+                                        </h3>
+                                    </div>
+
+                                    <form onSubmit={handleAddHmTime} className="flex gap-2">
+                                        <input
+                                            type="text"
+                                            value={newHmTime}
+                                            onChange={(e) => setNewHmTime(e.target.value)}
+                                            placeholder="例: 07:30-15:30"
+                                            className="w-40 px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 outline-none shadow-sm transition-all"
+                                        />
+                                        <button type="submit" className="bg-teal-600 hover:bg-teal-700 text-white px-3 py-1.5 rounded-lg transition-colors flex items-center text-sm font-medium">
+                                            <Plus size={16} />
+                                        </button>
+                                    </form>
+                                </div>
+
+                                <div className="p-4 flex flex-wrap gap-2 max-h-[250px] overflow-y-auto">
+                                    {hmTimes.map(time => (
+                                        <div key={time} className="flex items-center gap-2 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg group hover:border-teal-300 transition-colors">
+                                            <span className="text-sm font-bold text-slate-700">{time}</span>
+                                            <button
+                                                type="button"
+                                                onClick={() => handleDeleteHmTime(time)}
+                                                className="text-slate-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
+                                            >
+                                                <X size={14} />
+                                            </button>
+                                        </div>
+                                    ))}
+                                    {hmTimes.length === 0 && (
+                                        <div className="w-full text-center py-4 text-gray-400 text-sm italic">
+                                            尚未設定上班時間
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
                         {/* Health Management Task Management */}
                         {canManageHealthMgmt && (
                             <div className="bg-white rounded-xl shadow-[0_2px_12px_rgba(0,0,0,0.03)] border border-gray-100 overflow-hidden flex flex-col h-fit">
                                 <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
                                     <div>
                                         <h3 className="font-bold text-gray-800 flex items-center gap-2">
-                                            健管業務任務管理 (主管專用)
+                                            {hmLocation}健管業務任務管理 (主管專用)
                                             <span className="text-xs font-semibold text-gray-500 px-2 py-0.5 bg-white border rounded-full">{hmTasks.length}</span>
                                         </h3>
                                     </div>
@@ -1642,7 +1729,7 @@ BMD :{{bmd}}
                                 <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
                                     <h3 className="font-bold text-gray-800 flex items-center gap-2">
                                         <Calendar size={16} className="text-gray-400" />
-                                        健管排班週期 (健管主管專用)
+                                        {hmLocation}健管排班週期 (健管主管專用)
                                     </h3>
                                 </div>
                                 
@@ -1684,7 +1771,7 @@ BMD :{{bmd}}
                                                 <div className="flex-[0.8]">
                                                     <label className="text-xs font-semibold text-gray-500 mb-1 block">所屬院區</label>
                                                     <select
-                                                        value={newHmCycle.location}
+                                                        value={newHmCycle.location || hmLocation}
                                                         onChange={(e) => setNewHmCycle({ ...newHmCycle, location: e.target.value })}
                                                         className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 outline-none shadow-sm transition-all bg-white"
                                                         required
@@ -1714,9 +1801,9 @@ BMD :{{bmd}}
                                     {hmCycles
                                         .filter(cycle => {
                                             if (currentUser.healthMgmtLocation && currentUser.healthMgmtLocation !== '全部') {
-                                                return cycle.location === currentUser.healthMgmtLocation || !cycle.location; // Also show cycles without location for backward compatibility
+                                                return cycle.location === currentUser.healthMgmtLocation || !cycle.location;
                                             }
-                                            return true;
+                                            return cycle.location === hmLocation || (!cycle.location && hmLocation === '北投');
                                         })
                                         .map(cycle => (
                                         <div key={cycle.id} className={`group p-3 hover:bg-gray-50 rounded-lg transition-colors border ${cycle.location === '大直' ? 'border-rose-100 bg-rose-50/10' : 'border-teal-100 bg-teal-50/10'} mb-2`}>

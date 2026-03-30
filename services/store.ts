@@ -216,9 +216,27 @@ class Store {
                     const mappedUser = { ...u };
                     this.mapFromDbFields(mappedUser);
                     
-                    const permissions = (mappedUser.permissions !== null && mappedUser.permissions !== undefined) 
-                        ? mappedUser.permissions 
+                    let permissions = (mappedUser.permissions !== null && mappedUser.permissions !== undefined) 
+                        ? [...mappedUser.permissions]
                         : getPermissionsByRole(mappedUser.role);
+                    
+                    // Auto-Reconcile: Link System Management to specific Business management if missing
+                    if (permissions.includes(PERMISSIONS.EDIT_STAFF) || permissions.includes(PERMISSIONS.EDIT_SETTINGS)) {
+                        if (mappedUser.isHealthMgmt && !permissions.includes(PERMISSIONS.EDIT_HEALTH_MGMT)) {
+                            permissions.push(PERMISSIONS.EDIT_HEALTH_MGMT);
+                        }
+                        if (mappedUser.isRadiographer && !permissions.includes(PERMISSIONS.EDIT_CLOUD_SCHEDULE)) {
+                            permissions.push(PERMISSIONS.EDIT_CLOUD_SCHEDULE);
+                        }
+                    }
+
+                    // Ensure basic view rights if attributes are true
+                    if (mappedUser.isHealthMgmt && !permissions.includes(PERMISSIONS.VIEW_HEALTH_MGMT)) {
+                        permissions.push(PERMISSIONS.VIEW_HEALTH_MGMT);
+                    }
+                    if (mappedUser.isRadiographer && !permissions.includes(PERMISSIONS.VIEW_PHYSICIAN)) {
+                        permissions.push(PERMISSIONS.VIEW_PHYSICIAN);
+                    }
                     
                     // Debug: Log permissions for critical roles
                     if (mappedUser.role === UserRole.SCHEDULER || mappedUser.role === UserRole.SYSTEM_ADMIN) {
@@ -227,7 +245,7 @@ class Store {
 
                     return {
                         ...mappedUser,
-                        permissions
+                        permissions: Array.from(new Set(permissions))
                     };
                 });
                 this.connectionStatus = { type: 'Supabase', details: `Loaded ${this.users.length} users` };
@@ -645,7 +663,8 @@ BMD :{{bmd}}
                 alias: newRecord.alias,
                 isActive: newRecord.is_active,
                 locations: newRecord.locations || [],
-                role: newRecord.role
+                role: newRecord.role,
+                displayOrder: newRecord.display_order
             };
             const index = this.anesthesiaStaff.findIndex(s => s.id === mapped.id);
             if (index !== -1) this.anesthesiaStaff[index] = mapped; else this.anesthesiaStaff.push(mapped);
@@ -717,7 +736,8 @@ BMD :{{bmd}}
                     ...newRecord,
                     isActive: newRecord.is_active,
                     role: newRecord.role,
-                    location: newRecord.location
+                    location: newRecord.location,
+                    displayOrder: newRecord.display_order
                 } as HealthMgmtStaff;
             } else {
                 this.healthMgmtStaff.push({
@@ -726,7 +746,8 @@ BMD :{{bmd}}
                     alias: newRecord.alias,
                     isActive: newRecord.is_active,
                     role: newRecord.role || 'VIEWER',
-                    location: newRecord.location
+                    location: newRecord.location,
+                    displayOrder: newRecord.display_order
                 });
             }
             this.notifyListeners();
@@ -899,8 +920,35 @@ BMD :{{bmd}}
             this.settings.healthMgmtTasks = ['主控', '輔控', '晚班', '排班', 'call班'];
         }
 
+        // Migration: healthMgmtStations -> healthMgmtStationsByLocation
+        if (!this.settings.healthMgmtStationsByLocation) {
+            this.settings.healthMgmtStationsByLocation = {
+                '北投': [...(this.settings.healthMgmtStations || [])],
+                '大直': [...(this.settings.healthMgmtStations || [])]
+            };
+        }
+
+        // Migration: healthMgmtTasks -> healthMgmtTasksByLocation
+        if (!this.settings.healthMgmtTasksByLocation) {
+            this.settings.healthMgmtTasksByLocation = {
+                '北投': [...(this.settings.healthMgmtTasks || [])],
+                '大直': [...(this.settings.healthMgmtTasks || [])]
+            };
+        }
+
         if (!this.settings.healthMgmtCycles) {
             this.settings.healthMgmtCycles = [];
+        }
+
+        if (!this.settings.healthMgmtTimes) {
+            this.settings.healthMgmtTimes = ['07:30-15:30', '08:00-16:00', '08:30-16:30', '09:00-17:00', '12:00-20:00', '13:30-21:30'];
+        }
+
+        if (!this.settings.healthMgmtTimesByLocation) {
+            this.settings.healthMgmtTimesByLocation = {
+                '北投': [...(this.settings.healthMgmtTimes || [])],
+                '大直': [...(this.settings.healthMgmtTimes || [])]
+            };
         }
     }
 
@@ -1138,7 +1186,8 @@ BMD :{{bmd}}
             alias: staff.alias,
             is_active: staff.isActive,
             role: staff.role || 'VIEWER',
-            location: staff.location
+            location: staff.location,
+            display_order: staff.displayOrder
         });
         if (error) {
             console.error('Failed to add health mgmt staff to Supabase:', error);
@@ -1158,6 +1207,7 @@ BMD :{{bmd}}
         if (updates.isActive !== undefined) dbUpdates.is_active = updates.isActive;
         if (updates.role !== undefined) dbUpdates.role = updates.role;
         if (updates.location !== undefined) dbUpdates.location = updates.location;
+        if (updates.displayOrder !== undefined) dbUpdates.display_order = updates.displayOrder;
 
         if (Object.keys(dbUpdates).length > 0) {
             const { error } = await supabase.from('health_mgmt_staff').update(dbUpdates).eq('id', id);
@@ -1200,7 +1250,8 @@ BMD :{{bmd}}
             alias: staff.alias,
             is_active: staff.isActive,
             locations: staff.locations || [],
-            role: staff.role || 'VIEWER'
+            role: staff.role || 'VIEWER',
+            display_order: staff.displayOrder
         });
         if (error) {
             console.error('[Store] addAnesthesiaStaff Supabase error:', error);
@@ -1219,6 +1270,7 @@ BMD :{{bmd}}
         if (updates.isActive !== undefined) dbUpdates.is_active = updates.isActive;
         if (updates.locations !== undefined) dbUpdates.locations = updates.locations;
         if (updates.role !== undefined) dbUpdates.role = updates.role;
+        if (updates.displayOrder !== undefined) dbUpdates.display_order = updates.displayOrder;
 
         const { error } = await supabase.from('anesthesia_staff').update(dbUpdates).eq('id', id);
         if (error) {
@@ -1715,22 +1767,73 @@ BMD :{{bmd}}
         return this.settings.stations;
     }
 
-    getHealthMgmtStations(): string[] {
+    getHealthMgmtStations(location?: string): string[] {
+        const byLoc = this.settings.healthMgmtStationsByLocation;
+        if (location && byLoc && byLoc[location]) {
+            return byLoc[location];
+        }
+        // Fallback or aggregate
+        if (byLoc) {
+            const all = Object.values(byLoc).flat();
+            if (all.length > 0) return [...new Set(all)];
+        }
         return this.settings.healthMgmtStations || ['H', 'G', '櫃1', '櫃2', '櫃3', '櫃助', '營1', '營2', '行政班'];
     }
 
-    async updateHealthMgmtStations(stations: string[]) {
-        this.settings.healthMgmtStations = stations;
+    async updateHealthMgmtStations(stations: string[], location?: string) {
+        if (location) {
+            if (!this.settings.healthMgmtStationsByLocation) this.settings.healthMgmtStationsByLocation = {};
+            this.settings.healthMgmtStationsByLocation[location] = stations;
+        } else {
+            this.settings.healthMgmtStations = stations;
+        }
         await this.saveSettings();
         this.notifyListeners();
     }
 
-    getHealthMgmtTasks(): string[] {
+    getHealthMgmtTasks(location?: string): string[] {
+        const byLoc = this.settings.healthMgmtTasksByLocation;
+        if (location && byLoc && byLoc[location]) {
+            return byLoc[location];
+        }
+        // Fallback or aggregate
+        if (byLoc) {
+            const all = Object.values(byLoc).flat();
+            if (all.length > 0) return [...new Set(all)];
+        }
         return this.settings.healthMgmtTasks || ['主控', '輔控', '晚班', '排班', 'call班'];
     }
 
-    async updateHealthMgmtTasks(tasks: string[]) {
-        this.settings.healthMgmtTasks = tasks;
+    async updateHealthMgmtTasks(tasks: string[], location?: string) {
+        if (location) {
+            if (!this.settings.healthMgmtTasksByLocation) this.settings.healthMgmtTasksByLocation = {};
+            this.settings.healthMgmtTasksByLocation[location] = tasks;
+        } else {
+            this.settings.healthMgmtTasks = tasks;
+        }
+        await this.saveSettings();
+        this.notifyListeners();
+    }
+
+    getHealthMgmtTimes(location?: string): string[] {
+        const byLoc = this.settings.healthMgmtTimesByLocation;
+        if (location && byLoc && byLoc[location]) {
+            return byLoc[location];
+        }
+        if (byLoc) {
+            const all = Object.values(byLoc).flat();
+            if (all.length > 0) return [...new Set(all)];
+        }
+        return this.settings.healthMgmtTimes || ['07:30-15:30', '08:00-16:00', '08:30-16:30', '09:00-17:00', '12:00-20:00', '13:30-21:30'];
+    }
+
+    async updateHealthMgmtTimes(times: string[], location?: string) {
+        if (location) {
+            if (!this.settings.healthMgmtTimesByLocation) this.settings.healthMgmtTimesByLocation = {};
+            this.settings.healthMgmtTimesByLocation[location] = times;
+        } else {
+            this.settings.healthMgmtTimes = times;
+        }
         await this.saveSettings();
         this.notifyListeners();
     }
@@ -1742,6 +1845,15 @@ BMD :{{bmd}}
     async addHealthMgmtCycle(cycle: RosterCycle) {
         if (!this.settings.healthMgmtCycles) this.settings.healthMgmtCycles = [];
         this.settings.healthMgmtCycles.unshift(cycle);
+        await this.saveSettings();
+        this.notifyListeners();
+    }
+
+    async updateHealthMgmtCycle(id: string, updates: Partial<RosterCycle>) {
+        if (!this.settings.healthMgmtCycles) return;
+        this.settings.healthMgmtCycles = this.settings.healthMgmtCycles.map(c => 
+            c.id === id ? { ...c, ...updates } : c
+        );
         await this.saveSettings();
         this.notifyListeners();
     }

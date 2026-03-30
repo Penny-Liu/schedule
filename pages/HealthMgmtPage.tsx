@@ -16,7 +16,8 @@ interface HealthMgmtPageProps {
 
 
 const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
-  const [activeTab, setActiveTab] = useState<'schedule' | 'staff' | 'stats' | 'anesthesia'>('schedule');
+  const [activeTab, setActiveTab] = useState<'schedule' | 'today' | 'staff' | 'stats' | 'anesthesia'>('schedule');
+  const [todayDate, setTodayDate] = useState(new Date());
   const [currentDate, setCurrentDate] = useState(new Date());
   const [shifts, setShifts] = useState<HealthMgmtShift[]>([]);
   const [hmStations, setHmStations] = useState<string[]>(db.getHealthMgmtStations());
@@ -28,6 +29,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
   const [error, setError] = useState<string | null>(null);
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [hmTasks, setHmTasks] = useState<string[]>(db.getHealthMgmtTasks());
+  const [hmTimes, setHmTimes] = useState<string[]>(db.getHealthMgmtTimes());
   const [hmCycles, setHmCycles] = useState<RosterCycle[]>(db.getHealthMgmtCycles());
   const [holidays, setHolidays] = useState(db.getHolidays());
 
@@ -65,6 +67,8 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
   const [quickScheduleStation, setQuickScheduleStation] = useState('');
   const [quickScheduleTask, setQuickScheduleTask] = useState('');
   const [quickScheduleLocation, setQuickScheduleLocation] = useState('');
+  const [quickScheduleTime, setQuickScheduleTime] = useState('');
+  const [isReorderMode, setIsReorderMode] = useState(false);
 
   // Quick Schedule State (Anesthesia)
   const [isAnesQuickScheduleMode, setIsAnesQuickScheduleMode] = useState(false);
@@ -78,7 +82,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
   const isGlobalReadOnly = currentUser.role === UserRole.VIEWER || currentUser.role === UserRole.RADIOGRAPHER_STAFF;
 
   const isHmReadOnly = useMemo(() => {
-    if (currentUser.role === UserRole.SYSTEM_ADMIN || currentUser.role === UserRole.HM_SUPERVISOR) return false;
+    if (currentUser.role === UserRole.SYSTEM_ADMIN) return false;
     if (currentUser.permissions?.includes(PERMISSIONS.EDIT_HEALTH_MGMT)) return false;
     const matchingStaff = healthMgmtStaff.find(s => s.name === currentUser.name || s.alias === currentUser.name);
     if (matchingStaff?.role === 'ADMIN') return false;
@@ -86,7 +90,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
   }, [currentUser, healthMgmtStaff]);
 
   const isAnesReadOnly = useMemo(() => {
-    if (currentUser.role === UserRole.SYSTEM_ADMIN || currentUser.role === UserRole.HM_SUPERVISOR) return false;
+    if (currentUser.role === UserRole.SYSTEM_ADMIN) return false;
     if (currentUser.permissions?.includes(PERMISSIONS.EDIT_ANESTHESIA)) return false;
     const matchingStaff = anesthesiaStaff.find(s => s.name === currentUser.name || s.alias === currentUser.name);
     if (matchingStaff?.role === 'ADMIN') return false;
@@ -108,15 +112,6 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
     return '全部'; // Fallback
   }, [currentUser, healthMgmtStaff, adminLocationView]);
 
-  // Filtered staff list based on reactive state and location
-  const activeHealthMgmtStaff = useMemo(() => {
-      let staff = healthMgmtStaff.filter(s => s.isActive !== false);
-      if (currentUserLocation !== '全部') {
-          staff = staff.filter(s => s.location === currentUserLocation || !s.location);
-      }
-      return staff;
-  }, [healthMgmtStaff, currentUserLocation]);
-
   const filteredHmCycles = useMemo(() => {
       return hmCycles.filter(cycle => {
           if (currentUserLocation !== '全部') {
@@ -126,8 +121,36 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
       });
   }, [hmCycles, currentUserLocation]);
 
+  const currentCycle = useMemo(() => {
+    return filteredHmCycles.find(c => c.id === selectedCycleId);
+  }, [selectedCycleId, filteredHmCycles]);
+
+  // Filtered staff list based on reactive state and location
+  const activeHealthMgmtStaff = useMemo(() => {
+      let staff = healthMgmtStaff.filter(s => s.isActive !== false);
+      if (currentUserLocation !== '全部') {
+          staff = staff.filter(s => s.location === currentUserLocation || !s.location);
+      }
+      
+      // Per-cycle sorting priority
+      const staffOrder = currentCycle?.staffOrder || [];
+      if (selectedCycleId !== 'month' && staffOrder.length > 0) {
+          return [...staff].sort((a, b) => {
+              const idxA = staffOrder.indexOf(a.id);
+              const idxB = staffOrder.indexOf(b.id);
+              if (idxA === -1 && idxB === -1) return (a.displayOrder ?? 999) - (b.displayOrder ?? 999);
+              if (idxA === -1) return 1;
+              if (idxB === -1) return -1;
+              return idxA - idxB;
+          });
+      }
+      
+      return [...staff].sort((a, b) => (a.displayOrder ?? 999) - (b.displayOrder ?? 999));
+  }, [healthMgmtStaff, currentUserLocation, currentCycle, selectedCycleId]);
+
   const activeAnesthesiaStaff = useMemo(() => {
-      return anesthesiaStaff.filter(s => s.isActive !== false);
+      const staff = anesthesiaStaff.filter(s => s.isActive !== false);
+      return [...staff].sort((a, b) => (a.displayOrder ?? 999) - (b.displayOrder ?? 999));
   }, [anesthesiaStaff]);
 
   // State for local modifications (if needed, but for this change, direct DB updates are used)
@@ -138,8 +161,9 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
     const loadData = () => {
       setHealthMgmtStaff(db.getHealthMgmtStaff());
       setShifts(db.getHealthMgmtShifts());
-      setHmStations(db.getHealthMgmtStations());
-      setHmTasks(db.getHealthMgmtTasks());
+      setHmStations(db.getHealthMgmtStations(currentUserLocation));
+      setHmTasks(db.getHealthMgmtTasks(currentUserLocation));
+      setHmTimes(db.getHealthMgmtTimes(currentUserLocation));
       const cycles = db.getHealthMgmtCycles();
       setHmCycles(cycles);
       setHolidays(db.getHolidays());
@@ -159,11 +183,8 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
     loadData();
     const unsubscribe = db.subscribe(loadData);
     return () => unsubscribe();
-  }, []);
+  }, [currentUserLocation]);
 
-  const currentCycle = useMemo(() => {
-    return filteredHmCycles.find(c => c.id === selectedCycleId);
-  }, [selectedCycleId, filteredHmCycles]);
 
   // Auto-switch to "month" view if the selected cycle is not available in the current location
   useEffect(() => {
@@ -234,8 +255,8 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
       try {
           if (isQuickScheduleMode) {
               // Quick apply
-              // Use quickScheduleStation or quickScheduleTask or quickScheduleLocation
-              await handleUpdateShift(userId, date, quickScheduleStation, quickScheduleTask || undefined, quickScheduleLocation || undefined);
+              const fullStation = quickScheduleTime ? `${quickScheduleTime} ${quickScheduleStation}` : quickScheduleStation;
+              await handleUpdateShift(userId, date, fullStation, quickScheduleTask || undefined);
           } else {
               // Open Inline Popup
               setSelectedCell({ userId, date });
@@ -287,6 +308,37 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
       } catch (err) {
           console.error('[HealthMgmtPage] handleSavePopup failed:', err);
           alert(`健管排班儲存失敗: ${err instanceof Error ? err.message : JSON.stringify(err)}`);
+      }
+  };
+
+  const handleMoveStaff = async (staffId: string, direction: 'up' | 'down') => {
+      const staffList = [...activeHealthMgmtStaff];
+      const index = staffList.findIndex(s => s.id === staffId);
+      if (index === -1) return;
+      
+      const newIndex = direction === 'up' ? index - 1 : index + 1;
+      if (newIndex < 0 || newIndex >= staffList.length) return;
+      
+      // Swap
+      const temp = staffList[index];
+      staffList[index] = staffList[newIndex];
+      staffList[newIndex] = temp;
+      
+      try {
+          if (selectedCycleId !== 'month' && currentCycle) {
+              // Update cycle-specific order
+              const newOrder = staffList.map(s => s.id);
+              await db.updateHealthMgmtCycle(currentCycle.id, { staffOrder: newOrder });
+          } else {
+              // Update global displayOrder for all staff in this list
+              const updates = staffList.map((s, i) => 
+                  db.updateHealthMgmtStaff(s.id, { displayOrder: i })
+              );
+              await Promise.all(updates);
+          }
+      } catch (err) {
+          console.error('Failed to update staff order:', err);
+          alert('調整順序失敗，請重新整理頁面');
       }
   };
 
@@ -934,6 +986,14 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
             <Calendar size={16} /> 健管排班總覽
           </button>
           <button
+            onClick={() => setActiveTab('today')}
+            className={"px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 " + (
+              activeTab === 'today' ? 'bg-white text-teal-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+            )}
+          >
+            <LayoutDashboard size={16} /> 今日崗位
+          </button>
+          <button
             onClick={() => setActiveTab('stats')}
             className={"px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 " + (
               activeTab === 'stats' ? 'bg-white text-teal-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'
@@ -1447,67 +1507,113 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
             </div>
           )}
         </div>
+      ) : activeTab === 'today' ? (
+        <div className="flex flex-col relative w-full h-full overflow-hidden">
+             <HMTodayView 
+                date={todayDate} 
+                onDateChange={setTodayDate}
+                location={currentUserLocation}
+                shifts={shifts}
+                anesthesiaShifts={anesthesiaShifts}
+                staff={healthMgmtStaff}
+                anesStaff={anesthesiaStaff}
+            />
+        </div>
       ) : activeTab === 'schedule' ? (
-        <>
-          <div className="mb-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
-              <div className="flex items-center gap-1 bg-white p-1 rounded border shadow-sm scale-90 origin-left">
-                <button onClick={() => {
-                  if (selectedCycleId === 'month') {
-                    const prev = new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1);
-                    setCurrentDate(prev);
-                  } else {
-                    const idx = filteredHmCycles.findIndex(c => c.id === selectedCycleId);
-                    if (idx < filteredHmCycles.length - 1 && idx !== -1) setSelectedCycleId(filteredHmCycles[idx+1].id);
-                  }
-                }} className="p-1.5 hover:bg-gray-50 rounded text-gray-500 transition-colors border-r">
-                   <ChevronLeft size={18} />
-                </button>
-                <div className="px-4 py-1 text-sm font-bold text-gray-700 min-w-[150px] text-center">
-                  {selectedCycleId === 'month' 
-                    ? `${currentDate.getFullYear()} 年 ${currentDate.getMonth() + 1} 月`
-                    : currentCycle?.name || '週期檢視'
-                  }
+        <div className="flex flex-col relative w-full">
+          {/* Sticky Controls Container */}
+          <div className="sticky top-0 z-[100] bg-slate-50 pb-4 pt-2 shadow-sm border-b border-slate-200">
+            <div className="mb-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1 bg-white p-1 rounded border shadow-sm scale-90 origin-left">
+                  <button onClick={() => {
+                    if (selectedCycleId === 'month') {
+                      const prev = new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1);
+                      setCurrentDate(prev);
+                    } else {
+                      const idx = filteredHmCycles.findIndex(c => c.id === selectedCycleId);
+                      if (idx < filteredHmCycles.length - 1 && idx !== -1) setSelectedCycleId(filteredHmCycles[idx+1].id);
+                    }
+                  }} className="p-1.5 hover:bg-gray-50 rounded text-gray-500 transition-colors border-r">
+                     <ChevronLeft size={18} />
+                  </button>
+                  <div className="px-4 py-1 text-sm font-bold text-gray-700 min-w-[150px] text-center">
+                    {selectedCycleId === 'month' 
+                      ? `${currentDate.getFullYear()} 年 ${currentDate.getMonth() + 1} 月`
+                      : currentCycle?.name || '週期檢視'
+                    }
+                  </div>
+                  <button onClick={() => {
+                    if (selectedCycleId === 'month') {
+                      const next = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1);
+                      setCurrentDate(next);
+                    } else {
+                      const idx = filteredHmCycles.findIndex(c => c.id === selectedCycleId);
+                      if (idx > 0) setSelectedCycleId(filteredHmCycles[idx-1].id);
+                    }
+                  }} className="p-1.5 hover:bg-gray-50 rounded text-gray-500 transition-colors border-l">
+                    <ChevronRight size={18} />
+                  </button>
                 </div>
-                <button onClick={() => {
-                  if (selectedCycleId === 'month') {
-                    const next = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1);
-                    setCurrentDate(next);
-                  } else {
-                    const idx = filteredHmCycles.findIndex(c => c.id === selectedCycleId);
-                    if (idx > 0) setSelectedCycleId(filteredHmCycles[idx-1].id);
-                  }
-                }} className="p-1.5 hover:bg-gray-50 rounded text-gray-500 transition-colors border-l">
-                  <ChevronRight size={18} />
-                </button>
+
+                <div className="flex flex-col md:flex-row md:items-center gap-2">
+                  <div className="flex items-center gap-2 bg-white p-1 rounded border shadow-sm px-3 h-[36px] scale-90 origin-left">
+                    <Calendar size={16} className="text-teal-600" />
+                    <select 
+                      className="text-sm font-bold text-gray-700 bg-transparent border-none outline-none focus:ring-0 cursor-pointer"
+                      onChange={(e) => setSelectedCycleId(e.target.value)}
+                      value={selectedCycleId}
+                    >
+                      <option value="month">按月份檢視</option>
+                      <optgroup label="自定義週期">
+                        {filteredHmCycles.map(c => (
+                          <option key={c.id} value={c.id}>{c.name}</option>
+                        ))}
+                      </optgroup>
+                    </select>
+                  </div>
+
+                  {/* Cycle Meta Info */}
+                  <div className="flex items-center gap-2 px-4 py-2 bg-emerald-50 border border-emerald-100 rounded h-[36px] scale-90 origin-left">
+                    <Search size={14} className="text-emerald-500" />
+                    <span className="text-xs font-medium text-emerald-800 whitespace-nowrap">
+                      {dateRange[0]} ~ {dateRange[dateRange.length - 1]} 
+                      <span className="mx-2 text-emerald-300">|</span>
+                      共 {dateRange.length} 天
+                    </span>
+                  </div>
+                </div>
+                
+                <div className="flex items-center gap-2 ml-2">
+                  {!isHmReadOnly && (
+                    <button 
+                      onClick={() => setIsReorderMode(!isReorderMode)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border flex items-center gap-1.5 ${
+                        isReorderMode ? 'bg-amber-500 text-white border-amber-600 shadow-md' : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
+                      }`}
+                      title="調整人員顯示順序"
+                    >
+                      {isReorderMode ? <Save size={14}/> : <Users size={14}/>}
+                      {isReorderMode ? '完成排序' : '調整順序'}
+                    </button>
+                  )}
+                </div>
               </div>
 
-              <div className="flex flex-col md:flex-row md:items-center gap-2">
-                <div className="flex items-center gap-2 bg-white p-1 rounded border shadow-sm px-3 h-[36px] scale-90 origin-left">
-                  <Calendar size={16} className="text-teal-600" />
-                  <select 
-                    className="text-sm font-bold text-gray-700 bg-transparent border-none outline-none focus:ring-0 cursor-pointer"
-                    onChange={(e) => setSelectedCycleId(e.target.value)}
-                    value={selectedCycleId}
-                  >
-                    <option value="month">按月份檢視</option>
-                    <optgroup label="自定義週期">
-                      {filteredHmCycles.map(c => (
-                        <option key={c.id} value={c.id}>{c.name}</option>
-                      ))}
-                    </optgroup>
-                  </select>
-                </div>
-
-                {/* Cycle Meta Info */}
-                <div className="flex items-center gap-2 px-4 py-2 bg-emerald-50 border border-emerald-100 rounded h-[36px] scale-90 origin-left">
-                  <Search size={14} className="text-emerald-500" />
-                  <span className="text-xs font-medium text-emerald-800 whitespace-nowrap">
-                    {dateRange[0]} ~ {dateRange[dateRange.length - 1]} 
-                    <span className="mx-2 text-emerald-300">|</span>
-                    共 {dateRange.length} 天
-                  </span>
-                </div>
+              <div className="flex bg-teal-50 rounded-lg p-0.5 border border-teal-100 items-center h-[34px]">
+                <button 
+                    onClick={handleExportSchedulePDF}
+                    className="px-3 py-1 hover:bg-white rounded-md text-xs font-bold text-teal-700 flex items-center gap-1 transition-all"
+                >
+                    <Download size={14} /> PDF
+                </button>
+                <div className="w-[1px] h-3 bg-teal-200 mx-1"></div>
+                <button 
+                    onClick={handleExportScheduleExcel}
+                    className="px-3 py-1 hover:bg-white rounded-md text-xs font-bold text-emerald-700 flex items-center gap-1 transition-all"
+                >
+                    <FileSpreadsheet size={14} /> Excel
+                </button>
               </div>
             </div>
 
@@ -1523,7 +1629,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                     </button>
                     
                     {isQuickScheduleMode && (
-                        <div className="flex flex-col gap-2 pl-2 border-l border-gray-200 overflow-x-auto max-w-[800px] no-scrollbar">
+                        <div className="flex flex-col gap-2 pl-2 border-l border-gray-200 overflow-x-auto max-w-full no-scrollbar">
                             <div className="flex items-center gap-1">
                                 <span className="text-[10px] text-gray-400 font-bold mr-2 whitespace-nowrap">崗位：</span>
                                 {[...hmStations, '清除'].map(st => (
@@ -1533,6 +1639,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                                             if (st === '清除') {
                                                 setQuickScheduleStation('');
                                                 setQuickScheduleTask('');
+                                                setQuickScheduleTime('');
                                             } else {
                                                 setQuickScheduleStation(st);
                                             }
@@ -1562,17 +1669,17 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                                 ))}
                             </div>
                             <div className="flex items-center gap-1">
-                                <span className="text-[10px] text-gray-400 font-bold mr-2 whitespace-nowrap">地點：</span>
-                                {LOCATIONS.map(loc => (
+                                <span className="text-[10px] text-gray-400 font-bold mr-2 whitespace-nowrap">班時：</span>
+                                {['07:30-15:30', '08:00-16:00', '08:30-16:30', '09:00-17:00'].map(tm => (
                                     <button
-                                        key={loc}
-                                        onClick={() => setQuickScheduleLocation(loc === quickScheduleLocation ? '' : loc)}
-                                        className={"px-2 py-0.5 rounded text-[10px] font-bold transition-colors border whitespace-nowrap " + (quickScheduleLocation === loc 
+                                        key={tm}
+                                        onClick={() => setQuickScheduleTime(tm === quickScheduleTime ? '' : tm)}
+                                        className={"px-2 py-0.5 rounded text-[10px] font-bold transition-colors border whitespace-nowrap " + (tm === quickScheduleTime 
                                                 ? 'bg-slate-800 text-white border-slate-900'
                                                 : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
                                         )}
                                     >
-                                        {loc}
+                                        {tm}
                                     </button>
                                 ))}
                             </div>
@@ -1580,27 +1687,11 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                     )}
                 </div>
             )}
-
-            <div className="flex bg-teal-50 rounded-lg p-0.5 border border-teal-100 items-center h-[34px]">
-                <button 
-                    onClick={handleExportSchedulePDF}
-                    className="px-3 py-1 hover:bg-white rounded-md text-xs font-bold text-teal-700 flex items-center gap-1 transition-all"
-                >
-                    <Download size={14} /> PDF
-                </button>
-                <div className="w-[1px] h-3 bg-teal-200 mx-1"></div>
-                <button 
-                    onClick={handleExportScheduleExcel}
-                    className="px-3 py-1 hover:bg-white rounded-md text-xs font-bold text-emerald-700 flex items-center gap-1 transition-all"
-                >
-                    <FileSpreadsheet size={14} /> Excel
-                </button>
-            </div>
           </div>
 
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm inline-block min-w-full">
             <table className="text-sm border-collapse w-auto">
-              <thead className="relative z-50">
+              <thead className={`sticky z-50 transition-all duration-300 ${isQuickScheduleMode ? 'top-[140px]' : 'top-[62px]'}`}>
                 <tr className="bg-slate-50 backdrop-blur border-b border-slate-200">
                   <th className="p-3 text-left font-bold text-slate-600 w-32 sticky left-0 top-0 bg-slate-50 backdrop-blur z-50 border-r border-slate-200 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">人員 (天數)</th>
                   {dateRange.map(date => {
@@ -1625,12 +1716,31 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
               <tbody className="divide-y divide-slate-100">
                 {activeHealthMgmtStaff.map(staff => (
                   <tr key={staff.id} className="group hover:bg-slate-50/50 transition-colors">
-                    <td className="p-0 border-r border-slate-200 sticky left-0 bg-white z-30 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
-                        <div className="p-3 font-bold text-slate-800 flex items-center min-w-[128px]">
-                            {staff.name}
-                            <span className="ml-2 text-xs text-gray-400 font-normal whitespace-nowrap">
-                                ({shifts.filter(s => s.userId === staff.id && dateRange.includes(s.date) && (s.station || s.task)).length})
-                            </span>
+                    <td className={`p-0 border-r border-slate-200 sticky left-0 z-30 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] transition-colors ${isReorderMode ? 'bg-amber-50' : 'bg-white'}`}>
+                        <div className="p-3 font-bold text-slate-800 flex items-center justify-between min-w-[128px]">
+                            <div className="flex items-center">
+                                <span className={isReorderMode ? 'text-amber-700' : ''}>{staff.name}</span>
+                                <span className="ml-2 text-xs text-gray-400 font-normal whitespace-nowrap">
+                                    ({shifts.filter(s => s.userId === staff.id && dateRange.includes(s.date) && (s.station || s.task)).length})
+                                </span>
+                            </div>
+                            
+                            {isReorderMode && (
+                                <div className="flex flex-col gap-0.5 ml-2">
+                                    <button 
+                                        onClick={() => handleMoveStaff(staff.id, 'up')}
+                                        className="p-1 hover:bg-amber-200 rounded text-amber-600 transition-colors"
+                                    >
+                                        <ChevronUp size={14} />
+                                    </button>
+                                    <button 
+                                        onClick={() => handleMoveStaff(staff.id, 'down')}
+                                        className="p-1 hover:bg-amber-200 rounded text-amber-600 transition-colors"
+                                    >
+                                        <ChevronDown size={14} />
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     </td>
                     {dateRange.map(date => {
@@ -1792,12 +1902,26 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
               </div>
 
               <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-gray-500 uppercase">工作時段 (選填)</label>
+                  <label className="text-xs font-bold text-gray-500 uppercase flex justify-between">
+                      <span>工作時段 (選填)</span>
+                      {editingShiftTime && <span className="text-teal-600 cursor-pointer hover:underline" onClick={() => setEditingShiftTime('')}>清除</span>}
+                  </label>
+                  <div className="flex flex-wrap gap-1.5 p-1 mb-2">
+                      {hmTimes.map(time => (
+                          <button
+                              key={time}
+                              onClick={() => setEditingShiftTime(time)}
+                              className={"px-3 py-1.5 rounded-lg text-[10px] font-bold border transition-all " + (editingShiftTime === time ? 'bg-teal-500 text-white border-teal-600 shadow-sm' : 'bg-slate-50 text-gray-600 border-gray-200 hover:border-teal-300 hover:bg-white')}
+                          >
+                              {time}
+                          </button>
+                      ))}
+                  </div>
                   <input
                       type="text"
                       value={editingShiftTime}
                       onChange={e => setEditingShiftTime(e.target.value)}
-                      placeholder="例: 08:00-16:00"
+                      placeholder="自訂時段 (例: 08:00-16:00)"
                       className="w-full px-4 py-2 bg-slate-50 border border-gray-200 rounded-lg text-sm font-medium focus:ring-2 focus:ring-teal-500 outline-none transition-all"
                   />
               </div>
@@ -1825,7 +1949,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
           </div>
         </div>
       )}
-        </>
+        </div>
       ) : activeTab === 'stats' ? (
         /* Statistics Tab */
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col h-fit p-6">
@@ -2078,6 +2202,204 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
       </div>
     </div>
   );
+};
+
+// --- Today View Component ---
+const HMTodayView: React.FC<{
+    date: Date;
+    onDateChange: (d: Date) => void;
+    location: string;
+    shifts: HealthMgmtShift[];
+    anesthesiaShifts: AnesthesiaShift[];
+    staff: HealthMgmtStaff[];
+    anesStaff: AnesthesiaStaff[];
+}> = ({ date, onDateChange, location, shifts, anesthesiaShifts, staff, anesStaff }) => {
+    const dateStr = toLocalISOString(date);
+
+    const filteredShifts = useMemo(() => shifts.filter(s => s.date === dateStr), [shifts, dateStr]);
+    const filteredAnes = useMemo(() => anesthesiaShifts.filter(s => s.date === dateStr), [anesthesiaShifts, dateStr]);
+
+    const groups = useMemo(() => {
+        if (location === '大直') {
+            return [
+                { id: 'H', label: '接待(H)', stations: ['H'] },
+                { 
+                    id: 'G', label: '腸胃(G)', stations: ['G'], 
+                    taskOrder: ['放診1', '診2', 'POR', '流動', '洗滌'] 
+                },
+                { 
+                    id: 'A', label: '麻護(A)', isAnesthesia: true,
+                    taskOrder: ['麻1', '麻2']
+                },
+                { 
+                    id: 'R', label: '櫃台(R)', stations: ['櫃1', '櫃2', '櫃3', '櫃助'], 
+                    taskOrder: ['早班', '晚班', '供餐'] 
+                },
+                { 
+                    id: 'D', label: '代謝(D)', stations: ['營1', '營2'], 
+                    taskOrder: ['營1', '營2'] 
+                },
+                { 
+                    id: 'M', label: '醫檢(M)', stations: ['M', '醫檢'], 
+                    taskOrder: ['早班', '晚班'] 
+                },
+                { 
+                    id: 'P', label: '藥師(P)', stations: ['P', '藥師'] 
+                }
+            ];
+        } else {
+            // Beitou or All
+            const stations = Array.from(new Set(filteredShifts.map(s => s.station).filter(Boolean))) as string[];
+            return stations.map(s => ({ id: s, label: s, stations: [s] }));
+        }
+    }, [location, filteredShifts]);
+
+    const getGroupAssignments = (group: any) => {
+        let assignments: any[] = [];
+        
+        if (group.isAnesthesia) {
+            assignments = filteredAnes.filter(s => s.location === '大直' || location === '全部').map(s => {
+                const u = anesStaff.find(st => st.id === s.userId);
+                return {
+                    name: u?.name || '未知',
+                    task: s.station, // station is the task for anes (e.g. 麻1)
+                    time: s.workTime || '',
+                    raw: s
+                };
+            });
+        } else {
+            assignments = filteredShifts.filter(s => group.stations.includes(s.station)).map(s => {
+                const u = staff.find(st => st.id === s.userId);
+                let time = s.time || '';
+                let displayStation = s.station;
+                
+                // Legacy support: extract time from station string if present
+                if (!time && s.station.includes(' ')) {
+                    const parts = s.station.split(' ');
+                    if (parts[0].includes(':')) {
+                        time = parts[0];
+                        displayStation = parts.slice(1).join(' ');
+                    }
+                }
+
+                return {
+                    name: u?.name || '未知',
+                    task: s.task,
+                    time: time,
+                    raw: { ...s, station: displayStation }
+                };
+            });
+        }
+
+        // Apply Sorting
+        if (group.taskOrder) {
+            assignments.sort((a, b) => {
+                const idxA = group.taskOrder.indexOf(a.task);
+                const idxB = group.taskOrder.indexOf(b.task);
+                if (idxA === -1 && idxB === -1) return 0;
+                if (idxA === -1) return 1;
+                if (idxB === -1) return -1;
+                return idxA - idxB;
+            });
+        }
+
+        return assignments;
+    };
+
+    return (
+        <div className="flex-1 flex flex-col p-4 space-y-4 overflow-hidden">
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-4">
+                    <button 
+                        onClick={() => { const d = new Date(date); d.setDate(d.getDate() - 1); onDateChange(d); }}
+                        className="p-2 hover:bg-slate-100 rounded-full text-slate-400 transition-colors"
+                    >
+                        <ArrowLeft size={20} />
+                    </button>
+                    <div className="text-center">
+                        <div className="text-lg font-black text-slate-800">
+                            {date.toLocaleDateString('zh-TW', { month: 'long', day: 'numeric' })}
+                            <span className="ml-2 text-sm font-bold text-teal-600">
+                                ({['日', '一', '二', '三', '四', '五', '六'][date.getDay()]})
+                            </span>
+                        </div>
+                    </div>
+                    <button 
+                        onClick={() => { const d = new Date(date); d.setDate(d.getDate() + 1); onDateChange(d); }}
+                        className="p-2 hover:bg-slate-100 rounded-full text-slate-400 transition-colors"
+                    >
+                        <ArrowRight size={20} />
+                    </button>
+                </div>
+                <div className="flex items-center gap-3">
+                    <div className="relative">
+                        <input 
+                            type="date" 
+                            className="absolute inset-0 opacity-0 cursor-pointer"
+                            onChange={(e) => onDateChange(new Date(e.target.value))}
+                        />
+                        <button className="flex items-center gap-2 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-100">
+                            <Calendar size={14} /> 跳轉日期
+                        </button>
+                    </div>
+                    <button 
+                        onClick={() => onDateChange(new Date())}
+                        className="px-3 py-1.5 bg-teal-50 text-teal-700 border border-teal-100 rounded-lg text-xs font-bold hover:bg-teal-100"
+                    >
+                        回到今天
+                    </button>
+                </div>
+            </div>
+
+            <div className="flex-1 overflow-auto pr-2 pb-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {groups.map(group => {
+                        const members = getGroupAssignments(group);
+                        if (members.length === 0 && location !== '大直') return null;
+
+                        return (
+                            <div key={group.id} className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden flex flex-col group hover:shadow-md transition-shadow">
+                                <div className="px-4 py-3 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
+                                    <h4 className="font-black text-slate-700 flex items-center gap-2">
+                                        <Users size={16} className="text-teal-600" />
+                                        {group.label}
+                                    </h4>
+                                    <span className="text-[10px] font-bold bg-white px-2 py-0.5 rounded-full border border-slate-200 text-slate-400">
+                                        {members.length} 人
+                                    </span>
+                                </div>
+                                <div className="p-3 space-y-2">
+                                    {members.length > 0 ? (
+                                        members.map((m, idx) => (
+                                            <div key={idx} className="flex items-center justify-between p-3 bg-slate-50/50 rounded-xl border border-slate-100 hover:bg-white hover:border-teal-100 hover:shadow-sm transition-all">
+                                                <div className="flex flex-col">
+                                                    <span className="text-sm font-black text-slate-800">{m.name}</span>
+                                                    {m.task && (
+                                                        <span className="text-[10px] font-bold text-teal-600 bg-teal-50 px-1.5 py-0.5 rounded mt-1 w-fit">
+                                                            {m.task}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                {m.time && (
+                                                    <div className="text-[11px] font-bold text-slate-400 bg-white px-2 py-1 rounded-lg border border-slate-100">
+                                                        {m.time}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ))
+                                    ) : (
+                                        <div className="py-8 text-center text-slate-300 text-xs italic">
+                                            尚未排班
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
+        </div>
+    );
 };
 
 export default HealthMgmtPage;

@@ -418,7 +418,14 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                         type="checkbox"
                         id="isRadiographer"
                         checked={formData.isRadiographer}
-                        onChange={e => setFormData({ ...formData, isRadiographer: e.target.checked })}
+                        onChange={e => {
+                          const checked = e.target.checked;
+                          setFormData(prev => {
+                            let perms = [...prev.permissions];
+                            if (checked && !perms.includes(PERMISSIONS.VIEW_PHYSICIAN)) perms.push(PERMISSIONS.VIEW_PHYSICIAN);
+                            return { ...prev, isRadiographer: checked, permissions: perms };
+                          });
+                        }}
                         disabled={currentUser.role === UserRole.HM_SUPERVISOR}
                         className="w-4 h-4 text-teal-600 border-gray-300 rounded focus:ring-teal-500"
                      />
@@ -442,12 +449,19 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                       </label>
                   </div>
 
-                  <div className="flex items-center gap-2">
+                   <div className="flex items-center gap-2">
                      <input
                         type="checkbox"
                         id="isHealthMgmt"
                         checked={formData.isHealthMgmt}
-                        onChange={e => setFormData({ ...formData, isHealthMgmt: e.target.checked })}
+                        onChange={e => {
+                          const checked = e.target.checked;
+                          setFormData(prev => {
+                            let perms = [...prev.permissions];
+                            if (checked && !perms.includes(PERMISSIONS.VIEW_HEALTH_MGMT)) perms.push(PERMISSIONS.VIEW_HEALTH_MGMT);
+                            return { ...prev, isHealthMgmt: checked, permissions: perms };
+                          });
+                        }}
                         disabled={currentUser.role === UserRole.SUPERVISOR}
                         className="w-4 h-4 text-teal-600 border-gray-300 rounded focus:ring-teal-500"
                      />
@@ -460,7 +474,10 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                           <label className="text-xs font-bold text-teal-700">預設管理院區</label>
                           <select 
                               value={formData.healthMgmtLocation}
-                              onChange={e => setFormData({ ...formData, healthMgmtLocation: e.target.value as any })}
+                              onChange={e => {
+                                  const loc = e.target.value as any;
+                                  setFormData({ ...formData, healthMgmtLocation: loc });
+                              }}
                               className="px-2 py-1 text-xs border border-teal-200 rounded text-teal-800 focus:ring-1 focus:ring-teal-500 outline-none"
                           >
                               <option value="全部">全部管理 / 跨院</option>
@@ -687,14 +704,25 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                                 type="checkbox" 
                                 id={`perm_${value}`}
                                 checked={formData.permissions.includes(value)}
-                                onChange={(e) => {
+                                 onChange={(e) => {
                                   const checked = e.target.checked;
-                                  setFormData(prev => ({
-                                      ...prev,
-                                      permissions: checked 
+                                  setFormData(prev => {
+                                      let perms = checked 
                                         ? [...prev.permissions, value]
-                                        : prev.permissions.filter(p => p !== value)
-                                  }));
+                                        : prev.permissions.filter(p => p !== value);
+                                      
+                                      // Special Linkage: If SYSTEM EDIT is checked, and they are HM, auto-add HM EDIT
+                                      if (checked && (value === PERMISSIONS.EDIT_STAFF || value === PERMISSIONS.EDIT_SETTINGS)) {
+                                          if (prev.isHealthMgmt && !perms.includes(PERMISSIONS.EDIT_HEALTH_MGMT)) {
+                                              perms.push(PERMISSIONS.EDIT_HEALTH_MGMT);
+                                          }
+                                          if (prev.isRadiographer && !perms.includes(PERMISSIONS.EDIT_CLOUD_SCHEDULE)) {
+                                              perms.push(PERMISSIONS.EDIT_CLOUD_SCHEDULE);
+                                          }
+                                      }
+                                      
+                                      return { ...prev, permissions: perms };
+                                  });
                                 }}
                                 className="w-3.5 h-3.5 text-teal-600 border-gray-300 rounded focus:ring-teal-500"
                               />
@@ -755,7 +783,14 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
           {users.filter(user => {
             // Department isolation for supervisors
             if (currentUser.role === UserRole.SUPERVISOR && !user.isRadiographer) return false;
-            if (currentUser.role === UserRole.HM_SUPERVISOR && !user.isHealthMgmt) return false;
+            // HM Supervisor isolation with Location Awareness
+            if (currentUser.role === UserRole.HM_SUPERVISOR) {
+                if (!user.isHealthMgmt) return false;
+                // If the supervisor is restricted to a location, only show staff in that location
+                if (currentUser.healthMgmtLocation && currentUser.healthMgmtLocation !== '全部') {
+                    return user.healthMgmtLocation === currentUser.healthMgmtLocation;
+                }
+            }
 
             // Hide resigned users once their resignation date is effective
             if (user.isActive === false) {
