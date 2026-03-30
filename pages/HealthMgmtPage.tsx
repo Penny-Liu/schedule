@@ -2340,7 +2340,7 @@ const HMTodayView: React.FC<{
                 };
             });
         } else {
-            assignments = filteredShifts.filter(s => group.stations.includes(s.station)).map(s => {
+            assignments = filteredShifts.filter(s => group.stations.some(st => s.station.split(' ').includes(st))).map(s => {
                 const u = staff.find(st => st.id === s.userId);
                 let time = s.time || '';
                 let displayStation = s.station;
