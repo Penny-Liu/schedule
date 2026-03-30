@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { User, Shift, HealthMgmtShift, UserRole, PERMISSIONS, StaffGroup, HealthMgmtStaff, RosterCycle, AnesthesiaStaff, AnesthesiaShift } from '../types';
 import { db } from '../services/store';
-import { Users, LayoutDashboard, Calendar, ArrowLeft, ArrowRight, X, Lock, Unlock, UserPlus, Save, Trash2, FileSpreadsheet, BarChart3, Download, Search, ChevronLeft, ChevronRight, Zap, ChevronDown, ChevronUp } from 'lucide-react';
+import { Users, LayoutDashboard, Calendar, ArrowLeft, ArrowRight, X, Lock, Unlock, UserPlus, Save, Trash2, FileSpreadsheet, BarChart3, Download, Search, ChevronLeft, ChevronRight, Zap, ChevronDown, ChevronUp, UserSearch, Stethoscope, Syringe, ConciergeBell, Apple, Microscope, Pill, Clock } from 'lucide-react';
 import { toLocalISOString, generateUUID } from '../services/utils';
 import ConfirmModal from '../components/ConfirmModal';
 import ExcelJS from 'exceljs';
@@ -2222,35 +2222,35 @@ const HMTodayView: React.FC<{
     const groups = useMemo(() => {
         if (location === '大直') {
             return [
-                { id: 'H', label: '接待(H)', stations: ['H'] },
+                { id: 'H', label: '接待(H)', stations: ['H'], icon: <UserSearch size={18} />, color: 'indigo' },
                 { 
-                    id: 'G', label: '腸胃(G)', stations: ['G'], 
+                    id: 'G', label: '腸胃(G)', stations: ['G'], icon: <Stethoscope size={18} />, color: 'emerald',
                     taskOrder: ['放診1', '診2', 'POR', '流動', '洗滌'] 
                 },
                 { 
-                    id: 'A', label: '麻護(A)', isAnesthesia: true,
+                    id: 'A', label: '麻護(A)', isAnesthesia: true, icon: <Syringe size={18} />, color: 'rose',
                     taskOrder: ['麻1', '麻2']
                 },
                 { 
-                    id: 'R', label: '櫃台(R)', stations: ['櫃1', '櫃2', '櫃3', '櫃助'], 
+                    id: 'R', label: '櫃台(R)', stations: ['櫃1', '櫃2', '櫃3', '櫃助'], icon: <ConciergeBell size={18} />, color: 'amber',
                     taskOrder: ['早班', '晚班', '供餐'] 
                 },
                 { 
-                    id: 'D', label: '代謝(D)', stations: ['營1', '營2'], 
+                    id: 'D', label: '代謝(D)', stations: ['營1', '營2'], icon: <Apple size={18} />, color: 'sky',
                     taskOrder: ['營1', '營2'] 
                 },
                 { 
-                    id: 'M', label: '醫檢(M)', stations: ['M', '醫檢'], 
+                    id: 'M', label: '醫檢(M)', stations: ['M', '醫檢'], icon: <Microscope size={18} />, color: 'violet',
                     taskOrder: ['早班', '晚班'] 
                 },
                 { 
-                    id: 'P', label: '藥師(P)', stations: ['P', '藥師'] 
+                    id: 'P', label: '藥師(P)', stations: ['P', '藥師'], icon: <Pill size={18} />, color: 'teal'
                 }
             ];
         } else {
             // Beitou or All
             const stations = Array.from(new Set(filteredShifts.map(s => s.station).filter(Boolean))) as string[];
-            return stations.map(s => ({ id: s, label: s, stations: [s] }));
+            return stations.map(s => ({ id: s, label: s, stations: [s], icon: <Zap size={18} />, color: 'teal' }));
         }
     }, [location, filteredShifts]);
 
@@ -2307,89 +2307,120 @@ const HMTodayView: React.FC<{
     };
 
     return (
-        <div className="flex-1 flex flex-col p-4 space-y-4 overflow-hidden">
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 flex items-center justify-between shrink-0">
-                <div className="flex items-center gap-4">
+        <div className="flex-1 flex flex-col p-6 space-y-6 overflow-hidden">
+            <div className="bg-white/80 backdrop-blur-md rounded-[2.5rem] shadow-sm border border-slate-200/60 p-5 flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-6">
                     <button 
                         onClick={() => { const d = new Date(date); d.setDate(d.getDate() - 1); onDateChange(d); }}
-                        className="p-2 hover:bg-slate-100 rounded-full text-slate-400 transition-colors"
+                        className="w-12 h-12 flex items-center justify-center bg-slate-50 hover:bg-white rounded-full text-slate-400 hover:text-teal-600 hover:shadow-md transition-all duration-300 border border-slate-100"
                     >
-                        <ArrowLeft size={20} />
+                        <ArrowLeft size={22} />
                     </button>
-                    <div className="text-center">
-                        <div className="text-lg font-black text-slate-800">
+                    <div className="flex flex-col items-center">
+                        <div className="text-2xl font-black text-slate-800 tracking-tight">
                             {date.toLocaleDateString('zh-TW', { month: 'long', day: 'numeric' })}
-                            <span className="ml-2 text-sm font-bold text-teal-600">
-                                ({['日', '一', '二', '三', '四', '五', '六'][date.getDay()]})
+                            <span className="ml-3 text-base font-black text-teal-500 bg-teal-50 px-3 py-1 rounded-full border border-teal-100/50">
+                                {['週日', '週一', '週二', '週三', '週四', '週五', '週六'][date.getDay()]}
                             </span>
                         </div>
                     </div>
                     <button 
                         onClick={() => { const d = new Date(date); d.setDate(d.getDate() + 1); onDateChange(d); }}
-                        className="p-2 hover:bg-slate-100 rounded-full text-slate-400 transition-colors"
+                        className="w-12 h-12 flex items-center justify-center bg-slate-50 hover:bg-white rounded-full text-slate-400 hover:text-teal-600 hover:shadow-md transition-all duration-300 border border-slate-100"
                     >
-                        <ArrowRight size={20} />
+                        <ArrowRight size={22} />
                     </button>
                 </div>
-                <div className="flex items-center gap-3">
-                    <div className="relative">
+                <div className="flex items-center gap-4">
+                    <div className="relative group/date">
                         <input 
                             type="date" 
-                            className="absolute inset-0 opacity-0 cursor-pointer"
+                            className="absolute inset-0 opacity-0 cursor-pointer z-10"
                             onChange={(e) => onDateChange(new Date(e.target.value))}
                         />
-                        <button className="flex items-center gap-2 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-100">
-                            <Calendar size={14} /> 跳轉日期
+                        <button className="flex items-center gap-2 px-5 py-2.5 bg-slate-900 text-white rounded-2xl text-sm font-black hover:bg-slate-800 transition-all shadow-lg shadow-slate-200 group-hover/date:scale-105">
+                            <Calendar size={16} /> 跳轉日期
                         </button>
                     </div>
                     <button 
                         onClick={() => onDateChange(new Date())}
-                        className="px-3 py-1.5 bg-teal-50 text-teal-700 border border-teal-100 rounded-lg text-xs font-bold hover:bg-teal-100"
+                        className="w-11 h-11 flex items-center justify-center bg-teal-50 text-teal-600 rounded-2xl border border-teal-100 hover:bg-teal-600 hover:text-white transition-all shadow-sm hover:shadow-teal-100"
+                        title="回到今天"
                     >
-                        回到今天
+                        <Zap size={18} fill="currentColor" />
                     </button>
                 </div>
             </div>
 
-            <div className="flex-1 overflow-auto pr-2 pb-8">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="flex-1 overflow-auto pr-2 pb-8 scrolling-touch">
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                     {groups.map(group => {
                         const members = getGroupAssignments(group);
                         if (members.length === 0 && location !== '大直') return null;
 
+                        const colorClasses: Record<string, string> = {
+                            indigo: 'border-indigo-600 text-indigo-700 bg-indigo-50',
+                            emerald: 'border-emerald-600 text-emerald-700 bg-emerald-50',
+                            rose: 'border-rose-600 text-rose-700 bg-rose-50',
+                            amber: 'border-amber-600 text-amber-700 bg-amber-50',
+                            sky: 'border-sky-600 text-sky-700 bg-sky-50',
+                            violet: 'border-violet-600 text-violet-700 bg-violet-50',
+                            teal: 'border-teal-600 text-teal-700 bg-teal-50'
+                        };
+
+                        const accentColor = colorClasses[group.color || 'teal'].split(' ')[0].replace('border-', 'bg-');
+
                         return (
-                            <div key={group.id} className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden flex flex-col group hover:shadow-md transition-shadow">
-                                <div className="px-4 py-3 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
-                                    <h4 className="font-black text-slate-700 flex items-center gap-2">
-                                        <Users size={16} className="text-teal-600" />
-                                        {group.label}
-                                    </h4>
-                                    <span className="text-[10px] font-bold bg-white px-2 py-0.5 rounded-full border border-slate-200 text-slate-400">
-                                        {members.length} 人
+                            <div key={group.id} className="bg-white rounded-[2rem] shadow-sm border border-slate-100 overflow-hidden flex flex-col group hover:shadow-xl hover:shadow-slate-200/50 transition-all duration-300 hover:-translate-y-1 relative">
+                                <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${accentColor}`}></div>
+                                <div className="px-6 py-4 bg-white border-b border-slate-50 flex items-center justify-between">
+                                    <div className="flex items-center gap-3">
+                                        <div className={`p-2 rounded-xl ${colorClasses[group.color || 'teal'].split(' ')[2]} ${colorClasses[group.color || 'teal'].split(' ')[1]}`}>
+                                            {group.icon}
+                                        </div>
+                                        <h4 className="font-black text-slate-800 text-lg uppercase tracking-tight">
+                                            {group.label}
+                                        </h4>
+                                    </div>
+                                    <span className="text-[11px] font-black bg-slate-100 px-2.5 py-1 rounded-full text-slate-500 border border-slate-200/50">
+                                        {members.length}
                                     </span>
                                 </div>
-                                <div className="p-3 space-y-2">
+                                <div className="p-4 space-y-3">
                                     {members.length > 0 ? (
                                         members.map((m, idx) => (
-                                            <div key={idx} className="flex items-center justify-between p-3 bg-slate-50/50 rounded-xl border border-slate-100 hover:bg-white hover:border-teal-100 hover:shadow-sm transition-all">
-                                                <div className="flex flex-col">
-                                                    <span className="text-sm font-black text-slate-800">{m.name}</span>
-                                                    {m.task && (
-                                                        <span className="text-[10px] font-bold text-teal-600 bg-teal-50 px-1.5 py-0.5 rounded mt-1 w-fit">
-                                                            {m.task}
-                                                        </span>
-                                                    )}
+                                            <div key={idx} className="flex items-center justify-between p-3.5 bg-slate-50/30 rounded-2xl border border-slate-100/50 hover:bg-white hover:border-teal-100 hover:shadow-md transition-all duration-300 group/item">
+                                                <div className="flex items-center gap-3">
+                                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center text-xs font-black text-white shadow-sm transition-transform group-hover/item:scale-110 ${accentColor}`}>
+                                                        {m.name.slice(-2)}
+                                                    </div>
+                                                    <div className="flex flex-col">
+                                                        <span className="text-base font-black text-slate-800 tracking-tight">{m.name}</span>
+                                                        {m.task && (
+                                                            <div className="flex items-center gap-1.5 mt-1">
+                                                                <span className={`text-[10px] font-black px-2 py-0.5 rounded-lg border shadow-sm ${colorClasses[group.color || 'teal']}`}>
+                                                                    {m.task}
+                                                                </span>
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 </div>
                                                 {m.time && (
-                                                    <div className="text-[11px] font-bold text-slate-400 bg-white px-2 py-1 rounded-lg border border-slate-100">
-                                                        {m.time}
+                                                    <div className="flex flex-col items-end gap-1">
+                                                        <div className="flex items-center gap-1 text-[11px] font-black text-slate-400 bg-white px-2.5 py-1 rounded-xl border border-slate-100 shadow-sm">
+                                                            <Clock size={10} className="opacity-50" />
+                                                            {m.time}
+                                                        </div>
                                                     </div>
                                                 )}
                                             </div>
                                         ))
                                     ) : (
-                                        <div className="py-8 text-center text-slate-300 text-xs italic">
-                                            尚未排班
+                                        <div className="py-12 flex flex-col items-center justify-center text-slate-300 gap-3">
+                                            <div className="w-12 h-12 rounded-full border-2 border-dashed border-slate-200 flex items-center justify-center">
+                                                <Users size={20} className="opacity-20" />
+                                            </div>
+                                            <span className="text-xs font-bold italic tracking-wider">尚未排班</span>
                                         </div>
                                     )}
                                 </div>
