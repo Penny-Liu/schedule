@@ -252,6 +252,7 @@ export interface DailyManpowerStats {
   beitou_clients: number;
   beitou_cta: number;
   dazhi_clients: number;
+  dazhi_metabolism_clients?: number; // New: Metabolism clients count for Dazhi
   beitou_gi?: number; // New: Manual GI cases count
   beitou_mr?: number; // New: Manual MR cases count
   dazhi_gi?: number;  // New: Manual GI cases count for Dazhi

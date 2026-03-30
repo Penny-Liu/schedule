@@ -1142,7 +1142,7 @@ BMD :{{bmd}}
 {{remote_doctors_detail}}
 遠：{{remote_radiographers}}
 
-大直：{{dazhi_count}} （客戶 {{dazhi_clients}} ）
+大直：{{dazhi_count}} （健檢 {{dazhi_clients}} 代謝 {{dazhi_metabolism_clients}} ）
 {{dazhi_radiographers}}
 
 三線支援：{{third_line_support}}`;
@@ -1169,7 +1169,7 @@ BMD :{{bmd}}
                                                     '{{floor_control}}', '{{mr}}', '{{us}}', '{{ct}}', '{{bmd}}',
                                                     '{{support}}', '{{support_section}}', '{{learning_section}}',
                                                     '{{remote_group_header}}', '{{remote_doctors_detail}}', '{{remote_radiographers}}',
-                                                    '{{dazhi_count}}', '{{dazhi_clients}}', '{{dazhi_radiographers}}',
+                                                    '{{dazhi_count}}', '{{dazhi_clients}}', '{{dazhi_metabolism_clients}}', '{{dazhi_radiographers}}',
                                                     '{{third_line_support}}'
                                                 ].map(v => (
                                                     <button

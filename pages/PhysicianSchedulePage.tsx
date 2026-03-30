@@ -146,7 +146,7 @@ GI：${stats?.beitou_gi || 0} 台`;
         return `${date.getMonth() + 1}/${date.getDate()} （${dayNames[date.getDay()]}）
 健檢客戶： ${stats?.dazhi_clients || 0} 位
 (腸胃：${stats?.dazhi_gi || 0} / 心超： )
-代謝客戶：   位
+代謝客戶： ${stats?.dazhi_metabolism_clients || 0} 位
 
 影像 : ${imgDocs.join('、') || '-'}
 解說 : ${expDocs.join('、') || '-'} 醫師
@@ -311,6 +311,19 @@ POR：
 
     const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
     const [doctorSearchQuery, setDoctorSearchQuery] = useState('');
+    
+    // Auto-collapse logic for Dazhi HM staff
+    const isDazhiHM = currentUser?.isHealthMgmt && currentUser?.healthMgmtLocation === '大直';
+    const [collapsedLocations, setCollapsedLocations] = useState<string[]>(() => {
+        if (isDazhiHM) return ['北投', '台中'];
+        return [];
+    });
+
+    const toggleLocationCollapse = (loc: string) => {
+        setCollapsedLocations(prev => 
+            prev.includes(loc) ? prev.filter(l => l !== loc) : [...prev, loc]
+        );
+    };
 
     const [requirements, setRequirements] = useState(db.getStationRequirements());
 
@@ -2744,7 +2757,7 @@ POR：
                                 </tr>
                                 <tr className="bg-slate-50">
                                     <td className={`sticky left-0 z-10 bg-slate-50/95 backdrop-blur border-r border-slate-200 shadow-[4px_0_8px_rgba(0,0,0,0.02)] ${isMobile ? 'p-1 w-[85px] min-w-[85px]' : 'p-2'}`}>
-                                        <div className="text-[10px] font-bold text-slate-600 flex items-center justify-end pr-2">大直客戶數</div>
+                                        <div className="text-[10px] font-bold text-slate-600 flex items-center justify-end pr-2 text-right">大直健檢<br />客戶數</div>
                                     </td>
                                     {dateRange.map(date => {
                                         const stats = db.getDailyStats(date);
@@ -2760,6 +2773,29 @@ POR：
                                                     />
                                                 ) : (
                                                     <span className="text-xs font-bold text-slate-700">{stats?.dazhi_clients || 0}</span>
+                                                )}
+                                            </td>
+                                        );
+                                    })}
+                                </tr>
+                                <tr className="bg-slate-50">
+                                    <td className={`sticky left-0 z-10 bg-slate-50/95 backdrop-blur border-r border-slate-200 shadow-[4px_0_8px_rgba(0,0,0,0.02)] ${isMobile ? 'p-1 w-[85px] min-w-[85px]' : 'p-2'}`}>
+                                        <div className="text-[10px] font-bold text-slate-600 flex items-center justify-end pr-2 text-right">大直代謝<br />客戶數</div>
+                                    </td>
+                                    {dateRange.map(date => {
+                                        const stats = db.getDailyStats(date);
+                                        return (
+                                            <td key={date} className="p-0.5 border-r border-slate-100 text-center align-middle">
+                                                {canEditStats ? (
+                                                    <input 
+                                                        type="number"
+                                                        value={stats?.dazhi_metabolism_clients || 0}
+                                                        onChange={(e) => db.updateDailyStats(date, { dazhi_metabolism_clients: Number(e.target.value) })}
+                                                        className="w-full text-center text-xs font-bold bg-transparent outline-none focus:bg-white focus:ring-1 focus:ring-teal-500 rounded-lg py-1 text-slate-700 hover:bg-white/50"
+                                                        placeholder="0"
+                                                    />
+                                                ) : (
+                                                    <span className="text-xs font-bold text-slate-700">{stats?.dazhi_metabolism_clients || 0}</span>
                                                 )}
                                             </td>
                                         );
@@ -2802,14 +2838,26 @@ POR：
                                     return (
                                         <React.Fragment key={location}>
                                             {/* Location Header */}
-                                            <tr className="bg-slate-100 border-b-2 border-slate-300">
+                                            <tr 
+                                                className="bg-slate-100 border-b-2 border-slate-300 cursor-pointer hover:bg-slate-200 transition-colors select-none"
+                                                onClick={() => toggleLocationCollapse(location)}
+                                            >
                                                 <td colSpan={dateRange.length + 1} className="px-3 py-2 font-bold text-slate-800 bg-slate-200 sticky left-0 z-10 text-left border-y-2 border-slate-400 shadow-[inset_0_2px_4px_rgba(0,0,0,0.1)]">
-                                                    <div className="flex items-center gap-2">
-                                                        <span className={`w-2 h-2 rounded-full ${LOCATION_COLORS[location]?.split(' ')[0]}`}></span>
-                                                        {location}區
+                                                    <div className="flex items-center justify-between w-full">
+                                                        <div className="flex items-center gap-2">
+                                                            <span className={`w-2.5 h-2.5 rounded-full ${LOCATION_COLORS[location]?.split(' ')[0]}`}></span>
+                                                            <span className="text-sm tracking-wide">{location}區</span>
+                                                            <span className="text-[10px] font-medium text-slate-400 ml-1">
+                                                                ({locationStations.length} 個崗位)
+                                                            </span>
+                                                        </div>
+                                                        {collapsedLocations.includes(location) ? <ChevronRight size={16} className="text-slate-400" /> : <ChevronDown size={16} className="text-slate-400" />}
                                                     </div>
                                                 </td>
                                             </tr>
+
+                                            {!collapsedLocations.includes(location) && (
+                                                <>
 
 
                                             {/* Main/Assistant Shift Rows (only for Beitou) */}
@@ -3093,7 +3141,7 @@ POR：
                                                                         if (isExp) {
                                                                             return (
                                                                                 <div className="absolute top-0 right-0 z-10 bg-blue-700 text-white px-1.5 py-0.5 text-[10px] font-black rounded-bl shadow-md pointer-events-none">
-                                                                                    {location === '北投' ? stats?.beitou_clients : (location === '大直' ? stats?.dazhi_clients : '')}
+                                                                                    {location === '北投' ? stats?.beitou_clients : (location === '大直' ? `${stats?.dazhi_clients || 0}/${stats?.dazhi_metabolism_clients || 0}` : '')}
                                                                                 </div>
                                                                             );
                                                                         }
@@ -3140,12 +3188,14 @@ POR：
                                                             );
                                                         })}
                                                     </tr>
-                                                );
-                                            });
-                                        })()}
-                                        </React.Fragment>
-                                    );
-                                })}
+                                            );
+                                        });
+                                    })()}
+                                </>
+                            )}
+                        </React.Fragment>
+                    );
+                })}
 
 
                             </tbody>
@@ -3177,10 +3227,28 @@ POR：
 
                                 return (
                                     <div key={loc} className="space-y-4">
-                                        <div className="flex items-center gap-4 border-b border-gray-200 pb-2">
-                                            <h2 className={`font-bold text-base px-4 py-1 rounded-full text-white shadow-md ${LOCATION_COLORS[loc]?.split(' ')[0] || 'bg-gray-500'}`}>
-                                                {loc}區
-                                            </h2>
+                                        <div 
+                                            className="flex items-center justify-between border-b border-gray-200 pb-2 cursor-pointer hover:bg-slate-50 transition-colors rounded-lg group"
+                                            onClick={() => toggleLocationCollapse(loc)}
+                                        >
+                                            <div className="flex items-center gap-4">
+                                                <h2 className={`font-bold text-base px-4 py-1 rounded-full text-white shadow-md ${LOCATION_COLORS[loc]?.split(' ')[0] || 'bg-gray-500'}`}>
+                                                    {loc}區
+                                                </h2>
+                                                {collapsedLocations.includes(loc) && (
+                                                    <span className="text-xs text-slate-400 font-medium group-hover:text-slate-600 transition-colors">
+                                                        點擊展開內容...
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <div className="pr-2">
+                                                {collapsedLocations.includes(loc) ? <ChevronRight size={20} className="text-slate-300" /> : <ChevronDown size={20} className="text-slate-300" />}
+                                            </div>
+                                        </div>
+
+                                        {!collapsedLocations.includes(loc) && (
+                                            <>
+                                            <div className="space-y-4 animate-in fade-in slide-in-from-top-1 duration-200">
                                             {(() => {
                                                 const stats = db.getDailyStats(toLocalISOString(currentDate));
                                                 if (loc === '北投') {
@@ -3210,7 +3278,16 @@ POR：
                                                         <div className="flex flex-wrap items-center gap-3">
                                                             <div className="flex items-center gap-1.5 bg-slate-100 px-3 py-1.5 rounded-full border border-slate-200 shadow-sm">
                                                                 <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">大直客戶數</span>
-                                                                <span className="text-base font-black text-slate-800">{stats?.dazhi_clients || 0}</span>
+                                                                <div className="flex flex-col items-center">
+                                                                    <div className="flex items-center gap-1.5">
+                                                                        <span className="text-[10px] text-slate-400">健：</span>
+                                                                        <span className="text-base font-black text-slate-800">{stats?.dazhi_clients || 0}</span>
+                                                                    </div>
+                                                                    <div className="flex items-center gap-1.5 mt-1 border-t border-slate-100 pt-1">
+                                                                        <span className="text-[10px] text-slate-400">代：</span>
+                                                                        <span className="text-sm font-bold text-slate-600">{stats?.dazhi_metabolism_clients || 0}</span>
+                                                                    </div>
+                                                                </div>
                                                             </div>
                                                             <div className="flex items-center gap-1.5 bg-emerald-50 px-3 py-1.5 rounded-full border border-emerald-100 shadow-sm">
                                                                 <span className="text-[11px] font-bold text-emerald-500 uppercase tracking-wider">GI(大直)</span>
@@ -3223,6 +3300,7 @@ POR：
                                             })()}
                                             <div className="flex-1 h-px bg-gray-100"></div>
                                         </div>
+
 
                                         {/* Main/Assistant (Rad + HM Staff) Row for this Location - Skip for Taichung */}
                                         {loc !== '台中' && (
@@ -3504,10 +3582,12 @@ POR：
                                             );
                                         })}
                                         </div>
-                                    </div>
-                                );
-                            });
-                        })()}
+                                    </>
+                                )}
+                            </div>
+                        );
+                    });
+                })()}
                     </div>
                 )}
 

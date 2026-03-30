@@ -2194,6 +2194,7 @@ BMD :{{bmd}}
             beitou_clients: 0,
             beitou_cta: 0,
             dazhi_clients: 0,
+            dazhi_metabolism_clients: 0,
             beitou_gi: 0,
             beitou_mr: 0,
             dazhi_gi: 0,
