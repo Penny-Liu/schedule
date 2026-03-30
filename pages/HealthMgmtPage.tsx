@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { User, Shift, HealthMgmtShift, UserRole, PERMISSIONS, StaffGroup, HealthMgmtStaff, RosterCycle, AnesthesiaStaff, AnesthesiaShift } from '../types';
+import { User, Shift, HealthMgmtShift, UserRole, PERMISSIONS, StaffGroup, HealthMgmtStaff, RosterCycle, AnesthesiaStaff, AnesthesiaShift, HMDesignation } from '../types';
 import { db } from '../services/store';
 import { Users, LayoutDashboard, Calendar, ArrowLeft, ArrowRight, X, Lock, Unlock, UserPlus, Save, Trash2, FileSpreadsheet, BarChart3, Download, Search, ChevronLeft, ChevronRight, Zap, ChevronDown, ChevronUp, UserSearch, Stethoscope, Syringe, ConciergeBell, Apple, Microscope, Pill, Clock } from 'lucide-react';
 import { toLocalISOString, generateUUID } from '../services/utils';
@@ -50,6 +50,8 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
   const [editingStaffRole, setEditingStaffRole] = useState<'ADMIN' | 'VIEWER'>('VIEWER');
   const [newStaffLocation, setNewStaffLocation] = useState<'北投' | '大直'>('北投');
   const [editingStaffLocation, setEditingStaffLocation] = useState<'北投' | '大直'>('北投');
+  const [newStaffDesignation, setNewStaffDesignation] = useState<HMDesignation>('健管師');
+  const [editingStaffDesignation, setEditingStaffDesignation] = useState<HMDesignation>('健管師');
   const [adminLocationView, setAdminLocationView] = useState<'全部' | '北投' | '大直'>('全部');
   const [newAnesStaffRole, setNewAnesStaffRole] = useState<'ADMIN' | 'VIEWER'>('VIEWER');
   const [editingAnesStaffRole, setEditingAnesStaffRole] = useState<'ADMIN' | 'VIEWER'>('VIEWER');
@@ -125,6 +127,14 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
     return filteredHmCycles.find(c => c.id === selectedCycleId);
   }, [selectedCycleId, filteredHmCycles]);
 
+  const DESIGNATION_ORDER: Record<string, number> = {
+      '健管師': 1,
+      '行政人員': 2,
+      '營養師': 3,
+      '醫檢師': 4,
+      '藥師': 5
+  };
+
   // Filtered staff list based on reactive state and location
   const activeHealthMgmtStaff = useMemo(() => {
       let staff = healthMgmtStaff.filter(s => s.isActive !== false);
@@ -134,18 +144,25 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
       
       // Per-cycle sorting priority
       const staffOrder = currentCycle?.staffOrder || [];
-      if (selectedCycleId !== 'month' && staffOrder.length > 0) {
-          return [...staff].sort((a, b) => {
+      
+      return [...staff].sort((a, b) => {
+          // 1. Designation Order
+          const orderA = a.designation ? DESIGNATION_ORDER[a.designation] : 999;
+          const orderB = b.designation ? DESIGNATION_ORDER[b.designation] : 999;
+          if (orderA !== orderB) return orderA - orderB;
+
+          // 2. Cycle-specific or displayOrder
+          if (selectedCycleId !== 'month' && staffOrder.length > 0) {
               const idxA = staffOrder.indexOf(a.id);
               const idxB = staffOrder.indexOf(b.id);
-              if (idxA === -1 && idxB === -1) return (a.displayOrder ?? 999) - (b.displayOrder ?? 999);
-              if (idxA === -1) return 1;
-              if (idxB === -1) return -1;
-              return idxA - idxB;
-          });
-      }
-      
-      return [...staff].sort((a, b) => (a.displayOrder ?? 999) - (b.displayOrder ?? 999));
+              if (idxA !== -1 || idxB !== -1) {
+                  if (idxA === -1) return 1;
+                  if (idxB === -1) return -1;
+                  return idxA - idxB;
+              }
+          }
+          return (a.displayOrder ?? 999) - (b.displayOrder ?? 999);
+      });
   }, [healthMgmtStaff, currentUserLocation, currentCycle, selectedCycleId]);
 
   const activeAnesthesiaStaff = useMemo(() => {
@@ -223,6 +240,14 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
 
   const handleUpdateShift = async (userId: string, date: string, station: string, task?: string, location?: string) => {
     if (isHmReadOnly) return;
+    
+    // Enforcement: Check if station is allowed for this staff's designation
+    const designation = getDesignationByStaffId(userId);
+    if (station && !isStationAllowedForDesignation(designation, station)) {
+        alert(`警告：該同仁身分為「${designation}」，不能安排此崗位 (${station})。`);
+        return;
+    }
+
     try {
         const existing = shifts.find(s => s.userId === userId && s.date === date);
         
@@ -593,6 +618,34 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
     });
   }, [activeHealthMgmtStaff, hmStations, shifts, dateRange, holidays]);
 
+  const getDesignationByStaffId = (staffId: string) => {
+    const staff = healthMgmtStaff.find(s => s.id === staffId);
+    return staff?.designation;
+  };
+
+  const isStationAllowedForDesignation = (designation: HMDesignation | undefined, station: string) => {
+    if (!designation) return true;
+    if (['休', 'V', 'E', '公出', '補', '病', '外', '特'].some(s => station.startsWith(s))) return true;
+    
+    // Normalize station to handle "07:30 H" format
+    const parts = station.split(' ');
+    const mainStation = parts.length > 1 && parts[0].includes(':') ? parts.slice(1).join(' ') : station;
+
+    switch (designation) {
+      case '健管師': 
+        return ['H', 'G', 'A'].some(s => mainStation.includes(s));
+      case '行政人員': 
+        return ['R', '櫃'].some(s => mainStation.includes(s));
+      case '營養師': 
+        return ['D', '營'].some(s => mainStation.includes(s));
+      case '醫檢師': 
+        return ['M', '醫檢'].some(s => mainStation.includes(s));
+      case '藥師': 
+        return ['P', '藥師'].some(s => mainStation.includes(s));
+      default: return true;
+    }
+  };
+
   // Function to add new HM staff
   const addStaff = async (e: React.FormEvent) => {
       e.preventDefault();
@@ -610,7 +663,8 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
               alias: newStaffAlias.trim() || undefined,
               isActive: true,
               role: newStaffRole,
-              location: currentUserLocation === '全部' ? newStaffLocation : (currentUserLocation === '北投' || currentUserLocation === '大直' ? currentUserLocation : newStaffLocation)
+              location: currentUserLocation === '全部' ? newStaffLocation : (currentUserLocation === '北投' || currentUserLocation === '大直' ? currentUserLocation : newStaffLocation),
+              designation: newStaffDesignation
           };
           await db.addHealthMgmtStaff(newStaff);
           setNewStaffName('');
@@ -640,7 +694,8 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
               alias: editingStaffAlias.trim() || undefined,
               isActive: editingStaffIsActive,
               role: editingStaffRole,
-              location: currentUserLocation === '全部' ? editingStaffLocation : (currentUserLocation === '北投' || currentUserLocation === '大直' ? currentUserLocation : editingStaffLocation)
+              location: currentUserLocation === '全部' ? editingStaffLocation : (currentUserLocation === '北投' || currentUserLocation === '大直' ? currentUserLocation : editingStaffLocation),
+              designation: editingStaffDesignation
           });
           setEditingId(null);
           setEditingStaffName('');
@@ -663,6 +718,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
     setEditingStaffIsActive(staff.isActive);
     setEditingStaffRole(staff.role || 'VIEWER');
     setEditingStaffLocation((staff.location as any) || '北投');
+    setEditingStaffDesignation(staff.designation || '健管師');
     setActiveTab('staff');
   };
 
@@ -1830,7 +1886,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
           
       {/* Inline Shift Edit Popup */}
       {selectedCell && (
-        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-[150] p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm border border-gray-100 animate-in zoom-in-95 duration-200 overflow-hidden">
             <div className="px-5 py-4 border-b border-gray-100 flex justify-between items-center bg-teal-50/50">
               <div>
@@ -1983,6 +2039,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                     <thead>
                         <tr className="bg-slate-50 text-slate-500 border-b border-slate-100">
                             <th className="p-4 text-left font-bold sticky left-0 bg-slate-50 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]">姓名</th>
+                            <th className="p-4 text-left font-bold text-slate-500">身份</th>
                             <th className="p-4 text-center font-bold text-teal-600">上班</th>
                             <th className="p-4 text-center font-bold text-blue-600">平日</th>
                             <th className="p-4 text-center font-bold text-red-600">假日</th>
@@ -1998,6 +2055,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                         {stats.map(({ staff, counts, total, weekday, holidayCount, roleCounts }) => (
                             <tr key={staff.id} className="hover:bg-slate-50/50 transition-colors">
                                 <td className="p-4 font-bold text-slate-700 sticky left-0 bg-white z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]">{staff.name}</td>
+                                <td className="p-4 text-slate-500 font-medium">{staff.designation || '-'}</td>
                                 <td className="p-4 text-center">
                                     <span className="font-extrabold text-teal-700 bg-teal-50 px-3 py-1.5 rounded-lg border border-teal-100">{total}</span>
                                 </td>
@@ -2056,6 +2114,18 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                           placeholder="簡稱 (例: 健1)"
                           className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-teal-500 outline-none"
                       />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                      <label className="text-[10px] font-bold text-teal-600 uppercase pl-1">身份 (崗位限制)</label>
+                      <select
+                          value={editingId ? editingStaffDesignation : newStaffDesignation}
+                          onChange={e => editingId ? setEditingStaffDesignation(e.target.value as any) : setNewStaffDesignation(e.target.value as any)}
+                          className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-teal-500 outline-none bg-white font-bold text-indigo-700"
+                      >
+                          {Object.keys(DESIGNATION_ORDER).map(d => (
+                              <option key={d} value={d}>{d}</option>
+                          ))}
+                      </select>
                   </div>
                   <div className="flex flex-col gap-1">
                       <label className="text-[10px] font-bold text-teal-600 uppercase pl-1">權限</label>
@@ -2166,6 +2236,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                                   <div className="flex items-center gap-2">
                                        <span className="font-bold text-slate-700">{staff.name}</span>
                                        {staff.alias && <span className="text-xs text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">({staff.alias})</span>}
+                                       {staff.designation && <span className="text-[10px] font-bold px-1.5 py-0.5 bg-rose-50 text-rose-600 rounded border border-rose-100">{staff.designation}</span>}
                                        {staff.role === 'ADMIN' && <span className="text-[10px] font-bold px-1.5 py-0.5 bg-indigo-50 text-indigo-600 rounded border border-indigo-100">管理</span>}
                                   </div>
                                   <div className="flex items-center gap-2">

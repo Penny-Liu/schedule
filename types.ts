@@ -55,6 +55,8 @@ export const PERMISSION_LABELS: Record<string, string> = {
   [PERMISSIONS.EDIT_ANESTHESIA]: '編輯麻護排班',
 };
 
+export type HMDesignation = '健管師' | '行政人員' | '營養師' | '醫檢師' | '藥師';
+
 export interface HealthMgmtStaff {
     id: string;
     name: string;
@@ -63,6 +65,7 @@ export interface HealthMgmtStaff {
     role?: 'ADMIN' | 'VIEWER';
     location?: string;
     displayOrder?: number;
+    designation?: HMDesignation;
 }
 
 export interface AnesthesiaStaff {

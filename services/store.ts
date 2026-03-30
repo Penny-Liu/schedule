@@ -1187,7 +1187,8 @@ BMD :{{bmd}}
             is_active: staff.isActive,
             role: staff.role || 'VIEWER',
             location: staff.location,
-            display_order: staff.displayOrder
+            display_order: staff.displayOrder,
+            designation: staff.designation
         });
         if (error) {
             console.error('Failed to add health mgmt staff to Supabase:', error);
@@ -1208,6 +1209,7 @@ BMD :{{bmd}}
         if (updates.role !== undefined) dbUpdates.role = updates.role;
         if (updates.location !== undefined) dbUpdates.location = updates.location;
         if (updates.displayOrder !== undefined) dbUpdates.display_order = updates.displayOrder;
+        if (updates.designation !== undefined) dbUpdates.designation = updates.designation;
 
         if (Object.keys(dbUpdates).length > 0) {
             const { error } = await supabase.from('health_mgmt_staff').update(dbUpdates).eq('id', id);
