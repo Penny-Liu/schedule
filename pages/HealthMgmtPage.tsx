@@ -16,6 +16,7 @@ interface HealthMgmtPageProps {
 
 
 const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
+  const isMobile = typeof window !== 'undefined' ? window.innerWidth < 1024 : false;
   const [activeTab, setActiveTab] = useState<'schedule' | 'today' | 'staff' | 'stats' | 'anesthesia'>('schedule');
   const [todayDate, setTodayDate] = useState(new Date());
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -2038,7 +2039,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
 
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm inline-block min-w-full">
             <table className="text-sm border-collapse w-auto">
-              <thead className={`sticky z-50 transition-all duration-300 ${isQuickScheduleMode ? 'top-[125px]' : 'top-[46px]'}`}>
+              <thead className={`sticky z-50 transition-all duration-300 ${isMobile ? 'top-0' : (isQuickScheduleMode ? 'top-[125px]' : 'top-[46px]')}`}>
                 <tr className="bg-slate-50 border-b border-slate-200">
                   <th className="p-3 text-left font-bold text-slate-600 w-32 sticky left-0 top-0 bg-slate-50 z-[60] border-r border-slate-200 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">人員 (天數)</th>
                   {dateRange.map(date => {
@@ -2728,13 +2729,19 @@ const HMTodayView: React.FC<{
                     >
                         <ArrowLeft size={22} />
                     </button>
-                    <div className="flex flex-col items-center">
-                        <div className="text-2xl font-black text-slate-800 tracking-tight">
-                            {date.toLocaleDateString('zh-TW', { month: 'long', day: 'numeric' })}
-                            <span className="ml-3 text-base font-black text-teal-500 bg-teal-50 px-3 py-1 rounded-full border border-teal-100/50">
+                    <div className="flex flex-col items-center mt-2">
+                        <button 
+                            onClick={() => dateInputRef.current?.showPicker ? dateInputRef.current.showPicker() : dateInputRef.current?.click()}
+                            className="group/date flex flex-col items-center hover:bg-slate-50 p-3 rounded-2xl transition-all active:scale-95"
+                        >
+                            <div className="text-2xl font-black text-slate-800 tracking-tight group-hover/date:text-teal-600 flex items-center gap-2">
+                                {date.toLocaleDateString('zh-TW', { month: 'long', day: 'numeric' })}
+                                <Calendar size={20} className="text-slate-300 group-hover/date:text-teal-400 transition-colors" />
+                            </div>
+                            <span className="mt-1 text-sm font-black text-teal-500 bg-teal-50 px-3 py-1 rounded-full border border-teal-100/50">
                                 {['週日', '週一', '週二', '週三', '週四', '週五', '週六'][date.getDay()]}
                             </span>
-                        </div>
+                        </button>
                     </div>
                     <button 
                         onClick={() => { const d = new Date(date); d.setDate(d.getDate() + 1); onDateChange(d); }}
@@ -2744,7 +2751,7 @@ const HMTodayView: React.FC<{
                     </button>
                 </div>
                 <div className="flex items-center gap-4">
-                    <div className="relative group/date">
+                    <div className="relative group/date hidden md:block">
                         <input 
                             ref={dateInputRef}
                             type="date" 

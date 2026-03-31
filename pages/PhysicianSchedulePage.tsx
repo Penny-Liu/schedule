@@ -13,6 +13,8 @@ interface PhysicianSchedulePageProps {
 }
 import { toLocalISOString, generateUUID } from '../services/utils';
 
+const isMobile = typeof window !== 'undefined' ? window.innerWidth < 1024 : false;
+
 
 // Alias for internal use if needed
 const propsToLocalISOString = toLocalISOString;
@@ -2586,9 +2588,9 @@ POR：
                 {viewMode === 'station' && (
                      <div className="bg-white rounded-xl border border-gray-200 shadow-sm inline-block min-w-full">
                         <table className="w-auto border-collapse bg-white">
-                            <thead className="sticky top-0 z-20 shadow-sm">
+                            <thead className="sticky top-0 z-50 shadow-sm">
                                 <tr>
-                                    <th className={`sticky left-0 z-30 bg-slate-50 border-b border-r border-slate-200 shadow-[4px_0_8px_rgba(0,0,0,0.02)] ${isMobile ? 'p-1 w-[70px] min-w-[70px]' : 'p-2 w-[120px] text-left'}`}>
+                                    <th className={`sticky left-0 z-[60] bg-slate-50 border-b border-r border-slate-200 shadow-[4px_0_8px_rgba(0,0,0,0.02)] ${isMobile ? 'p-1 w-[70px] min-w-[70px]' : 'p-2 w-[120px] text-left'}`}>
                                         <div className={`flex items-center font-bold text-xs text-slate-600 ${isMobile ? 'justify-center' : 'gap-2'}`}>
                                             <LayoutGrid size={14} className="text-teal-600" />
                                             {!isMobile && '工作崗位'}
@@ -2638,7 +2640,7 @@ POR：
                                 {isManpowerStatsExpanded && (
                                     <>
                                         <tr className="bg-slate-50">
-                                    <td className={`sticky left-0 z-10 bg-slate-50/95 backdrop-blur border-r border-slate-200 shadow-[4px_0_8px_rgba(0,0,0,0.02)] ${isMobile ? 'p-1 w-[85px] min-w-[85px]' : 'p-2'}`}>
+                                    <td className={`sticky left-0 z-10 bg-slate-50 border-r border-slate-200 shadow-[2px_0_4px_rgba(0,0,0,0.02)] ${isMobile ? 'p-1 w-[85px] min-w-[85px]' : 'p-2'}`}>
                                         <div className="text-[10px] font-bold text-slate-600 flex items-center justify-end pr-2">北投客戶數</div>
                                     </td>
                                     {dateRange.map(date => {
@@ -2661,7 +2663,7 @@ POR：
                                     })}
                                 </tr>
                                 <tr className="bg-slate-50">
-                                    <td className={`sticky left-0 z-10 bg-slate-50/95 backdrop-blur border-r border-slate-200 shadow-[4px_0_8px_rgba(0,0,0,0.02)] ${isMobile ? 'p-1 w-[85px] min-w-[85px]' : 'p-2'}`}>
+                                    <td className={`sticky left-0 z-10 bg-slate-50 border-r border-slate-200 shadow-[2px_0_4px_rgba(0,0,0,0.02)] ${isMobile ? 'p-1 w-[85px] min-w-[85px]' : 'p-2'}`}>
                                         <div className="text-[10px] font-bold text-slate-600 flex items-center justify-end pr-2">MR 數</div>
                                     </td>
                                     {dateRange.map(date => {
@@ -2684,7 +2686,7 @@ POR：
                                     })}
                                 </tr>
                                 <tr className="bg-slate-50">
-                                    <td className={`sticky left-0 z-10 bg-slate-50/95 backdrop-blur border-r border-slate-200 shadow-[4px_0_8px_rgba(0,0,0,0.02)] ${isMobile ? 'p-1 w-[85px] min-w-[85px]' : 'p-2'}`}>
+                                    <td className={`sticky left-0 z-10 bg-slate-50 border-r border-slate-200 shadow-[2px_0_4px_rgba(0,0,0,0.02)] ${isMobile ? 'p-1 w-[85px] min-w-[85px]' : 'p-2'}`}>
                                         <div className="text-[10px] font-bold text-slate-600 flex items-center justify-end pr-2">GI(北投)</div>
                                     </td>
                                     {dateRange.map(date => {
@@ -2707,7 +2709,7 @@ POR：
                                     })}
                                 </tr>
                                 <tr className="bg-slate-50">
-                                    <td className={`sticky left-0 z-10 bg-slate-50/95 backdrop-blur border-r border-slate-200 shadow-[4px_0_8px_rgba(0,0,0,0.02)] ${isMobile ? 'p-1 w-[85px] min-w-[85px]' : 'p-2'}`}>
+                                    <td className={`sticky left-0 z-10 bg-slate-50 border-r border-slate-200 shadow-[2px_0_4px_rgba(0,0,0,0.02)] ${isMobile ? 'p-1 w-[85px] min-w-[85px]' : 'p-2'}`}>
                                         <div className="text-[10px] font-bold text-slate-600 flex items-center justify-end pr-2">CTA 數</div>
                                     </td>
                                     {dateRange.map(date => {
@@ -2730,7 +2732,7 @@ POR：
                                     })}
                                 </tr>
                                 <tr className="bg-slate-50">
-                                    <td className={`sticky left-0 z-10 bg-slate-50/95 backdrop-blur border-r border-slate-200 shadow-[4px_0_8px_rgba(0,0,0,0.02)] ${isMobile ? 'p-1 w-[85px] min-w-[85px]' : 'p-2'}`}>
+                                    <td className={`sticky left-0 z-10 bg-slate-50 border-r border-slate-200 shadow-[2px_0_4px_rgba(0,0,0,0.02)] ${isMobile ? 'p-1 w-[85px] min-w-[85px]' : 'p-2'}`}>
                                         <div className="text-[10px] font-bold text-slate-600 flex items-center justify-end pr-2 text-right">大直健檢<br />客戶數</div>
                                     </td>
                                     {dateRange.map(date => {
@@ -2753,7 +2755,7 @@ POR：
                                     })}
                                 </tr>
                                 <tr className="bg-slate-50">
-                                    <td className={`sticky left-0 z-10 bg-slate-50/95 backdrop-blur border-r border-slate-200 shadow-[4px_0_8px_rgba(0,0,0,0.02)] ${isMobile ? 'p-1 w-[85px] min-w-[85px]' : 'p-2'}`}>
+                                    <td className={`sticky left-0 z-10 bg-slate-50 border-r border-slate-200 shadow-[2px_0_4px_rgba(0,0,0,0.02)] ${isMobile ? 'p-1 w-[85px] min-w-[85px]' : 'p-2'}`}>
                                         <div className="text-[10px] font-bold text-slate-600 flex items-center justify-end pr-2 text-right">大直代謝<br />客戶數</div>
                                     </td>
                                     {dateRange.map(date => {
@@ -2776,7 +2778,7 @@ POR：
                                     })}
                                 </tr>
                                 <tr className="bg-slate-50 border-b border-slate-200">
-                                    <td className={`sticky left-0 z-10 bg-slate-50/95 backdrop-blur border-r border-slate-200 shadow-[4px_0_8px_rgba(0,0,0,0.02)] ${isMobile ? 'p-1 w-[85px] min-w-[85px]' : 'p-2'}`}>
+                                    <td className={`sticky left-0 z-10 bg-slate-50 border-r border-slate-200 shadow-[2px_0_4px_rgba(0,0,0,0.02)] ${isMobile ? 'p-1 w-[85px] min-w-[85px]' : 'p-2'}`}>
                                         <div className="text-[10px] font-bold text-slate-600 flex items-center justify-end pr-2">GI(大直)</div>
                                     </td>
                                     {dateRange.map(date => {
