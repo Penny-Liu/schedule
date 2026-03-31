@@ -297,28 +297,7 @@ POR：
     const [doctorSearchQuery, setDoctorSearchQuery] = useState('');
 
     // Mobile swipe navigation for personnel/station views
-    const touchStartX = useRef<number | null>(null);
-    const touchStartY = useRef<number | null>(null);
-
-    const handleOverviewTouchStart = (e: React.TouchEvent) => {
-        touchStartX.current = e.touches[0].clientX;
-        touchStartY.current = e.touches[0].clientY;
-    };
-
-    const handleOverviewTouchEnd = (e: React.TouchEvent) => {
-        if (touchStartX.current === null || touchStartY.current === null) return;
-        const dx = touchStartX.current - e.changedTouches[0].clientX;
-        const dy = Math.abs(touchStartY.current - e.changedTouches[0].clientY);
-        // Only trigger if horizontal swipe dominates (not a scroll)
-        if (Math.abs(dx) > 50 && Math.abs(dx) > dy * 1.5) {
-            const newDate = new Date(currentDate);
-            newDate.setDate(newDate.getDate() + (dx > 0 ? 7 : -7));
-            setCurrentDate(newDate);
-        }
-        touchStartX.current = null;
-        touchStartY.current = null;
-    };
-    
+    // Auto-collapse logic for Dazhi HM staff
     // Auto-collapse logic for Dazhi HM staff
     const isDazhiHM = currentUser?.isHealthMgmt && currentUser?.healthMgmtLocation === '大直';
     const [collapsedLocations, setCollapsedLocations] = useState<string[]>(() => {
