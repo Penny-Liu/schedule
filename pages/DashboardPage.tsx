@@ -2336,6 +2336,9 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                     ];
 
                                     return categories.map(cat => {
+                                        // User Request: Radiographers should not see HM shifts in their "Today View" context
+                                        if (cat.title === '健管排班' && !currentUser.isHealthMgmt && currentUser.role !== UserRole.HM_SUPERVISOR && currentUser.role !== UserRole.SYSTEM_ADMIN) return null;
+
                                         const visibleStations = cat.stations.filter(st => getAllAssignments(st).length > 0);
                                         if (visibleStations.length === 0) return null;
 
@@ -2401,12 +2404,14 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                             {/* Off Staff Summary */}
                             <div className="px-6 py-3 bg-slate-50 border-t border-slate-200 text-xs text-slate-500 flex flex-wrap gap-2 items-center">
                                 <span className="font-bold">今日休假:</span>
-                                {[...displayUsers, ...healthMgmtStaff.filter(s => s.isActive !== false)].filter(u => {
+                                {[...(currentUser.isHealthMgmt || currentUser.role === UserRole.HM_SUPERVISOR ? [...displayUsers, ...healthMgmtStaff.filter(s => s.isActive !== false)] : displayUsers)].filter(u => {
                                     const dateStr = toLocalISOString(dailyDate);
                                     
                                     // Radio Shift Check
                                     const radioShift = shifts.find(s => s.userId === u.id && s.date === dateStr);
-                                    const isRadioOff = radioShift?.station === StationDefault.OFF || radioShift?.station === SYSTEM_OFF;
+                                    // User Request Fix: If no shift found for a full-timer, they are likely off (unless part-time which is already filtered out in displayUsers)
+                                    // Radiographer considered off if: no shift OR station is OFF/X/SYSTEM_OFF
+                                    const isRadioOff = !radioShift || radioShift.station === StationDefault.OFF || radioShift.station === SYSTEM_OFF || radioShift.station.includes('休');
                                     
                                     // HM Shift Check
                                     const hmShift = healthMgmtShifts.find(s => s.userId === u.id && s.date === dateStr);

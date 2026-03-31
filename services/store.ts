@@ -397,7 +397,9 @@ class Store {
                     alias: hm.alias,
                     isActive: hm.is_active,
                     role: hm.role || 'VIEWER',
-                    location: hm.location
+                    location: hm.location,
+                    designation: hm.designation,
+                    displayOrder: hm.display_order
                 }));
             }
 
@@ -1475,24 +1477,40 @@ BMD :{{bmd}}
     }
 
     async upsertHealthMgmtShift(shift: HealthMgmtShift) {
+        const isClearing = !shift.station || shift.station.trim() === '';
+
         // 1. Local state update: Optimistic update
-        const index = this.healthMgmtShifts.findIndex(s => s.userId === shift.userId && s.date === shift.date);
-        if (index >= 0) {
-            this.healthMgmtShifts[index] = { ...shift };
+        if (isClearing) {
+            this.healthMgmtShifts = this.healthMgmtShifts.filter(s => !(s.userId === shift.userId && s.date === shift.date));
         } else {
-            this.healthMgmtShifts.push({ ...shift });
+            const index = this.healthMgmtShifts.findIndex(s => s.userId === shift.userId && s.date === shift.date);
+            if (index >= 0) {
+                this.healthMgmtShifts[index] = { ...shift };
+            } else {
+                this.healthMgmtShifts.push({ ...shift });
+            }
         }
         this.notifyListeners();
 
         // 2. Remote sync
         try {
+            if (isClearing) {
+                const { error: deleteError } = await supabase
+                    .from('health_mgmt_shifts')
+                    .delete()
+                    .eq('userId', shift.userId)
+                    .eq('date', shift.date);
+                if (deleteError) throw deleteError;
+                return;
+            }
+
             // Prepare DB record with explicit mapping
             // Pack location into task
             const packedTask = shift.location ? `${shift.task || ''}@@${shift.location}` : (shift.task || null);
 
             const dbRecord: any = {
                 date: shift.date,
-                station: shift.station || '',
+                station: shift.station,
                 task: packedTask,
                 userId: shift.userId // Supabase table uses 'userId' (CamelCase) for this table specifically
             };
@@ -1534,8 +1552,6 @@ BMD :{{bmd}}
             const finalIndex = this.healthMgmtShifts.findIndex(s => s.userId === shift.userId && s.date === shift.date);
             if (finalIndex >= 0) {
                 this.healthMgmtShifts[finalIndex].id = targetId;
-            } else {
-                console.warn('[Store] HM shift not found in local memory after DB sync. Date:', shift.date, 'User:', shift.userId);
             }
 
         } catch (err) {

@@ -1056,45 +1056,61 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
         </div>
         
         <div className="flex bg-gray-100 p-1 rounded-xl w-fit">
+          {/* Desktop: text + icon; Mobile: icon + ultra-short label */}
           <button
             onClick={() => setActiveTab('schedule')}
-            className={"px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 " + (
+            className={"px-2 md:px-4 py-2 rounded-lg text-xs md:text-sm font-bold transition-all flex items-center gap-1 md:gap-2 " + (
               activeTab === 'schedule' ? 'bg-white text-teal-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'
             )}
+            title="健管排班總覽"
           >
-            <Calendar size={16} /> 健管排班總覽
+            <Calendar size={15} />
+            <span className="hidden md:inline">健管排班總覽</span>
+            <span className="md:hidden text-[10px]">總覽</span>
           </button>
           <button
             onClick={() => setActiveTab('today')}
-            className={"px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 " + (
+            className={"px-2 md:px-4 py-2 rounded-lg text-xs md:text-sm font-bold transition-all flex items-center gap-1 md:gap-2 " + (
               activeTab === 'today' ? 'bg-white text-teal-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'
             )}
+            title="今日崗位"
           >
-            <LayoutDashboard size={16} /> 今日崗位
+            <LayoutDashboard size={15} />
+            <span className="hidden md:inline">今日崗位</span>
+            <span className="md:hidden text-[10px]">今日</span>
           </button>
           <button
             onClick={() => setActiveTab('stats')}
-            className={"px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 " + (
+            className={"px-2 md:px-4 py-2 rounded-lg text-xs md:text-sm font-bold transition-all flex items-center gap-1 md:gap-2 " + (
               activeTab === 'stats' ? 'bg-white text-teal-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'
             )}
+            title="健管統計數據"
           >
-            <BarChart3 size={16} /> 健管統計數據
+            <BarChart3 size={15} />
+            <span className="hidden md:inline">健管統計數據</span>
+            <span className="md:hidden text-[10px]">統計</span>
           </button>
           <button
             onClick={() => setActiveTab('staff')}
-            className={"px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 " + (
+            className={"px-2 md:px-4 py-2 rounded-lg text-xs md:text-sm font-bold transition-all flex items-center gap-1 md:gap-2 " + (
               activeTab === 'staff' ? 'bg-white text-teal-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'
             )}
+            title="健管人員管理"
           >
-            <Users size={16} /> 健管人員管理
+            <Users size={15} />
+            <span className="hidden md:inline">健管人員管理</span>
+            <span className="md:hidden text-[10px]">人員</span>
           </button>
           <button
             onClick={() => setActiveTab('anesthesia')}
-            className={"px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 " + (
+            className={"px-2 md:px-4 py-2 rounded-lg text-xs md:text-sm font-bold transition-all flex items-center gap-1 md:gap-2 " + (
               activeTab === 'anesthesia' ? 'bg-white text-teal-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'
             )}
+            title="麻護排班"
           >
-            <Calendar size={16} /> 麻護排班
+            <Calendar size={15} />
+            <span className="hidden md:inline">麻護排班</span>
+            <span className="md:hidden text-[10px]">麻護</span>
           </button>
         </div>
       </div>
@@ -1618,175 +1634,192 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                 anesthesiaShifts={anesthesiaShifts}
                 staff={healthMgmtStaff}
                 anesStaff={anesthesiaStaff}
+                canEdit={!isHmReadOnly}
+                onSaveShift={async (userId, date, time) => {
+                    const existing = shifts.find(s => s.userId === userId && s.date === date);
+                    if (existing) {
+                        await db.upsertHealthMgmtShift({ ...existing, time });
+                    }
+                }}
+                onSaveAnesShift={async (userId, date, workTime) => {
+                    const existing = anesthesiaShifts.find(s => s.userId === userId && s.date === date);
+                    if (existing) {
+                        await db.assignAnesthesiaShift(
+                            existing.userId, existing.date, existing.station || '',
+                            existing.location, existing.task, workTime, existing.note
+                        );
+                    } else {
+                        // Handle case where we click a name but no record was pre-fetched
+                        await db.assignAnesthesiaShift(userId, date, '', '大直', '', workTime, '');
+                    }
+                }}
             />
         </div>
       ) : activeTab === 'schedule' ? (
         <div className="flex flex-col relative w-full">
-          {/* Sticky Controls Container */}
-          <div className="sticky top-0 z-[100] bg-slate-50 pb-4 pt-2 shadow-sm border-b border-slate-200">
-            <div className="mb-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div className="flex items-center gap-2">
-                <div className="flex items-center gap-1 bg-white p-1 rounded border shadow-sm scale-90 origin-left">
-                  <button onClick={() => {
+          {/* ── Unified Sticky Header ── */}
+          <div className="sticky top-0 z-[100] bg-white border-b border-slate-200 shadow-sm">
+
+            {/* Row 1: All controls in one compact line */}
+            <div className="flex items-center gap-2 px-3 py-2 flex-wrap">
+
+              {/* Calendar nav (prev / label / next) */}
+              <div className="flex items-center bg-slate-100 rounded-lg overflow-hidden border border-slate-200">
+                <button
+                  onClick={() => {
                     if (selectedCycleId === 'month') {
-                      const prev = new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1);
-                      setCurrentDate(prev);
+                      setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
                     } else {
                       const idx = filteredHmCycles.findIndex(c => c.id === selectedCycleId);
-                      if (idx < filteredHmCycles.length - 1 && idx !== -1) setSelectedCycleId(filteredHmCycles[idx+1].id);
+                      if (idx < filteredHmCycles.length - 1 && idx !== -1) setSelectedCycleId(filteredHmCycles[idx + 1].id);
                     }
-                  }} className="p-1.5 hover:bg-gray-50 rounded text-gray-500 transition-colors border-r">
-                     <ChevronLeft size={18} />
-                  </button>
-                  <div className="px-4 py-1 text-sm font-bold text-gray-700 min-w-[150px] text-center">
-                    {selectedCycleId === 'month' 
-                      ? `${currentDate.getFullYear()} 年 ${currentDate.getMonth() + 1} 月`
-                      : currentCycle?.name || '週期檢視'
-                    }
-                  </div>
-                  <button onClick={() => {
+                  }}
+                  className="px-2 py-1.5 hover:bg-slate-200 text-slate-500 transition-colors"
+                >
+                  <ChevronLeft size={16} />
+                </button>
+                <span className="px-2 text-xs font-black text-slate-700 whitespace-nowrap min-w-[110px] text-center">
+                  {selectedCycleId === 'month'
+                    ? `${currentDate.getFullYear()} 年 ${currentDate.getMonth() + 1} 月`
+                    : currentCycle?.name || '週期'}
+                </span>
+                <button
+                  onClick={() => {
                     if (selectedCycleId === 'month') {
-                      const next = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1);
-                      setCurrentDate(next);
+                      setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
                     } else {
                       const idx = filteredHmCycles.findIndex(c => c.id === selectedCycleId);
-                      if (idx > 0) setSelectedCycleId(filteredHmCycles[idx-1].id);
+                      if (idx > 0) setSelectedCycleId(filteredHmCycles[idx - 1].id);
                     }
-                  }} className="p-1.5 hover:bg-gray-50 rounded text-gray-500 transition-colors border-l">
-                    <ChevronRight size={18} />
-                  </button>
-                </div>
-
-                <div className="flex flex-col md:flex-row md:items-center gap-2">
-                  <div className="flex items-center gap-2 bg-white p-1 rounded border shadow-sm px-3 h-[36px] scale-90 origin-left">
-                    <Calendar size={16} className="text-teal-600" />
-                    <select 
-                      className="text-sm font-bold text-gray-700 bg-transparent border-none outline-none focus:ring-0 cursor-pointer"
-                      onChange={(e) => setSelectedCycleId(e.target.value)}
-                      value={selectedCycleId}
-                    >
-                      <option value="month">按月份檢視</option>
-                      <optgroup label="自定義週期">
-                        {filteredHmCycles.map(c => (
-                          <option key={c.id} value={c.id}>{c.name}</option>
-                        ))}
-                      </optgroup>
-                    </select>
-                  </div>
-
-                  {/* Cycle Meta Info */}
-                  <div className="flex items-center gap-2 px-4 py-2 bg-emerald-50 border border-emerald-100 rounded h-[36px] scale-90 origin-left">
-                    <Search size={14} className="text-emerald-500" />
-                    <span className="text-xs font-medium text-emerald-800 whitespace-nowrap">
-                      {dateRange[0]} ~ {dateRange[dateRange.length - 1]} 
-                      <span className="mx-2 text-emerald-300">|</span>
-                      共 {dateRange.length} 天
-                    </span>
-                  </div>
-                </div>
-                
-                <div className="flex items-center gap-2 ml-2">
-                  {!isHmReadOnly && (
-                    <button 
-                      onClick={() => setIsReorderMode(!isReorderMode)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border flex items-center gap-1.5 ${
-                        isReorderMode ? 'bg-amber-500 text-white border-amber-600 shadow-md' : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
-                      }`}
-                      title="調整人員顯示順序"
-                    >
-                      {isReorderMode ? <Save size={14}/> : <Users size={14}/>}
-                      {isReorderMode ? '完成排序' : '調整順序'}
-                    </button>
-                  )}
-                </div>
+                  }}
+                  className="px-2 py-1.5 hover:bg-slate-200 text-slate-500 transition-colors"
+                >
+                  <ChevronRight size={16} />
+                </button>
               </div>
 
-              <div className="flex bg-teal-50 rounded-lg p-0.5 border border-teal-100 items-center h-[34px]">
-                <button 
-                    onClick={handleExportSchedulePDF}
-                    className="px-3 py-1 hover:bg-white rounded-md text-xs font-bold text-teal-700 flex items-center gap-1 transition-all"
+              {/* Cycle selector dropdown */}
+              <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-lg px-2 h-[30px]">
+                <Calendar size={13} className="text-teal-500 shrink-0" />
+                <select
+                  className="text-xs font-bold text-gray-700 bg-transparent border-none outline-none focus:ring-0 cursor-pointer"
+                  onChange={(e) => setSelectedCycleId(e.target.value)}
+                  value={selectedCycleId}
                 >
-                    <Download size={14} /> PDF
+                  <option value="month">月份</option>
+                  <optgroup label="週期">
+                    {filteredHmCycles.map(c => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </optgroup>
+                </select>
+              </div>
+
+              {/* Date range info */}
+              <span className="text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-100 px-2 py-1 rounded-lg font-medium whitespace-nowrap hidden sm:inline">
+                {dateRange[0]} ~ {dateRange[dateRange.length - 1]}
+                <span className="mx-1 text-emerald-300">|</span>
+                {dateRange.length} 天
+              </span>
+
+              {/* Spacer */}
+              <div className="flex-1" />
+
+              {/* Action buttons */}
+              {!isHmReadOnly && (
+                <>
+                  <button
+                    onClick={() => setIsReorderMode(!isReorderMode)}
+                    className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all border flex items-center gap-1 ${
+                      isReorderMode ? 'bg-amber-500 text-white border-amber-600 shadow-md' : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
+                    }`}
+                    title="調整人員顯示順序"
+                  >
+                    {isReorderMode ? <Save size={13}/> : <Users size={13}/>}
+                    <span className="hidden sm:inline">{isReorderMode ? '完成排序' : '排序'}</span>
+                  </button>
+
+                  <button
+                    onClick={() => { setIsQuickScheduleMode(!isQuickScheduleMode); }}
+                    className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all border flex items-center gap-1 ${
+                      isQuickScheduleMode ? 'bg-indigo-600 text-white border-indigo-700 shadow-md' : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
+                    }`}
+                    title="快速排班"
+                  >
+                    <Zap size={13} />
+                    <span className="hidden sm:inline">快速排班</span>
+                    {isQuickScheduleMode && <span className="text-[9px] bg-white/20 px-1 rounded">ON</span>}
+                  </button>
+                </>
+              )}
+
+              <div className="flex bg-teal-50 rounded-lg p-0.5 border border-teal-100 items-center h-[30px]">
+                <button onClick={handleExportSchedulePDF} className="px-2 py-0.5 hover:bg-white rounded-md text-xs font-bold text-teal-700 flex items-center gap-1 transition-all">
+                  <Download size={13} /> PDF
                 </button>
-                <div className="w-[1px] h-3 bg-teal-200 mx-1"></div>
-                <button 
-                    onClick={handleExportScheduleExcel}
-                    className="px-3 py-1 hover:bg-white rounded-md text-xs font-bold text-emerald-700 flex items-center gap-1 transition-all"
-                >
-                    <FileSpreadsheet size={14} /> Excel
+                <div className="w-[1px] h-3 bg-teal-200 mx-0.5" />
+                <button onClick={handleExportScheduleExcel} className="px-2 py-0.5 hover:bg-white rounded-md text-xs font-bold text-emerald-700 flex items-center gap-1 transition-all">
+                  <FileSpreadsheet size={13} /> Excel
                 </button>
               </div>
             </div>
 
-            {/* Quick Schedule Toolbar */}
-            {!isHmReadOnly && (
-                <div className="flex flex-wrap items-center gap-2 bg-white p-2 rounded-xl shadow-sm border border-gray-200">
+            {/* Row 2: Quick Schedule Toolbar (collapsible, only shows when ON) */}
+            {!isHmReadOnly && isQuickScheduleMode && (
+              <div className="border-t border-indigo-100 bg-indigo-50/60 px-3 py-2 flex flex-wrap items-center gap-x-4 gap-y-1.5">
+                <div className="flex items-center gap-1 flex-wrap">
+                  <span className="text-[10px] text-indigo-400 font-black mr-1 whitespace-nowrap">崗位：</span>
+                  {[...hmStations, '清除'].map(st => (
                     <button
-                        onClick={() => setIsQuickScheduleMode(!isQuickScheduleMode)}
-                        className={"px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 " + (isQuickScheduleMode ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50')}
-                        title="開啟後，點擊格子可快速填寫所選任務"
+                      key={st}
+                      onClick={() => {
+                        if (st === '清除') {
+                          setQuickScheduleStation('');
+                          setQuickScheduleTask('');
+                          setQuickScheduleTime('');
+                        } else {
+                          setQuickScheduleStation(st);
+                        }
+                      }}
+                      className={"px-2 py-0.5 rounded text-[10px] font-bold transition-colors border whitespace-nowrap " + (
+                        quickScheduleStation === st || (st === '清除' && !quickScheduleStation && !quickScheduleTask)
+                          ? st === '清除' ? 'bg-red-100 text-red-700 border-red-200' : 'bg-teal-600 text-white border-teal-700'
+                          : st === '清除' ? 'bg-white text-red-600 border-red-200 hover:bg-red-50' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                      )}
                     >
-                        快速排班 {isQuickScheduleMode ? 'ON' : 'OFF'}
+                      {st}
                     </button>
-                    
-                    {isQuickScheduleMode && (
-                        <div className="flex flex-col gap-2 pl-2 border-l border-gray-200 overflow-x-auto max-w-full no-scrollbar">
-                            <div className="flex items-center gap-1">
-                                <span className="text-[10px] text-gray-400 font-bold mr-2 whitespace-nowrap">崗位：</span>
-                                {[...hmStations, '清除'].map(st => (
-                                    <button
-                                        key={st}
-                                        onClick={() => {
-                                            if (st === '清除') {
-                                                setQuickScheduleStation('');
-                                                setQuickScheduleTask('');
-                                                setQuickScheduleTime('');
-                                            } else {
-                                                setQuickScheduleStation(st);
-                                            }
-                                        }}
-                                        className={"px-2 py-0.5 rounded text-[10px] font-bold transition-colors border whitespace-nowrap " + (quickScheduleStation === st || (st === '清除' && !quickScheduleStation && !quickScheduleTask)
-                                                ? st === '清除' ? 'bg-red-100 text-red-700 border-red-200' : 'bg-teal-600 text-white border-teal-700'
-                                                : st === '清除' ? 'bg-white text-red-600 border-red-200 hover:bg-red-50' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
-                                        )}
-                                    >
-                                        {st}
-                                    </button>
-                                ))}
-                            </div>
-                            <div className="flex items-center gap-1">
-                                <span className="text-[10px] text-gray-400 font-bold mr-2 whitespace-nowrap">任務：</span>
-                                {hmTasks.map(tk => (
-                                    <button
-                                        key={tk}
-                                        onClick={() => setQuickScheduleTask(tk === quickScheduleTask ? '' : tk)}
-                                        className={"px-2 py-0.5 rounded text-[10px] font-bold transition-colors border whitespace-nowrap " + (quickScheduleTask === tk 
-                                                ? 'bg-indigo-600 text-white border-indigo-700'
-                                                : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
-                                        )}
-                                    >
-                                        {tk}
-                                    </button>
-                                ))}
-                            </div>
-                            <div className="flex items-center gap-1">
-                                <span className="text-[10px] text-gray-400 font-bold mr-2 whitespace-nowrap">班時：</span>
-                                {['07:30-15:30', '08:00-16:00', '08:30-16:30', '09:00-17:00'].map(tm => (
-                                    <button
-                                        key={tm}
-                                        onClick={() => setQuickScheduleTime(tm === quickScheduleTime ? '' : tm)}
-                                        className={"px-2 py-0.5 rounded text-[10px] font-bold transition-colors border whitespace-nowrap " + (tm === quickScheduleTime 
-                                                ? 'bg-slate-800 text-white border-slate-900'
-                                                : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
-                                        )}
-                                    >
-                                        {tm}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-                    )}
+                  ))}
                 </div>
+                <div className="flex items-center gap-1 flex-wrap">
+                  <span className="text-[10px] text-indigo-400 font-black mr-1 whitespace-nowrap">任務：</span>
+                  {hmTasks.map(tk => (
+                    <button
+                      key={tk}
+                      onClick={() => setQuickScheduleTask(tk === quickScheduleTask ? '' : tk)}
+                      className={"px-2 py-0.5 rounded text-[10px] font-bold transition-colors border whitespace-nowrap " + (
+                        quickScheduleTask === tk ? 'bg-indigo-600 text-white border-indigo-700' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                      )}
+                    >
+                      {tk}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex items-center gap-1 flex-wrap">
+                  <span className="text-[10px] text-indigo-400 font-black mr-1 whitespace-nowrap">班時：</span>
+                  {['07:30-15:30', '08:00-16:00', '08:30-16:30', '09:00-17:00'].map(tm => (
+                    <button
+                      key={tm}
+                      onClick={() => setQuickScheduleTime(tm === quickScheduleTime ? '' : tm)}
+                      className={"px-2 py-0.5 rounded text-[10px] font-bold transition-colors border whitespace-nowrap " + (
+                        tm === quickScheduleTime ? 'bg-slate-800 text-white border-slate-900' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                      )}
+                    >
+                      {tm}
+                    </button>
+                  ))}
+                </div>
+              </div>
             )}
           </div>
           {/* === Stats Bar for Selected Date === */}
@@ -1795,101 +1828,207 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
               const svDate = new Date(statsViewDate);
               const isStatsToday = statsViewDate === toLocalISOString(new Date());
               
-              // Compute per-designation headcount for that date
-              const statsShifts = shifts.filter(s => s.date === statsViewDate);
-              const designationCounts: Record<string, number> = {};
-              activeHealthMgmtStaff.forEach(staff => {
-                  const shift = statsShifts.find(s => s.userId === staff.id);
-                  if (shift && (shift.station || shift.task)) {
-                      const key = staff.designation || '其他';
-                      designationCounts[key] = (designationCounts[key] || 0) + 1;
+              // Compute per-station headcount for that date (based on station assignment letter)
+              const statsShifts = shifts.filter(s => {
+                  if (s.date !== statsViewDate) return false;
+                  if (currentUserLocation !== '全部' && s.location && s.location !== currentUserLocation) return false;
+                  return true;
+              });
+
+              const STATION_GROUPS: Record<string, string[]> = {
+                  'H': ['H', '健管', '接待'],
+                  'G': ['G', '腸胃', '診1', '診2', 'POR', '流動', '洗滌'],
+                  'R': ['R', '行政', '櫃台', '櫃1', '櫃2', '櫃3', '櫃助'],
+                  'D': ['D', '代謝', '營養', '營1', '營2'],
+                  'M': ['M', '醫檢', '檢驗'],
+                  'P': ['P', '藥師'],
+              };
+              const stationCounts: Record<string, number> = {};
+              const groupNames: Record<string, string[]> = {};
+              
+              const countedUserIds = new Set<string>(); // Each person counts once per day
+
+              statsShifts.forEach(s => {
+                  const sText = (s.station || '').toUpperCase();
+                  if (!sText || sText.includes('休') || sText.includes('V')) return;
+                  if (countedUserIds.has(s.userId)) return;
+                  
+                  const u = db.getHealthMgmtStaff().find(st => st.id === s.userId);
+                  if (!u || u.isActive === false) return; // Only count active staff
+
+                  const parts = s.station.split(' ');
+                  const base = parts.find(p => !p.includes(':')) || parts[parts.length - 1] || '';
+
+                  for (const [key, vals] of Object.entries(STATION_GROUPS)) {
+                      if (vals.some(v => sText.includes(v.toUpperCase()) || base.toUpperCase().startsWith(v.toUpperCase()))) {
+                          stationCounts[key] = (stationCounts[key] || 0) + 1;
+                          if (!groupNames[key]) groupNames[key] = [];
+                          groupNames[key].push(u.name);
+                          countedUserIds.add(s.userId);
+                          break;
+                      }
                   }
               });
-              // Shorthands: 健管師=H, 行政人員=R, 營養師=D(代謝), 醫檢師=M, 藥師=P
-              const DESG_ABBR: Record<string, string> = { '健管師': 'H', '行政人員': 'R', '營養師': 'D', '醫檢師': 'M', '藥師': 'P' };
               // Anesthesia = A
-              const anesDate = anesthesiaShifts.filter(s => s.date === statsViewDate && s.station && s.station !== '休' && s.station !== 'V');
-              const anesCount = anesDate.length;
+              const anesDate = anesthesiaShifts.filter(s => {
+                  if (s.date !== statsViewDate) return false;
+                  if (currentUserLocation !== '全部' && s.location && s.location !== currentUserLocation) return false;
+                  const st = (s.station || '').toUpperCase();
+                  if (!st.trim() || st.includes('休') || st.includes('V')) return false;
+
+                  const u = db.getAnesthesiaStaff().find(as => as.id === s.userId);
+                  return u && u.isActive !== false;
+              });
+              
+              const uniqueAnesUserIds = new Set<string>();
+              const anesNames: string[] = [];
+              
+              anesDate.forEach(s => {
+                  if (!uniqueAnesUserIds.has(s.userId)) {
+                      uniqueAnesUserIds.add(s.userId);
+                      const u = db.getAnesthesiaStaff().find(st => st.id === s.userId);
+                      if (u) anesNames.push(u.name);
+                  }
+              });
+              
+              const anesCount = uniqueAnesUserIds.size;
+
+              // Abbr map for display
+              const DESG_ABBR: Record<string, string> = { 'H': 'H', 'G': 'G', 'R': 'R', 'D': 'D', 'M': 'M', 'P': 'P' };
 
               return (
-                  <div className="bg-gradient-to-r from-teal-50 to-slate-50 border border-teal-100 rounded-xl px-4 py-2.5 flex flex-wrap items-center gap-x-4 gap-y-2 mt-2">
-                      {/* Date navigation */}
-                      <div className="flex items-center gap-1.5 shrink-0">
-                          <button
-                              onClick={() => { const d = new Date(statsViewDate); d.setDate(d.getDate() - 1); setStatsViewDate(toLocalISOString(d)); }}
-                              className="p-1 rounded-full hover:bg-white text-slate-400 hover:text-teal-600 transition-colors"
-                          ><ChevronLeft size={14} /></button>
-                          <div className="flex flex-col items-center min-w-[48px]">
-                              <span className={`text-sm font-black ${isStatsToday ? 'text-teal-600' : 'text-slate-700'}`}>
-                                  {svDate.getMonth() + 1}/{svDate.getDate()}
-                              </span>
-                              <span className={`text-[9px] font-bold ${isStatsToday ? 'text-teal-400' : 'text-slate-400'}`}>
-                                  {['日', '一', '二', '三', '四', '五', '六'][svDate.getDay()]}
-                                  {isStatsToday && ' (今)'}
-                              </span>
+                  <div className="border border-teal-100 rounded-xl mt-2 overflow-hidden bg-white shadow-sm">
+                      {/* Header row: date navigation */}
+                      <div className="bg-gradient-to-r from-teal-600 to-teal-500 px-4 py-2 flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                              <button
+                                  onClick={() => { const d = new Date(statsViewDate); d.setDate(d.getDate() - 1); setStatsViewDate(toLocalISOString(d)); }}
+                                  className="p-1 rounded-full hover:bg-white/20 text-white transition-colors"
+                              ><ChevronLeft size={16} /></button>
+                              <div className="flex items-center gap-2">
+                                  <span className="text-white font-black text-base">
+                                      {svDate.getMonth() + 1}/{svDate.getDate()}
+                                  </span>
+                                  <span className={`text-sm font-bold ${isStatsToday ? 'text-teal-100' : 'text-teal-200'}`}>
+                                      ({['日', '一', '二', '三', '四', '五', '六'][svDate.getDay()]})
+                                  </span>
+                                  {isStatsToday && <span className="text-[10px] font-black text-white bg-white/20 px-2 py-0.5 rounded-full">今日</span>}
+                              </div>
+                              <button
+                                  onClick={() => { const d = new Date(statsViewDate); d.setDate(d.getDate() + 1); setStatsViewDate(toLocalISOString(d)); }}
+                                  className="p-1 rounded-full hover:bg-white/20 text-white transition-colors"
+                              ><ChevronRight size={16} /></button>
+                              {!isStatsToday && (
+                                  <button onClick={() => setStatsViewDate(toLocalISOString(new Date()))} className="text-[10px] font-black text-teal-600 bg-white px-2.5 py-1 rounded-full hover:bg-teal-50 transition-colors">回今日</button>
+                              )}
                           </div>
-                          <button
-                              onClick={() => { const d = new Date(statsViewDate); d.setDate(d.getDate() + 1); setStatsViewDate(toLocalISOString(d)); }}
-                              className="p-1 rounded-full hover:bg-white text-slate-400 hover:text-teal-600 transition-colors"
-                          ><ChevronRight size={14} /></button>
-                          {!isStatsToday && (
-                              <button onClick={() => setStatsViewDate(toLocalISOString(new Date()))} className="text-[9px] font-bold text-teal-600 bg-teal-50 border border-teal-100 px-2 py-0.5 rounded-full hover:bg-teal-100 transition-colors">今日</button>
-                          )}
+                          {/* Per-designation counts */}
+                          <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                              <span className="text-[10px] text-white/70 font-bold shrink-0">人員：</span>
+                              {Object.entries(DESG_ABBR).map(([key, abbr]) => {
+                                  const cnt = stationCounts[key] || 0;
+                                  const names = groupNames[key] || [];
+                                  return (
+                                      <div 
+                                          key={key} 
+                                          title={names.length > 0 ? names.join(', ') : '無排班'}
+                                          className={`flex items-center gap-0.5 px-2 py-0.5 rounded-full text-xs font-black transition-all cursor-help ${cnt > 0 ? 'bg-white text-teal-700 shadow-sm' : 'bg-white/20 text-white/40'}`}
+                                      >
+                                          <span>{abbr}:{cnt}</span>
+                                      </div>
+                                  );
+                              })}
+                              <div 
+                                  title={anesNames.length > 0 ? anesNames.join(', ') : '無排班'}
+                                  className={`flex items-center gap-0.5 px-2 py-0.5 rounded-full text-xs font-black transition-all cursor-help ${anesCount > 0 ? 'bg-rose-100 text-rose-600 shadow-sm' : 'bg-white/20 text-white/40'}`}
+                              >
+                                  <span>A:{anesCount}</span>
+                              </div>
+                          </div>
                       </div>
 
-                      <div className="w-px h-5 bg-teal-200/60 shrink-0" />
-
-                      {/* Per-designation counts */}
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="text-[9px] text-slate-400 font-bold shrink-0">人員：</span>
-                          {Object.entries(DESG_ABBR).map(([desg, abbr]) => {
-                              const cnt = designationCounts[desg] || 0;
-                              return (
-                                  <div key={desg} className={`flex items-center gap-0.5 px-2 py-0.5 rounded-full border text-[10px] font-black ${cnt > 0 ? 'bg-white border-teal-200 text-teal-700' : 'bg-white/40 border-slate-100 text-slate-300'}`}>
-                                      <span>{abbr}</span>
-                                      <span>:{cnt}</span>
+                      {/* Data rows: conditional by location */}
+                      <div className={`grid ${currentUserLocation === '全部' ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                          {/* 北投 - show if 北投 or 全部 */}
+                          {(currentUserLocation === '北投' || currentUserLocation === '全部') && (
+                              <div className={`px-3 py-2 flex flex-col gap-1 ${currentUserLocation === '全部' ? 'border-r border-slate-100' : ''}`}>
+                                  {currentUserLocation === '全部' && (
+                                      <div className="flex items-center gap-1 mb-0.5">
+                                          <span className="w-1.5 h-3 bg-teal-500 rounded-sm inline-block"></span>
+                                          <span className="text-xs font-black text-teal-700">北投</span>
+                                      </div>
+                                  )}
+                                  <div className="flex flex-wrap gap-2 md:gap-4">
+                                      <div className="flex flex-col">
+                                          <span className="text-[9px] md:text-[10px] font-bold text-slate-400 uppercase">GI</span>
+                                          <span className="text-base md:text-xl font-black text-emerald-600">{svStats?.beitou_gi ?? '-'}</span>
+                                      </div>
+                                      <div className="flex flex-col">
+                                          <span className="text-[9px] md:text-[10px] font-bold text-slate-400 uppercase">健檢</span>
+                                          <span className="text-base md:text-xl font-black text-slate-700">{svStats?.beitou_clients ?? '-'}</span>
+                                      </div>
+                                      {!isHmReadOnly ? (
+                                          <div className="flex flex-col">
+                                              <span className="text-[9px] md:text-[10px] font-bold text-amber-500 uppercase">上限</span>
+                                              <input
+                                                  type="number"
+                                                  value={svStats?.beitou_max_capacity || ''}
+                                                  onChange={(e) => db.updateDailyStats(statsViewDate, { beitou_max_capacity: Number(e.target.value) || undefined })}
+                                                  placeholder="-"
+                                                  className="w-12 md:w-16 text-base md:text-xl font-black bg-amber-50 border border-amber-200 rounded-lg px-1 md:px-2 py-0.5 outline-none focus:ring-2 focus:ring-amber-400 text-amber-700 placeholder-amber-200"
+                                              />
+                                          </div>
+                                      ) : (
+                                          <div className="flex flex-col">
+                                              <span className="text-[9px] md:text-[10px] font-bold text-amber-500 uppercase">上限</span>
+                                              <span className="text-base md:text-xl font-black text-amber-700">{svStats?.beitou_max_capacity ?? '-'}</span>
+                                          </div>
+                                      )}
                                   </div>
-                              );
-                          })}
-                          {/* Anesthesia (A) */}
-                          <div className={`flex items-center gap-0.5 px-2 py-0.5 rounded-full border text-[10px] font-black ${anesCount > 0 ? 'bg-white border-rose-200 text-rose-600' : 'bg-white/40 border-slate-100 text-slate-300'}`}>
-                              <span>A</span><span>:{anesCount}</span>
-                          </div>
-                      </div>
+                              </div>
+                          )}
 
-                      <div className="w-px h-5 bg-teal-200/60 shrink-0" />
-
-                      {/* GI */}
-                      <div className="flex items-center gap-1 shrink-0">
-                          <span className="text-[9px] text-slate-400 font-bold">GI：</span>
-                          <span className="text-[11px] font-black text-emerald-700">{(svStats?.beitou_gi || 0) + (svStats?.dazhi_gi || 0) || '-'}</span>
-                      </div>
-
-                      {/* Clients */}
-                      <div className="flex items-center gap-1 shrink-0">
-                          <span className="text-[9px] text-slate-400 font-bold">健檢：</span>
-                          <span className="text-[11px] font-black text-slate-700">{(svStats?.beitou_clients || 0) + (svStats?.dazhi_clients || 0) || '-'}</span>
-                      </div>
-                      {(svStats?.dazhi_metabolism_clients !== undefined || currentUserLocation === '大直' || currentUserLocation === '全部') && (
-                          <div className="flex items-center gap-1 shrink-0">
-                              <span className="text-[9px] text-slate-400 font-bold">代謝：</span>
-                              <span className="text-[11px] font-black text-sky-600">{svStats?.dazhi_metabolism_clients || 0}</span>
-                          </div>
-                      )}
-
-                      {/* Max Capacity (editable) */}
-                      <div className="flex items-center gap-1 shrink-0">
-                          <span className="text-[9px] text-amber-500 font-bold">最大量：</span>
-                          {!isHmReadOnly ? (
-                              <input
-                                  type="number"
-                                  value={svStats?.dazhi_max_capacity || ''}
-                                  onChange={(e) => db.updateDailyStats(statsViewDate, { dazhi_max_capacity: Number(e.target.value) || undefined })}
-                                  placeholder="-"
-                                  className="w-12 text-center text-[11px] font-black bg-white border border-amber-200 rounded-lg py-0.5 outline-none focus:ring-2 focus:ring-amber-400 text-amber-700 placeholder-amber-200"
-                              />
-                          ) : (
-                              <span className="text-[11px] font-black text-amber-700">{svStats?.dazhi_max_capacity || '-'}</span>
+                          {/* 大直 - show if 大直 or 全部 */}
+                          {(currentUserLocation === '大直' || currentUserLocation === '全部') && (
+                              <div className="px-3 py-2 flex flex-col gap-1">
+                                  {currentUserLocation === '全部' && (
+                                      <div className="flex items-center gap-1 mb-0.5">
+                                          <span className="w-1.5 h-3 bg-rose-500 rounded-sm inline-block"></span>
+                                          <span className="text-xs font-black text-rose-600">大直</span>
+                                      </div>
+                                  )}
+                                  <div className="flex flex-wrap gap-2 md:gap-4">
+                                      <div className="flex flex-col">
+                                          <span className="text-[9px] md:text-[10px] font-bold text-slate-400 uppercase">GI</span>
+                                          <span className="text-base md:text-xl font-black text-emerald-600">{svStats?.dazhi_gi ?? '-'}</span>
+                                      </div>
+                                      <div className="flex flex-col">
+                                          <span className="text-[9px] md:text-[10px] font-bold text-slate-400 uppercase">健檢</span>
+                                          <span className="text-base md:text-xl font-black text-slate-700">{svStats?.dazhi_clients ?? '-'}</span>
+                                      </div>
+                                      <div className="flex flex-col">
+                                          <span className="text-[9px] md:text-[10px] font-bold text-slate-400 uppercase">代謝</span>
+                                          <span className="text-base md:text-xl font-black text-sky-600">{svStats?.dazhi_metabolism_clients ?? '-'}</span>
+                                      </div>
+                                      {!isHmReadOnly ? (
+                                          <div className="flex flex-col">
+                                              <span className="text-[9px] md:text-[10px] font-bold text-amber-500 uppercase">上限</span>
+                                              <input
+                                                  type="number"
+                                                  value={svStats?.dazhi_max_capacity || ''}
+                                                  onChange={(e) => db.updateDailyStats(statsViewDate, { dazhi_max_capacity: Number(e.target.value) || undefined })}
+                                                  placeholder="-"
+                                                  className="w-12 md:w-16 text-base md:text-xl font-black bg-amber-50 border border-amber-200 rounded-lg px-1 md:px-2 py-0.5 outline-none focus:ring-2 focus:ring-amber-400 text-amber-700 placeholder-amber-200"
+                                              />
+                                          </div>
+                                      ) : (
+                                          <div className="flex flex-col">
+                                              <span className="text-[9px] md:text-[10px] font-bold text-amber-500 uppercase">上限</span>
+                                              <span className="text-base md:text-xl font-black text-amber-700">{svStats?.dazhi_max_capacity ?? '-'}</span>
+                                          </div>
+                                      )}
+                                  </div>
+                              </div>
                           )}
                       </div>
                   </div>
@@ -1899,9 +2038,9 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
 
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm inline-block min-w-full">
             <table className="text-sm border-collapse w-auto">
-              <thead className={`sticky z-50 transition-all duration-300 ${isQuickScheduleMode ? 'top-[140px]' : 'top-[62px]'}`}>
-                <tr className="bg-slate-50 backdrop-blur border-b border-slate-200">
-                  <th className="p-3 text-left font-bold text-slate-600 w-32 sticky left-0 top-0 bg-slate-50 backdrop-blur z-50 border-r border-slate-200 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">人員 (天數)</th>
+              <thead className={`sticky z-50 transition-all duration-300 ${isQuickScheduleMode ? 'top-[125px]' : 'top-[46px]'}`}>
+                <tr className="bg-slate-50 border-b border-slate-200">
+                  <th className="p-3 text-left font-bold text-slate-600 w-32 sticky left-0 top-0 bg-slate-50 z-[60] border-r border-slate-200 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">人員 (天數)</th>
                   {dateRange.map(date => {
                       const d = new Date(date);
                       const isWeekend = d.getDay() === 0 || d.getDay() === 6;
@@ -2436,63 +2575,93 @@ const HMTodayView: React.FC<{
     anesthesiaShifts: AnesthesiaShift[];
     staff: HealthMgmtStaff[];
     anesStaff: AnesthesiaStaff[];
-}> = ({ date, onDateChange, location, shifts, anesthesiaShifts, staff, anesStaff }) => {
+    canEdit?: boolean;
+    onSaveShift?: (userId: string, date: string, time: string) => Promise<void>;
+    onSaveAnesShift?: (userId: string, date: string, workTime: string) => Promise<void>;
+}> = ({ date, onDateChange, location, shifts, anesthesiaShifts, staff, anesStaff, canEdit = false, onSaveShift, onSaveAnesShift }) => {
     const dateStr = toLocalISOString(date);
     const dateInputRef = useRef<HTMLInputElement>(null);
+    // Time edit popup state
+    const [editingMember, setEditingMember] = useState<{ userId: string; name: string; currentTime: string; date: string; isAnes?: boolean } | null>(null);
+    const [editingTime, setEditingTime] = useState('');
 
     const filteredShifts = useMemo(() => shifts.filter(s => s.date === dateStr), [shifts, dateStr]);
     const filteredAnes = useMemo(() => anesthesiaShifts.filter(s => s.date === dateStr), [anesthesiaShifts, dateStr]);
 
     const groups = useMemo(() => {
-        if (location === '大直') {
-            return [
-                { id: 'H', label: '接待(H)', stations: ['H'], icon: <UserSearch size={18} />, color: 'indigo' },
-                { 
-                    id: 'G', label: '腸胃(G)', stations: ['G'], icon: <Stethoscope size={18} />, color: 'emerald',
-                    taskOrder: ['放診1', '診2', 'POR', '流動', '洗滌'] 
-                },
-                { 
-                    id: 'A', label: '麻護(A)', isAnesthesia: true, icon: <Syringe size={18} />, color: 'rose',
-                    taskOrder: ['麻1', '麻2']
-                },
-                { 
-                    id: 'R', label: '櫃台(R)', stations: ['櫃1', '櫃2', '櫃3', '櫃助'], icon: <ConciergeBell size={18} />, color: 'amber',
-                    taskOrder: ['早班', '晚班', '供餐'] 
-                },
-                { 
-                    id: 'D', label: '代謝(D)', stations: ['營1', '營2'], icon: <Apple size={18} />, color: 'sky',
-                    taskOrder: ['營1', '營2'] 
-                },
-                { 
-                    id: 'M', label: '醫檢(M)', stations: ['M', '醫檢'], icon: <Microscope size={18} />, color: 'violet',
-                    taskOrder: ['早班', '晚班'] 
-                },
-                { 
-                    id: 'P', label: '藥師(P)', stations: ['P', '藥師'], icon: <Pill size={18} />, color: 'teal'
-                }
-            ];
-        } else {
-            // Beitou or All
-            const stations = Array.from(new Set(filteredShifts.map(s => s.station).filter(Boolean))) as string[];
-            return stations.map(s => ({ id: s, label: s, stations: [s], icon: <Zap size={18} />, color: 'teal' }));
-        }
-    }, [location, filteredShifts]);
+        // User Request: Use categorized view for ALL locations (Beitou, Dazhi, All)
+        // This ensures R (Counter) and D (Metabolism) are always categorized/found properly
+        return [
+            { id: 'H', label: '接待(H)', stations: ['H', '健管', '接待'], icon: <UserSearch size={18} />, color: 'indigo' },
+            { 
+                id: 'G', label: '腸胃(G)', stations: ['G', '腸胃', '診1', '診2', 'POR', '流動', '洗滌'], icon: <Stethoscope size={18} />, color: 'emerald',
+                taskOrder: ['放診1', '診2', 'POR', '流動', '洗滌'] 
+            },
+            { 
+                id: 'A', label: '麻護(A)', isAnesthesia: true, icon: <Syringe size={18} />, color: 'rose',
+                taskOrder: ['麻1', '麻2']
+            },
+            { 
+                id: 'R', label: '櫃台(R)', stations: ['R', '行政', '行政人員', '櫃台', '櫃枱', '櫃1', '櫃2', '櫃3', '櫃助', '櫃'], icon: <ConciergeBell size={18} />, color: 'amber',
+                taskOrder: ['早班', '晚班', '供餐'] 
+            },
+            { 
+                id: 'D', label: '代謝(D)', stations: ['D', '代謝', '營養', '營1', '營2'], icon: <Apple size={18} />, color: 'sky',
+                taskOrder: ['營1', '營2'] 
+            },
+            { 
+                id: 'M', label: '醫檢(M)', stations: ['M', '醫檢', '檢驗'], icon: <Microscope size={18} />, color: 'violet',
+                taskOrder: ['早班', '晚班'] 
+            },
+            { 
+                id: 'P', label: '藥師(P)', stations: ['P', '藥師'], icon: <Pill size={18} />, color: 'teal'
+            }
+        ];
+    }, []);
 
     const getGroupAssignments = (group: any) => {
         let assignments: any[] = [];
         
         if (group.isAnesthesia) {
-            assignments = filteredAnes.filter(s => s.location === '大直' || location === '全部').map(s => {
+            assignments = filteredAnes.filter(s => {
+                // Location filter
+                if (location !== '全部' && s.location && s.location !== location) return false;
+                if (location === '全部' && s.location === '北投') return false; // Default HM logic for Anes: only Dazhi + All
+
+                const st = (s.station || '').toUpperCase();
+                if (!st.trim() || st.includes('休') || st.includes('V')) return false;
+
+                const u = anesStaff.find(as => as.id === s.userId);
+                return u && u.isActive !== false;
+            }).map(s => {
                 const u = anesStaff.find(st => st.id === s.userId);
                 return {
                     name: u?.name || '未知',
                     task: s.station, // station is the task for anes (e.g. 麻1)
                     time: s.workTime || '',
-                    raw: s
+                    raw: { ...s, userId: s.userId }
                 };
             });
         } else {
-            assignments = filteredShifts.filter(s => group.stations.some(st => s.station.split(' ').includes(st))).map(s => {
+            // Also match by designation for R (行政/counter) and D (代謝/nutrition)
+            assignments = filteredShifts.filter(s => {
+                const sText = (s.station || '').toUpperCase();
+                if (!sText || sText.includes('休') || sText.includes('V')) return false;
+
+                const u = staff.find(st => st.id === s.userId);
+                if (!u || u.isActive === false) return false;
+
+                const stationParts = sText.split(' ');
+                const baseStation = stationParts.find(p => !p.includes(':')) || stationParts[stationParts.length - 1] || '';
+                
+                // Location filter: if view is 北投/大直, only show that location. If 全部, show all.
+                if (location !== '全部' && s.location && s.location !== location) return false;
+
+                return group.stations.some(st => {
+                    const stUpper = st.toUpperCase();
+                    return sText.includes(stUpper) || baseStation.startsWith(stUpper);
+                });
+            }).map(s => {
                 const u = staff.find(st => st.id === s.userId);
                 let time = s.time || '';
                 let displayStation = s.station;
@@ -2516,16 +2685,35 @@ const HMTodayView: React.FC<{
         }
 
         // Apply Sorting
-        if (group.taskOrder) {
-            assignments.sort((a, b) => {
+        assignments.sort((a, b) => {
+            // Priority 1: 主控, Priority 2: 輔控
+            const isMainA = (a.task || '').includes('主控') || (a.raw?.station || '').includes('主控');
+            const isMainB = (b.task || '').includes('主控') || (b.raw?.station || '').includes('主控');
+            const isAsstA = (a.task || '').includes('輔控') || (a.raw?.station || '').includes('輔控');
+            const isAsstB = (b.task || '').includes('輔控') || (b.raw?.station || '').includes('輔控');
+
+            if (isMainA && !isMainB) return -1;
+            if (!isMainA && isMainB) return 1;
+            if (isAsstA && !isAsstB) return -1;
+            if (!isAsstA && isAsstB) return 1;
+
+            // Priority 3: Work Time
+            if (a.time && b.time) {
+                return a.time.localeCompare(b.time);
+            }
+            if (a.time) return -1;
+            if (b.time) return 1;
+
+            // Priority 4: Task Order
+            if (group.taskOrder) {
                 const idxA = group.taskOrder.indexOf(a.task);
                 const idxB = group.taskOrder.indexOf(b.task);
-                if (idxA === -1 && idxB === -1) return 0;
-                if (idxA === -1) return 1;
-                if (idxB === -1) return -1;
-                return idxA - idxB;
-            });
-        }
+                if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+                if (idxA !== -1) return -1;
+                if (idxB !== -1) return 1;
+            }
+            return 0;
+        });
 
         return assignments;
     };
@@ -2585,7 +2773,7 @@ const HMTodayView: React.FC<{
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                     {groups.map(group => {
                         const members = getGroupAssignments(group);
-                        if (members.length === 0 && location !== '大直') return null;
+                        if (members.length === 0) return null;
 
                         const colorClasses: Record<string, string> = {
                             indigo: 'border-indigo-600 text-indigo-700 bg-indigo-50',
@@ -2617,8 +2805,24 @@ const HMTodayView: React.FC<{
                                 </div>
                                 <div className="p-4 space-y-3">
                                     {members.length > 0 ? (
-                                        members.map((m, idx) => (
-                                            <div key={idx} className="flex items-center justify-between p-3.5 bg-slate-50/30 rounded-2xl border border-slate-100/50 hover:bg-white hover:border-teal-100 hover:shadow-md transition-all duration-300 group/item">
+                                        members.map((m, idx) => {
+                                            const isClickable = canEdit && (group.isAnesthesia ? !!onSaveAnesShift : !!onSaveShift) && m.raw?.userId;
+                                            return (
+                                            <div
+                                                key={idx}
+                                                onClick={() => {
+                                                    if (!isClickable) return;
+                                                    setEditingMember({ 
+                                                        userId: m.raw.userId, 
+                                                        name: m.name, 
+                                                        currentTime: m.time, 
+                                                        date: dateStr,
+                                                        isAnes: !!group.isAnesthesia
+                                                    });
+                                                    setEditingTime(m.time || '');
+                                                }}
+                                                className={`flex items-center justify-between p-3.5 bg-slate-50/30 rounded-2xl border border-slate-100/50 hover:bg-white hover:border-teal-100 hover:shadow-md transition-all duration-300 group/item ${isClickable ? 'cursor-pointer' : ''}`}
+                                            >
                                                 <div className="flex items-center gap-3">
                                                     <div className={`w-10 h-10 rounded-full flex items-center justify-center text-xs font-black text-white shadow-sm transition-transform group-hover/item:scale-110 ${accentColor}`}>
                                                         {m.name.slice(-2)}
@@ -2634,16 +2838,19 @@ const HMTodayView: React.FC<{
                                                         )}
                                                     </div>
                                                 </div>
-                                                {m.time && (
-                                                    <div className="flex flex-col items-end gap-1">
-                                                        <div className="flex items-center gap-1 text-[11px] font-black text-slate-400 bg-white px-2.5 py-1 rounded-xl border border-slate-100 shadow-sm">
-                                                            <Clock size={10} className="opacity-50" />
+                                                <div className="flex flex-col items-end gap-1">
+                                                    {m.time ? (
+                                                        <div className="flex items-center gap-1.5 text-[11px] font-black text-white bg-slate-700/90 px-3 py-1.5 rounded-xl border border-slate-600 shadow-md transform hover:scale-105 transition-transform">
+                                                            <Clock size={12} className="text-teal-400" />
                                                             {m.time}
                                                         </div>
-                                                    </div>
-                                                )}
+                                                    ) : isClickable ? (
+                                                        <div className="text-[10px] text-slate-400 font-bold px-3 py-1.5 rounded-xl border-2 border-dashed border-slate-100 bg-slate-50/50 hover:bg-teal-50 hover:border-teal-200 hover:text-teal-600 cursor-pointer transition-all">+ 時間</div>
+                                                    ) : null}
+                                                </div>
                                             </div>
-                                        ))
+                                            );
+                                        })
                                     ) : (
                                         <div className="py-12 flex flex-col items-center justify-center text-slate-300 gap-3">
                                             <div className="w-12 h-12 rounded-full border-2 border-dashed border-slate-200 flex items-center justify-center">
@@ -2658,6 +2865,62 @@ const HMTodayView: React.FC<{
                     })}
                 </div>
             </div>
+
+            {/* Time Edit Popup */}
+            {editingMember && (
+                <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-[200] p-4" onClick={() => setEditingMember(null)}>
+                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+                        <div className="px-6 py-5 border-b border-slate-100 bg-gradient-to-r from-teal-50 to-white flex items-center justify-between">
+                            <div>
+                                <h4 className="text-lg font-black text-slate-800">{editingMember.name}</h4>
+                                <p className="text-xs text-slate-500 mt-0.5">{editingMember.date} 上班時間</p>
+                            </div>
+                            <button onClick={() => setEditingMember(null)} className="p-2 hover:bg-slate-100 rounded-full text-slate-400 transition-colors"><X size={18} /></button>
+                        </div>
+                        <div className="p-5 space-y-4">
+                            <div className="grid grid-cols-2 gap-2">
+                                {['07:30-15:30', '08:00-16:00', '08:30-16:30', '09:00-17:00', '10:00-18:00', '11:00-19:00'].map(t => (
+                                    <button
+                                        key={t}
+                                        onClick={() => setEditingTime(t)}
+                                        className={`py-2.5 px-3 rounded-xl text-sm font-bold border-2 transition-all ${
+                                            editingTime === t ? 'bg-teal-500 text-white border-teal-600 shadow-md' : 'border-slate-100 text-slate-600 hover:border-teal-200 hover:bg-teal-50'
+                                        }`}
+                                    >{t}</button>
+                                ))}
+                            </div>
+                            <input
+                                type="text"
+                                value={editingTime}
+                                onChange={e => setEditingTime(e.target.value)}
+                                placeholder="自訂時段 (例: 08:00-16:00)"
+                                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-2 focus:ring-teal-500 outline-none transition-all"
+                            />
+                            <div className="flex gap-2">
+                                {editingMember.currentTime && (
+                                    <button
+                                        onClick={async () => {
+                                            if (onSaveShift && !editingMember.isAnes) await onSaveShift(editingMember.userId, editingMember.date, '');
+                                        if (onSaveAnesShift && editingMember.isAnes) await onSaveAnesShift(editingMember.userId, editingMember.date, '');
+                                            setEditingMember(null);
+                                        }}
+                                        className="flex-1 py-3 text-sm font-bold text-red-500 bg-red-50 rounded-xl hover:bg-red-100 transition-colors border border-red-100"
+                                    >清除時間</button>
+                                )}
+                                <button
+                                    onClick={async () => {
+                                        if (onSaveShift && !editingMember.isAnes && editingTime) await onSaveShift(editingMember.userId, editingMember.date, editingTime);
+                                        if (onSaveAnesShift && editingMember.isAnes && editingTime) await onSaveAnesShift(editingMember.userId, editingMember.date, editingTime);
+                                        setEditingMember(null);
+                                    }}
+                                    disabled={!editingTime}
+                                    className="flex-1 py-3 text-sm font-black text-white bg-teal-600 rounded-xl hover:bg-teal-700 transition-colors disabled:opacity-40 shadow-lg shadow-teal-100"
+                                >確認儲存</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

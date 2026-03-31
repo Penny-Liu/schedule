@@ -39,8 +39,6 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
         const dateStr = propsToLocalISOString(date);
         const dayShifts = shifts.filter(s => s.date === dateStr && (s.location === '北投' || !s.location));
         const dayStaffShifts = staffShifts.filter(s => s.date === dateStr);
-        const dayHMShifts = db.getHealthMgmtShifts().filter(s => s.date === dateStr);
-        const hmStaff = db.getHealthMgmtStaff();
 
         const getName = (userId: string) => {
             const u = users.find(user => user.id === userId);
@@ -59,21 +57,6 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
             return u?.isRadiographer && (s.specialRoles?.includes('輔班') || s.station === '輔' || s.station === '輔控');
         }).map(s => getName(s.userId));
 
-        const getHM = (loc: string, type: '主' | '輔') => {
-            return dayHMShifts.filter(s => {
-                const isType = type === '主' ? (s.station?.includes('主控') || s.task === '主控') : (s.station?.includes('輔控') || s.task === '輔控');
-                if (!isType) return false;
-                const u = hmStaff.find(st => st.id === s.userId);
-                return (s.location || u?.location || '北投') === loc;
-            }).map(s => {
-                const u = hmStaff.find(st => st.id === s.userId);
-                return u?.alias || u?.name?.slice(-2) || '-';
-            });
-        };
-
-        const mainHM = getHM('北投', '主');
-        const assistHM = getHM('北投', '輔');
-
         const getDocs = (station: string) => dayShifts.filter(s => (s.scheduled_station === station || s.station === station)).map(s => {
             const d = doctors.find(doc => doc.id === s.doctorId);
             return d?.alias || d?.name || '?';
@@ -88,7 +71,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
         const dayNames = ['日', '一', '二', '三', '四', '五', '六'];
 
         return `${date.getMonth() + 1}/${date.getDate()} （${dayNames[date.getDay()]}）
-主/輔：${mainRads.join('/') || '-'}/${assistRads.join('/') || '-'}  ${mainHM.join('/') || '-'}/${assistHM.join('/') || '-'}
+主/輔：${mainRads.join('/') || '-'}/${assistRads.join('/') || '-'}
 影像：${getDocs('影像').join('/') || '無'}
 解說：${getDocs('解說').join('/') || '無'}
 支援：${getDocs('支援').join('/') || '無'}
@@ -312,6 +295,29 @@ POR：
 
     const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
     const [doctorSearchQuery, setDoctorSearchQuery] = useState('');
+
+    // Mobile swipe navigation for personnel/station views
+    const touchStartX = useRef<number | null>(null);
+    const touchStartY = useRef<number | null>(null);
+
+    const handleOverviewTouchStart = (e: React.TouchEvent) => {
+        touchStartX.current = e.touches[0].clientX;
+        touchStartY.current = e.touches[0].clientY;
+    };
+
+    const handleOverviewTouchEnd = (e: React.TouchEvent) => {
+        if (touchStartX.current === null || touchStartY.current === null) return;
+        const dx = touchStartX.current - e.changedTouches[0].clientX;
+        const dy = Math.abs(touchStartY.current - e.changedTouches[0].clientY);
+        // Only trigger if horizontal swipe dominates (not a scroll)
+        if (Math.abs(dx) > 50 && Math.abs(dx) > dy * 1.5) {
+            const newDate = new Date(currentDate);
+            newDate.setDate(newDate.getDate() + (dx > 0 ? 7 : -7));
+            setCurrentDate(newDate);
+        }
+        touchStartX.current = null;
+        touchStartY.current = null;
+    };
     
     // Auto-collapse logic for Dazhi HM staff
     const isDazhiHM = currentUser?.isHealthMgmt && currentUser?.healthMgmtLocation === '大直';
@@ -2318,13 +2324,17 @@ POR：
             </div>
             
             {/* ... Grid Content ... */}
-            <div className="flex-1 overflow-auto p-4 md:p-6 pb-20">
+            <div
+                className="flex-1 overflow-auto p-4 md:p-6 pb-20"
+                onTouchStart={isMobile && (viewMode === 'personnel' || viewMode === 'station') ? handleOverviewTouchStart : undefined}
+                onTouchEnd={isMobile && (viewMode === 'personnel' || viewMode === 'station') ? handleOverviewTouchEnd : undefined}
+            >
                 {viewMode === 'personnel' && (
                     <div className="bg-white rounded-xl border border-gray-200 shadow-sm inline-block min-w-full">
                         <table className="text-sm border-collapse w-auto">
                             <thead className="relative z-50">
-                                <tr className="bg-slate-50 backdrop-blur border-b border-slate-200">
-                                    <th className="p-3 text-left font-bold text-slate-600 w-32 sticky left-0 top-0 bg-slate-50 backdrop-blur z-50 border-r border-slate-200 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">醫師</th>
+                                <tr className="bg-slate-50 border-b border-slate-200">
+                                    <th className="p-3 text-left font-bold text-slate-600 w-32 sticky left-0 top-0 bg-slate-50 z-[60] border-r border-slate-200 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">醫師</th>
                                     {dateRange.map(date => {
                                         const d = new Date(date);
                                         const isWeekend = d.getDay() === 0 || d.getDay() === 6;
@@ -2614,46 +2624,8 @@ POR：
                      <div className="bg-white rounded-xl border border-gray-200 shadow-sm inline-block min-w-full">
                         <table className="w-full border-collapse bg-white table-fixed">
                             <thead className="sticky top-0 z-20 shadow-sm">
-                                {/* === Stats Summary Bar Row === */}
-                                <tr className="bg-gradient-to-r from-teal-50/80 to-slate-50/80">
-                                    <td className={`sticky left-0 z-30 bg-teal-50/90 backdrop-blur border-r border-b border-teal-100 ${isMobile ? 'p-1 w-[85px] min-w-[85px]' : 'p-1.5 w-[120px]'}`}>
-                                        <div className="text-[9px] font-black text-teal-700 uppercase tracking-wider text-center">日統計</div>
-                                    </td>
-                                    {dateRange.map(date => {
-                                        const dayStats = db.getDailyStats(date);
-                                        const isToday = date === toLocalISOString(new Date());
-                                        return (
-                                            <td key={date} className={`px-0.5 py-1 border-r border-b border-teal-50 text-center align-middle ${isToday ? 'bg-teal-50/60' : ''}`}>
-                                                <div className="flex flex-col items-center gap-0.5">
-                                                    <div className="flex items-center gap-0.5">
-                                                        <span className="text-[7px] text-emerald-500 font-black">GI</span>
-                                                        <span className="text-[9px] font-black text-emerald-700">{(dayStats?.beitou_gi || 0) + (dayStats?.dazhi_gi || 0) || '-'}</span>
-                                                    </div>
-                                                    <div className="flex items-center gap-0.5">
-                                                        <span className="text-[7px] text-slate-400 font-bold">客</span>
-                                                        <span className="text-[9px] font-black text-slate-600">{(dayStats?.beitou_clients || 0) + (dayStats?.dazhi_clients || 0) || '-'}</span>
-                                                    </div>
-                                                    {canEditStats ? (
-                                                        <input
-                                                            type="number"
-                                                            value={dayStats?.dazhi_max_capacity || ''}
-                                                            onChange={(e) => db.updateDailyStats(date, { dazhi_max_capacity: Number(e.target.value) || undefined })}
-                                                            placeholder="max"
-                                                            title="最大量"
-                                                            className="w-full max-w-[34px] text-center text-[8px] font-bold bg-white/80 border border-amber-200 outline-none focus:ring-1 focus:ring-amber-400 rounded py-0.5 text-amber-700 placeholder-amber-300"
-                                                        />
-                                                    ) : (
-                                                        dayStats?.dazhi_max_capacity ? (
-                                                            <span className="text-[8px] font-black text-amber-600" title="最大量">↑{dayStats.dazhi_max_capacity}</span>
-                                                        ) : null
-                                                    )}
-                                                </div>
-                                            </td>
-                                        );
-                                    })}
-                                </tr>
                                 <tr>
-                                    <th className={`sticky left-0 z-30 bg-slate-50/95 backdrop-blur border-b border-r border-slate-200 shadow-[4px_0_8px_rgba(0,0,0,0.02)] ${isMobile ? 'p-1 w-[85px] min-w-[85px]' : 'p-2 w-[120px] text-left'}`}>
+                                    <th className={`sticky left-0 z-30 bg-slate-50 border-b border-r border-slate-200 shadow-[4px_0_8px_rgba(0,0,0,0.02)] ${isMobile ? 'p-1 w-[85px] min-w-[85px]' : 'p-2 w-[120px] text-left'}`}>
                                         <div className={`flex items-center font-bold text-xs text-slate-600 ${isMobile ? 'justify-center' : 'gap-2'}`}>
                                             <LayoutGrid size={14} className="text-teal-600" />
                                             {!isMobile && '工作崗位'}
@@ -2911,25 +2883,13 @@ POR：
                                                             const radShifts = db.shifts.filter(s => 
                                                                 s.date === date && (s.station?.includes('場控') || s.station === '主' || s.station === '主控')
                                                             );
-                                                            const hmShifts = db.getHealthMgmtShifts().filter(s => {
-                                                                if (s.date !== date) return false;
-                                                                if (!(s.task === '主控' || s.station?.includes('主控'))) return false;
-                                                                const st = hmStaff.find(u => u.id === s.userId);
-                                                                const effectiveLoc = s.location || st?.location || '北投';
-                                                                return effectiveLoc === '北投';
-                                                            });
                                                             
                                                             const radNames = radShifts.map(s => {
                                                                 const u = radUsers.find(u => u.id === s.userId);
                                                                 return u?.isRadiographer ? u.name : null;
-                                                            }).filter(Boolean);
+                                                                }).filter(Boolean);
                                                             
-                                                            const hmNames = hmShifts.map(s => {
-                                                                const st = hmStaff.find(u => u.id === s.userId);
-                                                                return st?.name;
-                                                            }).filter(Boolean);
-                                                            
-                                                            const displayList = [...radNames, ...hmNames];
+                                                            const displayList = radNames;
                                                             
                                                             return (
                                                                 <td 
@@ -2953,25 +2913,13 @@ POR：
                                                             const radShifts = db.shifts.filter(s => 
                                                                 s.date === date && (s.specialRoles?.includes('輔班') || s.station === '輔' || s.station === '輔控')
                                                             );
-                                                            const hmShifts = db.getHealthMgmtShifts().filter(s => {
-                                                                if (s.date !== date) return false;
-                                                                if (!(s.task === '輔控' || s.station?.includes('輔控'))) return false;
-                                                                const st = hmStaff.find(u => u.id === s.userId);
-                                                                const effectiveLoc = s.location || st?.location || '北投';
-                                                                return effectiveLoc === '北投';
-                                                            });
                                                             
                                                             const radNames = radShifts.map(s => {
                                                                 const u = radUsers.find(u => u.id === s.userId);
                                                                 return u?.isRadiographer ? u.name : null;
-                                                            }).filter(Boolean);
+                                                                }).filter(Boolean);
                                                             
-                                                            const hmNames = hmShifts.map(s => {
-                                                                const st = hmStaff.find(u => u.id === s.userId);
-                                                                return st?.name;
-                                                            }).filter(Boolean);
-                                                            
-                                                            const displayList = [...radNames, ...hmNames];
+                                                            const displayList = radNames;
                                                             
                                                             return (
                                                                 <td 
@@ -2988,74 +2936,7 @@ POR：
                                                 </>
                                             )}
 
-                                            {/* Main/Assistant Shift Rows (only for Dazhi Health Mgmt) */}
-                                            {location === '大直' && (
-                                                <>
-                                                    {/* Main Shift (主控 - 大直) */}
-                                                    <tr className="bg-amber-50/30 border-b border-amber-100 group hover:bg-amber-50/50 transition-colors">
-                                                        <td className={`sticky left-0 z-10 bg-amber-50/80 backdrop-blur border-r border-amber-200 shadow-[4px_0_8px_rgba(0,0,0,0.02)] ${isMobile ? 'p-1 w-[85px] min-w-[85px]' : 'p-2'}`}>
-                                                            <div className="text-xs font-bold text-amber-800 flex items-center justify-end pr-2">主控</div>
-                                                        </td>
-                                                        {dateRange.map(date => {
-                                                            const hmShifts = db.getHealthMgmtShifts().filter(s => {
-                                                                if (s.date !== date) return false;
-                                                                if (!(s.task === '主控' || s.station?.includes('主控'))) return false;
-                                                                const st = hmStaff.find(u => u.id === s.userId);
-                                                                const effectiveLoc = s.location || st?.location || '北投';
-                                                                return effectiveLoc === '大直';
-                                                            });
-                                                            
-                                                            const hmNames = hmShifts.map(s => {
-                                                                const st = hmStaff.find(u => u.id === s.userId);
-                                                                return st?.name;
-                                                            }).filter(Boolean);
-                                                            
-                                                            return (
-                                                                <td 
-                                                                    key={date} 
-                                                                    className="p-1 border-r border-amber-50 text-center text-[11px] font-normal text-amber-900"
-                                                                >
-                                                                    {hmNames.length > 0 ? hmNames.map((name, i) => (
-                                                                        <div key={`${name}-${i}`} className="leading-tight py-0.5">{name}</div>
-                                                                    )) : '-'}
-                                                                </td>
-                                                            );
-                                                        })}
-                                                    </tr>
-
-                                                    {/* Assistant Shift (輔控 - 大直) */}
-                                                    <tr className="bg-amber-50/30 border-b border-amber-100 group hover:bg-amber-50/50 transition-colors">
-                                                        <td className={`sticky left-0 z-10 bg-amber-50/80 backdrop-blur border-r border-amber-200 shadow-[4px_0_8px_rgba(0,0,0,0.02)] ${isMobile ? 'p-1 w-[85px] min-w-[85px]' : 'p-2'}`}>
-                                                            <div className="text-xs font-bold text-amber-800 flex items-center justify-end pr-2">輔控</div>
-                                                        </td>
-                                                        {dateRange.map(date => {
-                                                            const hmShifts = db.getHealthMgmtShifts().filter(s => {
-                                                                if (s.date !== date) return false;
-                                                                if (!(s.task === '輔控' || s.station?.includes('輔控'))) return false;
-                                                                const st = hmStaff.find(u => u.id === s.userId);
-                                                                const effectiveLoc = s.location || st?.location || '北投';
-                                                                return effectiveLoc === '大直';
-                                                            });
-                                                            
-                                                            const hmNames = hmShifts.map(s => {
-                                                                const st = hmStaff.find(u => u.id === s.userId);
-                                                                return st?.name;
-                                                            }).filter(Boolean);
-                                                            
-                                                            return (
-                                                                <td 
-                                                                    key={date} 
-                                                                    className="p-1 border-r border-amber-50 text-center text-[11px] font-normal text-amber-900"
-                                                                >
-                                                                    {hmNames.length > 0 ? hmNames.map((name, i) => (
-                                                                        <div key={`${name}-${i}`} className="leading-tight py-0.5">{name}</div>
-                                                                    )) : '-'}
-                                                                </td>
-                                                            );
-                                                        })}
-                                                    </tr>
-                                                </>
-                                            )}
+                                            {/* Date Cells */}
                 
 
                                             {(() => {
@@ -3357,13 +3238,7 @@ POR：
                                                         return u?.isRadiographer && effectiveLoc === loc && (s.station?.includes('場控') || s.station === '主' || s.station === '主控');
                                                     }).map(s => radUsers.find(u => u.id === s.userId)?.name).filter(Boolean);
                                                     
-                                                    const locMainHMNames = hmShifts.filter(s => {
-                                                        const u = hmStaff.find(st => st.id === s.userId);
-                                                        const effectiveLoc = s.location || u?.location || '北投';
-                                                        return effectiveLoc === loc && (s.station === '主控' || s.task === '主控' || s.station?.includes('主控'));
-                                                    }).map(s => hmStaff.find(u => u.id === s.userId)?.name).filter(Boolean);
-                                                    
-                                                    const locMainNamesJoined = [...locMainRadNames, ...locMainHMNames].join(' / ') || '-';
+                                                    const locMainNamesJoined = locMainRadNames.join(' / ') || '-';
                                                     
                                                     const locAssistRadNames = radShifts.filter(s => {
                                                         const u = radUsers.find(user => user.id === s.userId);
@@ -3371,13 +3246,7 @@ POR：
                                                         return u?.isRadiographer && effectiveLoc === loc && (s.specialRoles?.includes('輔班') || s.station === '輔' || s.station === '輔控');
                                                     }).map(s => radUsers.find(u => u.id === s.userId)?.name).filter(Boolean);
                                                     
-                                                    const locAssistHMNames = hmShifts.filter(s => {
-                                                        const u = hmStaff.find(st => st.id === s.userId);
-                                                        const effectiveLoc = s.location || u?.location || '北投';
-                                                        return effectiveLoc === loc && (s.station === '輔控' || s.task === '輔控' || s.station?.includes('輔控'));
-                                                    }).map(s => hmStaff.find(u => u.id === s.userId)?.name).filter(Boolean);
-                                                    
-                                                    const locAssistNamesJoined = [...locAssistRadNames, ...locAssistHMNames].join(' / ') || '-';
+                                                    const locAssistNamesJoined = locAssistRadNames.join(' / ') || '-';
 
                                                     return (
                                                         <>
