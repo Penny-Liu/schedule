@@ -337,18 +337,8 @@ POR：
     const dateRange = useMemo(() => {
         const year = currentDate.getFullYear();
         const month = currentDate.getMonth();
-        
-        // Mobile weekly view for Personnel perspective
-        if (isMobile && (viewMode === 'personnel' || viewMode === 'station')) {
-            const dates = [];
-            for (let i = 0; i < 7; i++) {
-                const d = new Date(currentDate);
-                d.setDate(currentDate.getDate() + i);
-                dates.push(toLocalISOString(d));
-            }
-            return dates;
-        }
 
+        // Show full month by default (requested for mobile too)
         const daysInMonth = new Date(year, month + 1, 0).getDate();
         const dates = [];
         for (let i = 1; i <= daysInMonth; i++) {
@@ -2326,15 +2316,13 @@ POR：
             {/* ... Grid Content ... */}
             <div
                 className="flex-1 overflow-auto p-4 md:p-6 pb-20"
-                onTouchStart={isMobile && (viewMode === 'personnel' || viewMode === 'station') ? handleOverviewTouchStart : undefined}
-                onTouchEnd={isMobile && (viewMode === 'personnel' || viewMode === 'station') ? handleOverviewTouchEnd : undefined}
             >
                 {viewMode === 'personnel' && (
                     <div className="bg-white rounded-xl border border-gray-200 shadow-sm inline-block min-w-full">
                         <table className="text-sm border-collapse w-auto">
                             <thead className="relative z-50">
                                 <tr className="bg-slate-50 border-b border-slate-200">
-                                    <th className="p-3 text-left font-bold text-slate-600 w-32 sticky left-0 top-0 bg-slate-50 z-[60] border-r border-slate-200 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">醫師</th>
+                                    <th className="p-2 md:p-3 text-left font-bold text-slate-600 w-20 md:w-32 sticky left-0 top-0 bg-slate-50 z-[60] border-r border-slate-200 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">醫師</th>
                                     {dateRange.map(date => {
                                         const d = new Date(date);
                                         const isWeekend = d.getDay() === 0 || d.getDay() === 6;
@@ -2390,7 +2378,8 @@ POR：
                                 {filteredDoctorsForDisplay.map(doc => (
                                     <tr key={doc.id} className="group hover:bg-slate-50/50 transition-colors">
                                         <td className="p-0 border-r border-slate-200 sticky left-0 bg-white z-30 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
-                                            <div className="p-3 font-bold text-slate-800 flex items-center gap-2 min-w-[128px]">
+                                            <div className="p-2 md:p-3 font-bold text-slate-800 flex items-center gap-1 md:gap-2 min-w-[80px] md:min-w-[128px]">
+                                                <span className="text-xs md:text-sm truncate max-w-[60px] md:max-w-none">{doc.alias || doc.name}</span>
                                                 {isReorderMode && (
                                                     <div className="flex flex-col gap-0.5">
                                                         <button
@@ -2625,7 +2614,7 @@ POR：
                         <table className="w-full border-collapse bg-white table-fixed">
                             <thead className="sticky top-0 z-20 shadow-sm">
                                 <tr>
-                                    <th className={`sticky left-0 z-30 bg-slate-50 border-b border-r border-slate-200 shadow-[4px_0_8px_rgba(0,0,0,0.02)] ${isMobile ? 'p-1 w-[85px] min-w-[85px]' : 'p-2 w-[120px] text-left'}`}>
+                                    <th className={`sticky left-0 z-30 bg-slate-50 border-b border-r border-slate-200 shadow-[4px_0_8px_rgba(0,0,0,0.02)] ${isMobile ? 'p-1 w-[70px] min-w-[70px]' : 'p-2 w-[120px] text-left'}`}>
                                         <div className={`flex items-center font-bold text-xs text-slate-600 ${isMobile ? 'justify-center' : 'gap-2'}`}>
                                             <LayoutGrid size={14} className="text-teal-600" />
                                             {!isMobile && '工作崗位'}
