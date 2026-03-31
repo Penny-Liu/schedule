@@ -2035,9 +2035,8 @@ POR：
                                 const newDate = new Date(currentDate);
                                 if (viewMode === 'daily') {
                                     newDate.setDate(newDate.getDate() - 1);
-                                } else if (isMobile && (viewMode === 'personnel' || viewMode === 'station')) {
-                                    newDate.setDate(newDate.getDate() - 7);
                                 } else {
+                                    // Monthly view for desktop AND mobile physician/station overviews
                                     newDate.setDate(1); // Set to 1st to avoid month overflow
                                     newDate.setMonth(newDate.getMonth() - 1);
                                 }
@@ -2052,7 +2051,7 @@ POR：
                             onClick={() => dateInputRef.current?.showPicker ? dateInputRef.current.showPicker() : dateInputRef.current?.click()}
                             title="點擊切換日期"
                         >
-                           {viewMode === 'daily' || (isMobile && (viewMode === 'personnel' || viewMode === 'station'))
+                           {viewMode === 'daily'
                                 ? `${toLocalISOString(currentDate)} (${['日', '一', '二', '三', '四', '五', '六'][currentDate.getDay()]})`
                                 : `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`
                            }
@@ -2070,9 +2069,8 @@ POR：
                                 const newDate = new Date(currentDate);
                                 if (viewMode === 'daily') {
                                     newDate.setDate(newDate.getDate() + 1);
-                                } else if (isMobile && (viewMode === 'personnel' || viewMode === 'station')) {
-                                    newDate.setDate(newDate.getDate() + 7);
                                 } else {
+                                    // Monthly view for desktop AND mobile physician/station overviews
                                     newDate.setDate(1); // Set to 1st to avoid month overflow
                                     newDate.setMonth(newDate.getMonth() + 1);
                                 }
@@ -2088,7 +2086,7 @@ POR：
                         onClick={() => setCurrentDate(new Date())}
                         className="px-3 py-1 bg-slate-100 text-slate-600 rounded-lg text-sm font-bold hover:bg-slate-200 transition-colors border border-slate-200"
                     >
-                        {viewMode === 'daily' || (isMobile && (viewMode === 'personnel' || viewMode === 'station')) ? '今天' : '本月'}
+                        {viewMode === 'daily' ? '今天' : '本月'}
                     </button>
 
                     {(viewMode === 'personnel' || viewMode === 'station') && (
@@ -2391,11 +2389,8 @@ POR：
                                                         </button>
                                                     </div>
                                                 )}
-                                                <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-500">
-                                                    {doc.alias}
-                                                </div>
                                                 <div className="flex flex-col">
-                                                    <span>{doc.name}</span>
+                                                    <span className="text-xs md:text-sm font-bold text-slate-800">{doc.name}</span>
                                                     {(() => {
                                                         // Find the personalCycle entry for the currently viewed month
                                                         const currentMonthStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
@@ -2590,7 +2585,7 @@ POR：
                 
                 {viewMode === 'station' && (
                      <div className="bg-white rounded-xl border border-gray-200 shadow-sm inline-block min-w-full">
-                        <table className="w-full border-collapse bg-white table-fixed">
+                        <table className="w-auto border-collapse bg-white">
                             <thead className="sticky top-0 z-20 shadow-sm">
                                 <tr>
                                     <th className={`sticky left-0 z-30 bg-slate-50 border-b border-r border-slate-200 shadow-[4px_0_8px_rgba(0,0,0,0.02)] ${isMobile ? 'p-1 w-[70px] min-w-[70px]' : 'p-2 w-[120px] text-left'}`}>
