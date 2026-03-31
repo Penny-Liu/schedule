@@ -257,6 +257,8 @@ export interface DailyManpowerStats {
   beitou_mr?: number; // New: Manual MR cases count
   dazhi_gi?: number;  // New: Manual GI cases count for Dazhi
   beitou_total?: number; // Manually entered total radiographer count for Beitou
+  dazhi_max_capacity?: number; // New: Manually entered max capacity for Dazhi (最大量)
+  beitou_max_capacity?: number; // New: Manually entered max capacity for Beitou (最大量)
 }
 
 export interface WeekdaySetting {

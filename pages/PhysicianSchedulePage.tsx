@@ -204,7 +204,8 @@ POR：
     // Can edit if Admin/Scheduler AND NOT Locked
     const canEdit = (currentUser.permissions?.includes(PERMISSIONS.EDIT_PHYSICIAN) || currentUser.role === UserRole.SYSTEM_ADMIN) && !isLocked;
     // Viewer and Finance can see stats only
-    const canEditStats = (currentUser.permissions?.includes(PERMISSIONS.VIEW_DOCTOR_STATS) || currentUser.role === UserRole.SYSTEM_ADMIN || currentUser.role === UserRole.VIEWER || currentUser.role === UserRole.FINANCE) && !isLocked;
+    const isDazhiHMStaff = currentUser?.isHealthMgmt && currentUser?.healthMgmtLocation === '大直';
+    const canEditStats = (currentUser.permissions?.includes(PERMISSIONS.VIEW_DOCTOR_STATS) || currentUser.role === UserRole.SYSTEM_ADMIN || currentUser.role === UserRole.VIEWER || currentUser.role === UserRole.FINANCE || isDazhiHMStaff) && !isLocked;
     const canManageLock = currentUser.role === UserRole.SYSTEM_ADMIN || currentUser.permissions?.includes(PERMISSIONS.EDIT_SETTINGS);
     
     const [doctors, setDoctors] = useState<Doctor[]>([]);
@@ -2613,6 +2614,44 @@ POR：
                      <div className="bg-white rounded-xl border border-gray-200 shadow-sm inline-block min-w-full">
                         <table className="w-full border-collapse bg-white table-fixed">
                             <thead className="sticky top-0 z-20 shadow-sm">
+                                {/* === Stats Summary Bar Row === */}
+                                <tr className="bg-gradient-to-r from-teal-50/80 to-slate-50/80">
+                                    <td className={`sticky left-0 z-30 bg-teal-50/90 backdrop-blur border-r border-b border-teal-100 ${isMobile ? 'p-1 w-[85px] min-w-[85px]' : 'p-1.5 w-[120px]'}`}>
+                                        <div className="text-[9px] font-black text-teal-700 uppercase tracking-wider text-center">日統計</div>
+                                    </td>
+                                    {dateRange.map(date => {
+                                        const dayStats = db.getDailyStats(date);
+                                        const isToday = date === toLocalISOString(new Date());
+                                        return (
+                                            <td key={date} className={`px-0.5 py-1 border-r border-b border-teal-50 text-center align-middle ${isToday ? 'bg-teal-50/60' : ''}`}>
+                                                <div className="flex flex-col items-center gap-0.5">
+                                                    <div className="flex items-center gap-0.5">
+                                                        <span className="text-[7px] text-emerald-500 font-black">GI</span>
+                                                        <span className="text-[9px] font-black text-emerald-700">{(dayStats?.beitou_gi || 0) + (dayStats?.dazhi_gi || 0) || '-'}</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-0.5">
+                                                        <span className="text-[7px] text-slate-400 font-bold">客</span>
+                                                        <span className="text-[9px] font-black text-slate-600">{(dayStats?.beitou_clients || 0) + (dayStats?.dazhi_clients || 0) || '-'}</span>
+                                                    </div>
+                                                    {canEditStats ? (
+                                                        <input
+                                                            type="number"
+                                                            value={dayStats?.dazhi_max_capacity || ''}
+                                                            onChange={(e) => db.updateDailyStats(date, { dazhi_max_capacity: Number(e.target.value) || undefined })}
+                                                            placeholder="max"
+                                                            title="最大量"
+                                                            className="w-full max-w-[34px] text-center text-[8px] font-bold bg-white/80 border border-amber-200 outline-none focus:ring-1 focus:ring-amber-400 rounded py-0.5 text-amber-700 placeholder-amber-300"
+                                                        />
+                                                    ) : (
+                                                        dayStats?.dazhi_max_capacity ? (
+                                                            <span className="text-[8px] font-black text-amber-600" title="最大量">↑{dayStats.dazhi_max_capacity}</span>
+                                                        ) : null
+                                                    )}
+                                                </div>
+                                            </td>
+                                        );
+                                    })}
+                                </tr>
                                 <tr>
                                     <th className={`sticky left-0 z-30 bg-slate-50/95 backdrop-blur border-b border-r border-slate-200 shadow-[4px_0_8px_rgba(0,0,0,0.02)] ${isMobile ? 'p-1 w-[85px] min-w-[85px]' : 'p-2 w-[120px] text-left'}`}>
                                         <div className={`flex items-center font-bold text-xs text-slate-600 ${isMobile ? 'justify-center' : 'gap-2'}`}>

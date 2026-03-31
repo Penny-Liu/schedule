@@ -78,6 +78,9 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
   const [quickAnesLocation, setQuickAnesLocation] = useState('');
   const [isAnesStaffManagementExpanded, setIsAnesStaffManagementExpanded] = useState(false);
   const [selectedCycleId, setSelectedCycleId] = useState<string>('month');
+  const [isAnesReorderMode, setIsAnesReorderMode] = useState(false);
+  // Stats bar: selected date for the schedule tab stats view (defaults to today)
+  const [statsViewDate, setStatsViewDate] = useState<string>(toLocalISOString(new Date()));
 
   const LOCATIONS = ['北投', '大直'];
 
@@ -333,6 +336,26 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
       } catch (err) {
           console.error('[HealthMgmtPage] handleSavePopup failed:', err);
           alert(`健管排班儲存失敗: ${err instanceof Error ? err.message : JSON.stringify(err)}`);
+      }
+  };
+
+  const handleMoveAnesStaff = async (staffId: string, direction: 'up' | 'down') => {
+      const staffList = [...activeAnesthesiaStaff];
+      const index = staffList.findIndex(s => s.id === staffId);
+      if (index === -1) return;
+      const newIndex = direction === 'up' ? index - 1 : index + 1;
+      if (newIndex < 0 || newIndex >= staffList.length) return;
+      const temp = staffList[index];
+      staffList[index] = staffList[newIndex];
+      staffList[newIndex] = temp;
+      try {
+          const updates = staffList.map((s, i) =>
+              db.updateAnesthesiaStaff(s.id, { displayOrder: i })
+          );
+          await Promise.all(updates);
+      } catch (err) {
+          console.error('Failed to update anesthesia staff order:', err);
+          alert('調整麻護排序失敗');
       }
   };
 
@@ -1215,17 +1238,29 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                     )}
                 </div>
                 <div className="flex items-center gap-1">
+                    {!isAnesReadOnly && (
+                        <button
+                            onClick={() => setIsAnesReorderMode(!isAnesReorderMode)}
+                            className={`px-3 py-1.5 rounded text-xs font-bold flex items-center gap-1 transition-all border ${
+                                isAnesReorderMode ? 'bg-amber-500 text-white border-amber-600 shadow-md' : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
+                            }`}
+                            title="調整麦護人員顯示順序"
+                        >
+                            {isAnesReorderMode ? <Save size={12}/> : <Users size={12}/>}
+                            {isAnesReorderMode ? '完成排序' : '調整順序'}
+                        </button>
+                    )}
                     <button
                         onClick={handleExportAnesthesiaPDF}
                         className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded text-xs font-bold flex items-center gap-1.5 shadow-sm transition-colors"
                     >
-                        <Download size={14} /> 匯出 PDF
+                        <Download size={14} /> 匙出 PDF
                     </button>
                     <button
                         onClick={handleExportStats}
                         className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded text-xs font-bold flex items-center gap-1.5 shadow-sm transition-colors"
                     >
-                        <FileSpreadsheet size={14} /> 匯出 Excel
+                        <FileSpreadsheet size={14} /> 匙出 Excel
                     </button>
                 </div>
             </div>
@@ -1295,8 +1330,18 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                                     </tr>
                                     {/* Anesthesia Staff Rows */}
                                     {activeAnesthesiaStaff.filter(s => s.locations?.includes(loc)).map(staff => (
-                                        <tr key={`${loc}-${staff.id}`} className="hover:bg-slate-50 transition-colors h-8">
-                                            <td className="px-2 border-r border-b sticky left-0 bg-white z-30 font-bold text-slate-700 shadow-[1px_0_0_0_#e2e8f0] truncate">{staff.name}</td>
+                                        <tr key={`${loc}-${staff.id}`} className={`hover:bg-slate-50 transition-colors h-8 ${isAnesReorderMode ? 'bg-amber-50/40' : ''}`}>
+                                            <td className={`px-2 border-r border-b sticky left-0 z-30 font-bold text-slate-700 shadow-[1px_0_0_0_#e2e8f0] truncate ${isAnesReorderMode ? 'bg-[#fffbeb]' : 'bg-white'}`}>
+                                                <div className="flex items-center justify-between pr-1">
+                                                    <span className={isAnesReorderMode ? 'text-amber-700' : ''}>{staff.name}</span>
+                                                    {isAnesReorderMode && (
+                                                        <div className="flex flex-col gap-0">
+                                                            <button onClick={() => handleMoveAnesStaff(staff.id, 'up')} className="p-0.5 hover:bg-amber-200 rounded text-amber-600"><ChevronUp size={12}/></button>
+                                                            <button onClick={() => handleMoveAnesStaff(staff.id, 'down')} className="p-0.5 hover:bg-amber-200 rounded text-amber-600"><ChevronDown size={12}/></button>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </td>
                                             {dateRange.map(date => {
                                                 const shift = anesthesiaShifts.find(s => s.userId === staff.id && s.date === date && s.location === loc);
                                                 return (
@@ -1744,6 +1789,113 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                 </div>
             )}
           </div>
+          {/* === Stats Bar for Selected Date === */}
+          {(() => {
+              const svStats = db.getDailyStats(statsViewDate);
+              const svDate = new Date(statsViewDate);
+              const isStatsToday = statsViewDate === toLocalISOString(new Date());
+              
+              // Compute per-designation headcount for that date
+              const statsShifts = shifts.filter(s => s.date === statsViewDate);
+              const designationCounts: Record<string, number> = {};
+              activeHealthMgmtStaff.forEach(staff => {
+                  const shift = statsShifts.find(s => s.userId === staff.id);
+                  if (shift && (shift.station || shift.task)) {
+                      const key = staff.designation || '其他';
+                      designationCounts[key] = (designationCounts[key] || 0) + 1;
+                  }
+              });
+              // Shorthands: 健管師=H, 行政人員=R, 營養師=D(代謝), 醫檢師=M, 藥師=P
+              const DESG_ABBR: Record<string, string> = { '健管師': 'H', '行政人員': 'R', '營養師': 'D', '醫檢師': 'M', '藥師': 'P' };
+              // Anesthesia = A
+              const anesDate = anesthesiaShifts.filter(s => s.date === statsViewDate && s.station && s.station !== '休' && s.station !== 'V');
+              const anesCount = anesDate.length;
+
+              return (
+                  <div className="bg-gradient-to-r from-teal-50 to-slate-50 border border-teal-100 rounded-xl px-4 py-2.5 flex flex-wrap items-center gap-x-4 gap-y-2 mt-2">
+                      {/* Date navigation */}
+                      <div className="flex items-center gap-1.5 shrink-0">
+                          <button
+                              onClick={() => { const d = new Date(statsViewDate); d.setDate(d.getDate() - 1); setStatsViewDate(toLocalISOString(d)); }}
+                              className="p-1 rounded-full hover:bg-white text-slate-400 hover:text-teal-600 transition-colors"
+                          ><ChevronLeft size={14} /></button>
+                          <div className="flex flex-col items-center min-w-[48px]">
+                              <span className={`text-sm font-black ${isStatsToday ? 'text-teal-600' : 'text-slate-700'}`}>
+                                  {svDate.getMonth() + 1}/{svDate.getDate()}
+                              </span>
+                              <span className={`text-[9px] font-bold ${isStatsToday ? 'text-teal-400' : 'text-slate-400'}`}>
+                                  {['日', '一', '二', '三', '四', '五', '六'][svDate.getDay()]}
+                                  {isStatsToday && ' (今)'}
+                              </span>
+                          </div>
+                          <button
+                              onClick={() => { const d = new Date(statsViewDate); d.setDate(d.getDate() + 1); setStatsViewDate(toLocalISOString(d)); }}
+                              className="p-1 rounded-full hover:bg-white text-slate-400 hover:text-teal-600 transition-colors"
+                          ><ChevronRight size={14} /></button>
+                          {!isStatsToday && (
+                              <button onClick={() => setStatsViewDate(toLocalISOString(new Date()))} className="text-[9px] font-bold text-teal-600 bg-teal-50 border border-teal-100 px-2 py-0.5 rounded-full hover:bg-teal-100 transition-colors">今日</button>
+                          )}
+                      </div>
+
+                      <div className="w-px h-5 bg-teal-200/60 shrink-0" />
+
+                      {/* Per-designation counts */}
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-[9px] text-slate-400 font-bold shrink-0">人員：</span>
+                          {Object.entries(DESG_ABBR).map(([desg, abbr]) => {
+                              const cnt = designationCounts[desg] || 0;
+                              return (
+                                  <div key={desg} className={`flex items-center gap-0.5 px-2 py-0.5 rounded-full border text-[10px] font-black ${cnt > 0 ? 'bg-white border-teal-200 text-teal-700' : 'bg-white/40 border-slate-100 text-slate-300'}`}>
+                                      <span>{abbr}</span>
+                                      <span>:{cnt}</span>
+                                  </div>
+                              );
+                          })}
+                          {/* Anesthesia (A) */}
+                          <div className={`flex items-center gap-0.5 px-2 py-0.5 rounded-full border text-[10px] font-black ${anesCount > 0 ? 'bg-white border-rose-200 text-rose-600' : 'bg-white/40 border-slate-100 text-slate-300'}`}>
+                              <span>A</span><span>:{anesCount}</span>
+                          </div>
+                      </div>
+
+                      <div className="w-px h-5 bg-teal-200/60 shrink-0" />
+
+                      {/* GI */}
+                      <div className="flex items-center gap-1 shrink-0">
+                          <span className="text-[9px] text-slate-400 font-bold">GI：</span>
+                          <span className="text-[11px] font-black text-emerald-700">{(svStats?.beitou_gi || 0) + (svStats?.dazhi_gi || 0) || '-'}</span>
+                      </div>
+
+                      {/* Clients */}
+                      <div className="flex items-center gap-1 shrink-0">
+                          <span className="text-[9px] text-slate-400 font-bold">健檢：</span>
+                          <span className="text-[11px] font-black text-slate-700">{(svStats?.beitou_clients || 0) + (svStats?.dazhi_clients || 0) || '-'}</span>
+                      </div>
+                      {(svStats?.dazhi_metabolism_clients !== undefined || currentUserLocation === '大直' || currentUserLocation === '全部') && (
+                          <div className="flex items-center gap-1 shrink-0">
+                              <span className="text-[9px] text-slate-400 font-bold">代謝：</span>
+                              <span className="text-[11px] font-black text-sky-600">{svStats?.dazhi_metabolism_clients || 0}</span>
+                          </div>
+                      )}
+
+                      {/* Max Capacity (editable) */}
+                      <div className="flex items-center gap-1 shrink-0">
+                          <span className="text-[9px] text-amber-500 font-bold">最大量：</span>
+                          {!isHmReadOnly ? (
+                              <input
+                                  type="number"
+                                  value={svStats?.dazhi_max_capacity || ''}
+                                  onChange={(e) => db.updateDailyStats(statsViewDate, { dazhi_max_capacity: Number(e.target.value) || undefined })}
+                                  placeholder="-"
+                                  className="w-12 text-center text-[11px] font-black bg-white border border-amber-200 rounded-lg py-0.5 outline-none focus:ring-2 focus:ring-amber-400 text-amber-700 placeholder-amber-200"
+                              />
+                          ) : (
+                              <span className="text-[11px] font-black text-amber-700">{svStats?.dazhi_max_capacity || '-'}</span>
+                          )}
+                      </div>
+                  </div>
+              );
+          })()}
+
 
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm inline-block min-w-full">
             <table className="text-sm border-collapse w-auto">
