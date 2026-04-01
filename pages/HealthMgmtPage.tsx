@@ -2385,11 +2385,11 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
         </div>
       ) : (
         /* Staff Management Tab */
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-          <div className="p-4 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 flex flex-col h-full overflow-hidden">
+          <div className="p-4 border-b border-gray-100 bg-gray-50 flex-none flex justify-between items-center">
             <h3 className="font-bold text-gray-700">健管人員名單</h3>
           </div>
-          <div className="p-6">
+          <div className="p-6 flex-1 overflow-y-auto custom-scrollbar pb-20">
               <form onSubmit={editingId ? updateStaff : addStaff} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 items-end mb-8 bg-gray-50 p-5 rounded-xl border border-gray-100">
                   <div className="flex flex-col gap-1 lg:col-span-2 xl:col-span-1">
                       <label className="text-[10px] font-bold text-teal-600 uppercase pl-1">姓名</label>
