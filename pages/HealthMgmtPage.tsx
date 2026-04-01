@@ -1015,7 +1015,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
   };
 
   return (
-    <div className="p-2 w-full h-screen flex flex-col overflow-hidden bg-slate-50">
+    <div className="p-1 md:p-2 w-full h-[100dvh] flex flex-col overflow-hidden bg-slate-50">
       <ConfirmModal
         isOpen={!!deleteTargetId}
         onClose={() => setDeleteTargetId(null)}
@@ -1028,7 +1028,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
 
       <div className="mb-2 flex flex-col md:flex-row md:items-center justify-between gap-2">
         <div>
-          <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+          <h2 className="text-base md:text-xl font-bold text-gray-800 flex items-center gap-1.5 md:gap-2">
             <LayoutDashboard className="text-teal-600" size={24} />
             健管業務管理
             {(currentUser.role === UserRole.SYSTEM_ADMIN || currentUser.permissions?.includes(PERMISSIONS.EDIT_HEALTH_MGMT)) && 
@@ -1053,7 +1053,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                  </span>
             )}
           </h2>
-          <p className="text-sm text-gray-500">管理健管人員名單與每日排班</p>
+
         </div>
         
         <div className="flex bg-gray-100 p-1 rounded-xl w-fit">
@@ -1681,41 +1681,6 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
             {/* Row 1: All controls in one compact line */}
             <div className="flex items-center gap-2 px-3 py-2 flex-wrap">
 
-              {/* Calendar nav (prev / label / next) */}
-              <div className="flex items-center bg-slate-100 rounded-lg overflow-hidden border border-slate-200">
-                <button
-                  onClick={() => {
-                    if (selectedCycleId === 'month') {
-                      setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
-                    } else {
-                      const idx = filteredHmCycles.findIndex(c => c.id === selectedCycleId);
-                      if (idx < filteredHmCycles.length - 1 && idx !== -1) setSelectedCycleId(filteredHmCycles[idx + 1].id);
-                    }
-                  }}
-                  className="px-2 py-1.5 hover:bg-slate-200 text-slate-500 transition-colors"
-                >
-                  <ChevronLeft size={16} />
-                </button>
-                <span className="px-2 text-xs font-black text-slate-700 whitespace-nowrap min-w-[110px] text-center">
-                  {selectedCycleId === 'month'
-                    ? `${currentDate.getFullYear()} 年 ${currentDate.getMonth() + 1} 月`
-                    : currentCycle?.name || '週期'}
-                </span>
-                <button
-                  onClick={() => {
-                    if (selectedCycleId === 'month') {
-                      setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
-                    } else {
-                      const idx = filteredHmCycles.findIndex(c => c.id === selectedCycleId);
-                      if (idx > 0) setSelectedCycleId(filteredHmCycles[idx - 1].id);
-                    }
-                  }}
-                  className="px-2 py-1.5 hover:bg-slate-200 text-slate-500 transition-colors"
-                >
-                  <ChevronRight size={16} />
-                </button>
-              </div>
-
               {/* Cycle selector dropdown */}
               <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-lg px-2 h-[30px]">
                 <Calendar size={13} className="text-teal-500 shrink-0" />
@@ -1924,13 +1889,13 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                                   className="p-1 rounded-full hover:bg-white/20 text-white transition-colors"
                               ><ChevronLeft size={16} /></button>
                               <div className="flex items-center gap-2">
-                                  <span className="text-white font-black text-base">
+                                  <span className="text-white font-black text-sm">
                                       {svDate.getMonth() + 1}/{svDate.getDate()}
                                   </span>
-                                  <span className={`text-sm font-bold ${isStatsToday ? 'text-teal-100' : 'text-teal-200'}`}>
+                                  <span className={`text-xs font-bold ${isStatsToday ? 'text-teal-100' : 'text-teal-200'}`}>
                                       ({['日', '一', '二', '三', '四', '五', '六'][svDate.getDay()]})
                                   </span>
-                                  {isStatsToday && <span className="text-[10px] font-black text-white bg-white/20 px-2 py-0.5 rounded-full">今日</span>}
+                                  {isStatsToday && <span className="text-[10px] md:text-xs font-black text-white bg-white/20 px-1.5 md:px-2 py-0.5 rounded-full leading-none mt-0.5">今</span>}
                               </div>
                               <button
                                   onClick={() => { const d = new Date(statsViewDate); d.setDate(d.getDate() + 1); setStatsViewDate(toLocalISOString(d)); }}
@@ -1977,9 +1942,9 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                                       </div>
                                   )}
                                   <div className="flex flex-wrap gap-2 md:gap-4">
-                                      <div className="flex flex-col">
-                                          <span className="text-[9px] md:text-[10px] font-bold text-slate-400 uppercase">GI</span>
-                                          <span className="text-base md:text-xl font-black text-emerald-600">{svStats?.beitou_gi ?? '-'}</span>
+                                      <div className="flex flex-col items-center">
+                                          <span className="text-[8px] md:text-[9px] font-bold text-slate-400 uppercase leading-tight">GI</span>
+                                          <span className="text-xs md:text-sm font-black text-emerald-600 leading-none">{svStats?.beitou_gi ?? '-'}</span>
                                       </div>
                                       <div className="flex flex-col">
                                           <span className="text-[9px] md:text-[10px] font-bold text-slate-400 uppercase">健檢</span>
@@ -2016,9 +1981,9 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                                       </div>
                                   )}
                                   <div className="flex flex-wrap gap-2 md:gap-4">
-                                      <div className="flex flex-col">
-                                          <span className="text-[9px] md:text-[10px] font-bold text-slate-400 uppercase">GI</span>
-                                          <span className="text-base md:text-xl font-black text-emerald-600">{svStats?.dazhi_gi ?? '-'}</span>
+                                      <div className="flex flex-col items-center">
+                                          <span className="text-[8px] md:text-[9px] font-bold text-slate-400 uppercase leading-tight">GI</span>
+                                          <span className="text-xs md:text-sm font-black text-emerald-600 leading-none">{svStats?.dazhi_gi ?? '-'}</span>
                                       </div>
                                       <div className="flex flex-col">
                                           <span className="text-[9px] md:text-[10px] font-bold text-slate-400 uppercase">健檢</span>
@@ -2058,7 +2023,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
             <table className="text-sm border-collapse w-auto">
               <thead className={`sticky z-50 transition-all duration-300 ${isMobile ? 'top-0' : (isQuickScheduleMode ? 'top-[125px]' : 'top-[46px]')}`}>
                 <tr className="bg-slate-50 border-b border-slate-200">
-                  <th className="p-3 text-left font-bold text-slate-600 w-32 sticky left-0 top-0 bg-slate-50 z-[60] border-r border-slate-200 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">人員 (天數)</th>
+                  <th className="p-3 text-left font-bold text-slate-600 w-[72px] md:w-28 sticky left-0 top-0 bg-slate-50 z-[60] border-r border-slate-200 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">人員<br/><span className="text-[9px]">(天數)</span></th>
                   {dateRange.map(date => {
                       const d = new Date(date);
                       const isWeekend = d.getDay() === 0 || d.getDay() === 6;
@@ -2082,10 +2047,10 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                 {activeHealthMgmtStaff.map(staff => (
                   <tr key={staff.id} className="group hover:bg-slate-50/50 transition-colors">
                     <td className={`p-0 border-r border-slate-200 sticky left-0 z-30 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] transition-colors ${isReorderMode ? 'bg-amber-50' : 'bg-white'}`}>
-                        <div className="p-3 font-bold text-slate-800 flex items-center justify-between min-w-[128px]">
-                            <div className="flex items-center">
+                        <div className="p-1 md:p-2 font-bold text-slate-800 flex items-center justify-between min-w-[72px] md:min-w-[112px]">
+                            <div className="flex flex-col md:flex-row md:items-center">
                                 <span className={isReorderMode ? 'text-amber-700' : ''}>{staff.name}</span>
-                                <span className="ml-2 text-xs text-gray-400 font-normal whitespace-nowrap">
+                                <span className="md:ml-1 text-[10px] md:text-xs text-gray-400 font-normal whitespace-nowrap">
                                     ({shifts.filter(s => s.userId === staff.id && dateRange.includes(s.date) && (s.station || s.task)).length})
                                 </span>
                             </div>
@@ -2218,7 +2183,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                       {editingShiftTask && <span className="text-teal-600 cursor-pointer hover:underline" onClick={() => setEditingShiftTask('')}>清除</span>}
                   </label>
                   <div className="flex flex-wrap gap-1.5 p-1 max-h-[300px] overflow-y-auto custom-scrollbar">
-                      {hmStations.map(st => (
+                      {(selectedCell ? db.getHealthMgmtStations(healthMgmtStaff.find(s => s.id === selectedCell.userId)?.location || currentUserLocation) : hmStations).map(st => (
                           <button
                               key={st}
                               onClick={() => setEditingShiftTask(st)}
@@ -2236,7 +2201,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                       {editingShiftSubTask.length > 0 && <span className="text-indigo-600 cursor-pointer hover:underline" onClick={() => setEditingShiftSubTask([])}>清除</span>}
                   </label>
                   <div className="flex flex-wrap gap-1.5 p-1 max-h-[300px] overflow-y-auto custom-scrollbar">
-                      {hmTasks.map(tk => (
+                      {(selectedCell ? db.getHealthMgmtTasks(healthMgmtStaff.find(s => s.id === selectedCell.userId)?.location || currentUserLocation) : hmTasks).map(tk => (
                           <button
                               key={tk}
                               onClick={() => setEditingShiftSubTask(prev => prev.includes(tk) ? prev.filter(t => t !== tk) : [...prev, tk])}
@@ -2272,7 +2237,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                       {editingShiftTime && <span className="text-teal-600 cursor-pointer hover:underline" onClick={() => setEditingShiftTime('')}>清除</span>}
                   </label>
                   <div className="flex flex-wrap gap-1.5 p-1 mb-2">
-                      {hmTimes.map(time => (
+                      {(selectedCell ? db.getHealthMgmtTimes(healthMgmtStaff.find(s => s.id === selectedCell.userId)?.location || currentUserLocation) : hmTimes).map(time => (
                           <button
                               key={time}
                               onClick={() => setEditingShiftTime(time)}

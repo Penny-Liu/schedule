@@ -2358,7 +2358,7 @@ ${flowWashNames ? '流+洗：' + flowWashNames : ''}${flowWashNames && (flowName
                         <table className="text-sm border-collapse w-auto">
                             <thead className="relative z-50">
                                 <tr className="bg-slate-50 border-b border-slate-200">
-                                    <th className="p-2 md:p-3 text-left font-bold text-slate-600 w-20 md:w-32 sticky left-0 top-0 bg-slate-50 z-[60] border-r border-slate-200 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">醫師</th>
+                                    <th className="p-2 md:p-2 text-left font-bold text-slate-600 w-[70px] md:w-[90px] sticky left-0 top-0 bg-slate-50 z-[60] border-r border-slate-200 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">醫師</th>
                                     {dateRange.map(date => {
                                         const d = new Date(date);
                                         const isWeekend = d.getDay() === 0 || d.getDay() === 6;
@@ -2414,8 +2414,7 @@ ${flowWashNames ? '流+洗：' + flowWashNames : ''}${flowWashNames && (flowName
                                 {filteredDoctorsForDisplay.map(doc => (
                                     <tr key={doc.id} className="group hover:bg-slate-50/50 transition-colors">
                                         <td className="p-0 border-r border-slate-200 sticky left-0 bg-white z-30 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
-                                            <div className="p-2 md:p-3 font-bold text-slate-800 flex items-center gap-1 md:gap-2 min-w-[80px] md:min-w-[128px]">
-                                                <span className="text-xs md:text-sm truncate max-w-[60px] md:max-w-none">{doc.alias || doc.name}</span>
+                                            <div className="p-2 md:p-2 font-bold text-slate-800 flex items-center gap-1 md:gap-2 min-w-[70px] md:min-w-[90px]">
                                                 {isReorderMode && (
                                                     <div className="flex flex-col gap-0.5">
                                                         <button
