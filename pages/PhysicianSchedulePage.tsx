@@ -49,15 +49,27 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
             return u.alias || u.name.slice(-2);
         };
 
+        const dayHMShifts = db.getHealthMgmtShifts().filter(s => s.date === dateStr && s.location === '北投');
+        const hmStaff = db.getHealthMgmtStaff();
+
         const mainRads = dayStaffShifts.filter(s => {
             const u = users.find(user => user.id === s.userId);
             return u?.isRadiographer && (s.station?.includes('場控') || s.station === '主' || s.station === '主控');
         }).map(s => getName(s.userId));
         
+        const mainHM = dayHMShifts.filter(s => s.task === '主控' || s.station === '主控')
+            .map(s => hmStaff.find(st => st.id === s.userId)?.name).filter(Boolean);
+
         const assistRads = dayStaffShifts.filter(s => {
             const u = users.find(user => user.id === s.userId);
             return u?.isRadiographer && (s.specialRoles?.includes('輔班') || s.station === '輔' || s.station === '輔控');
         }).map(s => getName(s.userId));
+
+        const assistHM = dayHMShifts.filter(s => s.task === '輔控' || s.station === '輔控')
+            .map(s => hmStaff.find(st => st.id === s.userId)?.name).filter(Boolean);
+
+        const combinedMain = Array.from(new Set([...mainRads, ...mainHM]));
+        const combinedAssist = Array.from(new Set([...assistRads, ...assistHM]));
 
         const getDocs = (station: string) => dayShifts.filter(s => (s.scheduled_station === station || s.station === station)).map(s => {
             const d = doctors.find(doc => doc.id === s.doctorId);
@@ -73,7 +85,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
         const dayNames = ['日', '一', '二', '三', '四', '五', '六'];
 
         return `${date.getMonth() + 1}/${date.getDate()} （${dayNames[date.getDay()]}）
-主/輔：${mainRads.join('/') || '-'}/${assistRads.join('/') || '-'}
+主/輔：${combinedMain.join('/') || '-'}/${combinedAssist.join('/') || '-'}
 影像：${getDocs('影像').join('/') || '無'}
 解說：${getDocs('解說').join('/') || '無'}
 支援：${getDocs('支援').join('/') || '無'}
@@ -110,6 +122,16 @@ GI：${stats?.beitou_gi || 0} 台`;
         // Maintain a stable order for GI doctors based on the station name (GI1, GI2...)
         const sortedGIShifts = [...giShifts].sort((a,b) => (a.scheduled_station || '').localeCompare(b.scheduled_station || ''));
         const giDocsNames = sortedGIShifts.map(s => doctors.find(doc => doc.id === s.doctorId)?.name || '?');
+
+        const mainHM = dayHMShifts.filter(s => s.location === '大直' && (s.task === '主控' || s.station === '主控'))
+            .map(s => hmStaff.find(st => st.id === s.userId)?.name).filter(Boolean);
+        const assistHM = dayHMShifts.filter(s => s.location === '大直' && (s.task === '輔控' || s.station === '輔控'))
+            .map(s => hmStaff.find(st => st.id === s.userId)?.name).filter(Boolean);
+
+        const getHMNameForGI = (giStation: string) => {
+            const shift = dayHMShifts.find(s => s.location === '大直' && (s.task?.includes(giStation) || s.station?.includes(giStation)));
+            return hmStaff.find(st => st.id === shift?.userId)?.name || '';
+        };
         
         const anesShifts = db.getAnesthesiaShifts().filter(s => s.date === dateStr && s.location === '大直');
         const anesStaffNames = anesShifts.map(s => db.getAnesthesiaStaff().find(as => as.id === s.userId)?.name).filter(Boolean);
@@ -129,6 +151,7 @@ GI：${stats?.beitou_gi || 0} 台`;
         const dayNames = ['日', '一', '二', '三', '四', '五', '六'];
 
         return `${date.getMonth() + 1}/${date.getDate()} （${dayNames[date.getDay()]}）
+主/輔：${mainHM.join('/') || '-'}/${assistHM.join('/') || '-'}
 健檢客戶： ${stats?.dazhi_clients || 0} 位
 (腸胃：${stats?.dazhi_gi || 0} / 心超： )
 代謝客戶： ${stats?.dazhi_metabolism_clients || 0} 位
@@ -155,8 +178,8 @@ GI：${stats?.beitou_gi || 0} 台`;
 腸胃鏡：${giDocsNames.map(n => n + '醫師').join('、') || '-'}
 ${giDocsNames.length}線 ${stats?.dazhi_gi || 0}台 (第一台 :   ，第二台 : ，最後一台 :     ，麻評  位)
 
-${giDocsNames.map((n, i) => `診${i+1}：${n} 醫師(08：00)
-主跟：
+${sortedGIShifts.map((s, i) => `診${i+1}：${doctors.find(d => d.id === s.doctorId)?.name || '?'} 醫師(08：00)
+主跟：${getHMNameForGI(s.scheduled_station || '')}
 麻護：`).join('\n\n')}
 
 POR：
@@ -2837,24 +2860,23 @@ POR：
 
 
                                             {/* Main/Assistant Shift Rows (only for Beitou) */}
-                                            {location === '北投' && (
+                                            {(location === '北投' || location === '大直') && (
                                                 <>
-                                                    {/* Main Shift (場控) */}
+                                                    {/* Main Shift (主班 / 場控) */}
                                                     <tr className="bg-amber-50/30 border-b border-amber-100 group hover:bg-amber-50/50 transition-colors">
                                                         <td className={`sticky left-0 z-10 bg-amber-50/80 backdrop-blur border-r border-amber-200 shadow-[4px_0_8px_rgba(0,0,0,0.02)] ${isMobile ? 'p-1 w-[85px] min-w-[85px]' : 'p-2'}`}>
                                                             <div className="text-xs font-bold text-amber-800 flex items-center justify-end pr-2">主班</div>
                                                         </td>
                                                         {dateRange.map(date => {
-                                                            const radShifts = db.shifts.filter(s => 
-                                                                s.date === date && (s.station?.includes('場控') || s.station === '主' || s.station === '主控')
-                                                            );
+                                                            const radNames = location === '北投' 
+                                                                ? db.shifts.filter(s => s.date === date && (s.station?.includes('場控') || s.station === '主' || s.station === '主控'))
+                                                                    .map(s => radUsers.find(u => u.id === s.userId)?.name).filter(Boolean)
+                                                                : [];
                                                             
-                                                            const radNames = radShifts.map(s => {
-                                                                const u = radUsers.find(u => u.id === s.userId);
-                                                                return u?.isRadiographer ? u.name : null;
-                                                                }).filter(Boolean);
+                                                            const hmNames = db.getHealthMgmtShifts().filter(s => s.date === date && s.location === location && (s.task === '主控' || s.station === '主控'))
+                                                                .map(s => hmStaff.find(st => st.id === s.userId)?.name).filter(Boolean);
                                                             
-                                                            const displayList = radNames;
+                                                            const displayList = Array.from(new Set([...radNames, ...hmNames]));
                                                             
                                                             return (
                                                                 <td 
@@ -2869,22 +2891,21 @@ POR：
                                                         })}
                                                     </tr>
 
-                                                    {/* Assistant Shift (輔控) */}
+                                                    {/* Assistant Shift (輔班 / 輔控) */}
                                                     <tr className="bg-amber-50/30 border-b border-amber-100 group hover:bg-amber-50/50 transition-colors">
                                                         <td className={`sticky left-0 z-10 bg-amber-50/80 backdrop-blur border-r border-amber-200 shadow-[4px_0_8px_rgba(0,0,0,0.02)] ${isMobile ? 'p-1 w-[85px] min-w-[85px]' : 'p-2'}`}>
                                                             <div className="text-xs font-bold text-amber-800 flex items-center justify-end pr-2">輔班</div>
                                                         </td>
                                                         {dateRange.map(date => {
-                                                            const radShifts = db.shifts.filter(s => 
-                                                                s.date === date && (s.specialRoles?.includes('輔班') || s.station === '輔' || s.station === '輔控')
-                                                            );
+                                                            const radNames = location === '北投' 
+                                                                ? db.shifts.filter(s => s.date === date && (s.specialRoles?.includes('輔班') || s.station === '輔' || s.station === '輔控'))
+                                                                    .map(s => radUsers.find(u => u.id === s.userId)?.name).filter(Boolean)
+                                                                : [];
                                                             
-                                                            const radNames = radShifts.map(s => {
-                                                                const u = radUsers.find(u => u.id === s.userId);
-                                                                return u?.isRadiographer ? u.name : null;
-                                                                }).filter(Boolean);
+                                                            const hmNames = db.getHealthMgmtShifts().filter(s => s.date === date && s.location === location && (s.task === '輔控' || s.station === '輔控'))
+                                                                .map(s => hmStaff.find(st => st.id === s.userId)?.name).filter(Boolean);
                                                             
-                                                            const displayList = radNames;
+                                                            const displayList = Array.from(new Set([...radNames, ...hmNames]));
                                                             
                                                             return (
                                                                 <td 
@@ -3197,21 +3218,27 @@ POR：
                                                     const radUsers = db.getUsers();
                                                     const hmStaff = db.getHealthMgmtStaff();
                                                     
-                                                    const locMainRadNames = radShifts.filter(s => {
+                                                    const locMainRadNames = loc === '北投' ? radShifts.filter(s => {
                                                         const u = radUsers.find(user => user.id === s.userId);
                                                         const effectiveLoc = s.location || '北投';
-                                                        return u?.isRadiographer && effectiveLoc === loc && (s.station?.includes('場控') || s.station === '主' || s.station === '主控');
-                                                    }).map(s => radUsers.find(u => u.id === s.userId)?.name).filter(Boolean);
+                                                        return u?.isRadiographer && effectiveLoc === '北投' && (s.station?.includes('場控') || s.station === '主' || s.station === '主控');
+                                                    }).map(s => radUsers.find(u => u.id === s.userId)?.name).filter(Boolean) : [];
                                                     
-                                                    const locMainNamesJoined = locMainRadNames.join(' / ') || '-';
+                                                    const locMainHMNames = hmShifts.filter(s => s.location === loc && (s.task === '主控' || s.station === '主控'))
+                                                        .map(s => hmStaff.find(st => st.id === s.userId)?.name).filter(Boolean);
                                                     
-                                                    const locAssistRadNames = radShifts.filter(s => {
+                                                    const locMainNamesJoined = Array.from(new Set([...locMainRadNames, ...locMainHMNames])).join(' / ') || '-';
+                                                    
+                                                    const locAssistRadNames = loc === '北投' ? radShifts.filter(s => {
                                                         const u = radUsers.find(user => user.id === s.userId);
                                                         const effectiveLoc = s.location || '北投';
-                                                        return u?.isRadiographer && effectiveLoc === loc && (s.specialRoles?.includes('輔班') || s.station === '輔' || s.station === '輔控');
-                                                    }).map(s => radUsers.find(u => u.id === s.userId)?.name).filter(Boolean);
+                                                        return u?.isRadiographer && effectiveLoc === '北投' && (s.specialRoles?.includes('輔班') || s.station === '輔' || s.station === '輔控');
+                                                    }).map(s => radUsers.find(u => u.id === s.userId)?.name).filter(Boolean) : [];
                                                     
-                                                    const locAssistNamesJoined = locAssistRadNames.join(' / ') || '-';
+                                                    const locAssistHMNames = hmShifts.filter(s => s.location === loc && (s.task === '輔控' || s.station === '輔控'))
+                                                        .map(s => hmStaff.find(st => st.id === s.userId)?.name).filter(Boolean);
+                                                    
+                                                    const locAssistNamesJoined = Array.from(new Set([...locAssistRadNames, ...locAssistHMNames])).join(' / ') || '-';
 
                                                     return (
                                                         <>
