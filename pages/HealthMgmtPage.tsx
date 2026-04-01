@@ -305,7 +305,21 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                   setEditingShiftTime('');
                   setEditingShiftTask('');
               }
-              setEditingShiftSubTask(existing.task ? existing.task.split(',').map((t: string) => t.trim()).filter(Boolean) : []);
+              if (existing.task) {
+                  const parts = existing.task.split(',').map(t => t.trim()).filter(Boolean);
+                  // Get the relevant tasks for this user's location to correctly identify presets
+                  const userLoc = healthMgmtStaff.find(s => s.id === userId)?.location || currentUserLocation;
+                  const currentLocTasks = db.getHealthMgmtTasks(userLoc);
+                  
+                  const presets = parts.filter(p => currentLocTasks.includes(p));
+                  const customParts = parts.filter(p => !currentLocTasks.includes(p));
+                  
+                  setEditingShiftSubTask(presets);
+                  setEditingShiftCustomTask(customParts.join(','));
+              } else {
+                  setEditingShiftSubTask([]);
+                  setEditingShiftCustomTask('');
+              }
               setEditingShiftLocation(existing.location || ''); // Load location
           } else {
               setEditingShiftTime('');
@@ -329,7 +343,14 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
               finalStation = (`${editingShiftTime} ${editingShiftTask}`).trim();
           }
 
-          const finalTask = editingShiftCustomTask || (editingShiftSubTask.length > 0 ? editingShiftSubTask.join(',') : '');
+          const taskParts = [...editingShiftSubTask];
+          if (editingShiftCustomTask.trim()) {
+              // Only add if not already in the preset list to avoid duplicates
+              if (!taskParts.includes(editingShiftCustomTask.trim())) {
+                  taskParts.push(editingShiftCustomTask.trim());
+              }
+          }
+          const finalTask = taskParts.filter(Boolean).join(',');
 
           await handleUpdateShift(selectedCell.userId, selectedCell.date, finalStation, finalTask || undefined, editingShiftLocation || undefined);
           setSelectedCell(null);
@@ -1116,9 +1137,9 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto w-full pr-2 pb-20 custom-scrollbar">
+      <div className="flex-1 flex flex-col overflow-hidden w-full pb-2 md:pb-4 custom-scrollbar">
         {activeTab === 'anesthesia' ? (
-          <div className="flex flex-col gap-6">
+          <div className="flex flex-col gap-6 overflow-y-auto pr-2 pb-20">
           {/* Anesthesia Schedule Grid */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 flex flex-col overflow-hidden">
             <div className="px-3 py-2 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
@@ -1626,7 +1647,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
           )}
         </div>
       ) : activeTab === 'today' ? (
-        <div className="flex flex-col relative w-full h-full overflow-hidden">
+        <div className="flex flex-col relative w-full h-full overflow-hidden pb-10">
              <HMTodayView 
                 date={todayDate} 
                 onDateChange={setTodayDate}
@@ -1674,10 +1695,9 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
             />
         </div>
       ) : activeTab === 'schedule' ? (
-        <div className="flex flex-col relative w-full">
-          {/* ── Unified Sticky Header ── */}
-          <div className="sticky top-0 z-[100] bg-white border-b border-slate-200 shadow-sm">
-
+        <div className="flex flex-col relative w-full h-full overflow-hidden">
+          {/* ── Fixed Top Controls & Stats ── */}
+          <div className="flex-none bg-white z-[100] border-b border-slate-200 shadow-sm px-1 pb-2">
             {/* Row 1: All controls in one compact line */}
             <div className="flex items-center gap-2 px-3 py-2 flex-wrap">
 
@@ -2018,10 +2038,11 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
               );
           })()}
 
-
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm inline-block min-w-full">
-            <table className="text-sm border-collapse w-auto">
-              <thead className={`sticky z-50 transition-all duration-300 ${isMobile ? 'top-0' : (isQuickScheduleMode ? 'top-[125px]' : 'top-[46px]')}`}>
+          {/* ── Scrollable Table Area ── */}
+          <div className="flex-1 overflow-auto w-full pr-1 pb-20 custom-scrollbar">
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm inline-block min-w-full mt-2">
+                <table className="text-sm border-collapse w-auto">
+                    <thead className="sticky top-0 z-[80]">
                 <tr className="bg-slate-50 border-b border-slate-200">
                   <th className="p-3 text-left font-bold text-slate-600 w-[72px] md:w-28 sticky left-0 top-0 bg-slate-50 z-[60] border-r border-slate-200 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">人員<br/><span className="text-[9px]">(天數)</span></th>
                   {dateRange.map(date => {
@@ -2279,10 +2300,11 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
           </div>
         </div>
       )}
+          </div>
         </div>
       ) : activeTab === 'stats' ? (
         /* Statistics Tab */
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col h-fit p-6">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 flex flex-col h-full p-6 overflow-y-auto pr-2 pb-20">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 pb-6 border-b border-slate-100">
                 <div>
                    <h3 className="text-xl font-bold text-slate-800">健管統計</h3>
@@ -2608,15 +2630,28 @@ const HMTodayView: React.FC<{
         
         if (group.isAnesthesia) {
             assignments = filteredAnes.filter(s => {
+                const u = anesStaff.find(as => as.id === s.userId);
+                if (!u || u.isActive === false) return false;
+
                 // Location filter
-                if (location !== '全部' && s.location && s.location !== location) return false;
-                if (location === '全部' && s.location === '北投') return false; // Default HM logic for Anes: only Dazhi + All
+                const shiftLoc = s.location;
+                if (location !== '全部') {
+                    if (shiftLoc) {
+                        if (shiftLoc !== location) return false;
+                    } else {
+                        // Fallback: check if the requested location is in user's allowed locations
+                        if (!u.locations?.includes(location)) return false;
+                    }
+                } else {
+                    // "全部" view: Default HM logic for Anes: exclude Beitou unless explicitly assigned elsewhere
+                    const effectiveLoc = shiftLoc || (u.locations && u.locations.length > 0 ? u.locations[0] : '');
+                    if (effectiveLoc === '北投') return false;
+                }
 
                 const st = (s.station || '').toUpperCase();
                 if (!st.trim() || st.includes('休') || st.includes('V')) return false;
 
-                const u = anesStaff.find(as => as.id === s.userId);
-                return u && u.isActive !== false;
+                return true;
             }).map(s => {
                 const u = anesStaff.find(st => st.id === s.userId);
                 return {
@@ -2639,7 +2674,8 @@ const HMTodayView: React.FC<{
                 const baseStation = stationParts.find(p => !p.includes(':')) || stationParts[stationParts.length - 1] || '';
                 
                 // Location filter: if view is 北投/大直, only show that location. If 全部, show all.
-                if (location !== '全部' && s.location && s.location !== location) return false;
+                const shiftLoc = s.location || u.location || '';
+                if (location !== '全部' && shiftLoc !== location) return false;
 
                 return group.stations.some(st => {
                     const stUpper = st.toUpperCase();

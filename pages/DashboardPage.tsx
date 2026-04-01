@@ -2267,47 +2267,49 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                     const dateStr = toLocalISOString(dailyDate);
 
                                     // Unified Shift Getter for Daily View
-                                    const getAllAssignments = (stationName: string) => {
+                                    const getAllAssignments = (stationName: string, isHmType: boolean = false) => {
                                         const assignments: { id: string; name: string; alias?: string; color?: string; specialRoles: string[] }[] = [];
                                         
-                                        // 1. Look in Radiographers
-                                        allRadiographers.forEach(u => {
-                                            const s = getDayShift(u.id, dateStr);
-                                            let match = false;
-                                            if (stationName === '遠距' && s.station?.includes('遠')) match = true;
-                                            else if (stationName === '場控' && s.station?.includes('場控')) match = true;
-                                            else if (stationName === '輔班' && s.specialRoles.includes(SPECIAL_ROLES.ASSIST)) match = true;
-                                            else if (stationName === '排班' && s.specialRoles.includes(SPECIAL_ROLES.SCHEDULER)) match = true;
-                                            else if (stationName === '大直') {
-                                                if (s.station?.includes('遠') && s.specialRoles.includes(SPECIAL_ROLES.DAZHI_SUPPORT)) match = true;
-                                                if (s.station === '大直' || s.station?.includes('支援')) match = true; // Added missing direct Dazhi assignments
-                                            }
-                                            else if (s.station === stationName) match = true;
+                                        if (!isHmType) {
+                                            // 1. Look in Radiographers
+                                            allRadiographers.forEach(u => {
+                                                const s = getDayShift(u.id, dateStr);
+                                                let match = false;
+                                                if (stationName === '遠距' && s.station?.includes('遠')) match = true;
+                                                else if (stationName === '場控' && s.station?.includes('場控')) match = true;
+                                                else if (stationName === '輔班' && s.specialRoles.includes(SPECIAL_ROLES.ASSIST)) match = true;
+                                                else if (stationName === '排班' && s.specialRoles.includes(SPECIAL_ROLES.SCHEDULER)) match = true;
+                                                else if (stationName === '大直') {
+                                                    if (s.station?.includes('遠') && s.specialRoles.includes(SPECIAL_ROLES.DAZHI_SUPPORT)) match = true;
+                                                    if (s.station === '大直' || s.station?.includes('支援')) match = true;
+                                                }
+                                                else if (s.station === stationName) match = true;
 
-                                            if (match) {
-                                                assignments.push({
-                                                    id: u.id,
-                                                    name: u.name,
-                                                    alias: u.alias,
-                                                    color: u.color,
-                                                    specialRoles: s.specialRoles.filter(r => r !== '輔班' && r !== '排班')
-                                                });
-                                            }
-                                        });
-
-                                        // 2. Look in Health Mgmt Staff
-                                        healthMgmtStaff.filter(s => s.isActive !== false).forEach(staff => {
-                                            const shift = healthMgmtShifts.find(s => s.userId === staff.id && s.date === dateStr);
-                                            if (shift && shift.station === stationName) {
-                                                assignments.push({
-                                                    id: staff.id,
-                                                    name: staff.name,
-                                                    alias: staff.alias,
-                                                    color: '#10b981', // Emerald for HM
-                                                    specialRoles: shift.task ? [shift.task] : []
-                                                });
-                                            }
-                                        });
+                                                if (match) {
+                                                    assignments.push({
+                                                        id: u.id,
+                                                        name: u.name,
+                                                        alias: u.alias,
+                                                        color: u.color,
+                                                        specialRoles: s.specialRoles.filter(r => r !== '輔班' && r !== '排班')
+                                                    });
+                                                }
+                                            });
+                                        } else {
+                                            // 2. Look in Health Mgmt Staff
+                                            healthMgmtStaff.filter(s => s.isActive !== false).forEach(staff => {
+                                                const shift = healthMgmtShifts.find(s => s.userId === staff.id && s.date === dateStr);
+                                                if (shift && shift.station === stationName) {
+                                                    assignments.push({
+                                                        id: staff.id,
+                                                        name: staff.name,
+                                                        alias: staff.alias,
+                                                        color: '#10b981', // Emerald for HM
+                                                        specialRoles: shift.task ? [shift.task] : []
+                                                    });
+                                                }
+                                            });
+                                        }
 
                                         return assignments;
                                     };
@@ -2339,7 +2341,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                         // User Request: Radiographers should not see HM shifts in their "Today View" context
                                         if (cat.title === '健管排班' && !currentUser.isHealthMgmt && currentUser.role !== UserRole.HM_SUPERVISOR && currentUser.role !== UserRole.SYSTEM_ADMIN) return null;
 
-                                        const visibleStations = cat.stations.filter(st => getAllAssignments(st).length > 0);
+                                        const visibleStations = cat.stations.filter(st => getAllAssignments(st, cat.title === '健管排班').length > 0);
                                         if (visibleStations.length === 0) return null;
 
                                         return (
