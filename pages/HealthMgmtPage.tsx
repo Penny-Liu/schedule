@@ -1908,21 +1908,21 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                                   onClick={() => { const d = new Date(statsViewDate); d.setDate(d.getDate() - 1); setStatsViewDate(toLocalISOString(d)); }}
                                   className="p-1 rounded-full hover:bg-white/20 text-white transition-colors"
                               ><ChevronLeft size={16} /></button>
-                              <div className="flex items-center gap-2">
-                                  <span className="text-white font-black text-sm">
+                              <div className="flex items-center gap-1.5 md:gap-2 whitespace-nowrap">
+                                  <span className="text-white font-black text-sm leading-none">
                                       {svDate.getMonth() + 1}/{svDate.getDate()}
                                   </span>
-                                  <span className={`text-xs font-bold ${isStatsToday ? 'text-teal-100' : 'text-teal-200'}`}>
+                                  <span className={`text-[11px] md:text-xs font-bold leading-none ${isStatsToday ? 'text-teal-100' : 'text-teal-200'}`}>
                                       ({['日', '一', '二', '三', '四', '五', '六'][svDate.getDay()]})
                                   </span>
-                                  {isStatsToday && <span className="text-[10px] md:text-xs font-black text-white bg-white/20 px-1.5 md:px-2 py-0.5 rounded-full leading-none mt-0.5">今</span>}
+                                  {isStatsToday && <span className="text-[11px] md:text-xs font-black text-white bg-white/20 px-1.5 md:px-2 py-0.5 rounded-full leading-none">今</span>}
                               </div>
                               <button
                                   onClick={() => { const d = new Date(statsViewDate); d.setDate(d.getDate() + 1); setStatsViewDate(toLocalISOString(d)); }}
                                   className="p-1 rounded-full hover:bg-white/20 text-white transition-colors"
                               ><ChevronRight size={16} /></button>
                               {!isStatsToday && (
-                                  <button onClick={() => setStatsViewDate(toLocalISOString(new Date()))} className="text-[10px] font-black text-teal-600 bg-white px-2.5 py-1 rounded-full hover:bg-teal-50 transition-colors">回今日</button>
+                                  <button onClick={() => setStatsViewDate(toLocalISOString(new Date()))} className="text-[10px] font-black text-teal-600 bg-white px-2.5 py-1 rounded-full hover:bg-teal-50 transition-colors">今日</button>
                               )}
                           </div>
                           {/* Per-designation counts */}
@@ -1961,30 +1961,30 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                                           <span className="text-xs font-black text-teal-700">北投</span>
                                       </div>
                                   )}
-                                  <div className="flex flex-wrap gap-2 md:gap-4">
-                                      <div className="flex flex-col items-center">
-                                          <span className="text-[8px] md:text-[9px] font-bold text-slate-400 uppercase leading-tight">GI</span>
-                                          <span className="text-xs md:text-sm font-black text-emerald-600 leading-none">{svStats?.beitou_gi ?? '-'}</span>
+                                  <div className="flex items-center gap-2.5 md:gap-4 whitespace-nowrap">
+                                      <div className="flex items-baseline gap-0.5">
+                                          <span className="text-[10px] md:text-[11px] font-bold text-slate-400 uppercase leading-none">GI：</span>
+                                          <span className="text-sm md:text-lg font-black text-emerald-600 leading-none">{svStats?.beitou_gi ?? '-'}</span>
                                       </div>
-                                      <div className="flex flex-col">
-                                          <span className="text-[9px] md:text-[10px] font-bold text-slate-400 uppercase">健檢</span>
-                                          <span className="text-base md:text-xl font-black text-slate-700">{svStats?.beitou_clients ?? '-'}</span>
+                                      <div className="flex items-baseline gap-0.5">
+                                          <span className="text-[10px] md:text-[11px] font-bold text-slate-400 uppercase leading-none">健檢：</span>
+                                          <span className="text-sm md:text-lg font-black text-slate-700 leading-none">{svStats?.beitou_clients ?? '-'}</span>
                                       </div>
                                       {!isHmReadOnly ? (
-                                          <div className="flex flex-col">
-                                              <span className="text-[9px] md:text-[10px] font-bold text-amber-500 uppercase">上限</span>
+                                          <div className="flex items-baseline gap-0.5">
+                                              <span className="text-[10px] md:text-[11px] font-bold text-amber-500 uppercase leading-none">上限：</span>
                                               <input
                                                   type="number"
                                                   value={svStats?.beitou_max_capacity || ''}
                                                   onChange={(e) => db.updateDailyStats(statsViewDate, { beitou_max_capacity: Number(e.target.value) || undefined })}
                                                   placeholder="-"
-                                                  className="w-12 md:w-16 text-base md:text-xl font-black bg-amber-50 border border-amber-200 rounded-lg px-1 md:px-2 py-0.5 outline-none focus:ring-2 focus:ring-amber-400 text-amber-700 placeholder-amber-200"
+                                                  className="w-10 md:w-12 text-sm md:text-lg leading-none font-black bg-amber-50 border border-amber-200 rounded-lg px-1 py-0.5 outline-none focus:ring-2 focus:ring-amber-400 text-amber-700 placeholder-amber-200"
                                               />
                                           </div>
                                       ) : (
-                                          <div className="flex flex-col">
-                                              <span className="text-[9px] md:text-[10px] font-bold text-amber-500 uppercase">上限</span>
-                                              <span className="text-base md:text-xl font-black text-amber-700">{svStats?.beitou_max_capacity ?? '-'}</span>
+                                          <div className="flex items-baseline gap-0.5">
+                                              <span className="text-[10px] md:text-[11px] font-bold text-amber-500 uppercase leading-none">上限：</span>
+                                              <span className="text-sm md:text-lg font-black text-amber-700 leading-none">{svStats?.beitou_max_capacity ?? '-'}</span>
                                           </div>
                                       )}
                                   </div>
@@ -2000,34 +2000,34 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                                           <span className="text-xs font-black text-rose-600">大直</span>
                                       </div>
                                   )}
-                                  <div className="flex flex-wrap gap-2 md:gap-4">
-                                      <div className="flex flex-col items-center">
-                                          <span className="text-[8px] md:text-[9px] font-bold text-slate-400 uppercase leading-tight">GI</span>
-                                          <span className="text-xs md:text-sm font-black text-emerald-600 leading-none">{svStats?.dazhi_gi ?? '-'}</span>
+                                  <div className="flex items-center gap-2.5 md:gap-4 whitespace-nowrap">
+                                      <div className="flex items-baseline gap-0.5">
+                                          <span className="text-[10px] md:text-[11px] font-bold text-slate-400 uppercase leading-none">GI：</span>
+                                          <span className="text-sm md:text-lg font-black text-emerald-600 leading-none">{svStats?.dazhi_gi ?? '-'}</span>
                                       </div>
-                                      <div className="flex flex-col">
-                                          <span className="text-[9px] md:text-[10px] font-bold text-slate-400 uppercase">健檢</span>
-                                          <span className="text-base md:text-xl font-black text-slate-700">{svStats?.dazhi_clients ?? '-'}</span>
+                                      <div className="flex items-baseline gap-0.5">
+                                          <span className="text-[10px] md:text-[11px] font-bold text-slate-400 uppercase leading-none">健檢：</span>
+                                          <span className="text-sm md:text-lg font-black text-slate-700 leading-none">{svStats?.dazhi_clients ?? '-'}</span>
                                       </div>
-                                      <div className="flex flex-col">
-                                          <span className="text-[9px] md:text-[10px] font-bold text-slate-400 uppercase">代謝</span>
-                                          <span className="text-base md:text-xl font-black text-sky-600">{svStats?.dazhi_metabolism_clients ?? '-'}</span>
+                                      <div className="flex items-baseline gap-0.5">
+                                          <span className="text-[10px] md:text-[11px] font-bold text-slate-400 uppercase leading-none">代謝：</span>
+                                          <span className="text-sm md:text-lg font-black text-sky-600 leading-none">{svStats?.dazhi_metabolism_clients ?? '-'}</span>
                                       </div>
                                       {!isHmReadOnly ? (
-                                          <div className="flex flex-col">
-                                              <span className="text-[9px] md:text-[10px] font-bold text-amber-500 uppercase">上限</span>
+                                          <div className="flex items-baseline gap-0.5">
+                                              <span className="text-[10px] md:text-[11px] font-bold text-amber-500 uppercase leading-none">上限：</span>
                                               <input
                                                   type="number"
                                                   value={svStats?.dazhi_max_capacity || ''}
                                                   onChange={(e) => db.updateDailyStats(statsViewDate, { dazhi_max_capacity: Number(e.target.value) || undefined })}
                                                   placeholder="-"
-                                                  className="w-12 md:w-16 text-base md:text-xl font-black bg-amber-50 border border-amber-200 rounded-lg px-1 md:px-2 py-0.5 outline-none focus:ring-2 focus:ring-amber-400 text-amber-700 placeholder-amber-200"
+                                                  className="w-10 md:w-12 text-sm md:text-lg leading-none font-black bg-amber-50 border border-amber-200 rounded-lg px-1 py-0.5 outline-none focus:ring-2 focus:ring-amber-400 text-amber-700 placeholder-amber-200"
                                               />
                                           </div>
                                       ) : (
-                                          <div className="flex flex-col">
-                                              <span className="text-[9px] md:text-[10px] font-bold text-amber-500 uppercase">上限</span>
-                                              <span className="text-base md:text-xl font-black text-amber-700">{svStats?.dazhi_max_capacity ?? '-'}</span>
+                                          <div className="flex items-baseline gap-0.5">
+                                              <span className="text-[10px] md:text-[11px] font-bold text-amber-500 uppercase leading-none">上限：</span>
+                                              <span className="text-sm md:text-lg font-black text-amber-700 leading-none">{svStats?.dazhi_max_capacity ?? '-'}</span>
                                           </div>
                                       )}
                                   </div>

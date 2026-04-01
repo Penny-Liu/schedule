@@ -2646,10 +2646,10 @@ ${flowWashNames ? '流+洗：' + flowWashNames : ''}${flowWashNames && (flowName
                         <table className="w-auto border-collapse bg-white">
                             <thead className="sticky top-0 z-50 shadow-sm">
                                 <tr>
-                                    <th className={`sticky left-0 z-[60] bg-slate-50 border-b border-r border-slate-200 shadow-[4px_0_8px_rgba(0,0,0,0.02)] ${isMobile ? 'p-1 w-[70px] min-w-[70px]' : 'p-2 w-[120px] text-left'}`}>
-                                        <div className={`flex items-center font-bold text-xs text-slate-600 ${isMobile ? 'justify-center' : 'gap-2'}`}>
+                                    <th className={`sticky top-0 left-0 z-[90] align-top bg-slate-50 border-b border-r border-slate-200 shadow-[4px_0_8px_rgba(0,0,0,0.02)] ${isMobile ? 'p-1 w-[70px] min-w-[70px]' : 'p-2 w-[96px] text-left'}`}>
+                                        <div className={`flex items-start font-bold text-xs text-slate-700 ${isMobile ? 'justify-center' : 'gap-2'}`}>
                                             <LayoutGrid size={14} className="text-teal-600" />
-                                            {!isMobile && '日期'}
+                                            {!isMobile && '崗位'}
                                         </div>
                                     </th>
                                     {dateRange.map(date => {
@@ -2662,17 +2662,17 @@ ${flowWashNames ? '流+洗：' + flowWashNames : ''}${flowWashNames && (flowName
                                         return (
                                             <th 
                                                 key={date} 
-                                                className={`border-b border-slate-200 py-1.5 min-w-[52px] text-center relative ${isToday ? 'bg-teal-100' : (holiday ? 'bg-red-50' : 'bg-white')}`}
+                                                className={`border-b border-slate-200 py-1 min-w-[44px] md:min-w-[46px] text-center relative ${isToday ? 'bg-teal-100' : (holiday ? 'bg-red-50' : 'bg-white')}`}
                                             >
                                                 <div className="flex flex-col items-center gap-0.5">
-                                                    <div className={`font-bold text-[11px] leading-tight ${isToday ? 'text-teal-600' : (isWeekend || holiday ? 'text-red-500' : 'text-slate-800')}`}>
+                                                    <div className={`font-bold text-[10px] leading-tight ${isToday ? 'text-teal-600' : (isWeekend || holiday ? 'text-red-500' : 'text-slate-800')}`}>
                                                         {d.getMonth() + 1}/{d.getDate()}
                                                     </div>
-                                                    <div className={`text-[10px] opacity-75 leading-tight ${isToday ? 'text-teal-600' : (isWeekend || holiday ? 'text-red-500' : 'text-slate-700')}`}>
+                                                    <div className={`text-[9px] opacity-75 leading-tight ${isToday ? 'text-teal-600' : (isWeekend || holiday ? 'text-red-500' : 'text-slate-700')}`}>
                                                         {['日', '一', '二', '三', '四', '五', '六'][d.getDay()]}
                                                     </div>
                                                     {holiday && (
-                                                        <span className={`text-[9px] px-1 rounded-sm leading-tight max-w-[45px] truncate mt-0.5 ${isToday ? 'bg-teal-200 text-teal-800 border border-teal-300' : 'bg-red-100 text-red-700 border border-red-200'}`}>
+                                                        <span className={`text-[8px] px-1 rounded-sm leading-tight max-w-[38px] truncate mt-0.5 ${isToday ? 'bg-teal-200 text-teal-800 border border-teal-300' : 'bg-red-100 text-red-700 border border-red-200'}`}>
                                                             {holiday.name}
                                                         </span>
                                                     )}
@@ -2875,9 +2875,9 @@ ${flowWashNames ? '流+洗：' + flowWashNames : ''}${flowWashNames && (flowName
                                                 className="bg-slate-100 border-b-2 border-slate-300 cursor-pointer hover:bg-slate-200 transition-colors select-none"
                                                 onClick={() => toggleLocationCollapse(location)}
                                             >
-                                                <td colSpan={dateRange.length + 1} className="px-3 py-2 font-bold text-slate-800 bg-slate-200 sticky left-0 z-10 text-left border-y-2 border-slate-400 shadow-[inset_0_2px_4px_rgba(0,0,0,0.1)]">
-                                                    <div className="flex items-center justify-between w-full">
-                                                        <div className="flex items-center gap-2">
+                                                <td colSpan={dateRange.length + 1} className="px-3 py-2 font-bold text-slate-800 bg-slate-200 sticky left-0 z-[70] text-left border-y-2 border-slate-400 shadow-[inset_0_2px_4px_rgba(0,0,0,0.1)]">
+                                                    <div className="relative flex items-center justify-between w-full">
+                                                        <div className="sticky left-2 z-[75] inline-flex items-center gap-2 bg-slate-200/95 px-2 py-0.5 rounded-md border border-slate-300 shadow-sm">
                                                             <span className={`w-2.5 h-2.5 rounded-full ${LOCATION_COLORS[location]?.split(' ')[0]}`}></span>
                                                             <span className="text-sm tracking-wide">{location}區</span>
                                                             <span className="text-[10px] font-medium text-slate-400 ml-1">
@@ -2918,10 +2918,10 @@ ${flowWashNames ? '流+洗：' + flowWashNames : ''}${flowWashNames && (flowName
                                                             return (
                                                                 <td 
                                                                     key={date} 
-                                                                    className="p-1 border-r border-amber-50 text-center text-[11px] font-normal text-amber-900"
+                                                                    className="p-1 border-r border-amber-50 text-center min-w-[44px] md:min-w-[46px]"
                                                                 >
                                                                     {displayList.length > 0 ? displayList.map((name, i) => (
-                                                                        <div key={`${name}-${i}`} className="leading-tight py-0.5">{name}</div>
+                                                                        <div key={`${name}-${i}`} className="text-[12px] md:text-[13px] font-normal leading-tight whitespace-nowrap tracking-tight py-0.5 text-slate-900">{name}</div>
                                                                     )) : '-'}
                                                                 </td>
                                                             );
@@ -2950,10 +2950,10 @@ ${flowWashNames ? '流+洗：' + flowWashNames : ''}${flowWashNames && (flowName
                                                             return (
                                                                 <td 
                                                                     key={date} 
-                                                                    className="p-1 border-r border-amber-50 text-center text-[11px] font-normal text-amber-900"
+                                                                    className="p-1 border-r border-amber-50 text-center min-w-[44px] md:min-w-[46px]"
                                                                 >
                                                                     {displayList.length > 0 ? displayList.map((name, i) => (
-                                                                        <div key={`${name}-${i}`} className="leading-tight py-0.5">{name}</div>
+                                                                        <div key={`${name}-${i}`} className="text-[12px] md:text-[13px] font-normal leading-tight whitespace-nowrap tracking-tight py-0.5 text-slate-900">{name}</div>
                                                                     )) : '-'}
                                                                 </td>
                                                             );
@@ -3064,7 +3064,7 @@ ${flowWashNames ? '流+洗：' + flowWashNames : ''}${flowWashNames && (flowName
                                                             return (
                                                                 <td 
                                                                     key={date} 
-                                                                    className={`p-1 border-r border-slate-100 min-w-[52px] relative 
+                                                                    className={`p-1 border-r border-slate-100 min-w-[44px] md:min-w-[46px] relative 
                                                                         ${canEdit ? 'cursor-pointer hover:bg-slate-50' : 'cursor-not-allowed'}
                                                                         ${getStationBgColor()} 
                                                                         ${selectedCell?.date === date && selectedCell?.doctorId === '' ? 'ring-2 ring-inset ring-blue-400' : ''}
@@ -3079,14 +3079,14 @@ ${flowWashNames ? '流+洗：' + flowWashNames : ''}${flowWashNames && (flowName
                                                                         
                                                                         if (isGI) {
                                                                             return (
-                                                                                <div className="absolute top-0 right-0 z-10 bg-red-600 text-white px-1.5 py-0.5 text-[10px] font-black rounded-bl shadow-md pointer-events-none">
+                                                                                <div className="absolute top-0 right-0 z-[1] bg-red-600 text-white px-1.5 py-0.5 text-[10px] font-black rounded-bl shadow-md pointer-events-none">
                                                                                     {location === '北投' ? stats?.beitou_gi : (location === '大直' ? stats?.dazhi_gi : '')}
                                                                                 </div>
                                                                             );
                                                                         }
                                                                         if (isExp) {
                                                                             return (
-                                                                                <div className="absolute top-0 right-0 z-10 bg-blue-700 text-white px-1.5 py-0.5 text-[10px] font-black rounded-bl shadow-md pointer-events-none">
+                                                                                <div className="absolute top-0 right-0 z-[1] bg-blue-700 text-white px-1.5 py-0.5 text-[10px] font-black rounded-bl shadow-md pointer-events-none">
                                                                                     {location === '北投' ? stats?.beitou_clients : (location === '大直' ? `${stats?.dazhi_clients || 0}/${stats?.dazhi_metabolism_clients || 0}` : '')}
                                                                                 </div>
                                                                             );
@@ -3101,7 +3101,7 @@ ${flowWashNames ? '流+洗：' + flowWashNames : ''}${flowWashNames && (flowName
                                                                                  return (
                                                                                      <div key={shift.id} className={`w-full text-center p-0.5 rounded ${isSimulated ? 'bg-amber-50 border border-dashed border-amber-400 animate-pulse' : ''}`}>
                                                                                          <div className={`flex flex-col items-center ${isSimulated ? 'text-amber-800' : 'text-slate-800'}`} title={doc?.name}>
-                                                                                             <div className="text-[11px] font-normal leading-tight whitespace-nowrap">
+                                                                                             <div className={`text-[12px] md:text-[13px] font-normal leading-tight whitespace-nowrap tracking-tight ${isSimulated ? 'text-amber-900' : 'text-slate-900'}`}>
                                                                                                  {doc?.name || '?'}
                                                                                              </div>
                                                                                              {suffix && (
