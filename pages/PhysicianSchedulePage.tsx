@@ -2875,9 +2875,9 @@ ${flowWashNames ? '流+洗：' + flowWashNames : ''}${flowWashNames && (flowName
                                                 className="bg-slate-100 border-b-2 border-slate-300 cursor-pointer hover:bg-slate-200 transition-colors select-none"
                                                 onClick={() => toggleLocationCollapse(location)}
                                             >
-                                                <td colSpan={dateRange.length + 1} className="px-3 py-2 font-bold text-slate-800 bg-slate-200 sticky left-0 z-[70] text-left border-y-2 border-slate-400 shadow-[inset_0_2px_4px_rgba(0,0,0,0.1)]">
-                                                    <div className="relative flex items-center justify-between w-full">
-                                                        <div className="sticky left-2 z-[75] inline-flex items-center gap-2 bg-slate-200/95 px-2 py-0.5 rounded-md border border-slate-300 shadow-sm">
+                                                <td colSpan={dateRange.length + 1} className="px-3 py-2 font-bold text-slate-800 bg-slate-200 sticky left-0 z-10 text-left border-y-2 border-slate-400 shadow-[inset_0_2px_4px_rgba(0,0,0,0.1)]">
+                                                    <div className="flex items-center justify-between w-full">
+                                                        <div className="flex items-center gap-2">
                                                             <span className={`w-2.5 h-2.5 rounded-full ${LOCATION_COLORS[location]?.split(' ')[0]}`}></span>
                                                             <span className="text-sm tracking-wide">{location}區</span>
                                                             <span className="text-[10px] font-medium text-slate-400 ml-1">
