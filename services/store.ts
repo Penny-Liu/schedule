@@ -1512,6 +1512,7 @@ BMD :{{bmd}}
                 date: shift.date,
                 station: shift.station,
                 task: packedTask,
+                time: shift.time,
                 userId: shift.userId // Supabase table uses 'userId' (CamelCase) for this table specifically
             };
 

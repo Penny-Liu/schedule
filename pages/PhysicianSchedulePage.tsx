@@ -49,27 +49,32 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
             return u.alias || u.name.slice(-2);
         };
 
-        const dayHMShifts = db.getHealthMgmtShifts().filter(s => s.date === dateStr && s.location === '北投');
         const hmStaff = db.getHealthMgmtStaff();
+        const dayHMShifts = db.getHealthMgmtShifts().filter(s => {
+            const shiftLoc = s.location || hmStaff.find(st => st.id === s.userId)?.location;
+            return s.date === dateStr && shiftLoc === '北投';
+        });
 
         const mainRads = dayStaffShifts.filter(s => {
             const u = users.find(user => user.id === s.userId);
             return u?.isRadiographer && (s.station?.includes('場控') || s.station === '主' || s.station === '主控');
         }).map(s => getName(s.userId));
         
-        const mainHM = dayHMShifts.filter(s => s.task === '主控' || s.station === '主控')
-            .map(s => hmStaff.find(st => st.id === s.userId)?.name).filter(Boolean);
+        const mainHM = dayHMShifts.filter(s => (s.task || '').includes('主控') || (s.station || '').includes('主控'))
+            .map(s => { const st = hmStaff.find(t => t.id === s.userId); return st?.alias || st?.name?.slice(-2); }).filter(Boolean);
 
         const assistRads = dayStaffShifts.filter(s => {
             const u = users.find(user => user.id === s.userId);
             return u?.isRadiographer && (s.specialRoles?.includes('輔班') || s.station === '輔' || s.station === '輔控');
         }).map(s => getName(s.userId));
 
-        const assistHM = dayHMShifts.filter(s => s.task === '輔控' || s.station === '輔控')
-            .map(s => hmStaff.find(st => st.id === s.userId)?.name).filter(Boolean);
+        const assistHM = dayHMShifts.filter(s => (s.task || '').includes('輔控') || (s.station || '').includes('輔控'))
+            .map(s => { const st = hmStaff.find(t => t.id === s.userId); return st?.alias || st?.name?.slice(-2); }).filter(Boolean);
 
-        const combinedMain = Array.from(new Set([...mainRads, ...mainHM]));
-        const combinedAssist = Array.from(new Set([...assistRads, ...assistHM]));
+        const radPart = `${mainRads.join('/') || '-'}/${assistRads.join('/') || '-'}`;
+        const hmPart = (mainHM.length > 0 || assistHM.length > 0)
+            ? `  ${mainHM.join('/') || '-'}/${assistHM.join('/') || '-'}`
+            : '';
 
         const getDocs = (station: string) => dayShifts.filter(s => (s.scheduled_station === station || s.station === station)).map(s => {
             const d = doctors.find(doc => doc.id === s.doctorId);
@@ -85,7 +90,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({ currentUs
         const dayNames = ['日', '一', '二', '三', '四', '五', '六'];
 
         return `${date.getMonth() + 1}/${date.getDate()} （${dayNames[date.getDay()]}）
-主/輔：${combinedMain.join('/') || '-'}/${combinedAssist.join('/') || '-'}
+主/輔：${radPart}${hmPart}
 影像：${getDocs('影像').join('/') || '無'}
 解說：${getDocs('解說').join('/') || '無'}
 支援：${getDocs('支援').join('/') || '無'}
@@ -123,20 +128,41 @@ GI：${stats?.beitou_gi || 0} 台`;
         const sortedGIShifts = [...giShifts].sort((a,b) => (a.scheduled_station || '').localeCompare(b.scheduled_station || ''));
         const giDocsNames = sortedGIShifts.map(s => doctors.find(doc => doc.id === s.doctorId)?.name || '?');
 
-        const mainHM = dayHMShifts.filter(s => s.location === '大直' && (s.task === '主控' || s.station === '主控'))
-            .map(s => hmStaff.find(st => st.id === s.userId)?.name).filter(Boolean);
-        const assistHM = dayHMShifts.filter(s => s.location === '大直' && (s.task === '輔控' || s.station === '輔控'))
-            .map(s => hmStaff.find(st => st.id === s.userId)?.name).filter(Boolean);
+        const mainHM = dayHMShifts.filter(s => {
+            const shiftLoc = s.location || hmStaff.find(st => st.id === s.userId)?.location;
+            return shiftLoc === '大直' && ((s.task || '').includes('主控') || (s.station || '').includes('主控'));
+        }).map(s => hmStaff.find(t => t.id === s.userId)?.name).filter(Boolean);
+        const assistHM = dayHMShifts.filter(s => {
+            const shiftLoc = s.location || hmStaff.find(st => st.id === s.userId)?.location;
+            return shiftLoc === '大直' && ((s.task || '').includes('輔控') || (s.station || '').includes('輔控'));
+        }).map(s => hmStaff.find(t => t.id === s.userId)?.name).filter(Boolean);
 
-        const getHMNameForGI = (giStation: string) => {
-            const shift = dayHMShifts.find(s => s.location === '大直' && (s.task?.includes(giStation) || s.station?.includes(giStation)));
+        // Helper: get 大直 HM staff names whose task includes keyword
+        const getHMByTask = (keyword: string): string[] => {
+            return dayHMShifts
+                .filter(s => {
+                    const shiftLoc = s.location || hmStaff.find(st => st.id === s.userId)?.location;
+                    return shiftLoc === '大直' && ((s.task || '').includes(keyword) || (s.station || '').includes(keyword));
+                })
+                .map(s => hmStaff.find(st => st.id === s.userId)?.name)
+                .filter(Boolean) as string[];
+        };
+
+        // 主跟 for each GI: match HM task by GI station name (with location fallback)
+        const getHMNameForGI = (giStation: string): string => {
+            const shift = dayHMShifts.find(s => {
+                const shiftLoc = s.location || hmStaff.find(st => st.id === s.userId)?.location;
+                return shiftLoc === '大直' && (s.task?.includes(giStation) || s.station?.includes(giStation));
+            });
             return hmStaff.find(st => st.id === shift?.userId)?.name || '';
         };
-        
+
+        // 麻醫：doctors only (not anesthesia nurses)
+        const anesDocNames = dayShifts.filter(s => (s.scheduled_station || '').includes('麻')).map(s => doctors.find(d => d.id === s.doctorId)?.name).filter(Boolean) as string[];
+
+        // 麻護：anesthesia nurses for 大直, alternately assigned across GI sessions
         const anesShifts = db.getAnesthesiaShifts().filter(s => s.date === dateStr && s.location === '大直');
-        const anesStaffNames = anesShifts.map(s => db.getAnesthesiaStaff().find(as => as.id === s.userId)?.name).filter(Boolean);
-        const anesDocNames = dayShifts.filter(s => (s.scheduled_station || '').includes('麻')).map(s => doctors.find(d => d.id === s.doctorId)?.name).filter(Boolean);
-        const allAnes = Array.from(new Set([...anesStaffNames, ...anesDocNames]));
+        const anesNurseNames = anesShifts.map(s => db.getAnesthesiaStaff().find(as => as.id === s.userId)?.name).filter(Boolean) as string[];
 
         const getSpec = (st: string) => {
             let res = getDocs(st).join('、');
@@ -147,6 +173,15 @@ GI：${stats?.beitou_gi || 0} 台`;
             }
             return res || '-';
         };
+
+        // 動態項目
+        const nutriNames = ['營1', '營2', '營3'].flatMap(k => getHMByTask(k)).join('、');
+        const onlineNames = getHMByTask('線上').join('、');
+        const supplyNames = getHMByTask('供餐').join('、');
+        const porNames = getHMByTask('POR').join('、');
+        const flowWashNames = getHMByTask('洗流').join('、');
+        const flowNames = getHMByTask('流動').join('、');
+        const washNames = getHMByTask('洗滌').join('、');
 
         const dayNames = ['日', '一', '二', '三', '四', '五', '六'];
 
@@ -159,7 +194,7 @@ GI：${stats?.beitou_gi || 0} 台`;
 影像 : ${imgDocs.join('、') || '-'}
 解說 : ${expDocs.join('、') || '-'} 醫師
 腸胃：${giDocsNames.join(' 醫師、') || '-'} 醫師
-麻醫：${allAnes.map(n => n + ' 醫師').join('、') || '-'}
+麻醫：${anesDocNames.map(n => n + ' 醫師').join('、') || '-'}
 
 3科會診醫師(09:00~12:00)
 婦科：${getSpec('婦科')}
@@ -168,22 +203,21 @@ GI：${stats?.beitou_gi || 0} 台`;
 
 放射
 
-營養諮詢
-
-線上：
-
-
-供餐：
+營養諮詢${nutriNames ? '\n' + nutriNames : ''}
+${onlineNames ? '線上：' + onlineNames + '\n' : ''}
+供餐：${supplyNames}
 
 腸胃鏡：${giDocsNames.map(n => n + '醫師').join('、') || '-'}
 ${giDocsNames.length}線 ${stats?.dazhi_gi || 0}台 (第一台 :   ，第二台 : ，最後一台 :     ，麻評  位)
 
-${sortedGIShifts.map((s, i) => `診${i+1}：${doctors.find(d => d.id === s.doctorId)?.name || '?'} 醫師(08：00)
-主跟：${getHMNameForGI(s.scheduled_station || '')}
-麻護：`).join('\n\n')}
+${sortedGIShifts.map((s, i) => {
+    const nurse = anesNurseNames[i % anesNurseNames.length] || '';
+    const mainFollower = getHMNameForGI(`診${i+1}`);
+    return `診${i+1}：${doctors.find(d => d.id === s.doctorId)?.name || '?'} 醫師(08：00)\n主跟：${mainFollower}\n麻護：${nurse}`;
+}).join('\n\n')}
 
-POR：
-流+洗：`;
+POR：${porNames}
+${flowWashNames ? '流+洗：' + flowWashNames : ''}${flowWashNames && (flowNames || washNames) ? '\n' : ''}${flowNames ? '流動：' + flowNames : ''}${flowNames && washNames ? '\n' : ''}${washNames ? '洗滌：' + washNames : ''}`;
     };
 
     const [currentDate, setCurrentDate] = useState(new Date());
@@ -2616,7 +2650,7 @@ POR：
                                     <th className={`sticky left-0 z-[60] bg-slate-50 border-b border-r border-slate-200 shadow-[4px_0_8px_rgba(0,0,0,0.02)] ${isMobile ? 'p-1 w-[70px] min-w-[70px]' : 'p-2 w-[120px] text-left'}`}>
                                         <div className={`flex items-center font-bold text-xs text-slate-600 ${isMobile ? 'justify-center' : 'gap-2'}`}>
                                             <LayoutGrid size={14} className="text-teal-600" />
-                                            {!isMobile && '工作崗位'}
+                                            {!isMobile && '日期'}
                                         </div>
                                     </th>
                                     {dateRange.map(date => {
@@ -2829,7 +2863,8 @@ POR：
                                     // Filter stations that belong to this location
                                     const locationStations = stations.filter(s => s.location === location);
                                     
-                                    if (locationStations.length === 0) return null; // Skip empty locations
+                                    // Only skip if it's not a primary location (Beitou/Dazhi) and has no doctor stations
+                                    if (locationStations.length === 0 && location !== '北投' && location !== '大直') return null;
 
                                     const radUsers = db.getUsers();
                                     const hmStaff = db.getHealthMgmtStaff();
@@ -2873,8 +2908,11 @@ POR：
                                                                     .map(s => radUsers.find(u => u.id === s.userId)?.name).filter(Boolean)
                                                                 : [];
                                                             
-                                                            const hmNames = db.getHealthMgmtShifts().filter(s => s.date === date && s.location === location && (s.task === '主控' || s.station === '主控'))
-                                                                .map(s => hmStaff.find(st => st.id === s.userId)?.name).filter(Boolean);
+                                                            // If shift has no location, fall back to the staff member's home location
+                                                            const hmNames = db.getHealthMgmtShifts().filter(s => {
+                                                                const shiftLocation = s.location || hmStaff.find(st => st.id === s.userId)?.location;
+                                                                return s.date === date && shiftLocation === location && ((s.task || '').includes('主控') || (s.station || '').includes('主控'));
+                                                            }).map(s => hmStaff.find(st => st.id === s.userId)?.name).filter(Boolean);
                                                             
                                                             const displayList = Array.from(new Set([...radNames, ...hmNames]));
                                                             
@@ -2902,8 +2940,11 @@ POR：
                                                                     .map(s => radUsers.find(u => u.id === s.userId)?.name).filter(Boolean)
                                                                 : [];
                                                             
-                                                            const hmNames = db.getHealthMgmtShifts().filter(s => s.date === date && s.location === location && (s.task === '輔控' || s.station === '輔控'))
-                                                                .map(s => hmStaff.find(st => st.id === s.userId)?.name).filter(Boolean);
+                                                            // If shift has no location, fall back to the staff member's home location
+                                                            const hmNames = db.getHealthMgmtShifts().filter(s => {
+                                                                const shiftLocation = s.location || hmStaff.find(st => st.id === s.userId)?.location;
+                                                                return s.date === date && shiftLocation === location && ((s.task || '').includes('輔控') || (s.station || '').includes('輔控'));
+                                                            }).map(s => hmStaff.find(st => st.id === s.userId)?.name).filter(Boolean);
                                                             
                                                             const displayList = Array.from(new Set([...radNames, ...hmNames]));
                                                             
@@ -3224,8 +3265,10 @@ POR：
                                                         return u?.isRadiographer && effectiveLoc === '北投' && (s.station?.includes('場控') || s.station === '主' || s.station === '主控');
                                                     }).map(s => radUsers.find(u => u.id === s.userId)?.name).filter(Boolean) : [];
                                                     
-                                                    const locMainHMNames = hmShifts.filter(s => s.location === loc && (s.task === '主控' || s.station === '主控'))
-                                                        .map(s => hmStaff.find(st => st.id === s.userId)?.name).filter(Boolean);
+                                                    const locMainHMNames = hmShifts.filter(s => {
+                                                        const shiftLoc = s.location || hmStaff.find(st => st.id === s.userId)?.location;
+                                                        return shiftLoc === loc && ((s.task || '').includes('主控') || (s.station || '').includes('主控'));
+                                                    }).map(s => hmStaff.find(st => st.id === s.userId)?.name).filter(Boolean);
                                                     
                                                     const locMainNamesJoined = Array.from(new Set([...locMainRadNames, ...locMainHMNames])).join(' / ') || '-';
                                                     
@@ -3235,8 +3278,10 @@ POR：
                                                         return u?.isRadiographer && effectiveLoc === '北投' && (s.specialRoles?.includes('輔班') || s.station === '輔' || s.station === '輔控');
                                                     }).map(s => radUsers.find(u => u.id === s.userId)?.name).filter(Boolean) : [];
                                                     
-                                                    const locAssistHMNames = hmShifts.filter(s => s.location === loc && (s.task === '輔控' || s.station === '輔控'))
-                                                        .map(s => hmStaff.find(st => st.id === s.userId)?.name).filter(Boolean);
+                                                    const locAssistHMNames = hmShifts.filter(s => {
+                                                        const shiftLoc = s.location || hmStaff.find(st => st.id === s.userId)?.location;
+                                                        return shiftLoc === loc && ((s.task || '').includes('輔控') || (s.station || '').includes('輔控'));
+                                                    }).map(s => hmStaff.find(st => st.id === s.userId)?.name).filter(Boolean);
                                                     
                                                     const locAssistNamesJoined = Array.from(new Set([...locAssistRadNames, ...locAssistHMNames])).join(' / ') || '-';
 

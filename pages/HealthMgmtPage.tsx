@@ -61,14 +61,14 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
   const [selectedCell, setSelectedCell] = useState<{ userId: string; date: string } | null>(null);
   const [editingShiftTime, setEditingShiftTime] = useState('');
   const [editingShiftTask, setEditingShiftTask] = useState(''); // This will map to 'station' (崗位)
-  const [editingShiftSubTask, setEditingShiftSubTask] = useState(''); // This will map to 'task' (任務)
+  const [editingShiftSubTask, setEditingShiftSubTask] = useState<string[]>([]); // multi-select tasks
   const [editingShiftLocation, setEditingShiftLocation] = useState(''); // New state for 'location'
   const [editingShiftCustomTask, setEditingShiftCustomTask] = useState('');
  
   // Quick Schedule State (Health Mgmt)
   const [isQuickScheduleMode, setIsQuickScheduleMode] = useState(false);
   const [quickScheduleStation, setQuickScheduleStation] = useState('');
-  const [quickScheduleTask, setQuickScheduleTask] = useState('');
+  const [quickScheduleTask, setQuickScheduleTask] = useState<string[]>([]);
   const [quickScheduleLocation, setQuickScheduleLocation] = useState('');
   const [quickScheduleTime, setQuickScheduleTime] = useState('');
   const [isReorderMode, setIsReorderMode] = useState(false);
@@ -285,7 +285,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
           if (isQuickScheduleMode) {
               // Quick apply
               const fullStation = quickScheduleTime ? `${quickScheduleTime} ${quickScheduleStation}` : quickScheduleStation;
-              await handleUpdateShift(userId, date, fullStation, quickScheduleTask || undefined);
+              await handleUpdateShift(userId, date, fullStation, quickScheduleTask.length > 0 ? quickScheduleTask.join(',') : undefined);
           } else {
               // Open Inline Popup
               setSelectedCell({ userId, date });
@@ -305,12 +305,12 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                   setEditingShiftTime('');
                   setEditingShiftTask('');
               }
-              setEditingShiftSubTask(existing.task || ''); // This is 'task' (任務)
+              setEditingShiftSubTask(existing.task ? existing.task.split(',').map((t: string) => t.trim()).filter(Boolean) : []);
               setEditingShiftLocation(existing.location || ''); // Load location
           } else {
               setEditingShiftTime('');
               setEditingShiftTask('');
-              setEditingShiftSubTask('');
+              setEditingShiftSubTask([]);
               setEditingShiftLocation('');
           }
       }
@@ -329,7 +329,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
               finalStation = (`${editingShiftTime} ${editingShiftTask}`).trim();
           }
 
-          const finalTask = editingShiftCustomTask || editingShiftSubTask;
+          const finalTask = editingShiftCustomTask || (editingShiftSubTask.length > 0 ? editingShiftSubTask.join(',') : '');
 
           await handleUpdateShift(selectedCell.userId, selectedCell.date, finalStation, finalTask || undefined, editingShiftLocation || undefined);
           setSelectedCell(null);
@@ -1640,18 +1640,35 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                     const existing = shifts.find(s => s.userId === userId && s.date === date);
                     if (existing) {
                         await db.upsertHealthMgmtShift({ ...existing, time });
+                    } else {
+                        // If no existing shift, we need to create one. 
+                        // But HMTodayView only shows people with existing shifts in HM groups.
+                        // However, if we're here, let's at least try to save the time if possible.
+                        const staffMember = healthMgmtStaff.find(s => s.id === userId);
+                        if (staffMember) {
+                            await db.upsertHealthMgmtShift({
+                                id: '', 
+                                userId,
+                                date,
+                                station: '接待', // Default station if none exists but we're setting time
+                                time,
+                                location: staffMember.location || currentUserLocation
+                            });
+                        }
                     }
                 }}
                 onSaveAnesShift={async (userId, date, workTime) => {
                     const existing = anesthesiaShifts.find(s => s.userId === userId && s.date === date);
                     if (existing) {
                         await db.assignAnesthesiaShift(
-                            existing.userId, existing.date, existing.station || '',
+                            existing.userId, existing.date, existing.station || '麻',
                             existing.location, existing.task, workTime, existing.note
                         );
                     } else {
                         // Handle case where we click a name but no record was pre-fetched
-                        await db.assignAnesthesiaShift(userId, date, '', '大直', '', workTime, '');
+                        // Use current view location instead of hardcoded '大直'
+                        const targetLoc = currentUserLocation === '全部' ? '大直' : currentUserLocation;
+                        await db.assignAnesthesiaShift(userId, date, '麻', targetLoc, '', workTime, '');
                     }
                 }}
             />
@@ -1776,7 +1793,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                       onClick={() => {
                         if (st === '清除') {
                           setQuickScheduleStation('');
-                          setQuickScheduleTask('');
+                          setQuickScheduleTask([]);
                           setQuickScheduleTime('');
                         } else {
                           setQuickScheduleStation(st);
@@ -1797,9 +1814,9 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                   {hmTasks.map(tk => (
                     <button
                       key={tk}
-                      onClick={() => setQuickScheduleTask(tk === quickScheduleTask ? '' : tk)}
+                      onClick={() => setQuickScheduleTask(prev => prev.includes(tk) ? prev.filter(t => t !== tk) : [...prev, tk])}
                       className={"px-2 py-0.5 rounded text-[10px] font-bold transition-colors border whitespace-nowrap " + (
-                        quickScheduleTask === tk ? 'bg-indigo-600 text-white border-indigo-700' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                        quickScheduleTask.includes(tk) ? 'bg-indigo-600 text-white border-indigo-700' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
                       )}
                     >
                       {tk}
@@ -2157,7 +2174,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                                     {isQuickScheduleMode && !isHmReadOnly ? (
                                          <div className="flex flex-col items-center scale-75 opacity-40">
                                              <span className="text-xs font-bold">{quickScheduleStation}</span>
-                                             <span className="text-[10px] font-bold text-indigo-600">{quickScheduleTask}</span>
+                                             <span className="text-[10px] font-bold text-indigo-600">{quickScheduleTask.join(",")}</span>
                                          </div>
                                     ) : null}
                                 </div>
@@ -2216,14 +2233,14 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
               <div className="space-y-1.5">
                   <label className="text-xs font-bold text-gray-500 uppercase flex justify-between">
                       <span>業務任務 (主控, 輔控...)</span>
-                      {editingShiftSubTask && <span className="text-indigo-600 cursor-pointer hover:underline" onClick={() => setEditingShiftSubTask('')}>清除</span>}
+                      {editingShiftSubTask.length > 0 && <span className="text-indigo-600 cursor-pointer hover:underline" onClick={() => setEditingShiftSubTask([])}>清除</span>}
                   </label>
                   <div className="flex flex-wrap gap-1.5 p-1 max-h-[300px] overflow-y-auto custom-scrollbar">
                       {hmTasks.map(tk => (
                           <button
                               key={tk}
-                              onClick={() => setEditingShiftSubTask(tk)}
-                              className={"px-3 py-1.5 rounded-lg text-xs font-bold border transition-all " + (editingShiftSubTask === tk ? 'bg-indigo-500 text-white border-indigo-600 shadow-sm' : 'bg-slate-50 text-gray-600 border-gray-200 hover:border-indigo-300 hover:bg-white')}
+                              onClick={() => setEditingShiftSubTask(prev => prev.includes(tk) ? prev.filter(t => t !== tk) : [...prev, tk])}
+                              className={"px-3 py-1.5 rounded-lg text-xs font-bold border transition-all " + (editingShiftSubTask.includes(tk) ? 'bg-indigo-500 text-white border-indigo-600 shadow-sm' : 'bg-slate-50 text-gray-600 border-gray-200 hover:border-indigo-300 hover:bg-white')}
                           >
                               {tk}
                           </button>
@@ -2585,6 +2602,7 @@ const HMTodayView: React.FC<{
     // Time edit popup state
     const [editingMember, setEditingMember] = useState<{ userId: string; name: string; currentTime: string; date: string; isAnes?: boolean } | null>(null);
     const [editingTime, setEditingTime] = useState('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     const filteredShifts = useMemo(() => shifts.filter(s => s.date === dateStr), [shifts, dateStr]);
     const filteredAnes = useMemo(() => anesthesiaShifts.filter(s => s.date === dateStr), [anesthesiaShifts, dateStr]);
@@ -2889,10 +2907,11 @@ const HMTodayView: React.FC<{
                                 {['07:30-15:30', '08:00-16:00', '08:30-16:30', '09:00-17:00', '10:00-18:00', '11:00-19:00'].map(t => (
                                     <button
                                         key={t}
-                                        onClick={() => setEditingTime(t)}
+                                        onClick={() => !isSubmitting && setEditingTime(t)}
+                                        disabled={isSubmitting}
                                         className={`py-2.5 px-3 rounded-xl text-sm font-bold border-2 transition-all ${
                                             editingTime === t ? 'bg-teal-500 text-white border-teal-600 shadow-md' : 'border-slate-100 text-slate-600 hover:border-teal-200 hover:bg-teal-50'
-                                        }`}
+                                        } ${isSubmitting ? 'opacity-50' : ''}`}
                                     >{t}</button>
                                 ))}
                             </div>
@@ -2907,22 +2926,35 @@ const HMTodayView: React.FC<{
                                 {editingMember.currentTime && (
                                     <button
                                         onClick={async () => {
-                                            if (onSaveShift && !editingMember.isAnes) await onSaveShift(editingMember.userId, editingMember.date, '');
-                                        if (onSaveAnesShift && editingMember.isAnes) await onSaveAnesShift(editingMember.userId, editingMember.date, '');
-                                            setEditingMember(null);
+                                            if (isSubmitting) return;
+                                            setIsSubmitting(true);
+                                            try {
+                                                if (onSaveShift && !editingMember.isAnes) await onSaveShift(editingMember.userId, editingMember.date, '');
+                                                if (onSaveAnesShift && editingMember.isAnes) await onSaveAnesShift(editingMember.userId, editingMember.date, '');
+                                                setEditingMember(null);
+                                            } finally {
+                                                setIsSubmitting(false);
+                                            }
                                         }}
-                                        className="flex-1 py-3 text-sm font-bold text-red-500 bg-red-50 rounded-xl hover:bg-red-100 transition-colors border border-red-100"
-                                    >清除時間</button>
+                                        disabled={isSubmitting}
+                                        className="flex-1 py-3 text-sm font-bold text-red-500 bg-red-50 rounded-xl hover:bg-red-100 transition-colors border border-red-100 disabled:opacity-50"
+                                    >{isSubmitting ? '處理中...' : '清除時間'}</button>
                                 )}
                                 <button
                                     onClick={async () => {
-                                        if (onSaveShift && !editingMember.isAnes && editingTime) await onSaveShift(editingMember.userId, editingMember.date, editingTime);
-                                        if (onSaveAnesShift && editingMember.isAnes && editingTime) await onSaveAnesShift(editingMember.userId, editingMember.date, editingTime);
-                                        setEditingMember(null);
+                                        if (isSubmitting || !editingTime) return;
+                                        setIsSubmitting(true);
+                                        try {
+                                            if (onSaveShift && !editingMember.isAnes) await onSaveShift(editingMember.userId, editingMember.date, editingTime);
+                                            if (onSaveAnesShift && editingMember.isAnes) await onSaveAnesShift(editingMember.userId, editingMember.date, editingTime);
+                                            setEditingMember(null);
+                                        } finally {
+                                            setIsSubmitting(false);
+                                        }
                                     }}
-                                    disabled={!editingTime}
+                                    disabled={!editingTime || isSubmitting}
                                     className="flex-1 py-3 text-sm font-black text-white bg-teal-600 rounded-xl hover:bg-teal-700 transition-colors disabled:opacity-40 shadow-lg shadow-teal-100"
-                                >確認儲存</button>
+                                >{isSubmitting ? '儲存中...' : '確認儲存'}</button>
                             </div>
                         </div>
                     </div>
