@@ -24,8 +24,13 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
 
     // Sort function: Viewer (位居最上方)
     const sortByRole = (a: any, b: any) => {
-        if (a.role === UserRole.VIEWER) return -1;
-        if (b.role === UserRole.VIEWER) return 1;
+        if (a.role === UserRole.VIEWER && b.role !== UserRole.VIEWER) return -1;
+        if (b.role === UserRole.VIEWER && a.role !== UserRole.VIEWER) return 1;
+        if (a.role === UserRole.VIEWER && b.role === UserRole.VIEWER) {
+            if (a.name === '瀏覽者') return -1;
+            if (b.name === '瀏覽者') return 1;
+            return a.name.localeCompare(b.name);
+        }
         return 0;
     };
 
