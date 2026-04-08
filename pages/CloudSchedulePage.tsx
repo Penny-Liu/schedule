@@ -143,6 +143,24 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
         return stats;
     }, [visibleDates, entries, shifts]);
 
+    const assistantDayStats = useMemo(() => {
+        // Count distinct days each assistant is scheduled (not total assignments)
+        const stats: Record<string, Set<string>> = {};
+        entries.forEach(e => {
+            if (!visibleDates.includes(e.date) || e.assistantIds.length === 0) return;
+            const dShift = shifts.find(s => s.date === e.date && s.doctorId === e.doctorId);
+            if (!isRelevantShift(dShift)) return;
+            e.assistantIds.forEach(aid => {
+                if (!stats[aid]) stats[aid] = new Set();
+                stats[aid].add(e.date);
+            });
+        });
+        // Convert sets to counts
+        const counts: Record<string, number> = {};
+        Object.entries(stats).forEach(([aid, days]) => { counts[aid] = days.size; });
+        return counts;
+    }, [visibleDates, entries, shifts]);
+
     const isShiftEmpty = (s: any) => {
         if (!s) return true;
         const station = (s.scheduled_station || s.station || '').trim();
@@ -929,6 +947,33 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
                                             <span className="text-xs font-bold text-slate-600">{r.alias || r.name}</span>
                                             <span className={`text-sm font-black px-2 py-0.5 rounded-lg ${count > 0 ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-500'}`}>
                                                 {count}
+                                            </span>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Assistant Day Count Summary */}
+                    <div className="mt-3">
+                        <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+                            <div className="flex items-center gap-2 mb-3">
+                                <Cloud size={18} className="text-sky-500" />
+                                <h4 className="text-sm font-bold text-slate-700">報告助理排班天數</h4>
+                                <span className="text-[10px] text-slate-400 font-normal ml-2">(同一天多位醫師配同一助理，只計1天)</span>
+                            </div>
+                            <div className="flex flex-wrap gap-3">
+                                {activeAssistants.map(asst => {
+                                    const days = assistantDayStats[asst.id] || 0;
+                                    return (
+                                        <div key={asst.id} className="flex items-center gap-2 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl transition-all hover:border-sky-200 hover:bg-white">
+                                            <div className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white" style={{ backgroundColor: asst.color || '#9CA3AF' }}>
+                                                {asst.name.charAt(0)}
+                                            </div>
+                                            <span className="text-xs font-bold text-slate-600">{asst.name}</span>
+                                            <span className={`text-sm font-black px-2 py-0.5 rounded-lg ${days > 0 ? 'text-white' : 'bg-slate-200 text-slate-500'}`} style={days > 0 ? { backgroundColor: asst.color || '#0ea5e9' } : {}}>
+                                                {days}
                                             </span>
                                         </div>
                                     );

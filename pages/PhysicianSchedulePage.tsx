@@ -185,12 +185,31 @@ GI：${stats?.beitou_gi || 0} 台`;
 
         const dayNames = ['日', '一', '二', '三', '四', '五', '六'];
 
+        const giScopeHeader = (() => {
+            if (sortedGIShifts.length === 0) return '腸胃鏡：-';
+            if (sortedGIShifts.length === 1) {
+                const docName = doctors.find(d => d.id === sortedGIShifts[0].doctorId)?.name || '?';
+                return `腸胃鏡：${docName}醫師`;
+            }
+            return `腸胃鏡：${giDocsNames.map(n => n + '醫師').join('、')}`;
+        })();
+
+        const giScopeLine = (() => {
+            const lineCount = sortedGIShifts.length;
+            const giCount = stats?.dazhi_gi || 0;
+            if (lineCount === 0) return '';
+            if (lineCount === 1) {
+                return `\n${lineCount}線 ${giCount}台 (第一台 :  ，最後一台 :   ，麻評  位)`;
+            }
+            return `\n${lineCount}線 ${giCount}台 (第一台 :  ，第二台 :  ，最後一台 :   ，麻評  位)`;
+        })();
+
         return `${date.getMonth() + 1}/${date.getDate()} （${dayNames[date.getDay()]}）
-主/輔：${mainHM.join('/') || '-'}/${assistHM.join('/') || '-'}
 健檢客戶： ${stats?.dazhi_clients || 0} 位
 (腸胃：${stats?.dazhi_gi || 0} / 心超： )
 代謝客戶： ${stats?.dazhi_metabolism_clients || 0} 位
 
+主/輔：${mainHM.join('/') || '-'}/${assistHM.join('/') || '-'}
 影像 : ${imgDocs.join('、') || '-'}
 解說 : ${expDocs.join('、') || '-'} 醫師
 腸胃：${giDocsNames.join(' 醫師、') || '-'} 醫師
@@ -207,8 +226,7 @@ GI：${stats?.beitou_gi || 0} 台`;
 ${onlineNames ? '線上：' + onlineNames + '\n' : ''}
 供餐：${supplyNames}
 
-腸胃鏡：${giDocsNames.map(n => n + '醫師').join('、') || '-'}
-${giDocsNames.length}線 ${stats?.dazhi_gi || 0}台 (第一台 :   ，第二台 : ，最後一台 :     ，麻評  位)
+${giScopeHeader}${giScopeLine}
 
 ${sortedGIShifts.map((s, i) => {
     const nurse = anesNurseNames[i % anesNurseNames.length] || '';

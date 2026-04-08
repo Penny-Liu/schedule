@@ -878,7 +878,11 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                   targetLocation = '';
               }
               
-              await handleUpdateAnesShift(userId, date, quickAnesStation, targetLocation, '');
+              // If station is '清除', pass '' to trigger DB delete
+              const stationToApply = quickAnesStation === '清除' ? '' : quickAnesStation;
+              targetLocation = stationToApply === '' ? '' : targetLocation;
+              
+              await handleUpdateAnesShift(userId, date, stationToApply, targetLocation, '');
               return;
           }
 
@@ -1036,7 +1040,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
   };
 
   return (
-    <div className="p-1 md:p-2 w-full h-[100dvh] flex flex-col overflow-hidden bg-slate-50">
+    <div className="p-1 md:p-2 w-full h-full flex flex-col overflow-hidden bg-slate-50">
       <ConfirmModal
         isOpen={!!deleteTargetId}
         onClose={() => setDeleteTargetId(null)}
@@ -1139,9 +1143,9 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
 
       <div className="flex-1 flex flex-col overflow-hidden w-full pb-2 md:pb-4 custom-scrollbar">
         {activeTab === 'anesthesia' ? (
-          <div className="flex flex-col gap-6 overflow-y-auto pr-2 pb-20">
+          <div className="flex-1 flex flex-col gap-6 overflow-y-auto pr-2 pb-20 min-h-0">
           {/* Anesthesia Schedule Grid */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 flex flex-col overflow-hidden">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 flex flex-col overflow-hidden max-h-[65vh]">
             <div className="px-3 py-2 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
                 <div className="flex flex-wrap items-center gap-3">
                     <h3 className="font-bold text-gray-700 flex items-center gap-2 text-sm whitespace-nowrap">
@@ -1440,7 +1444,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
           </div>
 
           {/* Anesthesia Staff Management Section (Optional/Collapsible or inline) */}
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden p-6 transition-all">
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 transition-all">
             <div 
               className="flex justify-between items-center cursor-pointer group"
               onClick={() => setIsAnesStaffManagementExpanded(!isAnesStaffManagementExpanded)}
@@ -1635,7 +1639,11 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                     </div>
                     {editingAnesShiftStation && (
                         <button 
-                            onClick={() => { setEditingAnesShiftStation(''); handleSaveAnesPopup(); }}
+                            onClick={async () => {
+                                if (!selectedAnesCell) return;
+                                await handleUpdateAnesShift(selectedAnesCell.userId, selectedAnesCell.date, '', editingAnesShiftLocation, editingAnesShiftTask);
+                                setSelectedAnesCell(null);
+                            }}
                             className="w-full text-red-500 text-sm font-bold py-2 hover:bg-red-50 rounded-lg transition-colors"
                         >
                             清除排班
@@ -2028,6 +2036,23 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                                           <div className="flex items-baseline gap-0.5">
                                               <span className="text-[10px] md:text-[11px] font-bold text-amber-500 uppercase leading-none">上限：</span>
                                               <span className="text-sm md:text-lg font-black text-amber-700 leading-none">{svStats?.dazhi_max_capacity ?? '-'}</span>
+                                          </div>
+                                      )}
+                                      {!isHmReadOnly ? (
+                                          <div className="flex items-baseline gap-0.5">
+                                              <span className="text-[10px] md:text-[11px] font-bold text-sky-500 uppercase leading-none">代謝上限：</span>
+                                              <input
+                                                  type="number"
+                                                  value={svStats?.dazhi_metabolism_max_capacity || ''}
+                                                  onChange={(e) => db.updateDailyStats(statsViewDate, { dazhi_metabolism_max_capacity: Number(e.target.value) || undefined })}
+                                                  placeholder="-"
+                                                  className="w-10 md:w-12 text-sm md:text-lg leading-none font-black bg-sky-50 border border-sky-200 rounded-lg px-1 py-0.5 outline-none focus:ring-2 focus:ring-sky-400 text-sky-700 placeholder-sky-200"
+                                              />
+                                          </div>
+                                      ) : (
+                                          <div className="flex items-baseline gap-0.5">
+                                              <span className="text-[10px] md:text-[11px] font-bold text-sky-500 uppercase leading-none">代謝上限：</span>
+                                              <span className="text-sm md:text-lg font-black text-sky-700 leading-none">{svStats?.dazhi_metabolism_max_capacity ?? '-'}</span>
                                           </div>
                                       )}
                                   </div>
@@ -2649,7 +2674,7 @@ const HMTodayView: React.FC<{
                 }
 
                 const st = (s.station || '').toUpperCase();
-                if (!st.trim() || st.includes('休') || st.includes('V')) return false;
+                if (!st.trim() || st === '清除' || st.includes('休') || st.includes('V')) return false;
 
                 return true;
             }).map(s => {

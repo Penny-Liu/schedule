@@ -259,6 +259,7 @@ export interface DailyManpowerStats {
   beitou_total?: number; // Manually entered total radiographer count for Beitou
   dazhi_max_capacity?: number; // New: Manually entered max capacity for Dazhi (最大量)
   beitou_max_capacity?: number; // New: Manually entered max capacity for Beitou (最大量)
+  dazhi_metabolism_max_capacity?: number; // New: Manually entered max capacity for Dazhi metabolism
 }
 
 export interface WeekdaySetting {
