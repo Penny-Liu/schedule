@@ -147,7 +147,8 @@ export const SPECIAL_ROLES = {
   LATE: '晚班',
   ASSIST: '輔班', // User called it "輔控", mapping to Assist/Support
   SCHEDULER: '排班',
-  DAZHI_SUPPORT: '大直支援' // New: Remote staff supporting Dazhi
+  DAZHI_SUPPORT: '大直支援', // New: Remote staff supporting Dazhi
+  DUAL_BMD: '兼BMD/DX'
 };
 
 export interface Shift {

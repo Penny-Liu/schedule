@@ -1452,7 +1452,15 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
             if (status === 'OFF') return false; 
             
             const shift = shifts.find(s => s.userId === user.id && s.date === dateStr);
-            if (shift && shift.station !== StationDefault.UNASSIGNED && shift.station !== '未分配' && shift.station !== station) return false;
+            if (shift && shift.station !== StationDefault.UNASSIGNED && shift.station !== '未分配' && shift.station !== station) {
+                const isRemoteShift = shift.station.includes('遠班') || shift.station.includes('遠距');
+                const isDualTarget = station.includes('BMD') || station.includes('DX');
+                if (!(isRemoteShift && isDualTarget)) {
+                    return false;
+                }
+                // If they're remote and already have the dual role, don't show them in the dropdown
+                if (shift.specialRoles.includes(SPECIAL_ROLES.DUAL_BMD)) return false;
+            }
             if (shift && shift.station === station) return false;
             return true;
         });
@@ -1479,7 +1487,21 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
     const handleAddUserToStation = (userId: string, dateStr: string, station: string) => {
         // Use db.shifts (Sync State) instead of React state to avoid staleness
         const existingShift = db.shifts.find(s => s.userId === userId && s.date === dateStr);
-        let roles = existingShift ? existingShift.specialRoles : [];
+        let roles = existingShift ? [...existingShift.specialRoles] : [];
+
+        if (existingShift) {
+            const isRemoteShift = existingShift.station.includes('遠距') || existingShift.station.includes('遠班');
+            const isDualBMDTarget = station.includes('BMD') || station.includes('DX');
+            
+            // Allow Remote users to take Dual BMD without changing primary station
+            if (isRemoteShift && isDualBMDTarget) {
+                if (!roles.includes(SPECIAL_ROLES.DUAL_BMD)) {
+                    roles.push(SPECIAL_ROLES.DUAL_BMD);
+                }
+                handleUpdateShift(userId, dateStr, existingShift.station, roles);
+                return;
+            }
+        }
 
         // Clear roles if moving to Floor Control (Dazhi constraint removed by user)
         if (station.includes('場控')) {
@@ -1489,9 +1511,20 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
         handleUpdateShift(userId, dateStr, station, roles);
     };
 
-    const handleRemoveUserFromStation = (userId: string, dateStr: string) => {
+    const handleRemoveUserFromStation = (userId: string, dateStr: string, stationLabel?: string) => {
         const existingShift = db.shifts.find(s => s.userId === userId && s.date === dateStr);
-        const roles = existingShift ? existingShift.specialRoles : [];
+        if (!existingShift) return;
+        
+        let roles = [...existingShift.specialRoles];
+        const isDualBMDTarget = stationLabel && (stationLabel.includes('BMD') || stationLabel.includes('DX'));
+        
+        // If clicking X on a Dual BMD badge in the BMD row, only remove the role, don't clear the main station
+        if (isDualBMDTarget && roles.includes(SPECIAL_ROLES.DUAL_BMD)) {
+            roles = roles.filter(r => r !== SPECIAL_ROLES.DUAL_BMD);
+            handleUpdateShift(userId, dateStr, existingShift.station, roles);
+            return;
+        }
+
         handleUpdateShift(userId, dateStr, StationDefault.UNASSIGNED, roles);
     };
 
@@ -1544,7 +1577,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
             if (name === SPECIAL_ROLES.LATE) return 'bg-amber-100 text-amber-900 border-amber-200';
             if (name === SPECIAL_ROLES.ASSIST) return 'bg-emerald-100 text-emerald-900 border-emerald-200';
             if (name === SPECIAL_ROLES.SCHEDULER) return 'bg-red-100 text-red-900 border-red-200';
-            return 'bg-gray-100 text-gray-800 border-gray-200';
+            return 'bg-purple-100 text-purple-800 border-purple-200';
         }
 
         if (name === SYSTEM_OFF) return 'bg-slate-100 text-slate-400 border-slate-200';
@@ -1585,7 +1618,8 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
         SPECIAL_ROLES.LATE,
         SPECIAL_ROLES.ASSIST,
         SPECIAL_ROLES.SCHEDULER,
-        SPECIAL_ROLES.DAZHI_SUPPORT
+        SPECIAL_ROLES.DAZHI_SUPPORT,
+        SPECIAL_ROLES.DUAL_BMD
     ];
 
     const allStationsSorted = useMemo(() => {
@@ -1664,6 +1698,22 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                     getData: (date: string) => {
                         // Standard Station Staff
                         const staff = getStationStaff(item, date);
+                        
+                        // If Station is BMD or DX, ALSO get DUAL_BMD Role staff
+                        if (item.includes('BMD') || item.includes('DX')) {
+                            const duals = shifts
+                                .filter(s => s.date === date && s.specialRoles && s.specialRoles.includes(SPECIAL_ROLES.DUAL_BMD))
+                                .map(s => ({ user: users.find(u => u.id === s.userId), shift: s }))
+                                .filter(i => i.user !== undefined);
+
+                            const existingIds = staff.map(s => s.user!.id);
+                            duals.forEach(d => {
+                                if (!existingIds.includes(d.user!.id)) {
+                                    staff.push(d);
+                                }
+                            });
+                        }
+
                         // If Station is Dazhi, ALSO get Dazhi Support Role staff
                         if (item.includes('大直')) {
                             // Find shifts that have DAZHI_SUPPORT role
@@ -2397,7 +2447,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                             {/* Daily Manpower Summary (Admin/Supervisor Only) */}
                             <DailyManpowerSummary
                                 date={toLocalISOString(dailyDate)}
-                                users={displayUsers}
+                                users={users}
                                 shifts={shifts}
                                 doctorShifts={doctorShifts}
                                 currentUser={currentUser}
@@ -2766,7 +2816,9 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                                             {specialRolesList.map(role => {
                                                                                 const isSelected = specialRoles.includes(role);
                                                                                 return (
-                                                                                    <button key={role} type="button" onClick={() => handleSpecialRoleToggle(user.id, date, role, station || StationDefault.UNASSIGNED, specialRoles)} className={`px-1 py-0.5 text-[9px] rounded-lg border transition-all font-bold ${isSelected ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-slate-400 border-slate-200 hover:border-purple-300 hover:text-purple-500'} `}>{role[0]}</button>
+                                                                                    <button key={role} type="button" onClick={() => handleSpecialRoleToggle(user.id, date, role, station || StationDefault.UNASSIGNED, specialRoles)} className={`px-1 py-0.5 text-[9px] rounded-lg border transition-all font-bold ${isSelected ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-slate-400 border-slate-200 hover:border-purple-300 hover:text-purple-500'} `}>
+                                                                                        {role === SPECIAL_ROLES.DUAL_BMD ? '兼B/D' : role[0]}
+                                                                                    </button>
                                                                                 );
                                                                             })}
                                                                         </div>
@@ -2854,6 +2906,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                                             const isLate = item.shift.specialRoles.includes(SPECIAL_ROLES.LATE);
                                                                             const isAssist = item.shift.specialRoles.includes(SPECIAL_ROLES.ASSIST);
                                                                             const isScheduler = item.shift.specialRoles.includes(SPECIAL_ROLES.SCHEDULER);
+                                                                            const isDualBMD = item.shift.specialRoles.includes(SPECIAL_ROLES.DUAL_BMD);
 
                                                                             // LEAVE STATUS CHECK
                                                                             const activeLeave = db.getLeaves().find(l =>
@@ -2909,12 +2962,13 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                                                         </div>
                                                                                     )}
 
-                                                                                    {showSuffix && (isOpening || isLate || isAssist || isScheduler) && (
+                                                                                    {showSuffix && (isOpening || isLate || isAssist || isScheduler || isDualBMD) && (
                                                                                         <div className="flex flex-col gap-0.5 mt-0.5 w-full items-center">
                                                                                             {isOpening && <span className="w-full text-center bg-blue-100/80 px-0.5 rounded-[2px] text-[10px] leading-tight text-blue-900 font-extrabold border border-blue-200/50">開機</span>}
                                                                                             {isLate && <span className="w-full text-center bg-amber-100/80 px-0.5 rounded-[2px] text-[10px] leading-tight text-amber-900 font-extrabold border border-amber-200/50">晚班</span>}
                                                                                             {isAssist && <span className="w-full text-center bg-emerald-100/80 px-0.5 rounded-[2px] text-[10px] leading-tight text-emerald-900 font-extrabold border border-emerald-200/50">輔班</span>}
                                                                                             {isScheduler && <span className="w-full text-center bg-red-100/80 px-0.5 rounded-[2px] text-[10px] leading-tight text-red-900 font-extrabold border border-red-200/50">排班</span>}
+                                                                                            {isDualBMD && <span className="w-full text-center bg-purple-100/80 px-0.5 rounded-[2px] text-[10px] leading-tight text-purple-900 font-extrabold border border-purple-200/50">兼BMD/DX</span>}
                                                                                         </div>
                                                                                     )}
 
@@ -2922,7 +2976,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                                                         <button
                                                                                             onClick={(e) => {
                                                                                                 e.stopPropagation();
-                                                                                                if (row.type === 'STATION') handleRemoveUserFromStation(item.user!.id, date);
+                                                                                                if (row.type === 'STATION') handleRemoveUserFromStation(item.user!.id, date, row.label);
                                                                                                 else handleRemoveUserFromRole(item.user!.id, date, row.label);
                                                                                             }}
                                                                                             className={`absolute-top-1-right-1 bg-white text-red-500 rounded-full p-0.5 transition-opacity shadow-sm border border-red-100 z-10 ${(isMobile && isEditMode) ? 'opacity-100' : 'opacity-0 group-hover/chip:opacity-100'} `}
@@ -3353,6 +3407,9 @@ const DailyManpowerSummary: React.FC<{
         let beitouCount = 0;
         let dazhiCount = 0;
 
+        const assist: string[] = [];
+        const scheduler: string[] = [];
+
         shiftsOnDate.forEach(s => {
             if (s.station === SYSTEM_OFF || s.station === StationDefault.UNASSIGNED) return;
 
@@ -3371,14 +3428,24 @@ const DailyManpowerSummary: React.FC<{
             else if (s.station.includes('BMD') || s.station.includes('DX')) modality = 'BMD';
 
             // Counts
+            const isDualBMD = s.specialRoles?.some(r => r.includes('兼BMD') || r.includes('兼DX')) || false;
+            
+            if (s.specialRoles?.includes(SPECIAL_ROLES.ASSIST)) assist.push(name);
+            if (s.specialRoles?.includes(SPECIAL_ROLES.SCHEDULER)) scheduler.push(name);
+
             if (s.station.includes('大直')) {
                 dazhiCount++;
                 dazhi.push(name);
                 dazhiShort.push(u ? u.name.slice(-2) : name);
             } else if (s.station.includes('遠距') || s.station.includes('遠班')) {
                 remoteCount++;
-                remote.push(name);
-                remote_short.push(u ? u.name.slice(-2) : name);
+                if (isDualBMD) {
+                    remote.push(`${name}(兼BMD/DX)`);
+                    remote_short.push(u ? `${u.name.slice(-2)}(兼BMD/DX)` : `${name}(兼BMD/DX)`);
+                } else {
+                    remote.push(name);
+                    remote_short.push(u ? u.name.slice(-2) : name);
+                }
             } else if (isLearning) {
                 // Learning doesn't count towards Beitou manpower
                 learning.push(`${name}(${modality})`);
@@ -3393,7 +3460,13 @@ const DailyManpowerSummary: React.FC<{
             if (s.station.includes('MR') && !isLearning) mr.push(name);
             if (s.station.includes('US') && !isLearning) us.push(name);
             if (s.station.includes('CT') && !isLearning) ct.push(name);
-            if ((s.station.includes('BMD') || s.station.includes('DX')) && !isLearning) bmd.push(name);
+            if ((s.station.includes('BMD') || s.station.includes('DX') || isDualBMD) && !isLearning) {
+                if (isDualBMD && (s.station.includes('遠距') || s.station.includes('遠班'))) {
+                    bmd.push(`${name}(遠班)`);
+                } else {
+                    bmd.push(name);
+                }
+            }
             if (s.station.includes('場控')) floorControl.push(name);
             if (s.station.includes('支援')) support.push(name);
         });
@@ -3406,6 +3479,8 @@ const DailyManpowerSummary: React.FC<{
             bmd,
             floorControl,
             support,
+            assist,
+            scheduler,
             learning,
             remote,
             remoteCount,
@@ -3493,7 +3568,9 @@ const DailyManpowerSummary: React.FC<{
 
 放射師人力
 北投：{{beitou_count}} (客戶：{{beitou_clients}}  CTA  {{beitou_cta}})
-BU領頭 場控：{{floor_control}}
+場控：{{floor_control}}
+輔班：{{assist}}
+排班：{{scheduler}}
 MR : {{mr}}
 US：{{us}}
 CT: {{ct}}
@@ -3518,11 +3595,13 @@ BMD :{{bmd}}
             '{{dazhi_clients}}': stats.dazhi_clients.toString(),
             '{{dazhi_metabolism_clients}}': (stats.dazhi_metabolism_clients || 0).toString(),
             '{{dazhi_count}}': manpower.dazhiCount.toString(),
-            '{{floor_control}}': manpower.floorControl.join('/') || '',
-            '{{mr}}': manpower.mr.join('/'),
-            '{{us}}': manpower.us.join('/'),
-            '{{ct}}': manpower.ct.join('/'),
-            '{{bmd}}': manpower.bmd.join('/'),
+            '{{floor_control}}': manpower.floorControl.join('/') || '無',
+            '{{assist}}': manpower.assist.join('/') || '無',
+            '{{scheduler}}': manpower.scheduler.join('/') || '無',
+            '{{mr}}': manpower.mr.join('/') || '無',
+            '{{us}}': manpower.us.join('/') || '無',
+            '{{ct}}': manpower.ct.join('/') || '無',
+            '{{bmd}}': manpower.bmd.join('/') || '無',
             '{{support}}': manpower.support.join('/'),
             '{{support_section}}': supportText,
             '{{learning_section}}': learningText,
