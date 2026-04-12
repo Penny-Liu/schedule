@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { db } from '../services/store';
-import { Doctor, UserRole, DoctorStationConfig, DateEventType, DoctorShift, PERMISSIONS } from '../types';
+import { Doctor, UserRole, DoctorStationConfig, DateEventType, DoctorShift, PERMISSIONS, SPECIAL_ROLES } from '../types';
 import { ChevronLeft, ChevronRight, ChevronDown, Download, Lock, RefreshCw, Save, Unlock, User, UserPlus, X, Calendar as CalendarIcon, Clock, Filter, Sliders, ArrowUpDown, Wand2, BarChart2, Check, AlertCircle, Plus, LayoutGrid, List as ListIcon, Trash2, Briefcase, FileText, MapPin, FileSpreadsheet, CalendarClock, Star, Shield, Users, Eye, EyeOff } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -183,6 +183,18 @@ GI：${stats?.beitou_gi || 0} 台`;
         const flowNames = getHMByTask('流動').join('、');
         const washNames = getHMByTask('洗滌').join('、');
 
+        // 放射師：抓大直崗位 或 大直支援 special role
+        const radShifts = db.getShifts(dateStr, dateStr);
+        const radUsers = db.getUsers();
+        const dazhiRads = radShifts
+            .filter(s => s.station?.includes('大直') || (s.specialRoles && s.specialRoles.includes(SPECIAL_ROLES.DAZHI_SUPPORT)))
+            .map(s => {
+                const u = radUsers.find(user => user.id === s.userId);
+                const name = u?.name || '';
+                return (s.specialRoles && s.specialRoles.includes(SPECIAL_ROLES.DAZHI_SUPPORT)) ? `${name}(兼遠班)` : name;
+            }).filter(Boolean);
+        const radNames = dazhiRads.join('、');
+
         const dayNames = ['日', '一', '二', '三', '四', '五', '六'];
 
         const giScopeHeader = (() => {
@@ -221,6 +233,7 @@ GI：${stats?.beitou_gi || 0} 台`;
 眼科：${getSpec('眼科')}
 
 放射
+${radNames || '-'}
 
 營養諮詢${nutriNames ? '\n' + nutriNames : ''}
 ${onlineNames ? '線上：' + onlineNames + '\n' : ''}

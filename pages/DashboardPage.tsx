@@ -2318,7 +2318,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
 
                                     // Unified Shift Getter for Daily View
                                     const getAllAssignments = (stationName: string, isHmType: boolean = false) => {
-                                        const assignments: { id: string; name: string; alias?: string; color?: string; specialRoles: string[] }[] = [];
+                                        const assignments: { id: string; name: string; alias?: string; color?: string; specialRoles: string[]; note?: string }[] = [];
                                         
                                         if (!isHmType) {
                                             // 1. Look in Radiographers
@@ -2326,6 +2326,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                 const s = getDayShift(u.id, dateStr);
                                                 let match = false;
                                                 if (stationName === '遠距' && s.station?.includes('遠')) match = true;
+                                                else if (stationName === StationDefault.BMD_DX && s.specialRoles.includes(SPECIAL_ROLES.DUAL_BMD)) match = true;
                                                 else if (stationName === '場控' && s.station?.includes('場控')) match = true;
                                                 else if (stationName === '輔班' && s.specialRoles.includes(SPECIAL_ROLES.ASSIST)) match = true;
                                                 else if (stationName === '排班' && s.specialRoles.includes(SPECIAL_ROLES.SCHEDULER)) match = true;
@@ -2336,12 +2337,20 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                 else if (s.station === stationName) match = true;
 
                                                 if (match) {
+                                                    const isRemoteDualBmd = stationName === StationDefault.BMD_DX
+                                                        && s.specialRoles.includes(SPECIAL_ROLES.DUAL_BMD)
+                                                        && (s.station?.includes('遠') || false);
                                                     assignments.push({
                                                         id: u.id,
                                                         name: u.name,
                                                         alias: u.alias,
                                                         color: u.color,
-                                                        specialRoles: s.specialRoles.filter(r => r !== '輔班' && r !== '排班')
+                                                        specialRoles: s.specialRoles.filter(r =>
+                                                            r !== SPECIAL_ROLES.ASSIST &&
+                                                            r !== SPECIAL_ROLES.SCHEDULER &&
+                                                            r !== SPECIAL_ROLES.DUAL_BMD
+                                                        ),
+                                                        note: isRemoteDualBmd ? '(遠班兼職)' : undefined
                                                     });
                                                 }
                                             });
@@ -2420,7 +2429,9 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                                                 {u.alias || u.name[0]}
                                                                             </div>
                                                                             <div className="flex flex-col min-w-0">
-                                                                                <span className="text-sm font-semibold text-slate-700 truncate">{u.name}</span>
+                                                                                <span className="text-sm font-semibold text-slate-700 truncate">
+                                                                                    {u.name}{u.note ? ` ${u.note}` : ''}
+                                                                                </span>
                                                                                 {u.specialRoles.length > 0 && (
                                                                                     <div className="flex flex-wrap gap-0.5">
                                                                                         {u.specialRoles.map(r => (
@@ -3739,7 +3750,17 @@ BMD :{{bmd}}
             return 7;
         };
         const sortedBeitou = [...manpower.beitou].sort((a, b) => stationPriority(a.station) - stationPriority(b.station));
-        const beitouLines = sortedBeitou.map(({ name }) => `${name}：`).join('\n');
+        const learningWorkloadLines = shifts
+            .filter(s => {
+                if (s.date !== date) return false;
+                if (s.station === SYSTEM_OFF || s.station === StationDefault.UNASSIGNED) return false;
+                const u = users.find(user => user.id === s.userId);
+                return !!u && (s.station.includes('學習') || !!u.learningCapabilities?.some(cap => s.station.includes(cap)));
+            })
+            .map(s => users.find(user => user.id === s.userId)?.name?.slice(-2) || '')
+            .filter(Boolean)
+            .map(name => `${name}：`);
+        const beitouLines = [...sortedBeitou.map(({ name }) => `${name}：`), ...learningWorkloadLines].join('\n');
         const dazhiLines = manpower.dazhiShort.map(n => `${n}：`).join('\n');
         const remoteLines = manpower.remote_short.map(n => `${n}：`).join('\n');
         const section4Parts: string[] = [workloadDateStr];
