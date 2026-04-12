@@ -4,6 +4,7 @@ import { User, UserRole, SPECIAL_ROLES, StationDefault, DateEventType } from '..
 import { db } from '../services/store';
 import { BarChart3, Calendar, Filter, Download, FileSpreadsheet, Settings2, Save, FileText, ChevronLeft, ChevronRight, AlertCircle } from 'lucide-react';
 import { utils, writeFile } from 'xlsx';
+import { getEmploymentPause, isUserOnEmploymentPause } from '../services/utils';
 
 interface StatisticsPageProps {
     currentUser: User;
@@ -81,21 +82,6 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
     const [savingId, setSavingId] = useState<string | null>(null);
     const [saveError, setSaveError] = useState<string | null>(null);
 
-    // Sync radiographers with DB and handle updates
-    useEffect(() => {
-        const refreshData = () => {
-            setRadiographers(db.getUsers().filter(u => u.isRadiographer === true && u.isActive !== false));
-        };
-        refreshData();
-        return db.subscribe(refreshData);
-    }, []);
-
-    // 只統計有勾選為放射師的人員
-    const users = db.getUsers().filter(u => u.isRadiographer === true);
-    const shifts = db.getShifts('', '');
-    const cloudSchedule = db.getCloudScheduleEntries();
-    const doctorShifts = db.doctorShifts;
-
     // ── Default dates for a month (already moved up) ──
 
     const cycleMonthKey = useMemo(() => {
@@ -127,7 +113,56 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
         return buildDateRange(start, end);
     }, [currentDate, selectedCycleId, cycles]);
 
+    const selectedMonthDateRange = useMemo(() => {
+        const defaults = getDefaultDatesForMonth(selectedMonth);
+        return buildDateRange(defaults.startDate, defaults.endDate);
+    }, [selectedMonth, cycles]);
 
+    const shifts = db.getShifts('', '');
+    const cloudSchedule = db.getCloudScheduleEntries();
+    const doctorShifts = db.doctorShifts;
+
+    const hasWorkedInRange = (user: User, range: string[]) => {
+        return shifts.some(s =>
+            s.userId === user.id &&
+            range.includes(s.date) &&
+            s.station !== StationDefault.UNASSIGNED &&
+            s.station !== StationDefault.OFF &&
+            s.station !== '休假'
+        );
+    };
+
+    // Sync radiographers with DB and handle updates
+    useEffect(() => {
+        const refreshData = () => {
+            setRadiographers(
+                db.getUsers().filter(u =>
+                    u.isRadiographer === true &&
+                    u.isActive !== false &&
+                    !u.isPartTime &&
+                    (
+                        !selectedMonthDateRange.some(date => isUserOnEmploymentPause(u, date)) ||
+                        hasWorkedInRange(u, selectedMonthDateRange)
+                    )
+                )
+            );
+        };
+        refreshData();
+        return db.subscribe(refreshData);
+    }, [selectedMonthDateRange]);
+
+    // 只統計全職、在職且不在留停區間的放射師
+    const users = useMemo(() => {
+        return db.getUsers().filter(u =>
+            u.isRadiographer === true &&
+            u.isActive !== false &&
+            !u.isPartTime &&
+            (
+                !dateRange.some(date => isUserOnEmploymentPause(u, date)) ||
+                hasWorkedInRange(u, dateRange)
+            )
+        );
+    }, [dateRange, radiographers]);
 
     // ── Calculations ──
     const statsData = useMemo(() => {
@@ -519,7 +554,14 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
                                                                 >
                                                                     {user.alias || user.name[0]}
                                                                 </div>
-                                                                <div className="font-bold text-gray-800 text-sm">{user.name}</div>
+                                                                <div>
+                                                                    <div className="font-bold text-gray-800 text-sm">{user.name}</div>
+                                                                    {getEmploymentPause(user) && (
+                                                                        <div className="text-[10px] text-indigo-600 font-semibold">
+                                                                            留停：{getEmploymentPause(user)?.startDate} ~ {getEmploymentPause(user)?.endDate}
+                                                                        </div>
+                                                                    )}
+                                                                </div>
                                                             </div>
                                                         </td>
                                                         <td className="px-6 py-4">
