@@ -4,7 +4,7 @@ import { User, UserRole, StaffGroup, SYSTEM_OFF, StationDefault, SPECIAL_ROLES, 
 import { db, getPermissionsByRole } from '../services/store';
 import { Mail, Shield, Users, Trash2, Plus, Check, CheckSquare, Square, Pencil, X, Save, Palette, AlertCircle, Star, BookOpen, Key } from 'lucide-react';
 import ConfirmModal from '../components/ConfirmModal';
-import { generateUUID } from '../services/utils';
+import { EMPLOYMENT_PAUSE_KEY, generateUUID, getEmploymentPause, toLocalISOString } from '../services/utils';
 
 interface StaffPageProps {
   currentUser: User;
@@ -68,6 +68,9 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
     healthMgmtLocation: '全部' | '北投' | '大直';
     isActive: boolean; // New
     resignationDate: string; // New
+    personalCycles: User['personalCycles'];
+    employmentPauseStartDate: string;
+    employmentPauseEndDate: string;
     groupIndex: number; // For Group D rotation order
     permissions: string[];
   }>({
@@ -86,6 +89,9 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
     healthMgmtLocation: '全部',
     isActive: true, // New
     resignationDate: '', // New
+    personalCycles: {},
+    employmentPauseStartDate: '',
+    employmentPauseEndDate: '',
     groupIndex: 0,
     permissions: [PERMISSIONS.VIEW_PHYSICIAN]
   });
@@ -107,6 +113,9 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
       isHealthMgmt: false,
       healthMgmtLocation: '全部',
       resignationDate: '',
+      personalCycles: {},
+      employmentPauseStartDate: '',
+      employmentPauseEndDate: '',
       groupIndex: 0,
       permissions: [PERMISSIONS.VIEW_PHYSICIAN]
     });
@@ -120,6 +129,22 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
 
     // Auto-generate alias if empty (take first char)
     const finalAlias = formData.alias || formData.name.charAt(0);
+    if ((formData.employmentPauseStartDate && !formData.employmentPauseEndDate) || (!formData.employmentPauseStartDate && formData.employmentPauseEndDate)) {
+      setError('留職停薪需同時設定開始日與結束日。');
+      setIsSaving(false);
+      return;
+    }
+
+    const updatedPersonalCycles = { ...(formData.personalCycles || {}) };
+    if (formData.employmentPauseStartDate && formData.employmentPauseEndDate) {
+      updatedPersonalCycles[EMPLOYMENT_PAUSE_KEY] = {
+        startDate: formData.employmentPauseStartDate,
+        endDate: formData.employmentPauseEndDate,
+        memo: '留職停薪'
+      };
+    } else {
+      delete updatedPersonalCycles[EMPLOYMENT_PAUSE_KEY];
+    }
 
     try {
       if (editingId) {
@@ -140,6 +165,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
           healthMgmtLocation: formData.healthMgmtLocation,
           isActive: formData.isActive,
           resignationDate: formData.resignationDate,
+          personalCycles: updatedPersonalCycles,
           groupIndex: formData.groupId === StaffGroup.GROUP_D ? formData.groupIndex : undefined,
           permissions: formData.permissions
         });
@@ -161,6 +187,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
           healthMgmtLocation: formData.healthMgmtLocation,
           isActive: formData.isActive,
           resignationDate: formData.resignationDate,
+          personalCycles: updatedPersonalCycles,
           groupIndex: formData.groupId === StaffGroup.GROUP_D ? formData.groupIndex : undefined,
           password: '1234',
           mustChangePassword: true,
@@ -182,6 +209,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
   const handleEditClick = (e: React.MouseEvent, user: User) => {
     e.stopPropagation(); // Prevent triggering parent clicks
     setEditingId(user.id);
+    const employmentPause = getEmploymentPause(user);
     setFormData({
       name: user.name,
       alias: user.alias || user.name.charAt(0),
@@ -198,6 +226,9 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
       healthMgmtLocation: user.healthMgmtLocation || '全部',
       isActive: user.isActive !== undefined ? user.isActive : true,
       resignationDate: user.resignationDate || '',
+      personalCycles: user.personalCycles || {},
+      employmentPauseStartDate: employmentPause?.startDate || '',
+      employmentPauseEndDate: employmentPause?.endDate || '',
       groupIndex: user.groupIndex ?? 0,
       permissions: user.permissions || []
     });
@@ -513,6 +544,36 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                   />
                 </div>
               )}
+
+              <div className="bg-indigo-50 p-3 rounded-lg border border-indigo-100 mb-2">
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <label className="text-xs font-bold text-indigo-700">留職停薪期間</label>
+                  {(formData.employmentPauseStartDate || formData.employmentPauseEndDate) && (
+                    <button
+                      type="button"
+                      onClick={() => setFormData({ ...formData, employmentPauseStartDate: '', employmentPauseEndDate: '' })}
+                      className="text-[10px] text-indigo-600 hover:text-indigo-800 font-bold"
+                    >
+                      清除
+                    </button>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    type="date"
+                    value={formData.employmentPauseStartDate}
+                    onChange={e => setFormData({ ...formData, employmentPauseStartDate: e.target.value })}
+                    className="w-full px-3 py-2 border border-indigo-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                  />
+                  <input
+                    type="date"
+                    value={formData.employmentPauseEndDate}
+                    onChange={e => setFormData({ ...formData, employmentPauseEndDate: e.target.value })}
+                    className="w-full px-3 py-2 border border-indigo-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                  />
+                </div>
+                <p className="text-[11px] text-indigo-600 mt-2">留停期間此人員不會出現在排班表與候選名單，結束後會自動恢復顯示。</p>
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-semibold text-gray-500 mb-1 block">身份</label>
@@ -800,6 +861,9 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
             return true;
           }).map(user => {
             const isEditingThisUser = editingId === user.id;
+            const employmentPause = getEmploymentPause(user);
+            const todayStr = toLocalISOString(new Date());
+            const isCurrentlyPaused = !!employmentPause && todayStr >= employmentPause.startDate && todayStr <= employmentPause.endDate;
 
             return (
               <div
@@ -877,6 +941,11 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                       {user.isActive === false && (
                         <span className="text-[10px] px-2 py-0.5 rounded font-bold border bg-gray-100 text-gray-500 border-gray-200 flex items-center gap-1">
                           已離職
+                        </span>
+                      )}
+                      {employmentPause && (
+                        <span className={`text-[10px] px-2 py-0.5 rounded font-bold border ${isCurrentlyPaused ? 'bg-indigo-100 text-indigo-700 border-indigo-200' : 'bg-indigo-50 text-indigo-600 border-indigo-100'} flex items-center gap-1`}>
+                          留停 {employmentPause.startDate} ~ {employmentPause.endDate}
                         </span>
                       )}
                       </div>

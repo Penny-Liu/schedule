@@ -2,7 +2,7 @@
 import { User, Shift, HealthMgmtShift, LeaveRequest, SystemSettings, StationDefault, SYSTEM_OFF, RosterCycle, DateEventType, Holiday, LeaveStatus, LeaveType, StaffGroup, SPECIAL_ROLES, CycleAnchor, DailyManpowerStats, Doctor, WeekdaySetting, DoctorShift, ReportAssistant, CloudScheduleEntry, UserRole, PERMISSIONS, HealthMgmtStaff, AnesthesiaStaff, AnesthesiaShift } from '../types';
 import { MOCK_USERS, MOCK_LEAVES, MOCK_DOCTORS } from './mockData';
 import { supabase } from './supabaseClient';
-import { generateUUID } from './utils';
+import { generateUUID, isUserOnEmploymentPause } from './utils';
 
 const SCHEDULE_STORAGE_KEY = 'radiology_schedule_data';
 
@@ -2100,6 +2100,10 @@ BMD :{{bmd}}
     getUserStatusOnDate(userId: string, dateStr: string): 'WORK' | 'OFF' {
         const user = this.users.find(u => u.id === userId);
         if (!user) return 'OFF';
+
+        if (isUserOnEmploymentPause(user, dateStr)) {
+            return 'OFF';
+        }
 
         // Check Resignation Date
         if (user.isActive === false && user.resignationDate) {

@@ -10,7 +10,7 @@ import ExcelJS from 'exceljs';
 import ConfirmModal from '../components/ConfirmModal';
 import { AutoScheduleModal, AutoScheduleSpecialRoleModal } from '../components/dashboard/AutoScheduleModals';
 import { DailyStatsRows } from '../components/dashboard/DailyStatsRows';
-import { toLocalISOString } from '../services/utils';
+import { isUserOnEmploymentPause, toLocalISOString } from '../services/utils';
 import { loadChineseFontToDoc } from '../services/pdfUtils';
 
 interface DashboardPageProps {
@@ -332,6 +332,9 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
     // For Part-Time: Only include if they have a shift (so they can be found in Station View)
     const users = useMemo(() => {
         return allRadiographers.filter(u => {
+             const isPausedForEntireRange = dateRange.length > 0 && dateRange.every(date => isUserOnEmploymentPause(u, date));
+             if (isPausedForEntireRange) return false;
+
              // Check if user has shift in current view
              const hasShift = shifts.some(s => 
                  s.userId === u.id && 
@@ -1169,6 +1172,11 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
 
     // --- Data Access Helpers ---
     const getDayShift = (userId: string, dateStr: string) => {
+        const user = users.find(u => u.id === userId);
+        if (isUserOnEmploymentPause(user, dateStr)) {
+            return { station: null, specialRoles: [], isOff: true };
+        }
+
         // Optimized Lookup O(1)
         const override = shiftMap.get(`${userId}-${dateStr}`);
 
@@ -1196,7 +1204,6 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
         const isClosed = event?.type === DateEventType.CLOSED;
 
         if (isClosed) return { station: null, specialRoles: [], isOff: true };
-        const user = users.find(u => u.id === userId);
         if (!user) return { station: null, specialRoles: [], isOff: false };
 
         // Use getUserStatusOnDate for ALL group logic (A/B/C cycle + Group D rolling rotation)
@@ -2323,6 +2330,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                         if (!isHmType) {
                                             // 1. Look in Radiographers
                                             allRadiographers.forEach(u => {
+                                                if (u.isPartTime) return;
                                                 const s = getDayShift(u.id, dateStr);
                                                 let match = false;
                                                 if (stationName === '遠距' && s.station?.includes('遠')) match = true;
@@ -3424,11 +3432,13 @@ const DailyManpowerSummary: React.FC<{
         shiftsOnDate.forEach(s => {
             if (s.station === SYSTEM_OFF || s.station === StationDefault.UNASSIGNED) return;
 
+            const u = users.find(user => user.id === s.userId);
+            if (isUserOnEmploymentPause(u, date)) return;
+
             const name = getName(s.userId);
             if (!name) return;
 
             // Check for Learning status (Station Match or Capability Match)
-            const u = users.find(user => user.id === s.userId);
             const isLearning = s.station.includes('學習') || (u?.learningCapabilities?.some(cap => s.station.includes(cap)));
 
             // Modality Detection (regardless of Learning status, useful for tagging)
@@ -3749,28 +3759,69 @@ BMD :{{bmd}}
             if (station === '行政') return 6;
             return 7;
         };
-        const sortedBeitou = [...manpower.beitou].sort((a, b) => stationPriority(a.station) - stationPriority(b.station));
+
+        const nonPartTimeShifts = shifts.filter(s => {
+            if (s.date !== date) return false;
+            if (s.station === SYSTEM_OFF || s.station === StationDefault.UNASSIGNED) return false;
+            const u = users.find(user => user.id === s.userId);
+            return !!u && !u.isPartTime && !isUserOnEmploymentPause(u, date);
+        });
+
+        const sortedBeitou = nonPartTimeShifts
+            .filter(s => {
+                const u = users.find(user => user.id === s.userId);
+                const isLearning = !!u && (s.station.includes('學習') || !!u.learningCapabilities?.some(cap => s.station.includes(cap)));
+                if (isLearning) return false;
+                if (s.station === '行政') return false;
+                if (s.station.includes('大直')) return false;
+                if (s.station.includes('遠距') || s.station.includes('遠班')) return false;
+                return true;
+            })
+            .map(s => {
+                const u = users.find(user => user.id === s.userId);
+                return {
+                    name: u?.name?.slice(-2) || '',
+                    station: s.station
+                };
+            })
+            .filter(entry => entry.name)
+            .sort((a, b) => stationPriority(a.station) - stationPriority(b.station));
+
         const learningWorkloadLines = shifts
             .filter(s => {
                 if (s.date !== date) return false;
                 if (s.station === SYSTEM_OFF || s.station === StationDefault.UNASSIGNED) return false;
                 const u = users.find(user => user.id === s.userId);
-                return !!u && (s.station.includes('學習') || !!u.learningCapabilities?.some(cap => s.station.includes(cap)));
+                return !!u && !u.isPartTime && (s.station.includes('學習') || !!u.learningCapabilities?.some(cap => s.station.includes(cap)));
             })
             .map(s => users.find(user => user.id === s.userId)?.name?.slice(-2) || '')
             .filter(Boolean)
             .map(name => `${name}：`);
         const beitouLines = [...sortedBeitou.map(({ name }) => `${name}：`), ...learningWorkloadLines].join('\n');
-        const dazhiLines = manpower.dazhiShort.map(n => `${n}：`).join('\n');
-        const remoteLines = manpower.remote_short.map(n => `${n}：`).join('\n');
+        const dazhiLines = nonPartTimeShifts
+            .filter(s => s.station.includes('大直'))
+            .map(s => users.find(user => user.id === s.userId)?.name?.slice(-2) || '')
+            .filter(Boolean)
+            .map(n => `${n}：`)
+            .join('\n');
+        const remoteLines = nonPartTimeShifts
+            .filter(s => s.station.includes('遠距') || s.station.includes('遠班'))
+            .map(s => {
+                const u = users.find(user => user.id === s.userId);
+                const isDualBmd = s.specialRoles?.some(r => r.includes('兼BMD') || r.includes('兼DX')) || false;
+                return u ? `${u.name.slice(-2)}${isDualBmd ? '(兼BMD/DX)' : ''}` : '';
+            })
+            .filter(Boolean)
+            .map(n => `${n}：`)
+            .join('\n');
         const section4Parts: string[] = [workloadDateStr];
-        if (manpower.beitou.length > 0) {
+        if (beitouLines) {
             section4Parts.push(`北投\n${beitouLines}`);
         }
-        if (manpower.dazhi.length > 0) {
+        if (dazhiLines) {
             section4Parts.push(`大直\n${dazhiLines}`);
         }
-        if (manpower.remote.length > 0) {
+        if (remoteLines) {
             section4Parts.push(`遠健\n${remoteLines}`);
         }
         const section4 = section4Parts.join('\n\n');

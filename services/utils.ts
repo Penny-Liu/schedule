@@ -1,7 +1,9 @@
 /**
  * Shared utility helpers used across multiple pages and services.
  */
-import type { UserRole } from '../types';
+import type { User, UserRole } from '../types';
+
+export const EMPLOYMENT_PAUSE_KEY = '__employment_pause__';
 
 /**
  * Converts a Date object to local ISO string (YYYY-MM-DD),
@@ -70,3 +72,18 @@ export const getRoleLabel = (role: UserRole): string => {
   }
 };
 
+export const getEmploymentPause = (user?: User | null) => {
+  const pause = user?.personalCycles?.[EMPLOYMENT_PAUSE_KEY];
+  if (!pause?.startDate || !pause?.endDate) return null;
+  return {
+    startDate: pause.startDate,
+    endDate: pause.endDate,
+    memo: pause.memo || '留職停薪'
+  };
+};
+
+export const isUserOnEmploymentPause = (user: User | undefined | null, dateStr: string): boolean => {
+  const pause = getEmploymentPause(user);
+  if (!pause) return false;
+  return dateStr >= pause.startDate && dateStr <= pause.endDate;
+};
