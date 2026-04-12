@@ -247,20 +247,30 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
             color: newColor,
             isActive: true,
         };
-        await db.addReportAssistant(assistant);
-        setNewName('');
-        setNewColor(PALETTE[0]);
+        try {
+            await db.addReportAssistant(assistant);
+            setNewName('');
+            setNewColor(PALETTE[0]);
+            showToast('報告助理已新增');
+        } catch (e: any) {
+            showToast(`新增失敗: ${e?.message || '請檢查資料庫權限設定'}`);
+        }
     };
 
     const handleUpdateAssistant = async () => {
         if (!editingAssistant?.id || !editingAssistant.name?.trim()) return;
-        await db.updateReportAssistant({
-            id: editingAssistant.id,
-            name: editingAssistant.name.trim(),
-            color: editingAssistant.color,
-            isActive: editingAssistant.isActive ?? true,
-        });
-        setEditingAssistant(null);
+        try {
+            await db.updateReportAssistant({
+                id: editingAssistant.id,
+                name: editingAssistant.name.trim(),
+                color: editingAssistant.color,
+                isActive: editingAssistant.isActive ?? true,
+            });
+            setEditingAssistant(null);
+            showToast('報告助理已更新');
+        } catch (e: any) {
+            showToast(`更新失敗: ${e?.message || '請檢查資料庫權限設定'}`);
+        }
     };
 
     const handleDeleteAssistant = async (id: string) => {
@@ -269,8 +279,13 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
 
     const handleConfirmDeleteAssistant = async () => {
         if (!deleteConfirmId) return;
-        await db.deleteReportAssistant(deleteConfirmId);
-        setDeleteConfirmId(null);
+        try {
+            await db.deleteReportAssistant(deleteConfirmId);
+            setDeleteConfirmId(null);
+            showToast('報告助理已刪除');
+        } catch (e: any) {
+            showToast(`刪除失敗: ${e?.message || '請檢查資料庫權限設定'}`);
+        }
     };
 
     const activeAssistants = assistants.filter(a => a.isActive !== false);

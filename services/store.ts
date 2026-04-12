@@ -3511,8 +3511,6 @@ BMD :{{bmd}}
     }
 
     async addReportAssistant(assistant: ReportAssistant) {
-        this.reportAssistants = [...this.reportAssistants, assistant];
-        this.notifyListeners();
         try {
             const { error } = await supabase.from('report_assistants').insert({
                 id: assistant.id,
@@ -3521,12 +3519,15 @@ BMD :{{bmd}}
                 is_active: assistant.isActive ?? true
             });
             if (error) throw error;
-        } catch (e) { console.error('[Store] addReportAssistant failed', e); }
+            this.reportAssistants = [...this.reportAssistants, assistant];
+            this.notifyListeners();
+        } catch (e) {
+            console.error('[Store] addReportAssistant failed', e);
+            throw e;
+        }
     }
 
     async updateReportAssistant(assistant: ReportAssistant) {
-        this.reportAssistants = this.reportAssistants.map(a => a.id === assistant.id ? assistant : a);
-        this.notifyListeners();
         try {
             const { error } = await supabase.from('report_assistants').update({
                 name: assistant.name,
@@ -3534,15 +3535,24 @@ BMD :{{bmd}}
                 is_active: assistant.isActive ?? true
             }).eq('id', assistant.id);
             if (error) throw error;
-        } catch (e) { console.error('[Store] updateReportAssistant failed', e); }
+            this.reportAssistants = this.reportAssistants.map(a => a.id === assistant.id ? assistant : a);
+            this.notifyListeners();
+        } catch (e) {
+            console.error('[Store] updateReportAssistant failed', e);
+            throw e;
+        }
     }
 
     async deleteReportAssistant(id: string) {
-        this.reportAssistants = this.reportAssistants.filter(a => a.id !== id);
-        this.notifyListeners();
         try {
-            await supabase.from('report_assistants').delete().eq('id', id);
-        } catch (e) { console.error('[Store] deleteReportAssistant failed', e); }
+            const { error } = await supabase.from('report_assistants').delete().eq('id', id);
+            if (error) throw error;
+            this.reportAssistants = this.reportAssistants.filter(a => a.id !== id);
+            this.notifyListeners();
+        } catch (e) {
+            console.error('[Store] deleteReportAssistant failed', e);
+            throw e;
+        }
     }
 
     getCloudScheduleEntries(): CloudScheduleEntry[] {
