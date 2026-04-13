@@ -7,10 +7,14 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
+    "sf:list-objects": "node scripts/salesforce-list-objects.mjs",
+    "sf:describe": "node scripts/salesforce-describe-object.mjs",
+    "sf:sync-daily-stats": "node scripts/sync-salesforce-daily-stats.mjs",
     "cap:sync": "vite build --base=./ && cap sync",
     "cap:open": "cap open ios",
     "predeploy": "vite build --base=/schedule/",
-    "deploy": "gh-pages -d dist"
+    "deploy": "gh-pages -d dist",
+    "sync-stats": "node scripts/sync-all-to-supabase.mjs"
   },
   "dependencies": {
     "@capacitor/app": "^8.0.0",

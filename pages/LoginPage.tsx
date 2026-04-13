@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { User, UserRole } from '../types';
 import { db } from '../services/store';
 import { LogIn, User as UserIcon, Lock, ChevronLeft, Shield, Calendar, Activity, Eye, ChevronDown } from 'lucide-react';
-import { getRoleLabel } from '../services/utils';
+import { getRoleLabel, isUserOnEmploymentPause } from '../services/utils';
 
 interface LoginPageProps {
     onLogin: (user: User) => void;
@@ -19,7 +19,8 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
     const activeUsers = users.filter(u => 
         u.isActive !== false && 
         u.isPartTime !== true && 
-        (!u.resignationDate || u.resignationDate > todayStr)
+        (!u.resignationDate || u.resignationDate > todayStr) &&
+        !isUserOnEmploymentPause(u, todayStr)
     );
 
     // Sort function: Viewer (位居最上方)
@@ -76,6 +77,10 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         if (selectedUser) {
+            if (isUserOnEmploymentPause(selectedUser, todayStr)) {
+                setError('此帳號目前為留職停薪期間，暫不開放登入');
+                return;
+            }
             const targetPassword = selectedUser.password || '1234';
             if (password === targetPassword) {
                 onLogin(selectedUser);

@@ -3822,6 +3822,7 @@ BMD :{{bmd}}
             .filter(s => s.station.includes('遠距') || s.station.includes('遠班'))
             .map(s => users.find(user => user.id === s.userId)?.name?.slice(-2) || '')
             .filter(Boolean)
+            .map(n => `${n}：`)
             .join('\n');
         const section4Parts: string[] = [workloadDateStr];
         if (beitouLines) {
