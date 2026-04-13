@@ -3418,7 +3418,7 @@ const DailyManpowerSummary: React.FC<{
         const learning: string[] = []; // 學習
         
         const support: string[] = []; // 支援
-        const dazhi: string[] = []; // 大直 assigned
+        const dazhi: Array<{ label: string; isRemoteSupport: boolean }> = []; // 大直 assigned
         const dazhiShort: string[] = []; // 大直 - 後2字
         const remote_short: string[] = []; // 遠健 - 後2字
         const beitou: Array<{ name: string; station: string }> = []; // 北投 (all others)
@@ -3458,7 +3458,10 @@ const DailyManpowerSummary: React.FC<{
 
             if (s.station.includes('大直') || isDazhiSupport) {
                 dazhiCount++;
-                dazhi.push(isDazhiSupport && !s.station.includes('大直') ? `${name}(兼遠班)` : name);
+                dazhi.push({
+                    label: isDazhiSupport && !s.station.includes('大直') ? `${name}(兼遠班)` : name,
+                    isRemoteSupport: isDazhiSupport && !s.station.includes('大直')
+                });
                 dazhiShort.push(u ? u.name.slice(-2) : name);
             }
 
@@ -3514,7 +3517,9 @@ const DailyManpowerSummary: React.FC<{
             remote,
             remoteHeader,
             remoteCount,
-            dazhi,
+            dazhi: dazhi
+                .sort((a, b) => Number(a.isRemoteSupport) - Number(b.isRemoteSupport))
+                .map(item => item.label),
             dazhiShort,
             remote_short,
             dazhiCount,
@@ -3815,13 +3820,8 @@ BMD :{{bmd}}
             .join('\n');
         const remoteLines = nonPartTimeShifts
             .filter(s => s.station.includes('遠距') || s.station.includes('遠班'))
-            .map(s => {
-                const u = users.find(user => user.id === s.userId);
-                const isDualBmd = s.specialRoles?.some(r => r.includes('兼BMD') || r.includes('兼DX')) || false;
-                return u ? `${u.name.slice(-2)}${isDualBmd ? '(兼BMD/DX)' : ''}` : '';
-            })
+            .map(s => users.find(user => user.id === s.userId)?.name?.slice(-2) || '')
             .filter(Boolean)
-            .map(n => `${n}：`)
             .join('\n');
         const section4Parts: string[] = [workloadDateStr];
         if (beitouLines) {
