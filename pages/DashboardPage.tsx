@@ -3412,6 +3412,7 @@ const DailyManpowerSummary: React.FC<{
         const ct: string[] = [];
         const bmd: string[] = [];  // Includes DX
         const remote: string[] = [];
+        const remoteHeader: string[] = [];
         const floorControl: string[] = []; // 場控  
         
         const learning: string[] = []; // 學習
@@ -3450,26 +3451,33 @@ const DailyManpowerSummary: React.FC<{
 
             // Counts
             const isDualBMD = s.specialRoles?.some(r => r.includes('兼BMD') || r.includes('兼DX')) || false;
+            const isDazhiSupport = s.specialRoles?.includes(SPECIAL_ROLES.DAZHI_SUPPORT) || false;
             
             if (s.specialRoles?.includes(SPECIAL_ROLES.ASSIST)) assist.push(name);
             if (s.specialRoles?.includes(SPECIAL_ROLES.SCHEDULER)) scheduler.push(name);
 
-            if (s.station.includes('大直')) {
+            if (s.station.includes('大直') || isDazhiSupport) {
                 dazhiCount++;
-                dazhi.push(name);
+                dazhi.push(isDazhiSupport && !s.station.includes('大直') ? `${name}(兼遠班)` : name);
                 dazhiShort.push(u ? u.name.slice(-2) : name);
-            } else if (s.station.includes('遠距') || s.station.includes('遠班')) {
+            }
+
+            if (s.station.includes('遠距') || s.station.includes('遠班')) {
                 remoteCount++;
+                remoteHeader.push(name);
                 if (isDualBMD) {
-                    remote.push(`${name}(兼BMD/DX)`);
+                    const remoteLabel = isDazhiSupport ? `${name}(大直支援)` : `${name}(兼BMD/DX)`;
+                    remote.push(remoteLabel);
                     remote_short.push(u ? `${u.name.slice(-2)}(兼BMD/DX)` : `${name}(兼BMD/DX)`);
                 } else {
-                    remote.push(name);
+                    remote.push(isDazhiSupport ? `${name}(大直支援)` : name);
                     remote_short.push(u ? u.name.slice(-2) : name);
                 }
             } else if (isLearning) {
                 // Learning doesn't count towards Beitou manpower
                 learning.push(`${name}(${modality})`);
+            } else if (s.station.includes('大直') || isDazhiSupport) {
+                // Already counted for Dazhi above; do not also count as Beitou
             } else if (s.station === '行政') {
                 // Admin doesn't count towards Beitou manpower
             } else {
@@ -3504,6 +3512,7 @@ const DailyManpowerSummary: React.FC<{
             scheduler,
             learning,
             remote,
+            remoteHeader,
             remoteCount,
             dazhi,
             dazhiShort,
@@ -3574,7 +3583,7 @@ const DailyManpowerSummary: React.FC<{
         // Result of filtering for falsy values to avoid "undefined" or empty strings in output
         // Remote Group Header: Combine Remote Docs + Remote Radiographers with spacing
         const joinedRemoteDocs = remoteDocsWithSuffix.filter(Boolean).join('/');
-        const joinedRemoteRads = manpower.remote.filter(Boolean).join('/');
+        const joinedRemoteRads = manpower.remoteHeader.filter(Boolean).join('/');
         let remoteGroupHeader = joinedRemoteDocs;
         if (joinedRemoteRads) {
              remoteGroupHeader += (joinedRemoteDocs ? '  ' : '') + joinedRemoteRads;
