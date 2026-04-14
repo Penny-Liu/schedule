@@ -2424,11 +2424,11 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                         const _dailyStats = db.getDailyStats(dateStr);
                                                         let _statBadge: { value: number; color: string; title: string } | null = null;
                                                         if (st.includes('場控') && (_dailyStats?.beitou_clients ?? 0) > 0)
-                                                            _statBadge = { value: _dailyStats!.beitou_clients, color: 'bg-blue-500', title: '北投客戶數' };
+                                                            _statBadge = { value: _dailyStats!.beitou_clients, color: 'bg-red-500', title: '北投客戶數' };
                                                         else if (st.includes('MR') && (_dailyStats?.beitou_mr ?? 0) > 0)
                                                             _statBadge = { value: _dailyStats!.beitou_mr!, color: 'bg-orange-500', title: 'MR 檢查數' };
-                                                        else if (st.includes('技術支援') && (_dailyStats?.beitou_cta ?? 0) > 0)
-                                                            _statBadge = { value: _dailyStats!.beitou_cta, color: 'bg-sky-500', title: 'CTA 檢查數' };
+                                                        else if (st.includes('CT') && (_dailyStats?.beitou_cta ?? 0) > 0)
+                                                            _statBadge = { value: _dailyStats!.beitou_cta, color: 'bg-blue-500', title: 'CTA 檢查數' };
                                                         else if (st === '大直' && (_dailyStats?.dazhi_clients ?? 0) > 0)
                                                             _statBadge = { value: _dailyStats!.dazhi_clients, color: 'bg-violet-500', title: '大直客戶數' };
                                                         return (
@@ -2462,7 +2462,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                                                     <div className="flex flex-wrap gap-0.5">
                                                                                         {u.specialRoles.map(r => (
                                                                                             <span key={r} className="text-[9px] text-teal-600 font-medium leading-none">
-                                                                                                {r}
+                                                                                                {r === SPECIAL_ROLES.DAZHI_SUPPORT && st === '大直' ? '遠班' : r}
                                                                                             </span>
                                                                                         ))}
                                                                                     </div>
@@ -2854,7 +2854,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                                                 const isSelected = specialRoles.includes(role);
                                                                                 return (
                                                                                     <button key={role} type="button" onClick={() => handleSpecialRoleToggle(user.id, date, role, station || StationDefault.UNASSIGNED, specialRoles)} className={`px-1 py-0.5 text-[9px] rounded-lg border transition-all font-bold ${isSelected ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-slate-400 border-slate-200 hover:border-purple-300 hover:text-purple-500'} `}>
-                                                                                        {role === SPECIAL_ROLES.DUAL_BMD ? '兼B/D' : role[0]}
+                                                                                        {role === SPECIAL_ROLES.DUAL_BMD ? '兼B/D' : role === SPECIAL_ROLES.DAZHI_SUPPORT ? '大直' : role[0]}
                                                                                     </button>
                                                                                 );
                                                                             })}
@@ -2933,17 +2933,41 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                         });
 
                                                         const isToday = toLocalISOString(new Date()) === date;
+
+                                                        // Salesforce Stats Badge logic (Daily per cell)
+                                                        const dStats = db.getDailyStats(date);
+                                                        let cellBadge: { val: number; bg: string; text: string; labelStyle: string } | null = null;
+                                                        if (dStats) {
+                                                            if (row.label.includes('場控') && (dStats.beitou_clients ?? 0) > 0)
+                                                                cellBadge = { val: dStats.beitou_clients, bg: 'bg-red-500', text: 'text-white', labelStyle: '' };
+                                                            else if (row.label.includes('MR') && (dStats.beitou_mr ?? 0) > 0)
+                                                                cellBadge = { val: dStats.beitou_mr!, bg: 'bg-orange-500', text: 'text-white', labelStyle: '' };
+                                                            else if (row.label.includes('CT') && (dStats.beitou_cta ?? 0) > 0)
+                                                                cellBadge = { val: dStats.beitou_cta, bg: 'bg-blue-500', text: 'text-white', labelStyle: '' };
+                                                            else if (row.label === '大直' && (dStats.dazhi_clients ?? 0) > 0)
+                                                                cellBadge = { val: dStats.dazhi_clients, bg: 'bg-violet-500', text: 'text-white', labelStyle: '' };
+                                                        }
+
                                                         // Unified Cell Content Logic for both Roles and Stations (Chips)
                                                         return (
                                                             <td key={date} className={`p-0.5 border-r border-slate-100 align-top h-16 ${isToday ? 'bg-teal-50/10' : ''} `}>
-                                                                <div className="h-full flex flex-col items-center justify-start pt-1 relative group/cell">
-                                                                    <div className="flex flex-wrap gap-1 justify-center w-full px-0.5">
+                                                                <div className="h-full flex flex-col items-center justify-start relative group/cell">
+                                                                    {cellBadge && (
+                                                                        <div className="w-full flex justify-center mb-1 mt-0.5" title="當日統計數量">
+                                                                            <div className={`${cellBadge.bg} ${cellBadge.text} text-[10px] font-bold px-2 py-[2px] rounded shadow-sm flex items-center justify-center`}>
+                                                                                {cellBadge.labelStyle && <span className="opacity-90 font-medium text-[9px] mr-1">{cellBadge.labelStyle}</span>}
+                                                                                <span className="leading-none text-[11px]">{cellBadge.val}</span>
+                                                                            </div>
+                                                                        </div>
+                                                                    )}
+                                                                    <div className={`flex flex-wrap gap-1 justify-center w-full px-0.5 ${!cellBadge ? 'pt-1' : ''}`}>
                                                                         {sortedStaff.map((item, i) => {
                                                                             const isOpening = item.shift.specialRoles.includes(SPECIAL_ROLES.OPENING);
                                                                             const isLate = item.shift.specialRoles.includes(SPECIAL_ROLES.LATE);
                                                                             const isAssist = item.shift.specialRoles.includes(SPECIAL_ROLES.ASSIST);
                                                                             const isScheduler = item.shift.specialRoles.includes(SPECIAL_ROLES.SCHEDULER);
                                                                             const isDualBMD = item.shift.specialRoles.includes(SPECIAL_ROLES.DUAL_BMD);
+                                                                            const isDazhiSupport = item.shift.specialRoles.includes(SPECIAL_ROLES.DAZHI_SUPPORT);
 
                                                                             // LEAVE STATUS CHECK
                                                                             const activeLeave = db.getLeaves().find(l =>
@@ -2999,13 +3023,14 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                                                         </div>
                                                                                     )}
 
-                                                                                    {showSuffix && (isOpening || isLate || isAssist || isScheduler || isDualBMD) && (
+                                                                                    {showSuffix && (isOpening || isLate || isAssist || isScheduler || isDualBMD || isDazhiSupport) && (
                                                                                         <div className="flex flex-col gap-0.5 mt-0.5 w-full items-center">
                                                                                             {isOpening && <span className="w-full text-center bg-blue-100/80 px-0.5 rounded-[2px] text-[10px] leading-tight text-blue-900 font-extrabold border border-blue-200/50">開機</span>}
                                                                                             {isLate && <span className="w-full text-center bg-amber-100/80 px-0.5 rounded-[2px] text-[10px] leading-tight text-amber-900 font-extrabold border border-amber-200/50">晚班</span>}
                                                                                             {isAssist && <span className="w-full text-center bg-emerald-100/80 px-0.5 rounded-[2px] text-[10px] leading-tight text-emerald-900 font-extrabold border border-emerald-200/50">輔班</span>}
                                                                                             {isScheduler && <span className="w-full text-center bg-red-100/80 px-0.5 rounded-[2px] text-[10px] leading-tight text-red-900 font-extrabold border border-red-200/50">排班</span>}
                                                                                             {isDualBMD && <span className="w-full text-center bg-purple-100/80 px-0.5 rounded-[2px] text-[10px] leading-tight text-purple-900 font-extrabold border border-purple-200/50">兼BMD/DX</span>}
+                                                                                            {isDazhiSupport && <span className="w-full text-center bg-violet-100/80 px-0.5 rounded-[2px] text-[10px] leading-tight text-violet-900 font-extrabold border border-violet-200/50">{row.label.includes('大直') ? '遠班' : '大直支援'}</span>}
                                                                                         </div>
                                                                                     )}
 
