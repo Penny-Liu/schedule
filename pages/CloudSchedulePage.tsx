@@ -121,11 +121,15 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
         const station = (s.scheduled_station || s.station || '').toLowerCase();
         const location = (s.location || '').toLowerCase();
         
-        // Exclude Banned, OFF, Dazhi, Taichung
-        if (station.includes('禁排') || station.includes('off') || location.includes('大直') || location.includes('台中') || station.includes('大直') || station.includes('台中')) return false;
+        const isRemote = station.includes('遠') || station.includes('remote');
+        
+        // Exclude Banned, OFF, Taichung
+        if (station.includes('禁排') || station.includes('off') || location.includes('台中') || station.includes('台中')) return false;
+        
+        // Exclude Dazhi UNLESS it is a Remote shift
+        if ((location.includes('大直') || station.includes('大直')) && !isRemote) return false;
         
         // Allow if Remote OR (Imaging/Support)
-        const isRemote = station.includes('遠') || station.includes('remote');
         const isImagingOrSupport = station.includes('影像') || station.includes('支援');
         
         return isRemote || isImagingOrSupport;
@@ -949,7 +953,7 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
                             <div className="flex items-center gap-2 mb-3">
                                 <UserCheck size={18} className="text-indigo-500" />
                                 <h4 className="text-sm font-bold text-slate-700">放射師目前校對總數</h4>
-                                <span className="text-[10px] text-slate-400 font-normal ml-2">(僅計算北投影像/支援及遠班)</span>
+                                <span className="text-[10px] text-slate-400 font-normal ml-2">(包含所有遠班及北投影像/支援)</span>
                             </div>
                             <div className="flex flex-wrap gap-3">
                                 {radiographers.map(r => {
