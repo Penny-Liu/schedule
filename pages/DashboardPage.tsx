@@ -2421,8 +2421,26 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                                                     {visibleStations.map(st => {
                                                         const assignments = getAllAssignments(st);
+                                                        const _dailyStats = db.getDailyStats(dateStr);
+                                                        let _statBadge: { value: number; color: string; title: string } | null = null;
+                                                        if (st.includes('場控') && (_dailyStats?.beitou_clients ?? 0) > 0)
+                                                            _statBadge = { value: _dailyStats!.beitou_clients, color: 'bg-blue-500', title: '北投客戶數' };
+                                                        else if (st.includes('MR') && (_dailyStats?.beitou_mr ?? 0) > 0)
+                                                            _statBadge = { value: _dailyStats!.beitou_mr!, color: 'bg-orange-500', title: 'MR 檢查數' };
+                                                        else if (st.includes('技術支援') && (_dailyStats?.beitou_cta ?? 0) > 0)
+                                                            _statBadge = { value: _dailyStats!.beitou_cta, color: 'bg-sky-500', title: 'CTA 檢查數' };
+                                                        else if (st === '大直' && (_dailyStats?.dazhi_clients ?? 0) > 0)
+                                                            _statBadge = { value: _dailyStats!.dazhi_clients, color: 'bg-violet-500', title: '大直客戶數' };
                                                         return (
-                                                            <div key={st} className="bg-slate-50 border border-slate-200 rounded-xl p-3 hover:shadow-md transition-shadow">
+                                                            <div key={st} className="bg-slate-50 border border-slate-200 rounded-xl p-3 hover:shadow-md transition-shadow relative">
+                                                                {_statBadge && (
+                                                                    <div
+                                                                        className={`absolute -top-2 -right-2 ${_statBadge.color} text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full shadow-md min-w-[20px] text-center leading-4 ring-2 ring-white z-10`}
+                                                                        title={_statBadge.title}
+                                                                    >
+                                                                        {_statBadge.value}
+                                                                    </div>
+                                                                )}
                                                                 <div className={`text-xs font-bold mb-2.5 flex items-center justify-between ${getStationChipStyle(st)} px-2 py-1 rounded-lg`}>
                                                                     <span className="truncate">{st}</span>
                                                                     <span className="text-[10px] opacity-70 bg-white/30 px-1.5 py-0.5 rounded-full ring-1 ring-white/20">{assignments.length}</span>
