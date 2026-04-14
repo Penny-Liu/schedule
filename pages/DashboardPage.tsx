@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import type { User, Shift, DoctorShift, HealthMgmtStaff, HealthMgmtShift } from '../types';
 import { UserRole, SYSTEM_OFF, SPECIAL_ROLES, LeaveRequest, LeaveStatus, LeaveType, StationDefault, DateEventType } from '../types';
 import { db } from '../services/store';
-import { ChevronLeft, ChevronRight, Briefcase, Moon, Sun, Monitor, Activity, Calendar as CalendarIcon, Filter, Wand2, Users, LayoutList, Star, AlertCircle, Plus, X, Download, BarChart2, Sparkles, ChevronDown, ChevronUp, GripVertical, BookOpen, Lock, Unlock, CheckCircle, Loader2, User as UserIcon, Key, Settings, Trash2, Check, AlertTriangle, Copy, FileSpreadsheet } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Briefcase, Moon, Sun, Monitor, Activity, Calendar as CalendarIcon, Filter, Wand2, Users, LayoutList, Star, AlertCircle, Plus, X, Download, BarChart2, Sparkles, ChevronDown, ChevronUp, GripVertical, BookOpen, Lock, Unlock, CheckCircle, Loader2, User as UserIcon, Key, Settings, Trash2, Check, AlertTriangle, Copy, FileSpreadsheet, Heart } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -2936,14 +2936,14 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
 
                                                         // Salesforce Stats Badge logic (Daily per cell)
                                                         const dStats = db.getDailyStats(date);
-                                                        let cellBadge: { val: number; bg: string; text: string; labelStyle: string } | null = null;
+                                                        let cellBadge: { val: number; bg: string; text: string; labelStyle: string; isHeart?: boolean } | null = null;
                                                         if (dStats) {
                                                             if (row.label.includes('場控') && (dStats.beitou_clients ?? 0) > 0)
                                                                 cellBadge = { val: dStats.beitou_clients, bg: 'bg-red-500', text: 'text-white', labelStyle: '' };
                                                             else if (row.label.includes('MR') && (dStats.beitou_mr ?? 0) > 0)
                                                                 cellBadge = { val: dStats.beitou_mr!, bg: 'bg-orange-500', text: 'text-white', labelStyle: '' };
                                                             else if (row.label.includes('CT') && (dStats.beitou_cta ?? 0) > 0)
-                                                                cellBadge = { val: dStats.beitou_cta, bg: 'bg-blue-500', text: 'text-white', labelStyle: '' };
+                                                                cellBadge = { val: dStats.beitou_cta, bg: 'bg-blue-500', text: 'text-white', labelStyle: '', isHeart: true };
                                                             else if (row.label === '大直' && (dStats.dazhi_clients ?? 0) > 0)
                                                                 cellBadge = { val: dStats.dazhi_clients, bg: 'bg-violet-500', text: 'text-white', labelStyle: '' };
                                                         }
@@ -2954,10 +2954,17 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                                 <div className="h-full flex flex-col items-center justify-start relative group/cell">
                                                                     {cellBadge && (
                                                                         <div className="w-full flex justify-center mb-1 mt-0.5" title="當日統計數量">
-                                                                            <div className={`${cellBadge.bg} ${cellBadge.text} text-[10px] font-bold px-2 py-[2px] rounded shadow-sm flex items-center justify-center`}>
-                                                                                {cellBadge.labelStyle && <span className="opacity-90 font-medium text-[9px] mr-1">{cellBadge.labelStyle}</span>}
-                                                                                <span className="leading-none text-[11px]">{cellBadge.val}</span>
-                                                                            </div>
+                                                                            {cellBadge.isHeart ? (
+                                                                                <div className="relative flex items-center justify-center transition-transform hover:scale-125">
+                                                                                    <Heart size={20} className="text-red-500 fill-red-500" />
+                                                                                    <span className="absolute text-white text-[10px] font-black pb-0.5">{cellBadge.val}</span>
+                                                                                </div>
+                                                                            ) : (
+                                                                                <div className={`${cellBadge.bg} ${cellBadge.text} text-[10px] font-bold px-2 py-[2px] rounded shadow-sm flex items-center justify-center`}>
+                                                                                    {cellBadge.labelStyle && <span className="opacity-90 font-medium text-[9px] mr-1">{cellBadge.labelStyle}</span>}
+                                                                                    <span className="leading-none text-[11px]">{cellBadge.val}</span>
+                                                                                </div>
+                                                                            )}
                                                                         </div>
                                                                     )}
                                                                     <div className={`flex flex-wrap gap-1 justify-center w-full px-0.5 ${!cellBadge ? 'pt-1' : ''}`}>
