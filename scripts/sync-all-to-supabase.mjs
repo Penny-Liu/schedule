@@ -1,43 +1,59 @@
+
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { getSalesforceSession, runSoqlQuery } from './salesforce-utils.mjs';
+import readline from 'readline';
 
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
+const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout
+});
+
+const askQuestion = (query) => new Promise((resolve) => rl.question(query, resolve));
+
 async function sync() {
     try {
-        console.log('🚀 開始抓取今日 + 未來一個月 (30天) 的數據...');
-        const session = await getSalesforceSession();
+        console.log('\n--- 🏥 Salesforce 數據同步工具 (CLI 版) ---');
+        
+        let startDate = await askQuestion('📅 請輸入開始日期 (YYYY-MM-DD，留空則為今天): ');
+        if (!startDate) startDate = new Date().toISOString().split('T')[0];
+        
+        let endDate = await askQuestion('📅 請輸入結束日期 (YYYY-MM-DD，留空則為今天): ');
+        if (!endDate) endDate = startDate;
 
-        // 查詢未來 30 天 (含今天) 的所有相關醫令
+        console.log(`\n🚀 準備同步區間: ${startDate} ~ ${endDate}`);
+        
+        const session = await getSalesforceSession();
+        console.log('✅ Salesforce 認證成功。');
+
+        // 查詢指定日期範圍的所有相關醫令
         const soql = `
             SELECT CheckupName__c, Location__c, Order__c, CheckStartDate__c
             FROM CheckupReservation__c 
             WHERE (Location__c = '北投' OR Location__c = '大直')
-              AND CheckStartDate__c >= TODAY 
-              AND CheckStartDate__c <= NEXT_N_DAYS:30
+              AND CheckStartDate__c >= ${startDate}
+              AND CheckStartDate__c <= ${endDate}
             ORDER BY CheckStartDate__c ASC
         `.trim();
 
         const result = await runSoqlQuery({ ...session, soql });
-        console.log(`✅ 成功抓取 ${result.records.length} 筆原始醫令資料。`);
+        console.log(`📦 成功從雲端抓取 ${result.records.length} 筆原始項次。`);
 
         // 用來存放按日期分組的統計結果
         const dailyResults = {};
-
-        // 初始化統計物件的函數
-        const initStats = () => ({
-            beitou_clients: 0, beitou_gi: 0, beitou_cta: 0, beitou_mr: 0,
-            dazhi_clients: 0, dazhi_gi: 0, dazhi_metabolism_clients: 0
-        });
-
-        // 追蹤 MR 去重用的 Set
         const seenMR = new Set(); // Key 格式: "日期_OrderID"
 
+        const initStats = () => ({
+            beitou_clients: 0, beitou_gi: 0, beitou_cta: 0, beitou_mr: 0,
+            dazhi_clients: 0, dazhi_gi: 0, dazhi_metabolism_clients: 0, dazhi_ultrasound: 0
+        });
+
         result.records.forEach(r => {
-            const date = r.CheckStartDate__c; // YYYY-MM-DD
+            const date = r.CheckStartDate__c;
             const loc = r.Location__c;
             const name = r.CheckupName__c || '';
             const orderId = r.Order__c;
@@ -60,11 +76,18 @@ async function sync() {
                 if (name === '血壓') stats.dazhi_clients++;
                 if (name === '大腸鏡檢查') stats.dazhi_gi++;
                 if (name === '營養門診(30)') stats.dazhi_metabolism_clients++;
+                if (name.includes('超音波')) stats.dazhi_ultrasound++;
             }
         });
 
+        if (Object.keys(dailyResults).length === 0) {
+            console.log('⚠️ 此區間內沒有查獲任何數據。');
+            rl.close();
+            return;
+        }
+
         // --- 寫入 Supabase ---
-        console.log('📝 正在更新資料庫...');
+        console.log('📝 正在更新 Supabase 資料庫...');
         const { data: row, error: fetchError } = await supabase
             .from('settings')
             .select('id, data')
@@ -77,7 +100,7 @@ async function sync() {
         const settingsData = row?.data || {};
         const dailyStats = settingsData.dailyStats || {};
 
-        // 併入原本的資料，不刪除過去的紀錄，只更新這 15 天
+        // 併入原本的資料，進行覆蓋更新
         settingsData.dailyStats = {
             ...dailyStats,
             ...dailyResults,
@@ -90,11 +113,17 @@ async function sync() {
 
         if (upsertError) throw upsertError;
 
-        console.log(`✨ 大功告成！已同步 ${Object.keys(dailyResults).length} 天的數據。`);
-        console.log('同步日期範圍:', Object.keys(dailyResults)[0], '~', Object.keys(dailyResults).pop());
+        console.log(`\n✨ 同步成功！`);
+        console.log(`📊 統計摘要:`);
+        Object.keys(dailyResults).forEach(d => {
+            const s = dailyResults[d];
+            console.log(`   - [${d}] 北投:${s.beitou_clients}人 | 大直:${s.dazhi_clients}人`);
+        });
 
     } catch (err) {
-        console.error('❌ 同步失敗:', err.message);
+        console.error('\n❌ 同步失敗:', err.message);
+    } finally {
+        rl.close();
     }
 }
 

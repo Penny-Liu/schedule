@@ -2422,15 +2422,17 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                     {visibleStations.map(st => {
                                                         const assignments = getAllAssignments(st);
                                                         const _dailyStats = db.getDailyStats(dateStr);
-                                                        let _statBadge: { value: number; color: string; title: string } | null = null;
+                                                        let _statBadge: { value: number | string; color: string; title: string } | null = null;
                                                         if (st.includes('場控') && (_dailyStats?.beitou_clients ?? 0) > 0)
                                                             _statBadge = { value: _dailyStats!.beitou_clients, color: 'bg-red-500', title: '北投客戶數' };
                                                         else if (st.includes('MR') && (_dailyStats?.beitou_mr ?? 0) > 0)
                                                             _statBadge = { value: _dailyStats!.beitou_mr!, color: 'bg-orange-500', title: 'MR 檢查數' };
                                                         else if (st.includes('CT') && (_dailyStats?.beitou_cta ?? 0) > 0)
                                                             _statBadge = { value: _dailyStats!.beitou_cta, color: 'bg-blue-500', title: 'CTA 檢查數' };
-                                                        else if (st === '大直' && (_dailyStats?.dazhi_clients ?? 0) > 0)
-                                                            _statBadge = { value: _dailyStats!.dazhi_clients, color: 'bg-violet-500', title: '大直客戶數' };
+                                                        else if (st === '大直' && (_dailyStats?.dazhi_clients ?? 0) > 0) {
+                                                            const _us = _dailyStats!.dazhi_ultrasound;
+                                                            _statBadge = { value: _us != null ? `${_dailyStats!.dazhi_clients}/${_us}` : _dailyStats!.dazhi_clients, color: 'bg-violet-500', title: `大直客戶數${_us != null ? ` / 超音波醫令數` : ''}` };
+                                                        }
                                                         return (
                                                             <div key={st} className="bg-slate-50 border border-slate-200 rounded-xl p-3 hover:shadow-md transition-shadow relative">
                                                                 {_statBadge && (
@@ -2936,7 +2938,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
 
                                                         // Salesforce Stats Badge logic (Daily per cell)
                                                         const dStats = db.getDailyStats(date);
-                                                        let cellBadge: { val: number; bg: string; text: string; labelStyle: string; isHeart?: boolean } | null = null;
+                                                        let cellBadge: { val: number | string; bg: string; text: string; labelStyle: string; isHeart?: boolean } | null = null;
                                                         if (dStats) {
                                                             if (row.label.includes('場控') && (dStats.beitou_clients ?? 0) > 0)
                                                                 cellBadge = { val: dStats.beitou_clients, bg: 'bg-red-500', text: 'text-white', labelStyle: '' };
@@ -2944,8 +2946,10 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                                 cellBadge = { val: dStats.beitou_mr!, bg: 'bg-orange-500', text: 'text-white', labelStyle: '' };
                                                             else if (row.label.includes('CT') && (dStats.beitou_cta ?? 0) > 0)
                                                                 cellBadge = { val: dStats.beitou_cta, bg: 'bg-blue-500', text: 'text-white', labelStyle: '', isHeart: true };
-                                                            else if (row.label === '大直' && (dStats.dazhi_clients ?? 0) > 0)
-                                                                cellBadge = { val: dStats.dazhi_clients, bg: 'bg-violet-500', text: 'text-white', labelStyle: '' };
+                                                            else if (row.label === '大直' && (dStats.dazhi_clients ?? 0) > 0) {
+                                                                const _us = dStats.dazhi_ultrasound;
+                                                                cellBadge = { val: _us != null ? `${dStats.dazhi_clients}/${_us}` : dStats.dazhi_clients, bg: 'bg-violet-500', text: 'text-white', labelStyle: '' };
+                                                            }
                                                         }
 
                                                         // Unified Cell Content Logic for both Roles and Stations (Chips)
