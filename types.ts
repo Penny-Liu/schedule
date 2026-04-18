@@ -258,9 +258,14 @@ export interface CycleAnchor {
 export interface DailyManpowerStats {
   beitou_clients: number;
   beitou_cta: number;
+  beitou_ultrasound?: number; // New: Total ultrasound count for Beitou
+  beitou_ultrasound_heart?: number; // New: Heart Ultrasound count for Beitou
+  beitou_ultrasound_fibrosis?: number; // New: Liver Fibrosis Ultrasound count for Beitou
   dazhi_clients: number;
   dazhi_metabolism_clients?: number; // New: Metabolism clients count for Dazhi
   dazhi_ultrasound?: number; // New: Ultrasound order count for Dazhi
+  dazhi_ultrasound_heart?: number; // New: Heart Ultrasound count for Dazhi
+  dazhi_ultrasound_fibrosis?: number; // New: Liver Fibrosis Ultrasound count for Dazhi
   beitou_gi?: number; // New: Manual GI cases count
   beitou_mr?: number; // New: Manual MR cases count
   dazhi_gi?: number; // New: Manual GI cases count for Dazhi

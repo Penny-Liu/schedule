@@ -49,7 +49,9 @@ async function sync() {
 
         const initStats = () => ({
             beitou_clients: 0, beitou_gi: 0, beitou_cta: 0, beitou_mr: 0,
-            dazhi_clients: 0, dazhi_gi: 0, dazhi_metabolism_clients: 0, dazhi_ultrasound: 0
+            beitou_ultrasound: 0, beitou_ultrasound_heart: 0, beitou_ultrasound_fibrosis: 0,
+            dazhi_clients: 0, dazhi_gi: 0, dazhi_metabolism_clients: 0, 
+            dazhi_ultrasound: 0, dazhi_ultrasound_heart: 0, dazhi_ultrasound_fibrosis: 0
         });
 
         result.records.forEach(r => {
@@ -72,11 +74,21 @@ async function sync() {
                         seenMR.add(mrKey);
                     }
                 }
+                if (name.includes('超音波')) {
+                  if (!stats.beitou_ultrasound) stats.beitou_ultrasound = 0;
+                  stats.beitou_ultrasound++;
+                  if (name.includes('心臟')) stats.beitou_ultrasound_heart++;
+                  if (name.includes('肝纖維')) stats.beitou_ultrasound_fibrosis++;
+                }
             } else if (loc === '大直') {
                 if (name === '血壓') stats.dazhi_clients++;
                 if (name === '大腸鏡檢查') stats.dazhi_gi++;
                 if (name === '營養門診(30)') stats.dazhi_metabolism_clients++;
-                if (name.includes('超音波')) stats.dazhi_ultrasound++;
+                if (name.includes('超音波')) {
+                  stats.dazhi_ultrasound++;
+                  if (name.includes('心臟')) stats.dazhi_ultrasound_heart++;
+                  if (name.includes('肝纖維')) stats.dazhi_ultrasound_fibrosis++;
+                }
             }
         });
 

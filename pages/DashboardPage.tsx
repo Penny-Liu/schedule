@@ -3224,6 +3224,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                               };
                             else if (
                               st.includes("MR") &&
+                              !st.includes("1.5T") &&
                               (_dailyStats?.beitou_mr ?? 0) > 0
                             )
                               _statBadge = {
@@ -3241,17 +3242,39 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                 title: "CTA 檢查數",
                               };
                             else if (
+                              st === "US1" &&
+                              ((_dailyStats?.beitou_ultrasound ?? 0) > 0 ||
+                               (_dailyStats?.beitou_ultrasound_heart ?? 0) > 0)
+                            ) {
+                              const _us = _dailyStats!.beitou_ultrasound || 0;
+                              const _heart = _dailyStats!.beitou_ultrasound_heart || 0;
+                              const _fibrosis = _dailyStats!.beitou_ultrasound_fibrosis || 0;
+                              const _adjustedUs = Math.max(0, _us - _fibrosis);
+                              _statBadge = {
+                                value: `${_adjustedUs}/${_heart}`,
+                                color: "bg-teal-600",
+                                title: `北投 US1：${_adjustedUs} 超音波 / ${_heart} 心臟`,
+                              };
+                            }
+                            else if (
                               st === "大直" &&
                               (_dailyStats?.dazhi_clients ?? 0) > 0
                             ) {
-                              const _us = _dailyStats!.dazhi_ultrasound;
+                              const _us = _dailyStats!.dazhi_ultrasound || 0;
+                              const _heart = _dailyStats!.dazhi_ultrasound_heart || 0;
+                              const _fibrosis = _dailyStats!.dazhi_ultrasound_fibrosis || 0;
+                              const _adjustedUs = Math.max(0, _us - _fibrosis);
+                              
                               _statBadge = {
-                                value:
-                                  _us != null
-                                    ? `${_dailyStats!.dazhi_clients}/${_us}`
-                                    : _dailyStats!.dazhi_clients,
+                                value: (
+                                  <div className="flex flex-col items-center leading-tight py-0.5">
+                                    <span className="text-[11px] font-black">{_dailyStats!.dazhi_clients}</span>
+                                    <span className="text-[9px] opacity-90">{_adjustedUs}/{_heart}</span>
+                                  </div>
+                                ),
                                 color: "bg-violet-500",
-                                title: `大直客戶數${_us != null ? ` / 超音波醫令數` : ""}`,
+                                title: `大直：${_dailyStats!.dazhi_clients} 客戶 / ${_adjustedUs} 超音波 / ${_heart} 心臟`,
+                                isCustomLayout: true,
                               };
                             }
                             return (
@@ -3261,7 +3284,11 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                               >
                                 {_statBadge && (
                                   <div
-                                    className={`absolute -top-2 -right-2 ${_statBadge.color} text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full shadow-md min-w-[20px] text-center leading-4 ring-2 ring-white z-10`}
+                                    className={`absolute -top-2 -right-2 ${_statBadge.color} text-white font-bold shadow-md min-w-[20px] text-center ring-2 ring-white z-10 ${
+                                      (_statBadge as any).isCustomLayout
+                                        ? "rounded-lg px-1.5 py-0.5"
+                                        : "text-[10px] px-1.5 py-0.5 rounded-full leading-4"
+                                    }`}
                                     title={_statBadge.title}
                                   >
                                     {_statBadge.value}
@@ -4151,14 +4178,30 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                             // Salesforce Stats Badge logic (Daily per cell)
                             const dStats = db.getDailyStats(date);
                             let cellBadge: {
-                              val: number | string;
+                              val: number | string | JSX.Element;
                               bg: string;
                               text: string;
                               labelStyle: string;
                               isHeart?: boolean;
+                              isCustomLayout?: boolean;
                             } | null = null;
                             if (dStats) {
                               if (
+                                row.label === "US1" &&
+                                ((dStats.beitou_ultrasound ?? 0) > 0 ||
+                                  (dStats.beitou_ultrasound_heart ?? 0) > 0)
+                              ) {
+                                const _us = dStats.beitou_ultrasound || 0;
+                                const _heart = dStats.beitou_ultrasound_heart || 0;
+                                const _fibrosis = dStats.beitou_ultrasound_fibrosis || 0;
+                                const _adjustedUs = Math.max(0, _us - _fibrosis);
+                                cellBadge = {
+                                  val: `${_adjustedUs}/${_heart}`,
+                                  bg: "bg-teal-600",
+                                  text: "text-white",
+                                  labelStyle: "",
+                                };
+                              } else if (
                                 row.label.includes("場控") &&
                                 (dStats.beitou_clients ?? 0) > 0
                               )
@@ -4170,6 +4213,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                 };
                               else if (
                                 row.label.includes("MR") &&
+                                !row.label.includes("1.5T") &&
                                 (dStats.beitou_mr ?? 0) > 0
                               )
                                 cellBadge = {
@@ -4193,15 +4237,21 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                 row.label === "大直" &&
                                 (dStats.dazhi_clients ?? 0) > 0
                               ) {
-                                const _us = dStats.dazhi_ultrasound;
+                                const _us = dStats.dazhi_ultrasound || 0;
+                                const _heart = dStats.dazhi_ultrasound_heart || 0;
+                                const _fibrosis = dStats.dazhi_ultrasound_fibrosis || 0;
+                                const _adjustedUs = Math.max(0, _us - _fibrosis);
                                 cellBadge = {
-                                  val:
-                                    _us != null
-                                      ? `${dStats.dazhi_clients}/${_us}`
-                                      : dStats.dazhi_clients,
+                                  val: (
+                                    <div className="flex flex-col items-center leading-[1.1] py-0.5 min-w-[3rem]">
+                                      <span className="text-xs font-black">{dStats.dazhi_clients}</span>
+                                      <span className="text-[10px] opacity-90">{_adjustedUs}/{_heart}</span>
+                                    </div>
+                                  ),
                                   bg: "bg-violet-500",
                                   text: "text-white",
                                   labelStyle: "",
+                                  isCustomLayout: true,
                                 };
                               }
                             }
@@ -4230,14 +4280,24 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                         </div>
                                       ) : (
                                         <div
-                                          className={`${cellBadge.bg} ${cellBadge.text} text-[10px] font-bold px-2 py-[2px] rounded shadow-sm flex items-center justify-center`}
+                                          className={`${cellBadge.bg} ${cellBadge.text} font-bold shadow-sm flex items-center justify-center ${
+                                            (cellBadge as any).isCustomLayout
+                                              ? "rounded-lg px-2"
+                                              : "text-[10px] px-2 py-[2px] rounded"
+                                          }`}
                                         >
                                           {cellBadge.labelStyle && (
                                             <span className="opacity-90 font-medium text-[9px] mr-1">
                                               {cellBadge.labelStyle}
                                             </span>
                                           )}
-                                          <span className="leading-none text-[11px]">
+                                          <span
+                                            className={
+                                              (cellBadge as any).isCustomLayout
+                                                ? ""
+                                                : "leading-none text-[11px]"
+                                            }
+                                          >
                                             {cellBadge.val}
                                           </span>
                                         </div>
@@ -5286,7 +5346,7 @@ BMD :{{bmd}}
 {{remote_doctors_detail}}
 遠：{{remote_radiographers}}
 
-大直：{{dazhi_count}} （健檢 {{dazhi_clients}} 代謝 {{dazhi_metabolism_clients}} ）
+大直：{{dazhi_count}} （健檢 {{dazhi_clients}} / 超音波 {{dazhi_us_adjusted}} / 心臟 {{dazhi_us_heart}} ）
 {{dazhi_radiographers}}
 
 三線支援：{{third_line_support}}`;
@@ -5298,6 +5358,11 @@ BMD :{{bmd}}
       "{{beitou_clients}}": stats.beitou_clients.toString(),
       "{{beitou_cta}}": stats.beitou_cta.toString(),
       "{{dazhi_clients}}": stats.dazhi_clients.toString(),
+      "{{dazhi_us_adjusted}}": Math.max(
+        0,
+        (stats.dazhi_ultrasound || 0) - (stats.dazhi_ultrasound_fibrosis || 0),
+      ).toString(),
+      "{{dazhi_us_heart}}": (stats.dazhi_ultrasound_heart || 0).toString(),
       "{{dazhi_metabolism_clients}}": (
         stats.dazhi_metabolism_clients || 0
       ).toString(),

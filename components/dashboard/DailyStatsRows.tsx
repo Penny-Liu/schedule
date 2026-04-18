@@ -53,6 +53,63 @@ export const DailyStatsRows: React.FC<DailyStatsRowsProps> = ({ currentUser, dat
                     );
                 })}
             </tr>
+            <tr className="bg-slate-50 border-t border-slate-200">
+                <td className={`sticky left-0 z-10 bg-slate-50/95 backdrop-blur border-r border-slate-200 shadow-[4px_0_8px_rgba(0,0,0,0.02)] ${isMobile ? 'p-1 w-[85px] min-w-[85px]' : 'p-2'}`}>
+                    <div className="text-[10px] font-bold text-slate-600 flex items-center justify-end pr-2 text-right">北投超音波<br />(總量)</div>
+                </td>
+                {dateRange.map(date => {
+                    const stats = db.getDailyStats(date);
+                    return (
+                        <td key={date} className="p-0.5 border-r border-slate-200 text-center align-middle">
+                            <input
+                                type="number"
+                                value={stats?.beitou_ultrasound || 0}
+                                onChange={(e) => db.updateDailyStats(date, { beitou_ultrasound: Number(e.target.value) })}
+                                className="w-full text-center text-xs bg-transparent outline-none focus:bg-white focus:ring-1 focus:ring-teal-500 rounded-lg py-1"
+                                placeholder="0"
+                            />
+                        </td>
+                    );
+                })}
+            </tr>
+            <tr className="bg-slate-50 text-indigo-600">
+                <td className={`sticky left-0 z-10 bg-slate-50/95 backdrop-blur border-r border-slate-200 shadow-[4px_0_8px_rgba(0,0,0,0.02)] ${isMobile ? 'p-1 w-[85px] min-w-[85px]' : 'p-2'}`}>
+                    <div className="text-[10px] font-bold flex items-center justify-end pr-2 text-right">北投心臟<br />超音波</div>
+                </td>
+                {dateRange.map(date => {
+                    const stats = db.getDailyStats(date);
+                    return (
+                        <td key={date} className="p-0.5 border-r border-slate-200 text-center align-middle">
+                            <input
+                                type="number"
+                                value={stats?.beitou_ultrasound_heart || 0}
+                                onChange={(e) => db.updateDailyStats(date, { beitou_ultrasound_heart: Number(e.target.value) })}
+                                className="w-full text-center text-xs bg-transparent outline-none focus:bg-white focus:ring-1 focus:ring-teal-500 rounded-lg py-1"
+                                placeholder="0"
+                            />
+                        </td>
+                    );
+                })}
+            </tr>
+            <tr className="bg-slate-50 text-rose-600">
+                <td className={`sticky left-0 z-10 bg-slate-50/95 backdrop-blur border-r border-slate-200 shadow-[4px_0_8px_rgba(0,0,0,0.02)] ${isMobile ? 'p-1 w-[85px] min-w-[85px]' : 'p-2'}`}>
+                    <div className="text-[10px] font-bold flex items-center justify-end pr-2 text-right">北投肝纖維<br />超音波</div>
+                </td>
+                {dateRange.map(date => {
+                    const stats = db.getDailyStats(date);
+                    return (
+                        <td key={date} className="p-0.5 border-r border-slate-200 text-center align-middle">
+                            <input
+                                type="number"
+                                value={stats?.beitou_ultrasound_fibrosis || 0}
+                                onChange={(e) => db.updateDailyStats(date, { beitou_ultrasound_fibrosis: Number(e.target.value) })}
+                                className="w-full text-center text-xs bg-transparent outline-none focus:bg-white focus:ring-1 focus:ring-teal-500 rounded-lg py-1"
+                                placeholder="0"
+                            />
+                        </td>
+                    );
+                })}
+            </tr>
             <tr className="bg-slate-50">
                 <td className={`sticky left-0 z-10 bg-slate-50/95 backdrop-blur border-r border-slate-200 shadow-[4px_0_8px_rgba(0,0,0,0.02)] ${isMobile ? 'p-1 w-[85px] min-w-[85px]' : 'p-2'}`}>
                     <div className="text-[10px] font-bold text-slate-600 flex items-center justify-end pr-2 text-right">大直健檢<br />客戶數</div>
@@ -65,6 +122,63 @@ export const DailyStatsRows: React.FC<DailyStatsRowsProps> = ({ currentUser, dat
                                 type="number"
                                 value={stats?.dazhi_clients || 0}
                                 onChange={(e) => db.updateDailyStats(date, { dazhi_clients: Number(e.target.value) })}
+                                className="w-full text-center text-xs bg-transparent outline-none focus:bg-white focus:ring-1 focus:ring-teal-500 rounded-lg py-1"
+                                placeholder="0"
+                            />
+                        </td>
+                    );
+                })}
+            </tr>
+            <tr className="bg-slate-50">
+                <td className={`sticky left-0 z-10 bg-slate-50/95 backdrop-blur border-r border-slate-200 shadow-[4px_0_8px_rgba(0,0,0,0.02)] ${isMobile ? 'p-1 w-[85px] min-w-[85px]' : 'p-2'}`}>
+                    <div className="text-[10px] font-bold text-slate-600 flex items-center justify-end pr-2 text-right">大直超音波<br />(總量)</div>
+                </td>
+                {dateRange.map(date => {
+                    const stats = db.getDailyStats(date);
+                    return (
+                        <td key={date} className="p-0.5 border-r border-slate-200 text-center align-middle">
+                            <input
+                                type="number"
+                                value={stats?.dazhi_ultrasound || 0}
+                                onChange={(e) => db.updateDailyStats(date, { dazhi_ultrasound: Number(e.target.value) })}
+                                className="w-full text-center text-xs bg-transparent outline-none focus:bg-white focus:ring-1 focus:ring-teal-500 rounded-lg py-1"
+                                placeholder="0"
+                            />
+                        </td>
+                    );
+                })}
+            </tr>
+            <tr className="bg-slate-50 text-indigo-600">
+                <td className={`sticky left-0 z-10 bg-slate-50/95 backdrop-blur border-r border-slate-200 shadow-[4px_0_8px_rgba(0,0,0,0.02)] ${isMobile ? 'p-1 w-[85px] min-w-[85px]' : 'p-2'}`}>
+                    <div className="text-[10px] font-bold flex items-center justify-end pr-2 text-right">大直心臟<br />超音波</div>
+                </td>
+                {dateRange.map(date => {
+                    const stats = db.getDailyStats(date);
+                    return (
+                        <td key={date} className="p-0.5 border-r border-slate-200 text-center align-middle">
+                            <input
+                                type="number"
+                                value={stats?.dazhi_ultrasound_heart || 0}
+                                onChange={(e) => db.updateDailyStats(date, { dazhi_ultrasound_heart: Number(e.target.value) })}
+                                className="w-full text-center text-xs bg-transparent outline-none focus:bg-white focus:ring-1 focus:ring-teal-500 rounded-lg py-1"
+                                placeholder="0"
+                            />
+                        </td>
+                    );
+                })}
+            </tr>
+            <tr className="bg-slate-50 text-rose-600">
+                <td className={`sticky left-0 z-10 bg-slate-50/95 backdrop-blur border-r border-slate-200 shadow-[4px_0_8px_rgba(0,0,0,0.02)] ${isMobile ? 'p-1 w-[85px] min-w-[85px]' : 'p-2'}`}>
+                    <div className="text-[10px] font-bold flex items-center justify-end pr-2 text-right">大直肝纖維<br />超音波</div>
+                </td>
+                {dateRange.map(date => {
+                    const stats = db.getDailyStats(date);
+                    return (
+                        <td key={date} className="p-0.5 border-r border-slate-200 text-center align-middle">
+                            <input
+                                type="number"
+                                value={stats?.dazhi_ultrasound_fibrosis || 0}
+                                onChange={(e) => db.updateDailyStats(date, { dazhi_ultrasound_fibrosis: Number(e.target.value) })}
                                 className="w-full text-center text-xs bg-transparent outline-none focus:bg-white focus:ring-1 focus:ring-teal-500 rounded-lg py-1"
                                 placeholder="0"
                             />

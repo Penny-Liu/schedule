@@ -392,7 +392,7 @@ GI：${stats?.beitou_gi || 0} 台`;
 
     return `${date.getMonth() + 1}/${date.getDate()} （${dayNames[date.getDay()]}）
 健檢客戶： ${stats?.dazhi_clients || 0} 位
-(腸胃：${stats?.dazhi_gi || 0} / 心超： )
+(腸胃：${stats?.dazhi_gi || 0} / 心超：${stats?.dazhi_ultrasound_heart || 0} )
 代謝客戶： ${stats?.dazhi_metabolism_clients || 0} 位
 
 主/輔：${mainHM.join("/") || "-"}/${assistHM.join("/") || "-"}
