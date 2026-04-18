@@ -48,7 +48,7 @@ async function sync() {
         const seenMR = new Set(); // Key 格式: "日期_OrderID"
 
         const initStats = () => ({
-            beitou_clients: 0, beitou_gi: 0, beitou_cta: 0, beitou_mr: 0,
+            beitou_clients: 0, beitou_gi: 0, beitou_cta: 0, beitou_mr: 0, beitou_mr_orders: 0,
             beitou_ultrasound: 0, beitou_ultrasound_heart: 0, beitou_ultrasound_fibrosis: 0,
             dazhi_clients: 0, dazhi_gi: 0, dazhi_metabolism_clients: 0, 
             dazhi_ultrasound: 0, dazhi_ultrasound_heart: 0, dazhi_ultrasound_fibrosis: 0
@@ -68,6 +68,7 @@ async function sync() {
                 if (name === '大腸鏡檢查') stats.beitou_gi++;
                 if (name.includes('電腦斷層(顯影)')) stats.beitou_cta++;
                 if (name.includes('磁振造影') || name.includes('MR')) {
+                    stats.beitou_mr_orders++;
                     const mrKey = `${date}_${orderId}`;
                     if (!seenMR.has(mrKey)) {
                         stats.beitou_mr++;

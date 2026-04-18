@@ -267,7 +267,8 @@ export interface DailyManpowerStats {
   dazhi_ultrasound_heart?: number; // New: Heart Ultrasound count for Dazhi
   dazhi_ultrasound_fibrosis?: number; // New: Liver Fibrosis Ultrasound count for Dazhi
   beitou_gi?: number; // New: Manual GI cases count
-  beitou_mr?: number; // New: Manual MR cases count
+  beitou_mr?: number; // Unique MR clients
+  beitou_mr_orders?: number; // New: Total MR order items count
   dazhi_gi?: number; // New: Manual GI cases count for Dazhi
   beitou_total?: number; // Manually entered total radiographer count for Beitou
   dazhi_max_capacity?: number; // New: Manually entered max capacity for Dazhi (最大量)

@@ -3225,12 +3225,12 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                             else if (
                               st.includes("MR") &&
                               !st.includes("1.5T") &&
-                              (_dailyStats?.beitou_mr ?? 0) > 0
+                              ((_dailyStats?.beitou_mr ?? 0) > 0 || (_dailyStats?.beitou_mr_orders ?? 0) > 0)
                             )
                               _statBadge = {
-                                value: _dailyStats!.beitou_mr!,
+                                value: `${_dailyStats!.beitou_mr || 0}/${_dailyStats!.beitou_mr_orders || 0}`,
                                 color: "bg-orange-500",
-                                title: "MR 檢查數",
+                                title: `MR：${_dailyStats!.beitou_mr || 0} 客戶 / ${_dailyStats!.beitou_mr_orders || 0} 醫令`,
                               };
                             else if (
                               st.includes("CT") &&
@@ -4214,10 +4214,10 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                               else if (
                                 row.label.includes("MR") &&
                                 !row.label.includes("1.5T") &&
-                                (dStats.beitou_mr ?? 0) > 0
+                                ((dStats.beitou_mr ?? 0) > 0 || (dStats.beitou_mr_orders ?? 0) > 0)
                               )
                                 cellBadge = {
-                                  val: dStats.beitou_mr!,
+                                  val: `${dStats.beitou_mr || 0}/${dStats.beitou_mr_orders || 0}`,
                                   bg: "bg-orange-500",
                                   text: "text-white",
                                   labelStyle: "",
