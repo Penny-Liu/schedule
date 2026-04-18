@@ -75,6 +75,10 @@ interface DashboardPageProps {
 type ViewMode = "user" | "station" | "daily" | "personal";
 
 const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
+  const isSupervisorOrHigher =
+    currentUser.role === UserRole.SUPERVISOR ||
+    currentUser.role === UserRole.SYSTEM_ADMIN;
+
   const [currentDate, setCurrentDate] = useState(new Date());
 
   // --- Cycle Selection Logic ---
@@ -3222,7 +3226,10 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                 color: "bg-red-500",
                                 title: "北投客戶數",
                               };
-                            else if (
+                            // Role check for stats visibility
+                            if (!isSupervisorOrHigher) {
+                              _statBadge = null;
+                            } else if (
                               st.includes("MR") &&
                               !st.includes("1.5T") &&
                               ((_dailyStats?.beitou_mr ?? 0) > 0 || (_dailyStats?.beitou_mr_orders ?? 0) > 0)
@@ -3242,6 +3249,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                 title: "CTA 檢查數",
                               };
                             else if (
+                              isSupervisorOrHigher &&
                               st === "US1" &&
                               ((_dailyStats?.beitou_ultrasound ?? 0) > 0 ||
                                (_dailyStats?.beitou_ultrasound_heart ?? 0) > 0)
@@ -4188,6 +4196,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                             if (dStats) {
                               if (
                                 row.label === "US1" &&
+                                isSupervisorOrHigher &&
                                 ((dStats.beitou_ultrasound ?? 0) > 0 ||
                                   (dStats.beitou_ultrasound_heart ?? 0) > 0)
                               ) {
@@ -4214,6 +4223,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                               else if (
                                 row.label.includes("MR") &&
                                 !row.label.includes("1.5T") &&
+                                isSupervisorOrHigher &&
                                 ((dStats.beitou_mr ?? 0) > 0 || (dStats.beitou_mr_orders ?? 0) > 0)
                               )
                                 cellBadge = {
