@@ -1,81 +1,85 @@
-
 export enum UserRole {
-  SUPERVISOR = 'SUPERVISOR', // 放射師主管
-  RADIOGRAPHER_STAFF = 'RADIOGRAPHER_STAFF', // 放射師同仁
-  SYSTEM_ADMIN = 'SYSTEM_ADMIN', // 系統管理員
-  PHYSICIAN_ADMIN = 'PHYSICIAN_ADMIN', // 醫師/行政管理
-  HM_SUPERVISOR = 'HM_SUPERVISOR', // 健管主管
-  HM_STAFF = 'HM_STAFF', // 健管同仁
-  VIEWER = 'VIEWER', // 瀏覽者 (僅查看)
-  FINANCE = 'FINANCE', // 財會 (僅查看醫師排班/工作統計/個人設定)
-  SCHEDULER = 'SCHEDULER', // Legacy: 舊版管理員
+  SUPERVISOR = "SUPERVISOR", // 放射師主管
+  RADIOGRAPHER_STAFF = "RADIOGRAPHER_STAFF", // 放射師同仁
+  SYSTEM_ADMIN = "SYSTEM_ADMIN", // 系統管理員
+  PHYSICIAN_ADMIN = "PHYSICIAN_ADMIN", // 醫師/行政管理
+  HM_SUPERVISOR = "HM_SUPERVISOR", // 健管主管
+  HM_STAFF = "HM_STAFF", // 健管同仁
+  VIEWER = "VIEWER", // 瀏覽者 (僅查看)
+  FINANCE = "FINANCE", // 財會 (僅查看醫師排班/工作統計/個人設定)
+  SCHEDULER = "SCHEDULER", // Legacy: 舊版管理員
 }
 
 export enum StaffGroup {
-  GROUP_A = 'A',
-  GROUP_B = 'B',
-  GROUP_C = 'C',
-  GROUP_D = 'D'  // Rolling rotation: Sun always off, Mon-Sat rotate by index
+  GROUP_A = "A",
+  GROUP_B = "B",
+  GROUP_C = "C",
+  GROUP_D = "D", // Rolling rotation: Sun always off, Mon-Sat rotate by index
 }
 
 // ── 權限常量 ──────────────────────────
 export const PERMISSIONS = {
-  VIEW_CLOUD_SCHEDULE: 'view_cloud_schedule',
-  EDIT_CLOUD_SCHEDULE: 'edit_cloud_schedule',
-  VIEW_STAFF: 'staff_view',
-  EDIT_STAFF: 'staff_edit',
-  VIEW_PHYSICIAN: 'physician_view',
-  EDIT_PHYSICIAN: 'physician_edit',
-  VIEW_STATS: 'stats_view',
-  VIEW_DOCTOR_STATS: 'doctor_stats_view',
-  EDIT_DOCTOR_STATS: 'doctor_stats_edit',
-  MANAGE_DOCTORS: 'doctors_manage',
-  EDIT_SETTINGS: 'settings_edit',
-  VIEW_HEALTH_MGMT: 'health_mgmt_view',
-  EDIT_HEALTH_MGMT: 'health_mgmt_edit',
-  VIEW_ANESTHESIA: 'anesthesia_view',
-  EDIT_ANESTHESIA: 'anesthesia_edit',
+  VIEW_CLOUD_SCHEDULE: "view_cloud_schedule",
+  EDIT_CLOUD_SCHEDULE: "edit_cloud_schedule",
+  VIEW_STAFF: "staff_view",
+  EDIT_STAFF: "staff_edit",
+  VIEW_PHYSICIAN: "physician_view",
+  EDIT_PHYSICIAN: "physician_edit",
+  VIEW_STATS: "stats_view",
+  VIEW_DOCTOR_STATS: "doctor_stats_view",
+  EDIT_DOCTOR_STATS: "doctor_stats_edit",
+  MANAGE_DOCTORS: "doctors_manage",
+  EDIT_SETTINGS: "settings_edit",
+  VIEW_HEALTH_MGMT: "health_mgmt_view",
+  EDIT_HEALTH_MGMT: "health_mgmt_edit",
+  VIEW_ANESTHESIA: "anesthesia_view",
+  EDIT_ANESTHESIA: "anesthesia_edit",
 };
 
 export const PERMISSION_LABELS: Record<string, string> = {
-  [PERMISSIONS.VIEW_CLOUD_SCHEDULE]: '查看雲班表',
-  [PERMISSIONS.EDIT_CLOUD_SCHEDULE]: '編輯雲班表',
-  [PERMISSIONS.VIEW_STAFF]: '查看人員管理',
-  [PERMISSIONS.EDIT_STAFF]: '編輯人員管理',
-  [PERMISSIONS.VIEW_PHYSICIAN]: '查看醫師排班',
-  [PERMISSIONS.EDIT_PHYSICIAN]: '編輯醫師排班',
-  [PERMISSIONS.VIEW_STATS]: '查看工作統計',
-  [PERMISSIONS.VIEW_DOCTOR_STATS]: '查看醫師統計',
-  [PERMISSIONS.EDIT_DOCTOR_STATS]: '編輯醫師統計',
-  [PERMISSIONS.MANAGE_DOCTORS]: '管理醫師名單',
-  [PERMISSIONS.EDIT_SETTINGS]: '系統設定權限',
-  [PERMISSIONS.VIEW_HEALTH_MGMT]: '查看健管排班',
-  [PERMISSIONS.EDIT_HEALTH_MGMT]: '編輯健管排班',
-  [PERMISSIONS.VIEW_ANESTHESIA]: '查看麻護排班',
-  [PERMISSIONS.EDIT_ANESTHESIA]: '編輯麻護排班',
+  [PERMISSIONS.VIEW_CLOUD_SCHEDULE]: "查看雲班表",
+  [PERMISSIONS.EDIT_CLOUD_SCHEDULE]: "編輯雲班表",
+  [PERMISSIONS.VIEW_STAFF]: "查看人員管理",
+  [PERMISSIONS.EDIT_STAFF]: "編輯人員管理",
+  [PERMISSIONS.VIEW_PHYSICIAN]: "查看醫師排班",
+  [PERMISSIONS.EDIT_PHYSICIAN]: "編輯醫師排班",
+  [PERMISSIONS.VIEW_STATS]: "查看工作統計",
+  [PERMISSIONS.VIEW_DOCTOR_STATS]: "查看醫師統計",
+  [PERMISSIONS.EDIT_DOCTOR_STATS]: "編輯醫師統計",
+  [PERMISSIONS.MANAGE_DOCTORS]: "管理醫師名單",
+  [PERMISSIONS.EDIT_SETTINGS]: "系統設定權限",
+  [PERMISSIONS.VIEW_HEALTH_MGMT]: "查看健管排班",
+  [PERMISSIONS.EDIT_HEALTH_MGMT]: "編輯健管排班",
+  [PERMISSIONS.VIEW_ANESTHESIA]: "查看麻護排班",
+  [PERMISSIONS.EDIT_ANESTHESIA]: "編輯麻護排班",
 };
 
-export type HMDesignation = '健管師' | '行政人員' | '營養師' | '醫檢師' | '藥師';
+export type HMDesignation =
+  | "健管師"
+  | "行政人員"
+  | "營養師"
+  | "醫檢師"
+  | "藥師";
 
 export interface HealthMgmtStaff {
-    id: string;
-    name: string;
-    alias?: string;
-    isActive: boolean;
-    role?: 'ADMIN' | 'VIEWER';
-    location?: string;
-    displayOrder?: number;
-    designation?: HMDesignation;
+  id: string;
+  name: string;
+  alias?: string;
+  isActive: boolean;
+  role?: "ADMIN" | "VIEWER";
+  location?: string;
+  displayOrder?: number;
+  designation?: HMDesignation;
 }
 
 export interface AnesthesiaStaff {
-    id: string;
-    name: string;
-    alias?: string;
-    isActive: boolean;
-    locations?: string[];
-    role?: 'ADMIN' | 'VIEWER';
-    displayOrder?: number;
+  id: string;
+  name: string;
+  alias?: string;
+  isActive: boolean;
+  locations?: string[];
+  role?: "ADMIN" | "VIEWER";
+  displayOrder?: number;
 }
 
 export interface User {
@@ -98,9 +102,12 @@ export interface User {
   isRadiographer?: boolean; // New: Flag to indicate if user should appear in Radiographer Schedule
   isPartTime?: boolean; // New: Flag for part-time radiographers (hidden in main view)
   isHealthMgmt?: boolean; // New: Flag for health management staff
-  healthMgmtLocation?: '全部' | '北投' | '大直'; // New: Restricts HM_SUPERVISOR/HM_STAFF view and edit location. '全部' allows dropdown.
+  healthMgmtLocation?: "全部" | "北投" | "大直"; // New: Restricts HM_SUPERVISOR/HM_STAFF view and edit location. '全部' allows dropdown.
   groupIndex?: number; // New: Fixed rotation index for Group D (0-based, determines rest day order)
-  personalCycles?: Record<string, { startDate: string; endDate: string; memo: string }>; // Per-month cycle adjustments
+  personalCycles?: Record<
+    string,
+    { startDate: string; endDate: string; memo: string }
+  >; // Per-month cycle adjustments
   permissions?: string[]; // Fine-grained permissions
 }
 
@@ -114,41 +121,40 @@ export interface ReportAssistant {
 
 export interface CloudScheduleEntry {
   id?: string;
-  date: string;            // YYYY-MM-DD
-  doctorId: string;        // ID of the radiologist (影像醫學部醫師)
-  assistantIds: string[];  // IDs of ReportAssistants on duty
+  date: string; // YYYY-MM-DD
+  doctorId: string; // ID of the radiologist (影像醫學部醫師)
+  assistantIds: string[]; // IDs of ReportAssistants on duty
   proofreaderUserId?: string; // isRadiographer User.id
 }
 
-
 // Updated Station Defaults: MR moved before US
 export enum StationDefault {
-  MR1_5T = 'MR1.5T',
-  MR3T = 'MR3T',
-  US1 = 'US1',
-  US2 = 'US2',
-  US3 = 'US3',
-  US4 = 'US4',
-  CT = 'CT',
-  BMD_DX = 'BMD/DX',
-  FLOOR_CONTROL = '場控',
-  TECH_SUPPORT = '技術支援',
-  REMOTE = '遠距',
-  ADMIN = '行政',
-  DAZHI_BRANCH = '大直',
-  OFF = '休假',
-  UNASSIGNED = '未分配'
+  MR1_5T = "MR1.5T",
+  MR3T = "MR3T",
+  US1 = "US1",
+  US2 = "US2",
+  US3 = "US3",
+  US4 = "US4",
+  CT = "CT",
+  BMD_DX = "BMD/DX",
+  FLOOR_CONTROL = "場控",
+  TECH_SUPPORT = "技術支援",
+  REMOTE = "遠距",
+  ADMIN = "行政",
+  DAZHI_BRANCH = "大直",
+  OFF = "休假",
+  UNASSIGNED = "未分配",
 }
 
-export const SYSTEM_OFF = '休假';
+export const SYSTEM_OFF = "休假";
 
 export const SPECIAL_ROLES = {
-  OPENING: '開機',
-  LATE: '晚班',
-  ASSIST: '輔班', // User called it "輔控", mapping to Assist/Support
-  SCHEDULER: '排班',
-  DAZHI_SUPPORT: '大直支援', // New: Remote staff supporting Dazhi
-  DUAL_BMD: '兼BMD/DX'
+  OPENING: "開機",
+  LATE: "晚班",
+  ASSIST: "輔班", // User called it "輔控", mapping to Assist/Support
+  SCHEDULER: "排班",
+  DAZHI_SUPPORT: "大直支援", // New: Remote staff supporting Dazhi
+  DUAL_BMD: "兼BMD/DX",
 };
 
 export interface Shift {
@@ -163,40 +169,40 @@ export interface Shift {
 }
 
 export interface HealthMgmtShift {
-    id: string;
-    userId: string;
-    date: string;
-    station: string;
-    task?: string; 
-    time?: string; // New: Working hours (e.g. "07:30-15:30")
-    location?: string; 
-    specialRoles?: string[];
+  id: string;
+  userId: string;
+  date: string;
+  station: string;
+  task?: string;
+  time?: string; // New: Working hours (e.g. "07:30-15:30")
+  location?: string;
+  specialRoles?: string[];
 }
 
 export interface AnesthesiaShift {
-    id: string;
-    userId: string;
-    date: string;
-    station: string;
-    task?: string; 
-    location?: string;
-    workTime?: string;
-    note?: string;
+  id: string;
+  userId: string;
+  date: string;
+  station: string;
+  task?: string;
+  location?: string;
+  workTime?: string;
+  note?: string;
 }
 
 export enum LeaveType {
-  PRE_SCHEDULED = '預假',
-  CANCEL_LEAVE = '銷假',
-  LONG_LEAVE = '長假',
-  SWAP_SHIFT = '換假', // 雙向換假 (User A Work D1/Off D2 <-> User B Off D1/Work D2)
-  ASK_LEAVE = '要假',  // 單向要假 (User A Work D1 -> User B Off D1)
-  DUTY_SWAP = '任務換班' // 特殊任務換班 (開機/晚班)
+  PRE_SCHEDULED = "預假",
+  CANCEL_LEAVE = "銷假",
+  LONG_LEAVE = "長假",
+  SWAP_SHIFT = "換假", // 雙向換假 (User A Work D1/Off D2 <-> User B Off D1/Work D2)
+  ASK_LEAVE = "要假", // 單向要假 (User A Work D1 -> User B Off D1)
+  DUTY_SWAP = "任務換班", // 特殊任務換班 (開機/晚班)
 }
 
 export enum LeaveStatus {
-  PENDING = '待審核',
-  APPROVED = '已核准',
-  REJECTED = '已駁回'
+  PENDING = "待審核",
+  APPROVED = "已核准",
+  REJECTED = "已駁回",
 }
 
 export interface LeaveRequest {
@@ -215,7 +221,7 @@ export interface LeaveRequest {
 
   // New fields for Duty Swap specificity & 2-step approval
   roleToSwap?: string; // E.g., '開機' or '晚班'
-  targetApproval?: 'PENDING' | 'AGREED' | 'REJECTED'; // Status of the target user's agreement
+  targetApproval?: "PENDING" | "AGREED" | "REJECTED"; // Status of the target user's agreement
 }
 
 export interface RosterCycle {
@@ -229,12 +235,12 @@ export interface RosterCycle {
 }
 
 export enum DateEventType {
-  NATIONAL = 'NATIONAL', // 國定假日
-  MEETING = 'MEETING',   // 科會
-  CLOSED = 'CLOSED',     // 休診 (全員預設休假)
-  NOTE = 'NOTE',          // 備忘
-  RADIOGRAPHER_NOTE = 'RADIOGRAPHER_NOTE', // 放射師備忘 (僅顯示於放射師排班)
-  DOCTOR_NOTE = 'DOCTOR_NOTE' // 醫師備忘 (僅顯示於醫師排班)
+  NATIONAL = "NATIONAL", // 國定假日
+  MEETING = "MEETING", // 科會
+  CLOSED = "CLOSED", // 休診 (全員預設休假)
+  NOTE = "NOTE", // 備忘
+  RADIOGRAPHER_NOTE = "RADIOGRAPHER_NOTE", // 放射師備忘 (僅顯示於放射師排班)
+  DOCTOR_NOTE = "DOCTOR_NOTE", // 醫師備忘 (僅顯示於醫師排班)
 }
 
 export interface Holiday {
@@ -246,7 +252,7 @@ export interface Holiday {
 
 export interface CycleAnchor {
   effectiveDate: string; // The date from which this logic applies (>=)
-  anchorDate: string;    // The reference "Day 1" for calculation
+  anchorDate: string; // The reference "Day 1" for calculation
 }
 
 export interface DailyManpowerStats {
@@ -257,7 +263,7 @@ export interface DailyManpowerStats {
   dazhi_ultrasound?: number; // New: Ultrasound order count for Dazhi
   beitou_gi?: number; // New: Manual GI cases count
   beitou_mr?: number; // New: Manual MR cases count
-  dazhi_gi?: number;  // New: Manual GI cases count for Dazhi
+  dazhi_gi?: number; // New: Manual GI cases count for Dazhi
   beitou_total?: number; // Manually entered total radiographer count for Beitou
   dazhi_max_capacity?: number; // New: Manually entered max capacity for Dazhi (最大量)
   beitou_max_capacity?: number; // New: Manually entered max capacity for Beitou (最大量)
@@ -265,48 +271,51 @@ export interface DailyManpowerStats {
 }
 
 export interface WeekdaySetting {
-    dayOfWeek: 0 | 1 | 2 | 3 | 4 | 5 | 6; // 0=Sun, 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat
-    workTime?: string; // e.g., "08:00-16:00"
-    task?: string;     // e.g., "亞東看診" (was memo)
+  dayOfWeek: 0 | 1 | 2 | 3 | 4 | 5 | 6; // 0=Sun, 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat
+  workTime?: string; // e.g., "08:00-16:00"
+  task?: string; // e.g., "亞東看診" (was memo)
 }
 
 export interface Doctor {
-    id: string;
-    name: string;
-    alias?: string; // Short name for display (e.g., '錢')
-    specialty?: string; // New: e.g. "家醫科"
-    capabilities?: string[]; // New: List of stations/skills this doctor can perform
-    locations?: string[]; // New: List of locations (Beitou, Dazhi, Taichung)
-    excludedDays?: number[]; // New: 0 (Sun) - 6 (Sat)
-    excludedAutoScheduleLocations?: string[]; // New: Locations to exclude from auto-schedule
-    isPartTime?: boolean; // New: Part-time doctor tag
-    monthlyTargetShifts?: number; // New: Target number of shifts per month
-    displayOrder?: number; // New: Custom display order (lower number = higher priority)
-    isActive?: boolean; // New: For soft delete
-    fixedShifts?: FixedShift[]; // New: Fixed weekly shifts
-    weekdaySettings?: WeekdaySetting[]; // New: Weekday-specific work hours and memos
-    personalCycles?: Record<string, { startDate: string; endDate: string; memo: string; }>; // New: Monthly work cycles (e.g., '2026-03': {...})
+  id: string;
+  name: string;
+  alias?: string; // Short name for display (e.g., '錢')
+  specialty?: string; // New: e.g. "家醫科"
+  capabilities?: string[]; // New: List of stations/skills this doctor can perform
+  locations?: string[]; // New: List of locations (Beitou, Dazhi, Taichung)
+  excludedDays?: number[]; // New: 0 (Sun) - 6 (Sat)
+  excludedAutoScheduleLocations?: string[]; // New: Locations to exclude from auto-schedule
+  isPartTime?: boolean; // New: Part-time doctor tag
+  monthlyTargetShifts?: number; // New: Target number of shifts per month
+  displayOrder?: number; // New: Custom display order (lower number = higher priority)
+  isActive?: boolean; // New: For soft delete
+  fixedShifts?: FixedShift[]; // New: Fixed weekly shifts
+  weekdaySettings?: WeekdaySetting[]; // New: Weekday-specific work hours and memos
+  personalCycles?: Record<
+    string,
+    { startDate: string; endDate: string; memo: string }
+  >; // New: Monthly work cycles (e.g., '2026-03': {...})
 }
 
 export interface FixedShift {
-    dayOfWeek: number; // 0=Sun, 1=Mon...
-    station: string;
-    location: string;
-    workTime?: string;
+  dayOfWeek: number; // 0=Sun, 1=Mon...
+  station: string;
+  location: string;
+  workTime?: string;
 }
 
 export interface DoctorShift {
-    id: string;
-    doctorId: string;
-    date: string; // YYYY-MM-DD
-    station: string;
-    explanationTaskType?: 'with_task' | 'standalone'; // Type of explanation task: 'with_task' (+解说) or 'standalone' ((解说))
-    workTime?: string; // New: Working hours (e.g. "08:00-12:00")
-    location?: string; // New: Beitou, Dazhi, Taichung
-    task?: string; // New: Additional task (e.g. Late shift), displayed with note
-    note?: string; // New: Special notes
-    isAutoGenerated?: boolean; // New: Flag for auto-scheduled items
-    scheduled_station?: string; // New: Actual schedule (CT, MR, US) vs Allocation (station)
+  id: string;
+  doctorId: string;
+  date: string; // YYYY-MM-DD
+  station: string;
+  explanationTaskType?: "with_task" | "standalone"; // Type of explanation task: 'with_task' (+解说) or 'standalone' ((解说))
+  workTime?: string; // New: Working hours (e.g. "08:00-12:00")
+  location?: string; // New: Beitou, Dazhi, Taichung
+  task?: string; // New: Additional task (e.g. Late shift), displayed with note
+  note?: string; // New: Special notes
+  isAutoGenerated?: boolean; // New: Flag for auto-scheduled items
+  scheduled_station?: string; // New: Actual schedule (CT, MR, US) vs Allocation (station)
 }
 
 export interface DoctorStationConfig {
@@ -338,4 +347,38 @@ export interface SystemSettings {
   healthMgmtTasksByLocation?: Record<string, string[]>; // New: Location-based tasks
   healthMgmtTimesByLocation?: Record<string, string[]>; // New: Location-based times
   healthMgmtCycles?: RosterCycle[]; // New: Independent cycles for HM
+}
+
+// ── 操作日誌介面 ──────────────────────────
+export interface OperationLog {
+  id: string;
+  timestamp: string; // ISO string
+  userId: string;
+  userName: string;
+  operation:
+    | "assign"
+    | "clear"
+    | "auto_schedule"
+    | "save_simulation"
+    | "update"
+    | "delete";
+  module:
+    | "radiographer"
+    | "physician"
+    | "health_mgmt"
+    | "anesthesia"
+    | "cloud_schedule";
+  details: {
+    date?: string;
+    dateRange?: { start: string; end: string };
+    personId?: string;
+    personName?: string;
+    station?: string;
+    location?: string;
+    task?: string;
+    oldValue?: any;
+    newValue?: any;
+    affectedCount?: number;
+    note?: string;
+  };
 }
