@@ -179,11 +179,75 @@ class Store {
       `[LOG] ${this.currentUser.name} performed ${operation} on ${module}:`,
       details,
     );
+
+    this.persistOperationLogToServer(logEntry);
+  }
+
+  private async persistOperationLogToServer(logEntry: OperationLog) {
+    try {
+      const { data, error } = await supabase
+        .from("operation_logs")
+        .insert({
+          id: logEntry.id,
+          timestamp: logEntry.timestamp,
+          user_id: logEntry.userId,
+          user_name: logEntry.userName,
+          operation: logEntry.operation,
+          module: logEntry.module,
+          details: logEntry.details,
+        })
+        .select();
+      if (error) {
+        throw error;
+      }
+      console.log("[LOG] persisted operation log to Supabase:", data);
+    } catch (e) {
+      console.error("Failed to persist operation log to Supabase:", e);
+      console.error(
+        "If operation_logs table is missing or has RLS restrictions, please create the table and configure insert policies.",
+      );
+    }
   }
 
   // 取得操作日誌
   getOperationLogs(): OperationLog[] {
     return [...this.operationLogs];
+  }
+
+  private async loadOperationLogsFromServer() {
+    try {
+      const { data, error } = await supabase
+        .from("operation_logs")
+        .select("*")
+        .order("timestamp", { ascending: false })
+        .limit(1000);
+
+      if (error) {
+        throw error;
+      }
+
+      if (data) {
+        this.operationLogs = (data as any[]).map((row) => ({
+          id: row.id,
+          timestamp: row.timestamp,
+          userId: row.user_id || row.userId,
+          userName: row.user_name || row.userName,
+          operation: row.operation,
+          module: row.module,
+          details: row.details,
+        }));
+        try {
+          localStorage.setItem(
+            "operation_logs",
+            JSON.stringify(this.operationLogs),
+          );
+        } catch (e) {
+          console.warn("Failed to cache operation logs to localStorage:", e);
+        }
+      }
+    } catch (e) {
+      console.error("Failed to load operation logs from Supabase:", e);
+    }
   }
 
   private async fetchPaginated(
@@ -254,6 +318,8 @@ class Store {
     } catch (e) {
       console.warn("Failed to load operation logs from localStorage:", e);
     }
+
+    await this.loadOperationLogsFromServer();
 
     // Setup Realtime Subscription
     this.setupRealtimeSubscription();
@@ -815,6 +881,11 @@ BMD :{{bmd}}
       )
       .on(
         "postgres_changes",
+        { event: "*", schema: "public", table: "operation_logs" },
+        (payload) => this.handleRealtimeOperationLogUpdate(payload),
+      )
+      .on(
+        "postgres_changes",
         { event: "*", schema: "public", table: "leaves" },
         (payload) => this.handleRealtimeLeaveUpdate(payload),
       )
@@ -1097,6 +1168,47 @@ BMD :{{bmd}}
       this.notifyListeners();
     } else if (eventType === "DELETE") {
       this.leaves = this.leaves.filter((l) => l.id !== oldRecord.id);
+      this.notifyListeners();
+    }
+  }
+
+  private handleRealtimeOperationLogUpdate(payload: any) {
+    const { eventType, new: newRecord, old: oldRecord } = payload;
+    if (!newRecord && !oldRecord) return;
+
+    const mapLog = (record: any): OperationLog => ({
+      id: record.id,
+      timestamp: record.timestamp,
+      userId: record.user_id || record.userId,
+      userName: record.user_name || record.userName,
+      operation: record.operation,
+      module: record.module,
+      details: record.details,
+    });
+
+    if (eventType === "INSERT") {
+      const log = mapLog(newRecord);
+      this.operationLogs = [
+        log,
+        ...this.operationLogs.filter((item) => item.id !== log.id),
+      ];
+      if (this.operationLogs.length > 1000) {
+        this.operationLogs = this.operationLogs.slice(0, 1000);
+      }
+      try {
+        localStorage.setItem(
+          "operation_logs",
+          JSON.stringify(this.operationLogs),
+        );
+      } catch (e) {
+        console.warn("Failed to cache realtime operation logs:", e);
+      }
+      this.notifyListeners();
+    } else if (eventType === "DELETE") {
+      const log = mapLog(oldRecord);
+      this.operationLogs = this.operationLogs.filter(
+        (item) => item.id !== log.id,
+      );
       this.notifyListeners();
     }
   }
@@ -1728,6 +1840,9 @@ BMD :{{bmd}}
       this.shifts.splice(otherIndices[i], 1);
     }
 
+    // 保存舊的 shift 數據，用於記錄操作日誌
+    const oldShift = foundIndex >= 0 ? { ...this.shifts[foundIndex] } : null;
+
     if (foundIndex >= 0) {
       this.shifts[foundIndex] = shift;
     } else {
@@ -1798,14 +1913,37 @@ BMD :{{bmd}}
 
     // 記錄操作日誌
     const user = this.users.find((u) => u.id === shift.userId);
-    this.logOperation("assign", "radiographer", {
-      date: shift.date,
-      personId: shift.userId,
-      personName: user?.name || shift.userId,
-      station: shift.station,
-      oldValue: foundIndex >= 0 ? this.shifts[foundIndex].station : undefined,
-      newValue: shift.station,
-    });
+
+    // 記錄崗位變化
+    if (oldShift?.station !== shift.station) {
+      this.logOperation("assign", "radiographer", {
+        date: shift.date,
+        personId: shift.userId,
+        personName: user?.name || shift.userId,
+        station: shift.station,
+        oldValue: oldShift?.station,
+        newValue: shift.station,
+      });
+    }
+
+    // 記錄特殊任務變化
+    const oldRoles = oldShift?.specialRoles || [];
+    const newRoles = shift.specialRoles || [];
+    const addedRoles = newRoles.filter((r) => !oldRoles.includes(r));
+    const removedRoles = oldRoles.filter((r) => !newRoles.includes(r));
+
+    if (addedRoles.length > 0 || removedRoles.length > 0) {
+      this.logOperation("任務調整", "radiographer", {
+        date: shift.date,
+        personId: shift.userId,
+        personName: user?.name || shift.userId,
+        operation: "任務調整",
+        addedTasks: addedRoles.join(", "),
+        removedTasks: removedRoles.join(", "),
+        currentTasks: newRoles.join(", "),
+        note: `任務調整：${addedRoles.length > 0 ? `新增 ${addedRoles.join(", ")}` : ""}${addedRoles.length > 0 && removedRoles.length > 0 ? "，" : ""}${removedRoles.length > 0 ? `移除 ${removedRoles.join(", ")}` : ""}`,
+      });
+    }
 
     return { error: null };
   }
@@ -1829,6 +1967,14 @@ BMD :{{bmd}}
     } catch (err) {
       console.error("Failed to delete shift:", err);
     }
+
+    const user = this.users.find((u) => u.id === userId);
+    this.logOperation("delete", "radiographer", {
+      date,
+      personId: userId,
+      personName: user?.name || userId,
+      note: "刪除放射師排班",
+    });
   }
 
   // --- Health Mgmt Shift Operations ---
@@ -2034,6 +2180,48 @@ BMD :{{bmd}}
 
   // Helper to apply approved leave to shifts
   private async applyLeaveToShifts(leave: LeaveRequest) {
+    const requestorUser = this.users.find((u) => u.id === leave.userId);
+    const targetUser = leave.targetUserId
+      ? this.users.find((u) => u.id === leave.targetUserId)
+      : null;
+
+    // 記錄請假核准造成的系統調整
+    let operationDesc = "";
+    switch (leave.type) {
+      case LeaveType.PRE_SCHEDULED:
+      case LeaveType.LONG_LEAVE:
+        operationDesc = "預排假/長假核准";
+        break;
+      case LeaveType.CANCEL_LEAVE:
+        operationDesc = "取消假單";
+        break;
+      case LeaveType.ASK_LEAVE:
+        operationDesc = "代班申請核准";
+        break;
+      case LeaveType.SWAP_SHIFT:
+        operationDesc = "換班申請核准";
+        break;
+      case LeaveType.DUTY_SWAP:
+        operationDesc = "任務換班核准";
+        break;
+      default:
+        operationDesc = "請假核准";
+    }
+
+    this.logOperation("update", "radiographer", {
+      operation: operationDesc,
+      leaveId: leave.id,
+      leaveType: leave.type,
+      requestorId: leave.userId,
+      requestorName: requestorUser?.name || leave.userId,
+      targetId: leave.targetUserId,
+      targetName: targetUser?.name,
+      startDate: leave.startDate,
+      endDate: leave.endDate,
+      returnDate: leave.returnDate,
+      note: `${operationDesc}：${requestorUser?.name || leave.userId} ${leave.startDate} 至 ${leave.endDate}${leave.returnDate ? ` (歸還日期: ${leave.returnDate})` : ""}${targetUser ? `，涉及 ${targetUser.name}` : ""}`,
+    });
+
     const startDate = new Date(leave.startDate);
     const endDate = new Date(leave.endDate);
 
@@ -2196,6 +2384,22 @@ BMD :{{bmd}}
           newTargetShift.isAutoGenerated = false;
 
           await this.upsertShift(newTargetShift);
+
+          // 記錄任務調整操作日誌
+          const requestorUser = this.users.find((u) => u.id === leave.userId);
+          const targetUser = this.users.find(
+            (u) => u.id === leave.targetUserId,
+          );
+          this.logOperation("update", "radiographer", {
+            date: dateStr,
+            operation: "任務換班",
+            requestorId: leave.userId,
+            requestorName: requestorUser?.name || leave.userId,
+            targetId: leave.targetUserId,
+            targetName: targetUser?.name || leave.targetUserId,
+            task: leave.roleToSwap || rolesToSwap.join(", "),
+            note: `任務換班：${requestorUser?.name || leave.userId} 將 ${leave.roleToSwap || rolesToSwap.join(", ")} 任務轉給 ${targetUser?.name || leave.targetUserId}`,
+          });
         }
       }
     }
@@ -4200,6 +4404,15 @@ BMD :{{bmd}}
       }
     }
     this.notifyListeners();
+
+    // 記錄自動排任務操作日誌
+    this.logOperation("auto_schedule", "radiographer", {
+      operation: "自動排任務",
+      startDate,
+      endDate,
+      roles: targetRoles.join(", "),
+      note: `自動分配任務：${targetRoles.join(", ")} (${startDate} 至 ${endDate})`,
+    });
   }
 
   // --- Data Archive & Cleanup ---

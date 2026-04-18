@@ -147,10 +147,38 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
       setActiveTab("personal");
     } else if (activeTab === "health_mgmt" && !canManageHealthMgmt) {
       setActiveTab("personal");
-    } else if (activeTab === "system" && !isSupervisorOrAdmin) {
+    } else if (
+      activeTab === "system" &&
+      !(isSupervisorOrAdmin || canManageHealthMgmt)
+    ) {
       setActiveTab("personal");
     }
   }, [activeTab, isSupervisorOrAdmin, canManageHealthMgmt]);
+
+  const [logFilterDateStart, setLogFilterDateStart] = useState<string>("");
+  const [logFilterDateEnd, setLogFilterDateEnd] = useState<string>("");
+  const [logFilterModule, setLogFilterModule] = useState<string>("");
+  const [logFilterUser, setLogFilterUser] = useState<string>("");
+
+  const filteredOperationLogs = useMemo(() => {
+    return db.getOperationLogs().filter((log) => {
+      const logDate = log.details.date || log.timestamp.slice(0, 10);
+      if (logFilterDateStart) {
+        if (logDate < logFilterDateStart) return false;
+      }
+      if (logFilterDateEnd) {
+        if (logDate > logFilterDateEnd) return false;
+      }
+      if (logFilterModule && logFilterModule !== "all") {
+        if (log.module !== logFilterModule) return false;
+      }
+      if (logFilterUser) {
+        const keyword = logFilterUser.toLowerCase();
+        if (!log.userName.toLowerCase().includes(keyword)) return false;
+      }
+      return true;
+    });
+  }, [logFilterDateStart, logFilterDateEnd, logFilterModule, logFilterUser]);
 
   // Template blocks state: [Block1, Block2, Block3]
   const [templateBlocks, setTemplateBlocks] = useState<string[]>(["", "", ""]);
@@ -862,7 +890,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
             <Calendar size={18} /> 健管設定
           </button>
         )}
-        {isSupervisorOrAdmin && (
+        {(isSupervisorOrAdmin || canManageHealthMgmt) && (
           <button
             onClick={() => setActiveTab("system")}
             className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-2 ${
@@ -1830,122 +1858,328 @@ BMD :{{bmd}}
           </>
         )}
 
-        {activeTab === "system" && isSupervisorOrAdmin && (
-          <>
-            {/* Station Management - SYSTEM ADMIN ONLY */}
-            {isSystemAdmin && (
-              <div className="bg-white rounded-xl shadow-[0_2px_12px_rgba(0,0,0,0.03)] border border-gray-100 overflow-hidden flex flex-col h-fit xl:col-span-2">
-                <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
-                  <div>
-                    <h3 className="font-bold text-gray-800 flex items-center gap-2">
-                      崗位與人力需求 (系統管理員專用)
-                      <span className="text-xs font-semibold text-gray-500 px-2 py-0.5 bg-white border rounded-full">
-                        {displayStations.length}
-                      </span>
-                    </h3>
+        {activeTab === "system" &&
+          (isSupervisorOrAdmin || canManageHealthMgmt) && (
+            <>
+              {/* Station Management - SYSTEM ADMIN ONLY */}
+              {isSystemAdmin && (
+                <div className="bg-white rounded-xl shadow-[0_2px_12px_rgba(0,0,0,0.03)] border border-gray-100 overflow-hidden flex flex-col h-fit xl:col-span-2">
+                  <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+                    <div>
+                      <h3 className="font-bold text-gray-800 flex items-center gap-2">
+                        崗位與人力需求 (系統管理員專用)
+                        <span className="text-xs font-semibold text-gray-500 px-2 py-0.5 bg-white border rounded-full">
+                          {displayStations.length}
+                        </span>
+                      </h3>
+                    </div>
+
+                    <form onSubmit={handleAddStation} className="flex gap-2">
+                      <input
+                        type="text"
+                        value={newStation}
+                        onChange={(e) => setNewStation(e.target.value)}
+                        placeholder="輸入新崗位名稱..."
+                        className="w-48 px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none shadow-sm transition-all"
+                      />
+                      <button
+                        type="submit"
+                        className="bg-teal-600 hover:bg-teal-700 text-white px-3 py-1.5 rounded-lg transition-colors flex items-center text-sm font-medium shadow-sm shadow-teal-200"
+                      >
+                        <Plus size={16} className="mr-1" /> 新增
+                      </button>
+                    </form>
                   </div>
 
-                  <form onSubmit={handleAddStation} className="flex gap-2">
-                    <input
-                      type="text"
-                      value={newStation}
-                      onChange={(e) => setNewStation(e.target.value)}
-                      placeholder="輸入新崗位名稱..."
-                      className="w-48 px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none shadow-sm transition-all"
-                    />
-                    <button
-                      type="submit"
-                      className="bg-teal-600 hover:bg-teal-700 text-white px-3 py-1.5 rounded-lg transition-colors flex items-center text-sm font-medium shadow-sm shadow-teal-200"
-                    >
-                      <Plus size={16} className="mr-1" /> 新增
-                    </button>
-                  </form>
-                </div>
-
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead className="bg-gray-50/50 text-xs text-gray-500 font-semibold uppercase border-b border-gray-100">
-                      <tr>
-                        <th className="px-6 py-3 text-left w-48 font-bold text-gray-600">
-                          崗位名稱
-                        </th>
-                        {weekDays.map((d, i) => (
-                          <th
-                            key={i}
-                            className={`px-1 py-3 text-center w-16 ${i === 0 || i === 6 ? "text-red-500" : ""}`}
-                          >
-                            週{d}
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="bg-gray-50/50 text-xs text-gray-500 font-semibold uppercase border-b border-gray-100">
+                        <tr>
+                          <th className="px-6 py-3 text-left w-48 font-bold text-gray-600">
+                            崗位名稱
                           </th>
-                        ))}
-                        <th className="px-6 py-3 text-right">移除</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-50">
-                      {displayStations.map((station) => {
-                        const reqs = requirements[station] || [
-                          0, 0, 0, 0, 0, 0, 0,
-                        ];
-                        return (
-                          <tr
-                            key={station}
-                            className="hover:bg-gray-50/50 transition-colors"
-                          >
-                            <td className="px-6 py-3 text-sm font-bold text-gray-700">
-                              {station}
-                            </td>
-                            {reqs.map((count, dayIdx) => (
-                              <td
-                                key={dayIdx}
-                                className="px-1 py-3 text-center"
-                              >
-                                <input
-                                  type="number"
-                                  min="0"
-                                  value={count}
-                                  onChange={(e) =>
-                                    handleRequirementChange(
-                                      station,
-                                      dayIdx,
-                                      parseInt(e.target.value) || 0,
-                                    )
-                                  }
-                                  className={`w-10 text-center text-sm rounded-lg py-1 outline-none transition-all font-medium 
+                          {weekDays.map((d, i) => (
+                            <th
+                              key={i}
+                              className={`px-1 py-3 text-center w-16 ${i === 0 || i === 6 ? "text-red-500" : ""}`}
+                            >
+                              週{d}
+                            </th>
+                          ))}
+                          <th className="px-6 py-3 text-right">移除</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-50">
+                        {displayStations.map((station) => {
+                          const reqs = requirements[station] || [
+                            0, 0, 0, 0, 0, 0, 0,
+                          ];
+                          return (
+                            <tr
+                              key={station}
+                              className="hover:bg-gray-50/50 transition-colors"
+                            >
+                              <td className="px-6 py-3 text-sm font-bold text-gray-700">
+                                {station}
+                              </td>
+                              {reqs.map((count, dayIdx) => (
+                                <td
+                                  key={dayIdx}
+                                  className="px-1 py-3 text-center"
+                                >
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    value={count}
+                                    onChange={(e) =>
+                                      handleRequirementChange(
+                                        station,
+                                        dayIdx,
+                                        parseInt(e.target.value) || 0,
+                                      )
+                                    }
+                                    className={`w-10 text-center text-sm rounded-lg py-1 outline-none transition-all font-medium 
                                                     ${count > 0 ? "text-teal-700 bg-teal-50 ring-1 ring-teal-100" : "text-gray-300 bg-gray-50"} 
                                                     focus:ring-2 focus:ring-teal-500 focus:bg-white`}
-                                />
+                                  />
+                                </td>
+                              ))}
+                              <td className="px-6 py-3 text-right">
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    handleDeleteStationClick(station)
+                                  }
+                                  className="text-gray-300 hover:text-red-500 transition-colors p-1.5 hover:bg-red-50 rounded"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
                               </td>
-                            ))}
-                            <td className="px-6 py-3 text-right">
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  handleDeleteStationClick(station)
-                                }
-                                className="text-gray-300 hover:text-red-500 transition-colors p-1.5 hover:bg-red-50 rounded"
-                              >
-                                <Trash2 size={16} />
-                              </button>
+                            </tr>
+                          );
+                        })}
+                        {displayStations.length === 0 && (
+                          <tr>
+                            <td
+                              colSpan={9}
+                              className="p-12 text-center text-gray-400 text-sm"
+                            >
+                              尚未新增任何有效崗位
                             </td>
                           </tr>
-                        );
-                      })}
-                      {displayStations.length === 0 && (
-                        <tr>
-                          <td
-                            colSpan={9}
-                            className="p-12 text-center text-gray-400 text-sm"
-                          >
-                            尚未新增任何有效崗位
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+              <div className="bg-white rounded-xl shadow-[0_2px_12px_rgba(0,0,0,0.03)] border border-gray-100 overflow-hidden flex flex-col h-fit xl:col-span-2">
+                <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
+                  <h3 className="font-bold text-gray-800 flex items-center gap-2">
+                    <FileSpreadsheet size={16} className="text-gray-400" />
+                    操作日誌
+                  </h3>
+                </div>
+
+                <div className="p-6">
+                  <div className="grid grid-cols-1 xl:grid-cols-4 gap-3 mb-4">
+                    <div className="space-y-1 text-sm text-gray-600">
+                      <label className="block text-xs font-semibold text-gray-500">
+                        起始日期
+                      </label>
+                      <input
+                        type="date"
+                        value={logFilterDateStart}
+                        onChange={(e) => setLogFilterDateStart(e.target.value)}
+                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
+                      />
+                    </div>
+                    <div className="space-y-1 text-sm text-gray-600">
+                      <label className="block text-xs font-semibold text-gray-500">
+                        結束日期
+                      </label>
+                      <input
+                        type="date"
+                        value={logFilterDateEnd}
+                        onChange={(e) => setLogFilterDateEnd(e.target.value)}
+                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
+                      />
+                    </div>
+                    <div className="space-y-1 text-sm text-gray-600">
+                      <label className="block text-xs font-semibold text-gray-500">
+                        排班類型
+                      </label>
+                      <select
+                        value={logFilterModule}
+                        onChange={(e) => setLogFilterModule(e.target.value)}
+                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
+                      >
+                        <option value="all">全部</option>
+                        <option value="radiographer">放射師</option>
+                        <option value="physician">醫師</option>
+                        <option value="health_mgmt">健管</option>
+                        <option value="cloud_schedule">影像雲</option>
+                        <option value="anesthesia">麻護</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1 text-sm text-gray-600">
+                      <label className="block text-xs font-semibold text-gray-500">
+                        操作者
+                      </label>
+                      <input
+                        type="text"
+                        value={logFilterUser}
+                        onChange={(e) => setLogFilterUser(e.target.value)}
+                        placeholder="搜尋操作者"
+                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-3 max-h-96 overflow-y-auto">
+                    {filteredOperationLogs.map((log) => (
+                      <div
+                        key={log.id}
+                        className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg border border-gray-100"
+                      >
+                        <div className="flex-shrink-0 w-2 h-2 bg-blue-500 rounded-full mt-2"></div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 text-sm">
+                            <span className="font-medium text-gray-900">
+                              {log.userName}
+                            </span>
+                            <span className="text-gray-500">•</span>
+                            <span className="text-gray-600">
+                              {new Date(log.timestamp).toLocaleString("zh-TW")}
+                            </span>
+                            <span className="text-gray-500">•</span>
+                            <span
+                              className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                                log.operation === "assign"
+                                  ? "bg-green-100 text-green-800"
+                                  : log.operation === "clear"
+                                    ? "bg-red-100 text-red-800"
+                                    : log.operation === "auto_schedule"
+                                      ? "bg-blue-100 text-blue-800"
+                                      : log.operation === "save_simulation"
+                                        ? "bg-purple-100 text-purple-800"
+                                        : log.operation === "任務調整"
+                                          ? "bg-orange-100 text-orange-800"
+                                          : "bg-gray-100 text-gray-800"
+                              }`}
+                            >
+                              {log.operation === "assign"
+                                ? "指派"
+                                : log.operation === "clear"
+                                  ? "清空"
+                                  : log.operation === "auto_schedule"
+                                    ? "自動排班"
+                                    : log.operation === "save_simulation"
+                                      ? "儲存模擬"
+                                      : log.operation === "任務調整"
+                                        ? "任務調整"
+                                        : log.operation === "update"
+                                          ? "更新"
+                                          : log.operation}
+                            </span>
+                            <span className="text-gray-500">•</span>
+                            <span className="text-gray-600 capitalize">
+                              {log.module.replace("_", " ")}
+                            </span>
+                          </div>
+                          <div className="mt-1 text-sm text-gray-700">
+                            {log.details.date && (
+                              <span>日期: {log.details.date} </span>
+                            )}
+                            {log.details.personName && (
+                              <span>人員: {log.details.personName} </span>
+                            )}
+                            {log.details.station && (
+                              <span>崗位: {log.details.station} </span>
+                            )}
+                            {log.details.location && (
+                              <span>地點: {log.details.location} </span>
+                            )}
+                            {log.details.task && (
+                              <span>任務: {log.details.task} </span>
+                            )}
+                            {log.details.affectedCount && (
+                              <span>
+                                影響數量: {log.details.affectedCount}{" "}
+                              </span>
+                            )}
+                            {log.details.note && (
+                              <span className="text-gray-500">
+                                ({log.details.note})
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    {filteredOperationLogs.length === 0 && (
+                      <div className="text-center py-8 text-gray-500">
+                        <FileSpreadsheet
+                          size={48}
+                          className="mx-auto mb-2 opacity-50"
+                        />
+                        <p>尚無操作記錄</p>
+                      </div>
+                    )}
+                  </div>
+                  {filteredOperationLogs.length > 0 && (
+                    <div className="mt-4 pt-4 border-t border-gray-100">
+                      <button
+                        onClick={() => {
+                          const logs = filteredOperationLogs;
+                          const csvContent = [
+                            [
+                              "時間",
+                              "操作者",
+                              "操作",
+                              "模組",
+                              "日期",
+                              "人員",
+                              "崗位",
+                              "地點",
+                              "任務",
+                              "備註",
+                            ].join(","),
+                            ...logs.map((log) =>
+                              [
+                                new Date(log.timestamp).toLocaleString("zh-TW"),
+                                log.userName,
+                                log.operation,
+                                log.module,
+                                log.details.date || "",
+                                log.details.personName || "",
+                                log.details.station || "",
+                                log.details.currentTasks ||
+                                  log.details.task ||
+                                  "",
+                                log.details.note || "",
+                              ].join(","),
+                            ),
+                          ].join("\n");
+
+                          const blob = new Blob([csvContent], {
+                            type: "text/csv;charset=utf-8;",
+                          });
+                          const link = document.createElement("a");
+                          link.href = URL.createObjectURL(blob);
+                          link.download = `operation_logs_${new Date().toISOString().slice(0, 10)}.csv`;
+                          link.click();
+                        }}
+                        className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 px-4 rounded-lg transition-colors text-sm flex items-center justify-center gap-2"
+                      >
+                        <Download size={16} />
+                        匯出 CSV
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
-            )}
-          </>
-        )}
+            </>
+          )}
 
         {activeTab === "health_mgmt" && (
           <>
@@ -2325,153 +2559,6 @@ BMD :{{bmd}}
                 </div>
               </div>
             )}
-
-            {/* Operation Logs */}
-            <div className="bg-white rounded-xl shadow-[0_2px_12px_rgba(0,0,0,0.03)] border border-gray-100 overflow-hidden flex flex-col h-fit">
-              <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
-                <h3 className="font-bold text-gray-800 flex items-center gap-2">
-                  <FileSpreadsheet size={16} className="text-gray-400" />
-                  操作日誌
-                </h3>
-              </div>
-
-              <div className="p-6">
-                <div className="space-y-3 max-h-96 overflow-y-auto">
-                  {db.getOperationLogs().map((log) => (
-                    <div
-                      key={log.id}
-                      className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg border border-gray-100"
-                    >
-                      <div className="flex-shrink-0 w-2 h-2 bg-blue-500 rounded-full mt-2"></div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 text-sm">
-                          <span className="font-medium text-gray-900">
-                            {log.userName}
-                          </span>
-                          <span className="text-gray-500">•</span>
-                          <span className="text-gray-600">
-                            {new Date(log.timestamp).toLocaleString("zh-TW")}
-                          </span>
-                          <span className="text-gray-500">•</span>
-                          <span
-                            className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                              log.operation === "assign"
-                                ? "bg-green-100 text-green-800"
-                                : log.operation === "clear"
-                                  ? "bg-red-100 text-red-800"
-                                  : log.operation === "auto_schedule"
-                                    ? "bg-blue-100 text-blue-800"
-                                    : log.operation === "save_simulation"
-                                      ? "bg-purple-100 text-purple-800"
-                                      : "bg-gray-100 text-gray-800"
-                            }`}
-                          >
-                            {log.operation === "assign"
-                              ? "指派"
-                              : log.operation === "clear"
-                                ? "清空"
-                                : log.operation === "auto_schedule"
-                                  ? "自動排班"
-                                  : log.operation === "save_simulation"
-                                    ? "儲存模擬"
-                                    : log.operation === "update"
-                                      ? "更新"
-                                      : log.operation}
-                          </span>
-                          <span className="text-gray-500">•</span>
-                          <span className="text-gray-600 capitalize">
-                            {log.module.replace("_", " ")}
-                          </span>
-                        </div>
-                        <div className="mt-1 text-sm text-gray-700">
-                          {log.details.date && (
-                            <span>日期: {log.details.date} </span>
-                          )}
-                          {log.details.personName && (
-                            <span>人員: {log.details.personName} </span>
-                          )}
-                          {log.details.station && (
-                            <span>崗位: {log.details.station} </span>
-                          )}
-                          {log.details.location && (
-                            <span>地點: {log.details.location} </span>
-                          )}
-                          {log.details.task && (
-                            <span>任務: {log.details.task} </span>
-                          )}
-                          {log.details.affectedCount && (
-                            <span>影響數量: {log.details.affectedCount} </span>
-                          )}
-                          {log.details.note && (
-                            <span className="text-gray-500">
-                              ({log.details.note})
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                  {db.getOperationLogs().length === 0 && (
-                    <div className="text-center py-8 text-gray-500">
-                      <FileSpreadsheet
-                        size={48}
-                        className="mx-auto mb-2 opacity-50"
-                      />
-                      <p>尚無操作記錄</p>
-                    </div>
-                  )}
-                </div>
-                {db.getOperationLogs().length > 0 && (
-                  <div className="mt-4 pt-4 border-t border-gray-100">
-                    <button
-                      onClick={() => {
-                        const logs = db.getOperationLogs();
-                        const csvContent = [
-                          [
-                            "時間",
-                            "操作者",
-                            "操作",
-                            "模組",
-                            "日期",
-                            "人員",
-                            "崗位",
-                            "地點",
-                            "任務",
-                            "備註",
-                          ].join(","),
-                          ...logs.map((log) =>
-                            [
-                              new Date(log.timestamp).toLocaleString("zh-TW"),
-                              log.userName,
-                              log.operation,
-                              log.module,
-                              log.details.date || "",
-                              log.details.personName || "",
-                              log.details.station || "",
-                              log.details.location || "",
-                              log.details.task || "",
-                              log.details.note || "",
-                            ].join(","),
-                          ),
-                        ].join("\n");
-
-                        const blob = new Blob([csvContent], {
-                          type: "text/csv;charset=utf-8;",
-                        });
-                        const link = document.createElement("a");
-                        link.href = URL.createObjectURL(blob);
-                        link.download = `operation_logs_${new Date().toISOString().slice(0, 10)}.csv`;
-                        link.click();
-                      }}
-                      className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 px-4 rounded-lg transition-colors text-sm flex items-center justify-center gap-2"
-                    >
-                      <Download size={16} />
-                      匯出 CSV
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
           </>
         )}
       </div>

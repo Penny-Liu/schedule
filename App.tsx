@@ -1,28 +1,27 @@
-
-import React, { useState, useEffect } from 'react';
-import { User, LeaveStatus, UserRole } from './types';
-import Sidebar from './components/Sidebar';
-import LoginPage from './pages/LoginPage';
-import DashboardPage from './pages/DashboardPage';
-import LeavePage from './pages/LeavePage';
-import StaffPage from './pages/StaffPage';
-import SettingsPage from './pages/SettingsPage';
-import StatisticsPage from './pages/StatisticsPage';
-import DoctorManagerPage from './pages/DoctorManagerPage';
-import { db } from './services/store';
-import { Loader2 } from 'lucide-react';
-import ChangePasswordPage from './pages/ChangePasswordPage';
-import PhysicianSchedulePage from './pages/PhysicianSchedulePage';
-import PhysicianSettingsPage from './pages/PhysicianSettingsPage';
-import DoctorStatisticsPage from './pages/DoctorStatisticsPage';
-import CloudSchedulePage from './pages/CloudSchedulePage';
-import HealthMgmtPage from './pages/HealthMgmtPage';
-
-
-
+import React, { useState, useEffect } from "react";
+import { User, LeaveStatus, UserRole } from "./types";
+import Sidebar from "./components/Sidebar";
+import LoginPage from "./pages/LoginPage";
+import DashboardPage from "./pages/DashboardPage";
+import LeavePage from "./pages/LeavePage";
+import StaffPage from "./pages/StaffPage";
+import SettingsPage from "./pages/SettingsPage";
+import StatisticsPage from "./pages/StatisticsPage";
+import DoctorManagerPage from "./pages/DoctorManagerPage";
+import { db } from "./services/store";
+import { Loader2 } from "lucide-react";
+import ChangePasswordPage from "./pages/ChangePasswordPage";
+import PhysicianSchedulePage from "./pages/PhysicianSchedulePage";
+import PhysicianSettingsPage from "./pages/PhysicianSettingsPage";
+import DoctorStatisticsPage from "./pages/DoctorStatisticsPage";
+import CloudSchedulePage from "./pages/CloudSchedulePage";
+import HealthMgmtPage from "./pages/HealthMgmtPage";
 
 // Error Boundary Component
-class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean; error: Error | null }> {
+class ErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean; error: Error | null }
+> {
   constructor(props: { children: React.ReactNode }) {
     super(props);
     this.state = { hasError: false, error: null };
@@ -43,10 +42,10 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { has
           <h1 className="text-2xl font-bold mb-4">Something went wrong</h1>
           <div className="bg-white p-4 rounded shadow border border-red-200 max-w-lg overflow-auto">
             <code className="text-sm font-mono text-red-600">
-              {this.state.error?.message || 'Unknown Error'}
+              {this.state.error?.message || "Unknown Error"}
             </code>
           </div>
-          <button 
+          <button
             className="mt-6 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
             onClick={() => window.location.reload()}
           >
@@ -62,7 +61,7 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { has
 
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [currentPage, setCurrentPage] = useState('dashboard');
+  const [currentPage, setCurrentPage] = useState("dashboard");
   const [isLoading, setIsLoading] = useState(true);
 
   // Init Data from Supabase & Auto-Refresh Setup
@@ -74,30 +73,44 @@ const App: React.FC = () => {
     init();
 
     // Auto-refresh on resume
-    import('@capacitor/app').then(({ App: CapApp }) => {
-       CapApp.addListener('appStateChange', ({ isActive }) => {
-          if (isActive) {
-             console.log('App resumed, refreshing data...');
-             db.initializeData(true);
-          }
-       });
+    import("@capacitor/app").then(({ App: CapApp }) => {
+      CapApp.addListener("appStateChange", ({ isActive }) => {
+        if (isActive) {
+          console.log("App resumed, refreshing data...");
+          db.initializeData(true);
+        }
+      });
     });
   }, []);
 
   const handleLogin = (user: User) => {
     setCurrentUser(user);
-    
+    db.currentUser = user;
+
     // Redirect logic by role/department
-    if (user.isHealthMgmt || user.role === UserRole.HM_SUPERVISOR || user.role === UserRole.HM_STAFF) {
-      setCurrentPage('health_mgmt');
-    } else if (user.role === UserRole.PHYSICIAN_ADMIN || user.role === UserRole.SCHEDULER || user.role === UserRole.VIEWER) {
-      setCurrentPage('physician_schedule');
+    if (
+      user.isHealthMgmt ||
+      user.role === UserRole.HM_SUPERVISOR ||
+      user.role === UserRole.HM_STAFF
+    ) {
+      setCurrentPage("health_mgmt");
+    } else if (
+      user.role === UserRole.PHYSICIAN_ADMIN ||
+      user.role === UserRole.SCHEDULER ||
+      user.role === UserRole.VIEWER
+    ) {
+      setCurrentPage("physician_schedule");
     } else if (user.role === UserRole.FINANCE) {
-      setCurrentPage('doctor_statistics');
-    } else if (user.role === UserRole.SUPERVISOR || user.role === UserRole.SYSTEM_ADMIN || user.role === UserRole.RADIOGRAPHER_STAFF || user.isRadiographer) {
-      setCurrentPage('dashboard');
+      setCurrentPage("doctor_statistics");
+    } else if (
+      user.role === UserRole.SUPERVISOR ||
+      user.role === UserRole.SYSTEM_ADMIN ||
+      user.role === UserRole.RADIOGRAPHER_STAFF ||
+      user.isRadiographer
+    ) {
+      setCurrentPage("dashboard");
     } else {
-      setCurrentPage('dashboard');
+      setCurrentPage("dashboard");
     }
   };
 
@@ -116,16 +129,19 @@ const App: React.FC = () => {
       const leaves = db.getLeaves();
       let hasPending = false;
 
-      if (currentUser.role === 'SUPERVISOR' || currentUser.role === 'SYSTEM_ADMIN') {
+      if (
+        currentUser.role === "SUPERVISOR" ||
+        currentUser.role === "SYSTEM_ADMIN"
+      ) {
         // Supervisor: Check for any PENDING leaves
-        hasPending = leaves.some(l => l.status === LeaveStatus.PENDING);
+        hasPending = leaves.some((l) => l.status === LeaveStatus.PENDING);
       }
 
       if (!hasPending) {
         // All Users: Check for Swap requests needing their agreement
-        hasPending = leaves.some(l =>
-          l.targetUserId === currentUser.id &&
-          l.targetApproval === 'PENDING'
+        hasPending = leaves.some(
+          (l) =>
+            l.targetUserId === currentUser.id && l.targetApproval === "PENDING",
         );
       }
 
@@ -155,7 +171,7 @@ const App: React.FC = () => {
   }
 
   // FORCE PASSWORD CHANGE CHECK
-  if (currentUser.mustChangePassword || currentUser.password === '1234') {
+  if (currentUser.mustChangePassword || currentUser.password === "1234") {
     return (
       <ChangePasswordPage
         currentUser={currentUser}
@@ -167,27 +183,27 @@ const App: React.FC = () => {
 
   const renderPage = () => {
     switch (currentPage) {
-      case 'dashboard':
+      case "dashboard":
         return <DashboardPage currentUser={currentUser} />;
-      case 'statistics':
+      case "statistics":
         return <StatisticsPage currentUser={currentUser} />;
-      case 'leave':
+      case "leave":
         return <LeavePage currentUser={currentUser} />;
-      case 'staff':
+      case "staff":
         return <StaffPage currentUser={currentUser} />;
-      case 'settings':
+      case "settings":
         return <SettingsPage currentUser={currentUser} />;
-      case 'doctors':
+      case "doctors":
         return <DoctorManagerPage currentUser={currentUser} />;
-      case 'doctor_statistics':
+      case "doctor_statistics":
         return <DoctorStatisticsPage currentUser={currentUser} />;
-      case 'physician_settings':
-          return <PhysicianSettingsPage currentUser={currentUser} />;
-      case 'physician_schedule':
+      case "physician_settings":
+        return <PhysicianSettingsPage currentUser={currentUser} />;
+      case "physician_schedule":
         return <PhysicianSchedulePage currentUser={currentUser} />;
-      case 'cloud_schedule':
+      case "cloud_schedule":
         return <CloudSchedulePage currentUser={currentUser} />;
-      case 'health_mgmt':
+      case "health_mgmt":
         return <HealthMgmtPage currentUser={currentUser} />;
       default:
         return <DashboardPage currentUser={currentUser} />;
@@ -207,11 +223,7 @@ const App: React.FC = () => {
         />
 
         {/* Main Content Area */}
-        <main className="flex-1 overflow-hidden relative">
-          {renderPage()}
-        </main>
-
-
+        <main className="flex-1 overflow-hidden relative">{renderPage()}</main>
       </div>
     </ErrorBoundary>
   );
