@@ -3702,9 +3702,13 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
             </div>
           </div>
         ) : (
-          <div id="roster-table" className="h-full bg-white overflow-auto p-2 pb-[70vh]">
-            {/* ... Table Content ... */}
-            <table className="w-full border-collapse bg-white table-fixed">
+          <div className="h-full bg-white flex flex-col">
+            <div
+              id="roster-table"
+              className="flex-1 overflow-auto p-2 pb-[70vh]"
+            >
+              {/* ... Table Content ... */}
+              <table className="w-full border-collapse bg-white table-fixed">
               {/* ... Table Header ... */}
               <thead className="sticky top-0 z-20 shadow-sm">
                 <tr>
@@ -4864,8 +4868,9 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                 )}
               </tbody>
             </table>
+            </div>
             {/* ... (Footer legend) ... */}
-            <div className="hidden lg:flex p-4 border-t border-slate-200 bg-white sticky bottom-0 z-20 gap-6 text-xs text-slate-500 font-medium">
+            <div className="hidden lg:flex shrink-0 p-4 border-t border-slate-200 bg-white gap-6 text-xs text-slate-500 font-medium">
               {viewMode === "user" ? (
                 <>
                   <div className="flex items-center gap-2">
