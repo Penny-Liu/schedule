@@ -3702,7 +3702,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
             </div>
           </div>
         ) : (
-          <div id="roster-table" className="h-full bg-white overflow-auto p-2">
+          <div id="roster-table" className="h-full bg-white overflow-auto p-2 pb-[70vh]">
             {/* ... Table Content ... */}
             <table className="w-full border-collapse bg-white table-fixed">
               {/* ... Table Header ... */}
