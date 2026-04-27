@@ -610,6 +610,8 @@ class Store {
           location: hm.location,
           designation: hm.designation,
           displayOrder: hm.display_order,
+          hireDate: hm.hire_date,
+          terminationDate: hm.termination_date,
         }));
       }
 
@@ -1034,6 +1036,8 @@ BMD :{{bmd}}
           role: newRecord.role,
           location: newRecord.location,
           displayOrder: newRecord.display_order,
+          hireDate: newRecord.hire_date,
+          terminationDate: newRecord.termination_date,
         } as HealthMgmtStaff;
       } else {
         this.healthMgmtStaff.push({
@@ -1044,6 +1048,8 @@ BMD :{{bmd}}
           role: newRecord.role || "VIEWER",
           location: newRecord.location,
           displayOrder: newRecord.display_order,
+          hireDate: newRecord.hire_date,
+          terminationDate: newRecord.termination_date,
         });
       }
       this.notifyListeners();
@@ -1593,6 +1599,8 @@ BMD :{{bmd}}
       location: staff.location,
       display_order: staff.displayOrder,
       designation: staff.designation,
+      hire_date: staff.hireDate,
+      termination_date: staff.terminationDate,
     });
     if (error) {
       console.error("Failed to add health mgmt staff to Supabase:", error);
@@ -1618,6 +1626,9 @@ BMD :{{bmd}}
       dbUpdates.display_order = updates.displayOrder;
     if (updates.designation !== undefined)
       dbUpdates.designation = updates.designation;
+    if (updates.hireDate !== undefined) dbUpdates.hire_date = updates.hireDate;
+    if (updates.terminationDate !== undefined)
+      dbUpdates.termination_date = updates.terminationDate;
 
     if (Object.keys(dbUpdates).length > 0) {
       const { error } = await supabase

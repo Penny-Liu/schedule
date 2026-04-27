@@ -70,6 +70,8 @@ export interface HealthMgmtStaff {
   location?: string;
   displayOrder?: number;
   designation?: HMDesignation;
+  hireDate?: string; // 到職日期 YYYY-MM-DD
+  terminationDate?: string; // 離職日期 YYYY-MM-DD
 }
 
 export interface AnesthesiaStaff {
