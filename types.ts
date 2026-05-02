@@ -390,3 +390,20 @@ export interface OperationLog {
     note?: string;
   };
 }
+
+export interface RadiographerWorkload {
+  id?: string;
+  year: number;
+  month: number;
+  date: string; // 組合成 YYYY-MM 供前端使用
+  radiographerName: string; // 實際關聯的是姓名
+  mr: number;
+  us: number;
+  ct: number;
+  dx: number;
+  mg: number;
+  bmd: number;
+  cta: number;
+  reportTyping: number;
+  proofreader: number;
+}

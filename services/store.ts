@@ -26,6 +26,7 @@ import {
   AnesthesiaStaff,
   AnesthesiaShift,
   OperationLog,
+  RadiographerWorkload,
 } from "../types";
 import { MOCK_USERS, MOCK_LEAVES, MOCK_DOCTORS } from "./mockData";
 import { supabase } from "./supabaseClient";
@@ -117,6 +118,7 @@ class Store {
   cloudScheduleEntries: CloudScheduleEntry[] = [];
   currentUser: User | null = null;
   operationLogs: OperationLog[] = [];
+  workloads: RadiographerWorkload[] = [];
   isLoaded: boolean = false;
   connectionStatus: { type: "Supabase" | "Mock"; details?: string } = {
     type: "Supabase",
@@ -305,6 +307,10 @@ class Store {
     return this.fetchPaginated("doctor_shifts");
   }
 
+  private async fetchAllWorkloads() {
+    return this.fetchPaginated("radiographer_workload");
+  }
+
   // New method to fetch all data from Supabase
   async initializeData(force: boolean = false) {
     if (this.isLoaded && !force) return;
@@ -340,6 +346,7 @@ class Store {
         hmShiftsRes,
         anesthesiaStaffRes,
         anesthesiaShiftsRes,
+        workloadsRes,
       ] = await Promise.all([
         this.fetchPaginated("users"),
         this.fetchAllShifts(),
@@ -351,6 +358,7 @@ class Store {
         this.fetchAllHealthMgmtShifts(),
         this.fetchPaginated("anesthesia_staff"),
         this.fetchPaginated("anesthesia_shifts"),
+        this.fetchAllWorkloads(),
       ]);
       console.log("[Store] Data loaded. Errors:", {
         users: usersRes.error,
@@ -635,6 +643,25 @@ class Store {
         }));
       }
 
+      if (workloadsRes && workloadsRes.data) {
+        this.workloads = workloadsRes.data.map((w: any) => ({
+          id: w.id,
+          year: w.year,
+          month: w.month,
+          date: w.year && w.month ? `${w.year}-${String(w.month).padStart(2, '0')}` : '',
+          radiographerName: w.radiographerName || w.radiographer_name || "",
+          mr: w.mr || 0,
+          us: w.us || 0,
+          ct: w.ct || 0,
+          dx: w.dx || 0,
+          mg: w.mg || 0,
+          bmd: w.bmd || 0,
+          cta: w.ctaPostProcessing || w.cta_post_processing || 0,
+          reportTyping: w.reportEntry || w.report_entry || 0,
+          proofreader: w.imageProofing || w.image_proofing || 0,
+        }));
+      }
+
       // Initialize default doctorStations if missing
       // Initialize default doctorStations if missing
       if (!this.settings.doctorStations) {
@@ -715,6 +742,84 @@ BMD :{{bmd}}
       };
       // Fallback to local storage or mock if critical failure
       this.loadFromLocalStorage();
+    }
+  }
+
+  // [New] Update Radiographer Workload
+  async updateWorkload(w: Partial<RadiographerWorkload>) {
+    if (!this.currentUser) return;
+    try {
+      // 確保欄位對應資料庫 snake_case 或原駝峰，這裡依照 user 提供兩者都給或是用對應的
+      const payload = {
+        year: w.year,
+        month: w.month,
+        radiographerName: w.radiographerName,
+        mr: w.mr,
+        us: w.us,
+        ct: w.ct,
+        dx: w.dx,
+        mg: w.mg,
+        bmd: w.bmd,
+        ctaPostProcessing: w.cta,
+        cta_post_processing: w.cta,
+        reportEntry: w.reportTyping,
+        report_entry: w.reportTyping,
+        imageProofing: w.proofreader,
+        image_proofing: w.proofreader,
+        total: (w.mr || 0) + (w.us || 0) + (w.ct || 0) + (w.dx || 0) + (w.mg || 0) + (w.bmd || 0) + (w.cta || 0) + (w.reportTyping || 0) + (w.proofreader || 0)
+      };
+
+      if (w.id) {
+        // 更新現有資料
+        const { error } = await supabase
+          .from("radiographer_workload")
+          .update(payload)
+          .eq("id", w.id);
+        if (error) throw error;
+      } else {
+        // 新增資料
+        const { data, error } = await supabase
+          .from("radiographer_workload")
+          .insert(payload)
+          .select()
+          .single();
+        if (error) throw error;
+        if (data) {
+          w.id = data.id;
+        }
+      }
+
+      // Update local state
+      const existingIdx = this.workloads.findIndex(
+        (work) => work.radiographerName === w.radiographerName && work.year === w.year && work.month === w.month
+      );
+      
+      const fullWorkload: RadiographerWorkload = {
+        id: w.id,
+        year: w.year!,
+        month: w.month!,
+        date: w.year && w.month ? `${w.year}-${String(w.month).padStart(2, '0')}` : '',
+        radiographerName: w.radiographerName!,
+        mr: w.mr || 0,
+        us: w.us || 0,
+        ct: w.ct || 0,
+        dx: w.dx || 0,
+        mg: w.mg || 0,
+        bmd: w.bmd || 0,
+        cta: w.cta || 0,
+        reportTyping: w.reportTyping || 0,
+        proofreader: w.proofreader || 0,
+      };
+
+      if (existingIdx >= 0) {
+        this.workloads[existingIdx] = fullWorkload;
+      } else {
+        this.workloads.push(fullWorkload);
+      }
+      this.notifyListeners();
+    } catch (e) {
+      console.error("Failed to update workload:", e);
+      throw e;
     }
   }
 
