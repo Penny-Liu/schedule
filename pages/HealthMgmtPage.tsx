@@ -972,7 +972,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
 
     switch (designation) {
       case "健管師":
-        return ["H", "G", "A"].some((s) => mainStation.includes(s));
+        return ["H", "G", "A", "R", "櫃"].some((s) => mainStation.includes(s));
       case "行政人員":
         return ["R", "櫃"].some((s) => mainStation.includes(s));
       case "營養師":
