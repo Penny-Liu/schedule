@@ -304,10 +304,15 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
         if (idxA !== -1 || idxB !== -1) {
           if (idxA === -1) return 1;
           if (idxB === -1) return -1;
-          return idxA - idxB;
+          if (idxA !== idxB) return idxA - idxB;
         }
       }
-      return (a.displayOrder ?? 999) - (b.displayOrder ?? 999);
+
+      const finalOrderA = a.displayOrder ?? 999;
+      const finalOrderB = b.displayOrder ?? 999;
+      if (finalOrderA !== finalOrderB) return finalOrderA - finalOrderB;
+
+      return a.name.localeCompare(b.name);
     });
   }, [
     healthMgmtStaff,
@@ -319,9 +324,12 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
 
   const activeAnesthesiaStaff = useMemo(() => {
     const staff = anesthesiaStaff.filter((s) => s.isActive !== false);
-    return [...staff].sort(
-      (a, b) => (a.displayOrder ?? 999) - (b.displayOrder ?? 999),
-    );
+    return [...staff].sort((a, b) => {
+      const orderA = a.displayOrder ?? 999;
+      const orderB = b.displayOrder ?? 999;
+      if (orderA !== orderB) return orderA - orderB;
+      return a.name.localeCompare(b.name);
+    });
   }, [anesthesiaStaff]);
 
   // State for local modifications (if needed, but for this change, direct DB updates are used)
@@ -4116,6 +4124,7 @@ const HMTodayView: React.FC<{
             task: s.station, // station is the task for anes (e.g. 麻1)
             time: s.workTime || "",
             raw: { ...s, userId: s.userId },
+            displayOrder: u?.displayOrder ?? 999,
           };
         });
     } else {
@@ -4163,6 +4172,7 @@ const HMTodayView: React.FC<{
             task: s.task,
             time: time,
             raw: { ...s, station: displayStation },
+            displayOrder: u?.displayOrder ?? 999,
           };
         });
     }
@@ -4199,11 +4209,19 @@ const HMTodayView: React.FC<{
       if (group.taskOrder) {
         const idxA = group.taskOrder.indexOf(a.task);
         const idxB = group.taskOrder.indexOf(b.task);
-        if (idxA !== -1 && idxB !== -1) return idxA - idxB;
-        if (idxA !== -1) return -1;
-        if (idxB !== -1) return 1;
+        if (idxA !== -1 && idxB !== -1) {
+          if (idxA !== idxB) return idxA - idxB;
+        } else {
+          if (idxA !== -1) return -1;
+          if (idxB !== -1) return 1;
+        }
       }
-      return 0;
+
+      // Priority 5: User Display Order
+      if (a.displayOrder !== b.displayOrder)
+        return a.displayOrder - b.displayOrder;
+
+      return a.name.localeCompare(b.name);
     });
 
     return assignments;
