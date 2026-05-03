@@ -1,35 +1,32 @@
-import 'dotenv/config';
-import { createClient } from '@supabase/supabase-js';
-import { getSalesforceSession } from './salesforce-utils.mjs';
-import readline from 'readline';
+import "dotenv/config";
+import { createClient } from "@supabase/supabase-js";
+import { getSalesforceSession, runSoqlQuery } from "./salesforce-utils.mjs";
+import readline from "readline";
 
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY;
 
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-  console.error('缺少 Supabase 環境變數');
+  console.error("缺少 Supabase 環境變數");
   process.exit(1);
 }
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-// 定義報表 ID
-const REPORT_ID_WORKLOAD = '00O2t000000ueta';     // 影像個人工作報表 (儀器量)
-const REPORT_ID_PROOFREADING = '00OTK000002o1HV'; // 影像校對報表
-
 const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout
+  input: process.stdin,
+  output: process.stdout,
 });
-const askQuestion = (query) => new Promise((resolve) => rl.question(query, resolve));
+const askQuestion = (query) =>
+  new Promise((resolve) => rl.question(query, resolve));
 
 // 取得該月份的第一天與最後一天 (格式: YYYY-MM-DD)
 function getGeneralRange(yearStr, monthStr) {
   const y = parseInt(yearStr, 10);
   const m = parseInt(monthStr, 10);
-  const startDate = `${y}-${String(m).padStart(2, '0')}-01`;
+  const startDate = `${y}-${String(m).padStart(2, "0")}-01`;
   const lastDay = new Date(y, m, 0).getDate();
-  const endDate = `${y}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+  const endDate = `${y}-${String(m).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
   return { startDate, endDate };
 }
 
@@ -37,7 +34,7 @@ function getGeneralRange(yearStr, monthStr) {
 function getReportRange(yearStr, monthStr) {
   const y = parseInt(yearStr, 10);
   const m = parseInt(monthStr, 10);
-  
+
   // 計算上個月
   let prevY = y;
   let prevM = m - 1;
@@ -46,43 +43,18 @@ function getReportRange(yearStr, monthStr) {
     prevY--;
   }
 
-  const startDate = `${prevY}-${String(prevM).padStart(2, '0')}-26`;
-  const endDate = `${y}-${String(m).padStart(2, '0')}-25`;
+  const startDate = `${prevY}-${String(prevM).padStart(2, "0")}-26`;
+  const endDate = `${y}-${String(m).padStart(2, "0")}-25`;
   return { startDate, endDate };
-}
-
-async function fetchReport(session, reportId, startDate, endDate, dateColumn = "CheckupReservation__c.Exam_Date__c") {
-  const url = `${session.instanceUrl}/services/data/${session.apiVersion}/analytics/reports/${reportId}?includeDetails=false`;
-  let fetchOptions = {
-    headers: { Authorization: `Bearer ${session.accessToken}` }
-  };
-
-  if (startDate && endDate) {
-    fetchOptions.method = 'POST';
-    fetchOptions.headers['Content-Type'] = 'application/json';
-    fetchOptions.body = JSON.stringify({
-      reportMetadata: {
-        standardDateFilter: {
-          column: dateColumn,
-          durationValue: "CUSTOM",
-          startDate: startDate,
-          endDate: endDate
-        }
-      }
-    });
-  }
-
-  const response = await fetch(url, fetchOptions);
-  const data = await response.json();
-  if (!response.ok) throw new Error(`報表 ${reportId} 執行失敗: ${JSON.stringify(data)}`);
-  return data;
 }
 
 async function syncAllWorkloads() {
   console.log(`\n🚀 開始同步放射師工作量與影像校對量...`);
 
   try {
-    let input = await askQuestion('📅 請輸入目標月份 (例如 2026-04 或 2026/04，留空則為本月): ');
+    let input = await askQuestion(
+      "📅 請輸入目標月份 (例如 2026-04 或 2026/04，留空則為本月): ",
+    );
     let targetYear, targetMonth;
     let generalRange, reportRange;
 
@@ -101,59 +73,138 @@ async function syncAllWorkloads() {
     }
 
     if (!targetYear || !targetMonth || targetMonth > 12) {
-      throw new Error('日期格式輸入錯誤，請使用 YYYY-MM 格式');
+      throw new Error("日期格式輸入錯誤，請使用 YYYY-MM 格式");
     }
 
     generalRange = getGeneralRange(targetYear, targetMonth);
     reportRange = getReportRange(targetYear, targetMonth);
 
     const session = await getSalesforceSession();
-    console.log('✅ Salesforce 認證成功。');
+    console.log("✅ Salesforce 認證成功。");
 
-    // 1. 抓取儀器工作量 (標準月區間: 1號 ~ 月底)
-    console.log(`📊 正在抓取儀器工作量 (${generalRange.startDate} ~ ${generalRange.endDate})...`);
-    const workloadReport = await fetchReport(session, REPORT_ID_WORKLOAD, generalRange.startDate, generalRange.endDate, "CheckupReservation__c.Exam_Date__c");
-    
-    // 2. 抓取影像校對量 (報告區間: 上月26號 ~ 本月25號)
-    console.log(`🔍 正在抓取影像校對量 (${reportRange.startDate} ~ ${reportRange.endDate})...`);
-    const proofReport = await fetchReport(session, REPORT_ID_PROOFREADING, reportRange.startDate, reportRange.endDate, "Order__c.ReserveDate__c");
+    // 建立 Supabase 人員名單對應 (因為 SOQL 返回的可能是別名或全名)
+    const { data: usersData } = await supabase
+      .from("users")
+      .select("name, alias")
+      .eq("is_radiographer", true)
+      .eq("is_part_time", false);
+
+    const validNamesMap = {};
+    if (usersData) {
+      usersData.forEach((u) => {
+        validNamesMap[u.name.trim()] = u.name.trim();
+        if (u.alias) validNamesMap[u.alias.trim()] = u.name.trim();
+      });
+    }
+
+    function findNameInPath(pathArr, validMap) {
+      for (let str of pathArr) {
+        if (!str || str === "-" || str === "Unknown") continue;
+        let n = str.split("(")[0].split("（")[0].trim();
+        if (n.includes("-")) {
+          const parts = n.split("-").map((p) => p.trim());
+          n = parts.find((p) => !/^[a-zA-Z0-9]+$/.test(p)) || parts[0];
+        }
+        if (validMap[n]) return validMap[n];
+        for (const key in validMap) {
+          if (key.length >= 2 && (n.endsWith(key) || key.endsWith(n))) {
+            return validMap[key];
+          }
+        }
+      }
+      return "Unknown";
+    }
 
     const masterData = {}; // 以姓名為 Key
-
-    // --- 解析儀器工作量 ---
-    const wDown = workloadReport.groupingsDown.groupings;
-    const wAcross = workloadReport.groupingsAcross.groupings;
-    const wFact = workloadReport.factMap;
-
-    wDown.forEach(row => {
-      if (row.label === "-") return;
-      const name = row.label;
-      if (!masterData[name]) masterData[name] = { mr: 0, us: 0, ct: 0, dx: 0, mg: 0, bmd: 0, proofreading: 0 };
-      
-      wAcross.forEach(col => {
-        const val = wFact[`${row.key}!${col.key}`]?.aggregates[0]?.value || 0;
-        if (col.label === 'MR') masterData[name].mr = val;
-        if (col.label === 'US') masterData[name].us = val;
-        if (col.label === 'CT') masterData[name].ct = val;
-        if (col.label === 'DX') masterData[name].dx = val;
-        if (col.label === 'MG') masterData[name].mg = val;
-        if (col.label === 'BMD') masterData[name].bmd = val;
+    if (usersData) {
+      usersData.forEach((u) => {
+        masterData[u.name] = {
+          mr: 0,
+          us: 0,
+          ct: 0,
+          dx: 0,
+          mg: 0,
+          bmd: 0,
+          proofreading: 0,
+        };
       });
+    }
+
+    const ensureUser = (name) => {
+      if (!masterData[name])
+        masterData[name] = {
+          mr: 0,
+          us: 0,
+          ct: 0,
+          dx: 0,
+          mg: 0,
+          bmd: 0,
+          proofreading: 0,
+        };
+    };
+
+    // 1. 抓取儀器工作量 (標準月區間: 1號 ~ 月底)
+    console.log(
+      `📊 正在抓取儀器工作量 (${generalRange.startDate} ~ ${generalRange.endDate})...`,
+    );
+    const checkupSoql = `SELECT Radiologist__r.Name person, ResourceCategory__c category, COUNT(Id) cnt 
+                         FROM CheckupReservation__c 
+                         WHERE (Order__r.ReserveDate__c >= ${generalRange.startDate} AND Order__r.ReserveDate__c <= ${generalRange.endDate}) 
+                         AND Radiologist__c != null 
+                         AND ResourceCategory__c IN ('MR','CT','US','BMD','MG','DX') 
+                         AND (NOT Name LIKE '%報到%') 
+                         AND Checkup_Status__c = '10' 
+                         GROUP BY Radiologist__r.Name, ResourceCategory__c`;
+
+    const checkupData = await runSoqlQuery({ ...session, soql: checkupSoql });
+    (checkupData.records || []).forEach((rec) => {
+      const rawName = rec.person || rec.Radiologist__r?.Name;
+      const category = (
+        rec.category ||
+        rec.ResourceCategory__c ||
+        ""
+      ).toLowerCase();
+      const count = parseInt(rec.cnt || rec.expr0 || 0, 10);
+      const cleanName = findNameInPath([rawName], validNamesMap);
+
+      const nameToUse = cleanName !== "Unknown" ? cleanName : rawName;
+      if (!nameToUse) return;
+
+      ensureUser(nameToUse);
+      if (category === "mr") masterData[nameToUse].mr += count;
+      if (category === "us") masterData[nameToUse].us += count;
+      if (category === "ct") masterData[nameToUse].ct += count;
+      if (category === "dx") masterData[nameToUse].dx += count;
+      if (category === "mg") masterData[nameToUse].mg += count;
+      if (category === "bmd") masterData[nameToUse].bmd += count;
     });
 
-    // --- 解析影像校對量 ---
-    const pDown = proofReport.groupingsDown.groupings;
-    const pFact = proofReport.factMap;
+    // 2. 抓取影像校對量 (報告區間: 上月26號 ~ 本月25號)
+    console.log(
+      ` 正在抓取影像校對量 (${reportRange.startDate} ~ ${reportRange.endDate})...`,
+    );
+    const proofingSoql = `SELECT Image_Proofreader__r.Name person, COUNT(Id) cnt 
+                          FROM Order__c 
+                          WHERE (ReserveDate__c >= ${reportRange.startDate} AND ReserveDate__c <= ${reportRange.endDate}) 
+                          AND Image_Proofreader__c != null 
+                          GROUP BY Image_Proofreader__r.Name`;
 
-    pDown.forEach(row => {
-      if (row.label === "-") return;
-      const name = row.label;
-      if (!masterData[name]) masterData[name] = { mr: 0, us: 0, ct: 0, dx: 0, mg: 0, bmd: 0, proofreading: 0 };
-      // 影像校對報表通常是簡單彙總，取 Total (T) 即可
-      masterData[name].proofreading = pFact[`${row.key}!T`]?.aggregates[0]?.value || 0;
+    const proofingData = await runSoqlQuery({ ...session, soql: proofingSoql });
+    (proofingData.records || []).forEach((rec) => {
+      const rawName = rec.person || rec.Image_Proofreader__r?.Name;
+      const value = parseInt(rec.cnt || rec.expr0 || 0, 10);
+      const cleanName = findNameInPath([rawName], validNamesMap);
+      const nameToUse = cleanName !== "Unknown" ? cleanName : rawName;
+
+      if (!nameToUse) return;
+
+      ensureUser(nameToUse);
+      masterData[nameToUse].proofreading += value;
     });
 
-    console.log(`✅ 解析完成，準備更新 ${Object.keys(masterData).length} 位人員數據...`);
+    console.log(
+      `✅ 解析完成，準備更新 ${Object.keys(masterData).length} 位人員數據...`,
+    );
 
     // --- 寫入 Supabase ---
     for (const name of Object.keys(masterData)) {
@@ -161,11 +212,11 @@ async function syncAllWorkloads() {
 
       // 先查詢現有資料
       const { data: existing } = await supabase
-        .from('radiographer_workload')
-        .select('*')
-        .eq('year', targetYear)
-        .eq('month', targetMonth)
-        .eq('radiographerName', name)
+        .from("radiographer_workload")
+        .select("*")
+        .eq("year", targetYear)
+        .eq("month", targetMonth)
+        .eq("radiographerName", name)
         .single();
 
       const payload = {
@@ -178,23 +229,24 @@ async function syncAllWorkloads() {
         dx: stats.dx,
         mg: stats.mg,
         bmd: stats.bmd,
-        image_proofing: stats.proofreading,
-        // 保留原本可能存在的 CTA 或 報告登打
-        cta_post_processing: existing ? existing.cta_post_processing : 0,
-        report_entry: existing ? existing.report_entry : 0,
+        imageProofing: stats.proofreading,
       };
 
       if (existing) {
-        await supabase.from('radiographer_workload').update(payload).eq('id', existing.id);
+        await supabase
+          .from("radiographer_workload")
+          .update(payload)
+          .eq("id", existing.id);
       } else {
-        await supabase.from('radiographer_workload').insert(payload);
+        await supabase.from("radiographer_workload").insert(payload);
       }
     }
 
-    console.log(`\n🎉 同步成功！已更新 ${targetYear} 年 ${targetMonth} 月的工作量。`);
-
+    console.log(
+      `\n🎉 同步成功！已更新 ${targetYear} 年 ${targetMonth} 月的工作量。`,
+    );
   } catch (error) {
-    console.error('❌ 同步失敗:', error.message);
+    console.error("❌ 同步失敗:", error.message);
   } finally {
     rl.close();
   }
