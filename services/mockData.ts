@@ -1,5 +1,5 @@
 
-import { User, UserRole, StaffGroup, Shift, LeaveRequest, LeaveStatus, LeaveType, StationDefault, SPECIAL_ROLES } from '../types';
+import { User, UserRole, StaffGroup, LeaveRequest, LeaveStatus, LeaveType, StationDefault, SPECIAL_ROLES } from '../types';
 
 const ALL_SKILLS = [
   StationDefault.MR1_5T, StationDefault.MR3T,
@@ -226,20 +226,3 @@ export const MOCK_USERS: User[] = [
   }
 ];
 export const MOCK_LEAVES: LeaveRequest[] = [];
-export const MOCK_SHIFTS: Shift[] = [];
-
-
-
-// Mock Doctors
-export const MOCK_DOCTORS = [
-    { id: 'doc-001', name: '陳醫師', alias: '陳', capabilities: ['影像', '遠班', '支援', '行政'], locations: ['北投', '大直'] },
-    { id: 'doc-002', name: '林醫師', alias: '林', capabilities: ['影像', 'GI', '麻醉'], locations: ['北投'] },
-    { id: 'doc-003', name: '黃醫師', alias: '黃', capabilities: ['影像', '遠班', '支援'], locations: ['北投', '台中'] },
-    { id: 'doc-004', name: '張醫師', alias: '張', capabilities: ['影像', '行政', 'GI'], locations: ['大直'] },
-    { id: 'doc-005', name: '李醫師', alias: '李', capabilities: ['影像', '遠班', '麻醉'], locations: ['北投', '大直', '台中'] },
-    { id: 'doc-006', name: '王醫師', alias: '王', capabilities: ['影像', '支援'], locations: ['台中'] },
-    { id: 'doc-007', name: '吳醫師', alias: '吳', capabilities: ['影像', '遠班', '支援', '行政'], locations: ['北投'] },
-    { id: 'doc-008', name: '蔡醫師', alias: '蔡', capabilities: ['影像', 'GI'], locations: ['大直', '台中'] },
-    { id: 'doc-009', name: '楊醫師', alias: '楊', capabilities: ['影像', '遠班', '麻醉'], locations: ['北投', '大直'] },
-    { id: 'doc-010', name: '鄭醫師', alias: '鄭', capabilities: ['影像', '支援', '行政'], locations: ['大直'] }
-];

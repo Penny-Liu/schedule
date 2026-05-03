@@ -28,7 +28,7 @@ import {
   OperationLog,
   RadiographerWorkload,
 } from "../types";
-import { MOCK_USERS, MOCK_LEAVES, MOCK_DOCTORS } from "./mockData";
+import { MOCK_USERS, MOCK_LEAVES } from "./mockData";
 import { supabase } from "./supabaseClient";
 import { generateUUID, isUserOnEmploymentPause } from "./utils";
 
