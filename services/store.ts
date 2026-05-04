@@ -3236,19 +3236,32 @@ BMD :{{bmd}}
     const doctor = this.doctors.find((d) => d.id === id);
     if (doctor) {
       doctor.isActive = false;
+
+      // Also remove future shifts locally to keep UI consistent
+      const today = toLocalISOString(new Date());
+      this.doctorShifts = this.doctorShifts.filter(
+        (s) => !(s.doctorId === id && s.date >= today),
+      );
+
       this.notifyListeners();
 
       try {
-        const { error } = await supabase
+        // 1. Soft delete doctor
+        const { error: docError } = await supabase
           .from("doctors")
           .update({ is_active: false })
           .eq("id", id);
-        if (error) throw error;
+        if (docError) throw docError;
+
+        // 2. Remove future shifts of this doctor (orphaned/ghost shifts)
+        const { error: shiftError } = await supabase
+          .from("doctor_shifts")
+          .delete()
+          .eq("doctorId", id)
+          .gte("date", today);
+        if (shiftError) throw shiftError;
       } catch (e: any) {
-        console.error("Failed to soft delete doctor:", e);
-        // We keep the local state as false even if remote fails (optimistic)
-        // unless we want to revert for data parity.
-        // But generally users expect 'deleted' to stay deleted.
+        console.error("Failed to soft delete doctor or clean up shifts:", e);
       }
     }
   }

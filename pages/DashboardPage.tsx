@@ -157,7 +157,10 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
   const [healthMgmtShifts, setHealthMgmtShifts] = useState<HealthMgmtShift[]>(
     db.getHealthMgmtShifts("", ""),
   );
-  const [doctorShifts, setDoctorShifts] = useState(db.getDoctorShifts());
+  const [doctorShifts, setDoctorShifts] = useState(() => {
+    const activeDocIds = new Set(db.getDoctors().filter(d => d.isActive !== false).map(d => d.id));
+    return db.getDoctorShifts().filter(s => activeDocIds.has(s.doctorId));
+  });
 
   const [stationRequirements, setStationRequirements] = useState(
     db.getStationRequirements(),
@@ -263,7 +266,8 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
       setShifts([...db.getShifts("", "")]);
       setHealthMgmtShifts([...db.getHealthMgmtShifts("", "")]);
       setDisplayOrder([...db.getStationDisplayOrder()]);
-      setDoctorShifts([...db.getDoctorShifts()]);
+      const activeDocIds = new Set(db.getDoctors().filter(d => d.isActive !== false).map(d => d.id));
+      setDoctorShifts(db.getDoctorShifts().filter(s => activeDocIds.has(s.doctorId)));
     });
     // Always refresh doctor_shifts on mount (bypass initializeData's isLoaded cache)
     db.refreshDoctorShifts();
