@@ -15,11 +15,12 @@ async function syncDailyStats(session, startDate, endDate) {
 
   // 一次性抓取整個區間的資料，取代原本跑 31 次報表的低效做法
   const soql = `
-      SELECT CheckupName__c, Location__c, Order__c, CheckStartDate__c
+      SELECT CheckupName__c, Location__c, Order__c, CheckStartDate__c, ResourceCategory__c
       FROM CheckupReservation__c 
       WHERE (Location__c = '北投' OR Location__c = '大直')
         AND CheckStartDate__c >= ${startDate}
         AND CheckStartDate__c <= ${endDate}
+        AND Checkup_Status__c = '10'
       ORDER BY CheckStartDate__c ASC
   `.trim();
 
@@ -30,6 +31,7 @@ async function syncDailyStats(session, startDate, endDate) {
 
   const dailyResults = {};
   const seenMR = new Set();
+  const seenDazhiClient = new Set(); // 追蹤大直已計數客戶 (日期+Order)
 
   const initStats = () => ({
     beitou_clients: 0,
@@ -76,7 +78,22 @@ async function syncDailyStats(session, startDate, endDate) {
         if (name.includes("肝纖維")) stats.beitou_ultrasound_fibrosis++;
       }
     } else if (loc === "大直") {
-      if (name === "血壓") stats.dazhi_clients++;
+      // 大直客戶數：有超音波、X光或骨密檢查的客人才計算 (依據 Order 去重)
+      const cat = (r.ResourceCategory__c || "").toUpperCase();
+      const isClientTarget =
+        name.includes("超音波") ||
+        name.includes("X光") ||
+        name.includes("骨密") ||
+        ["US", "DX", "BMD"].includes(cat);
+
+      if (isClientTarget) {
+        const clientKey = `${date}_${orderId}`;
+        if (!seenDazhiClient.has(clientKey)) {
+          stats.dazhi_clients++;
+          seenDazhiClient.add(clientKey);
+        }
+      }
+
       if (name === "大腸鏡檢查") stats.dazhi_gi++;
       if (name === "營養門診(30)") stats.dazhi_metabolism_clients++;
       if (name.includes("超音波")) {
@@ -343,21 +360,29 @@ if (process.argv[1] === __filename) {
     console.log("\n--- 🏥 Salesforce 數據同步工具 (CLI 版) ---");
     console.log("\n--- 🏥 放射師工作量同步工具 (CLI 版) ---");
 
+    const formatDate = (date) => {
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, "0");
+      const d = String(date.getDate()).padStart(2, "0");
+      return `${y}-${m}-${d}`;
+    };
+
     const today = new Date();
-    const currentYear = today.getFullYear();
-    const currentMonth = String(today.getMonth() + 1).padStart(2, "0");
-    const lastDay = new Date(currentYear, today.getMonth() + 1, 0).getDate();
+    const defaultStart = formatDate(today);
+
+    const thirtyDaysLater = new Date();
+    thirtyDaysLater.setDate(today.getDate() + 30);
+    const defaultEnd = formatDate(thirtyDaysLater);
 
     let startDate = await askQuestion(
-      `📅 請輸入一般區間開始日期 (預設 ${currentYear}-${currentMonth}-01): `,
+      `📅 請輸入一般區間開始日期 (預設 ${defaultStart}): `,
     );
-    if (!startDate) startDate = `${currentYear}-${currentMonth}-01`;
+    if (!startDate) startDate = defaultStart;
 
     let endDate = await askQuestion(
-      `📅 請輸入一般區間結束日期 (預設 ${currentYear}-${currentMonth}-${String(lastDay).padStart(2, "0")}): `,
+      `📅 請輸入一般區間結束日期 (預設 ${defaultEnd}): `,
     );
-    if (!endDate)
-      endDate = `${currentYear}-${currentMonth}-${String(lastDay).padStart(2, "0")}`;
+    if (!endDate) endDate = defaultEnd;
 
     // 自動推算報告區間
     const [sY, sM] = startDate.split("-");
