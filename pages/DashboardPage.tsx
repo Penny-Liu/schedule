@@ -17,6 +17,7 @@ import {
   DateEventType,
 } from "../types";
 import { db } from "../services/store";
+import { supabase } from "../services/supabaseClient";
 import {
   ChevronLeft,
   ChevronRight,
@@ -5095,6 +5096,27 @@ const DailyManpowerSummary: React.FC<{
     dazhi_metabolism_clients: 0,
   };
 
+  // Physician workload data from physician_workload_daily
+  type PhysicianWorkloadRow = {
+    doctor_name: string;
+    count_da_tao_5: number;
+    count_xiao_tao_4: number;
+    count_xiao_tao_3: number;
+    count_wu_2: number;
+    count_wu_1: number;
+  };
+  const [physicianWorkload, setPhysicianWorkload] = useState<PhysicianWorkloadRow[]>([]);
+
+  useEffect(() => {
+    supabase
+      .from("physician_workload_daily")
+      .select("doctor_name, count_da_tao_5, count_xiao_tao_4, count_xiao_tao_3, count_wu_2, count_wu_1")
+      .eq("date", date)
+      .then(({ data }) => {
+        if (data) setPhysicianWorkload(data as PhysicianWorkloadRow[]);
+      });
+  }, [date]);
+
   // Get daily events (holidays, memos, etc.)
   const dailyEvents = useMemo(() => {
     return db.getHolidays().filter((h) => h.date === date);
@@ -5315,6 +5337,37 @@ const DailyManpowerSummary: React.FC<{
     // Block 3: Only Doctors (supportDocs)
     const thirdLineSupportList = [...supportDocsWithSuffix];
 
+    // Workload detail lines for support doctors (compact: only show non-zero categories)
+    const supportDocShifts = docShifts.filter((s) => s.station === "支援");
+    const thirdLineWorkloadLines = supportDocShifts
+      .map((s) => {
+        const alias = getDocAlias(s.doctorId);
+        const doc = doctors.find((d) => d.id === s.doctorId);
+        const wl = doc
+          ? physicianWorkload.find((w) => {
+              const dbName = w.doctor_name.trim();
+              const localName = doc.name.trim();
+              return dbName === localName || dbName.includes(localName) || localName.includes(dbName);
+            })
+          : undefined;
+        if (!wl) return null;
+        const big = wl.count_da_tao_5;
+        const small = wl.count_xiao_tao_4 + wl.count_xiao_tao_3;
+        const none = wl.count_wu_2 + wl.count_wu_1;
+        const total = big + small + none;
+        const units =
+          big * 5 + wl.count_xiao_tao_4 * 4 + wl.count_xiao_tao_3 * 3 +
+          wl.count_wu_2 * 2 + wl.count_wu_1 * 1;
+        // Compact: only show non-zero categories
+        const parts: string[] = [];
+        if (big > 0) parts.push(`${big}大`);
+        if (small > 0) parts.push(`${small}小`);
+        if (none > 0) parts.push(`${none}無`);
+        return `${alias} ${total} (${parts.join(" ")}) → ${units}單位`;
+      })
+      .filter(Boolean)
+      .join("\n");
+
     // Block 1: Support Section
     // Technical Support: manpower.support (assigned to '支援')
     // Admin ('行政') is EXCLUDED per user request.
@@ -5398,7 +5451,9 @@ BMD :{{bmd}}
       "{{learning_section}}": learningText,
       "{{remote_radiographers}}": manpower.remote.join("/") || "無",
       "{{dazhi_radiographers}}": manpower.dazhi.join("/") || "無",
-      "{{third_line_support}}": thirdLineSupportList.join("/"),
+      "{{third_line_support}}": thirdLineWorkloadLines
+        ? `${thirdLineSupportList.join("/")}\n${thirdLineWorkloadLines}`
+        : thirdLineSupportList.join("/"),
       "{{remote_group_header}}": remoteGroupHeader,
       "{{remote_group}}": remoteGroupHeader,
       "{{events_section}}":
@@ -5407,52 +5462,107 @@ BMD :{{bmd}}
           : "",
     };
 
+    // Helper: build workload summary string — lookup by doctorId to avoid alias collision
+    const buildDocWorkloadStr = (doctorId: string, displayAlias: string, suffix: string): string => {
+      const doc = doctors.find((d) => d.id === doctorId);
+      const wl = doc
+        ? physicianWorkload.find((w) => {
+            const dbName = w.doctor_name.trim();
+            const localName = doc.name.trim();
+            return (
+              dbName === localName ||
+              dbName.includes(localName) ||
+              localName.includes(dbName)
+            );
+          })
+        : undefined;
+
+      if (!wl) {
+        return `${displayAlias}  -(無資料)${suffix ? ` ${suffix}` : ""}`;
+      }
+
+      const big = wl.count_da_tao_5;
+      const small = wl.count_xiao_tao_4 + wl.count_xiao_tao_3;
+      const none = wl.count_wu_2 + wl.count_wu_1;
+      const total = big + small + none;
+      const units =
+        big * 5 +
+        wl.count_xiao_tao_4 * 4 +
+        wl.count_xiao_tao_3 * 3 +
+        wl.count_wu_2 * 2 +
+        wl.count_wu_1 * 1;
+
+      const core = `${displayAlias}  ${total} (${big}大 ${small}小 ${none}無 ) →${units} 單位`;
+      return suffix ? `${core} ${suffix}` : core;
+    };
+
     // Doctor Lists formatting
     let imgDocStr = "";
     if (imagingDocs.length > 0) {
-      imgDocStr = imagingDocs
-        .map((docAlias) => {
-          // Find doctor shift to check for explanation suffix
-          const docShift = docShifts.find((s) => {
-            const doc = doctors.find((d) => d.id === s.doctorId);
-            return (
-              s.station === "影像" && (doc?.alias || doc?.name) === docAlias
-            );
-          });
-
-          // Format based on scheduled_station
-          if (docShift?.scheduled_station === "解說") {
-            return `${docAlias}  N(N大 N小 N無 ) →N 單位 (解說)`;
-          } else if (docShift?.scheduled_station === "支援") {
-            return `${docAlias}  N(N大 N小 N無 ) →N 單位 +解說`;
+      imgDocStr = docShifts
+        .filter((s) => {
+          if (s.station !== "影像") return false;
+          if (s.location === "台中") return false;
+          return true;
+        })
+        .map((s) => {
+          const alias = getDocAlias(s.doctorId);
+          if (s.scheduled_station === "解說") {
+            return buildDocWorkloadStr(s.doctorId, alias, "(解說)");
+          } else if (s.scheduled_station === "支援") {
+            return buildDocWorkloadStr(s.doctorId, alias, "+解說");
           } else {
-            return `${docAlias}  N(N大 N小 N無 ) →N 單位`;
+            return buildDocWorkloadStr(s.doctorId, alias, "");
           }
         })
         .join("\n");
     } else {
-      imgDocStr = `(無影像醫師)  N(N大 N小 N無 ) →N 單位`;
+      imgDocStr = `(無影像醫師)`;
     }
     replacements["{{imaging_doctors}}"] = imgDocStr;
 
     let remDocStr = "";
     if (remoteDocsRaw.length > 0) {
-      // New Format: Name X (...) +大直 {{dazhi_clients}} →N 單位
-      remDocStr = remoteDocsRaw
-        .map((docAlias) => {
-          // Find doctor shift to check for explanation suffix
-          const docShift = docShifts.find((s) => {
-            const doc = doctors.find((d) => d.id === s.doctorId);
-            return s.station === "遠" && (doc?.alias || doc?.name) === docAlias;
-          });
+      remDocStr = docShifts
+        .filter((s) => s.station === "遠")
+        .map((s) => {
+          const alias = getDocAlias(s.doctorId);
+          const doc = doctors.find((d) => d.id === s.doctorId);
+          const wl = doc
+            ? physicianWorkload.find((w) => {
+                const dbName = w.doctor_name.trim();
+                const localName = doc.name.trim();
+                return (
+                  dbName === localName ||
+                  dbName.includes(localName) ||
+                  localName.includes(dbName)
+                );
+              })
+            : undefined;
 
-          // Format based on scheduled_station
-          if (docShift?.scheduled_station === "解說") {
-            return `${docAlias}  X (X大 X小 X無) +大直 ${stats.dazhi_clients} →N 單位 (解說)`;
-          } else if (docShift?.scheduled_station === "支援") {
-            return `${docAlias}  X (X大 X小 X無) +大直 ${stats.dazhi_clients} →N 單位 +解說`;
+          let core: string;
+          if (!wl) {
+            core = `${alias}  -(無資料) +大直 ${stats.dazhi_clients}`;
           } else {
-            return `${docAlias}  X (X大 X小 X無) +大直 ${stats.dazhi_clients} →N 單位`;
+            const big = wl.count_da_tao_5;
+            const small = wl.count_xiao_tao_4 + wl.count_xiao_tao_3;
+            const none = wl.count_wu_2 + wl.count_wu_1;
+            const total = big + small + none;
+            const units =
+              big * 5 +
+              wl.count_xiao_tao_4 * 4 +
+              wl.count_xiao_tao_3 * 3 +
+              wl.count_wu_2 * 2 +
+              wl.count_wu_1 * 1;
+            core = `${alias}  ${total} (${big}大 ${small}小 ${none}無) +大直 ${stats.dazhi_clients} →${units + stats.dazhi_clients} 單位`;
+          }
+
+          if (s.scheduled_station === "解說") {
+            return `${core} (解說)`;
+          } else if (s.scheduled_station === "支援") {
+            return `${core} +解說`;
+          } else {
+            return core;
           }
         })
         .join("\n");
@@ -5646,7 +5756,7 @@ BMD :{{bmd}}
     const section4 = section4Parts.join("\n\n");
 
     return { full: finalText, section1, section2, section3, section4 };
-  }, [date, shifts, manpower, users, stats, doctorShifts]);
+  }, [date, shifts, manpower, users, stats, doctorShifts, physicianWorkload]);
 
   const handleCopy = (text: string) => {
     navigator.clipboard.writeText(text).catch((err) => {

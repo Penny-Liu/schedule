@@ -328,6 +328,160 @@ async function syncRadiographerWorkload(
   console.log(`[sync-stats] [SF API] ✅ 同步成功！`);
 }
 
+// --- [3/3] 影像醫師工作量分類 (大套/小套) ---
+async function syncPhysicianWorkload(session, startDate, endDate) {
+  console.log(
+    `\n[sync-stats] [3/3] 同步影像醫師工作量分類：${startDate} ~ ${endDate}`,
+  );
+
+  const soql = `
+      SELECT 
+        Image_assignment__r.Name, 
+        Order__r.Image_assignment__r.Name,
+        Order__c,
+        Image_Report__c, 
+        ResourceCategory__c, 
+        CheckupName__c, 
+        CheckStartDate__c
+      FROM CheckupReservation__c 
+      WHERE CheckStartDate__c >= ${startDate}
+        AND CheckStartDate__c <= ${endDate}
+        AND Checkup_Status__c = '10'
+        AND Location__c = '北投'
+  `.trim();
+
+  const result = await runSoqlQuery({ ...session, soql });
+  const records = result.records || [];
+  console.log(
+    `[sync-stats] 🔍 雲端原始抓取到 ${records.length} 筆項次 (進行客戶/醫師分類解析...)`,
+  );
+
+  // 第一階段：依照 日期 -> 醫令 (Order) 進行彙整，判斷該客戶的套裝類別
+  const orderWorkload = {}; // { date: { orderId: { mrCount, hasSpecialCT, doctors: Set } } }
+
+  records.forEach((r) => {
+    const date = r.CheckStartDate__c;
+    const orderId = r.Order__c;
+    if (!orderId) return;
+
+    if (!orderWorkload[date]) orderWorkload[date] = {};
+    if (!orderWorkload[date][orderId]) {
+      orderWorkload[date][orderId] = {
+        mrCount: 0,
+        hasSpecialCT: false,
+        doctors: new Set(),
+      };
+    }
+
+    const item = orderWorkload[date][orderId];
+    const name = (r.CheckupName__c || "").toUpperCase();
+    const cat = (r.ResourceCategory__c || "").toUpperCase();
+
+    // 統計該 Order 下的 MR 數量
+    if (cat === "MR") item.mrCount++;
+
+    // 判斷該 Order 是否含有低劑量或 CTA
+    if (
+      name.includes("低劑量") ||
+      name.includes("CTA") ||
+      name.includes("顯影")
+    ) {
+      item.hasSpecialCT = true;
+    }
+
+    // 取得該 Order 關聯的醫師 (去重)
+    let docName =
+      r.Image_assignment__r?.Name ||
+      r.Order__r?.Image_assignment__r?.Name ||
+      r.Image_Report__c ||
+      "";
+    docName = docName.trim();
+    if (docName && !docName.includes("<a") && docName !== "登打") {
+      item.doctors.add(docName);
+    }
+  });
+
+  // 第二階段：依照 醫師 進行統計 (計算該醫師負責了多少個 大套/小套 客戶)
+  const doctorStats = {}; // { date: { docName: { categories: {}, totalMR: 0 } } }
+
+  Object.entries(orderWorkload).forEach(([date, orders]) => {
+    if (!doctorStats[date]) doctorStats[date] = {};
+
+    Object.values(orders).forEach((data) => {
+      const { mrCount, hasSpecialCT, doctors } = data;
+      let category = "";
+
+      // 套裝規則分類 (以 Order 為單位)
+      if (mrCount >= 6 && hasSpecialCT) {
+        category = "大套5";
+      } else if (mrCount >= 1 && mrCount <= 5 && hasSpecialCT) {
+        category = "小套4";
+      } else if (mrCount >= 1 && mrCount <= 5 && !hasSpecialCT) {
+        category = "小套3";
+      } else if (mrCount === 0 && hasSpecialCT) {
+        category = "無2";
+      } else if (mrCount === 0 && !hasSpecialCT) {
+        category = "無1";
+      } else if (mrCount >= 6 && !hasSpecialCT) {
+        category = "大套5(無特檢)";
+      }
+
+      doctors.forEach((doc) => {
+        if (!doctorStats[date][doc]) {
+          doctorStats[date][doc] = { categories: {}, totalMR: 0 };
+        }
+        const s = doctorStats[date][doc];
+        s.totalMR += mrCount; // 醫師當天判讀的總 MR 醫令數
+        if (category) {
+          s.categories[category] = (s.categories[category] || 0) + 1;
+        }
+      });
+    });
+  });
+
+  const updates = [];
+  Object.entries(doctorStats).forEach(([date, docs]) => {
+    Object.entries(docs).forEach(([name, stats]) => {
+      // 將分類統計轉換為字串，例如 "大套5:3, 小套4:1"
+      const categorySummary = Object.entries(stats.categories)
+        .map(([cat, count]) => `${cat}:${count}`)
+        .join(", ");
+
+      updates.push({
+        date,
+        doctor_name: name,
+        mr_count: stats.totalMR,
+        has_special_ct: categorySummary.includes("套"),
+        category: categorySummary,
+        count_da_tao_5: stats.categories["大套5"] || 0,
+        count_xiao_tao_4: stats.categories["小套4"] || 0,
+        count_xiao_tao_3: stats.categories["小套3"] || 0,
+        count_wu_2: stats.categories["無2"] || 0,
+        count_wu_1: stats.categories["無1"] || 0,
+        updated_at: new Date().toISOString(),
+      });
+    });
+  });
+
+  if (updates.length > 0) {
+    console.log(
+      `[sync-stats] 📝 正在寫入 ${updates.length} 筆影像醫師工作量數據 (以客戶為單位)...`,
+    );
+    const { error } = await supabase
+      .from("physician_workload_daily")
+      .upsert(updates, { onConflict: "date,doctor_name" });
+
+    if (error) {
+      console.warn(
+        `[sync-stats] ⚠️ 寫入失敗 (請確認資料表 'physician_workload_daily' 是否已建立或欄位是否正確):`,
+        error.message,
+      );
+    } else {
+      console.log(`[sync-stats] ✅ 影像醫師工作量同步完成！`);
+    }
+  }
+}
+
 // --- 主函式：供 Web 與 CLI 共同呼叫 ---
 export async function syncWorkloadForWeb(
   startDate,
@@ -344,6 +498,7 @@ export async function syncWorkloadForWeb(
     reportStartDate,
     reportEndDate,
   );
+  await syncPhysicianWorkload(session, startDate, endDate);
 }
 
 // --- CLI 執行邏輯 ---
@@ -356,69 +511,114 @@ if (process.argv[1] === __filename) {
   const askQuestion = (query) =>
     new Promise((resolve) => rl.question(query, resolve));
 
-  (async () => {
-    console.log("\n--- 🏥 Salesforce 數據同步工具 (CLI 版) ---");
-    console.log("\n--- 🏥 放射師工作量同步工具 (CLI 版) ---");
+  const formatDate = (date) => {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, "0");
+    const d = String(date.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  };
 
-    const formatDate = (date) => {
-      const y = date.getFullYear();
-      const m = String(date.getMonth() + 1).padStart(2, "0");
-      const d = String(date.getDate()).padStart(2, "0");
-      return `${y}-${m}-${d}`;
-    };
+  const ensureIsoDate = (dateStr) => {
+    const parts = dateStr.split(/[-/]/);
+    if (parts.length !== 3) return dateStr;
+    const [y, m, d] = parts;
+    return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+  };
+
+  const askDate = async (label, defaultVal) => {
+    const input = await askQuestion(`  📅 ${label} (預設 ${defaultVal}): `);
+    return ensureIsoDate(input.trim() || defaultVal);
+  };
+
+  const askYesNo = async (label) => {
+    const input = await askQuestion(`${label} [Y/n]: `);
+    return input.trim().toLowerCase() !== "n";
+  };
+
+  (async () => {
+    console.log("\n--- 🏥 Salesforce → Supabase 同步工具 (CLI 版) ---\n");
 
     const today = new Date();
-    const defaultStart = formatDate(today);
+    const todayStr = formatDate(today);
 
-    const thirtyDaysLater = new Date();
-    thirtyDaysLater.setDate(today.getDate() + 30);
-    const defaultEnd = formatDate(thirtyDaysLater);
+    const session = await getSalesforceSession();
 
-    let startDate = await askQuestion(
-      `📅 請輸入一般區間開始日期 (預設 ${defaultStart}): `,
-    );
-    if (!startDate) startDate = defaultStart;
+    // ─── [1/3] 每日統計 ───────────────────────────────────────────
+    console.log("\n--- [1/3] 每日統計 (醫令數與客戶量) ---");
+    const doBlock1 = await askYesNo("要同步此區塊嗎？");
+    if (doBlock1) {
+      const fiveDaysLater = new Date(today);
+      fiveDaysLater.setDate(today.getDate() + 30);
+      const defaultEnd1 = formatDate(fiveDaysLater);
 
-    let endDate = await askQuestion(
-      `📅 請輸入一般區間結束日期 (預設 ${defaultEnd}): `,
-    );
-    if (!endDate) endDate = defaultEnd;
+      const s1 = await askDate("開始日期", todayStr);
+      const e1 = await askDate("結束日期", defaultEnd1);
 
-    // 自動推算報告區間
-    const [sY, sM] = startDate.split("-");
-    let prevM = parseInt(sM, 10) - 1;
-    let prevY = parseInt(sY, 10);
-    if (prevM === 0) {
-      prevM = 12;
-      prevY--;
+      try {
+        await syncDailyStats(session, s1, e1);
+      } catch (err) {
+        console.error("\n❌ [1/3] 執行失敗:", err);
+      }
+    } else {
+      console.log("  ⏭️  已略過。");
     }
 
-    let reportStartDate = await askQuestion(
-      `📅 請輸入報告校對開始日期 (預設 ${prevY}-${String(prevM).padStart(2, "0")}-26): `,
-    );
-    if (!reportStartDate)
-      reportStartDate = `${prevY}-${String(prevM).padStart(2, "0")}-26`;
+    // ─── [2/3] 放射師工作量統計 ──────────────────────────────────
+    console.log("\n--- [2/3] 放射師工作量統計 ---");
+    const doBlock2 = await askYesNo("要同步此區塊嗎？");
+    if (doBlock2) {
+      // 預設：本月 (第一天到最後一天)
+      const y = today.getFullYear();
+      const mo = today.getMonth() + 1;
+      const firstDay = `${y}-${String(mo).padStart(2, "0")}-01`;
+      const lastDay = formatDate(new Date(y, mo, 0)); // month 0-indexed trick
 
-    let reportEndDate = await askQuestion(
-      `📅 請輸入報告校對結束日期 (預設 ${sY}-${sM}-25): `,
-    );
-    if (!reportEndDate) reportEndDate = `${sY}-${sM}-25`;
+      // 報告校對預設：上個月26號 ~ 本月25號
+      let prevY = y;
+      let prevMo = mo - 1;
+      if (prevMo === 0) { prevMo = 12; prevY--; }
+      const defaultReportStart = `${prevY}-${String(prevMo).padStart(2, "0")}-26`;
+      const defaultReportEnd = `${y}-${String(mo).padStart(2, "0")}-25`;
+
+      console.log(`  (各檢查量預設：本月 ${firstDay} ~ ${lastDay})`);
+      console.log(`  (影像報告校對預設：${defaultReportStart} ~ ${defaultReportEnd})`);
+
+      const s2 = await askDate("各檢查量開始日期", firstDay);
+      const e2 = await askDate("各檢查量結束日期", lastDay);
+      const rs2 = await askDate("影像報告校對開始日期", defaultReportStart);
+      const re2 = await askDate("影像報告校對結束日期", defaultReportEnd);
+
+      try {
+        await syncRadiographerWorkload(session, s2, e2, rs2, re2);
+      } catch (err) {
+        console.error("\n❌ [2/3] 執行失敗:", err);
+      }
+    } else {
+      console.log("  ⏭️  已略過。");
+    }
+
+    // ─── [3/3] 影像醫師工作量分類 ────────────────────────────────
+    console.log("\n--- [3/3] 影像醫師工作量分類 (大套/小套) ---");
+    const doBlock3 = await askYesNo("要同步此區塊嗎？");
+    if (doBlock3) {
+      const fiveDaysLater = new Date(today);
+      fiveDaysLater.setDate(today.getDate() + 5);
+      const defaultEnd3 = formatDate(fiveDaysLater);
+
+      const s3 = await askDate("開始日期", todayStr);
+      const e3 = await askDate("結束日期", defaultEnd3);
+
+      try {
+        await syncPhysicianWorkload(session, s3, e3);
+      } catch (err) {
+        console.error("\n❌ [3/3] 執行失敗:", err);
+      }
+    } else {
+      console.log("  ⏭️  已略過。");
+    }
 
     rl.close();
-    console.log(`\n🚀 準備同步...`);
-
-    try {
-      await syncWorkloadForWeb(
-        startDate,
-        endDate,
-        reportStartDate,
-        reportEndDate,
-      );
-      console.log("\n✨ 所有同步作業已順利完成！");
-      process.exit(0);
-    } catch (err) {
-      console.error("\n❌ 執行失敗:", err);
-      process.exit(1);
-    }
+    console.log("\n✨ 所有選擇的同步作業已完成！");
+    process.exit(0);
   })();
 }
