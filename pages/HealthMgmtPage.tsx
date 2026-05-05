@@ -2650,24 +2650,13 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                 </div>
               )}
             </div>
+
             {/* === Stats Bar for Selected Date === */}
             {(() => {
               const svStats = db.getDailyStats(statsViewDate);
               const svDate = new Date(statsViewDate);
               const isStatsToday =
                 statsViewDate === toLocalISOString(new Date());
-
-              // Compute per-station headcount for that date (based on station assignment letter)
-              const statsShifts = shifts.filter((s) => {
-                if (s.date !== statsViewDate) return false;
-                if (
-                  currentUserLocation !== "全部" &&
-                  s.location &&
-                  s.location !== currentUserLocation
-                )
-                  return false;
-                return true;
-              });
 
               const STATION_GROUPS: Record<string, string[]> = {
                 H: ["H", "健管", "接待"],
@@ -2677,79 +2666,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                 M: ["M", "醫檢", "檢驗"],
                 P: ["P", "藥師"],
               };
-              const stationCounts: Record<string, number> = {};
-              const groupNames: Record<string, string[]> = {};
 
-              const countedUserIds = new Set<string>(); // Each person counts once per day
-
-              statsShifts.forEach((s) => {
-                const sText = (s.station || "").toUpperCase();
-                if (!sText || sText.includes("休") || sText.includes("V"))
-                  return;
-                if (countedUserIds.has(s.userId)) return;
-
-                const u = db
-                  .getHealthMgmtStaff()
-                  .find((st) => st.id === s.userId);
-                if (!u || u.isActive === false) return; // Only count active staff
-
-                const parts = s.station.split(" ");
-                const base =
-                  parts.find((p) => !p.includes(":")) ||
-                  parts[parts.length - 1] ||
-                  "";
-
-                for (const [key, vals] of Object.entries(STATION_GROUPS)) {
-                  if (
-                    vals.some(
-                      (v) =>
-                        sText.includes(v.toUpperCase()) ||
-                        base.toUpperCase().startsWith(v.toUpperCase()),
-                    )
-                  ) {
-                    stationCounts[key] = (stationCounts[key] || 0) + 1;
-                    if (!groupNames[key]) groupNames[key] = [];
-                    groupNames[key].push(u.name);
-                    countedUserIds.add(s.userId);
-                    break;
-                  }
-                }
-              });
-              // Anesthesia = A
-              const anesDate = anesthesiaShifts.filter((s) => {
-                if (s.date !== statsViewDate) return false;
-                if (
-                  currentUserLocation !== "全部" &&
-                  s.location &&
-                  s.location !== currentUserLocation
-                )
-                  return false;
-                const st = (s.station || "").toUpperCase();
-                if (!st.trim() || st.includes("休") || st.includes("V"))
-                  return false;
-
-                const u = db
-                  .getAnesthesiaStaff()
-                  .find((as) => as.id === s.userId);
-                return u && u.isActive !== false;
-              });
-
-              const uniqueAnesUserIds = new Set<string>();
-              const anesNames: string[] = [];
-
-              anesDate.forEach((s) => {
-                if (!uniqueAnesUserIds.has(s.userId)) {
-                  uniqueAnesUserIds.add(s.userId);
-                  const u = db
-                    .getAnesthesiaStaff()
-                    .find((st) => st.id === s.userId);
-                  if (u) anesNames.push(u.name);
-                }
-              });
-
-              const anesCount = uniqueAnesUserIds.size;
-
-              // Abbr map for display
               const DESG_ABBR: Record<string, string> = {
                 H: "H",
                 G: "G",
@@ -2758,6 +2675,128 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                 M: "M",
                 P: "P",
               };
+
+              const getCountsForLocation = (loc: string) => {
+                const locShifts = shifts.filter((s) => {
+                  if (s.date !== statsViewDate) return false;
+                  const sLoc =
+                    s.location ||
+                    db.getHealthMgmtStaff().find((st) => st.id === s.userId)
+                      ?.location;
+                  return sLoc === loc;
+                });
+
+                const stationCounts: Record<string, number> = {};
+                const groupNames: Record<string, string[]> = {};
+                const countedUserIds = new Set<string>();
+
+                locShifts.forEach((s) => {
+                  const sText = (s.station || "").toUpperCase();
+                  if (!sText || sText.includes("休") || sText.includes("V"))
+                    return;
+                  if (countedUserIds.has(s.userId)) return;
+
+                  const u = db
+                    .getHealthMgmtStaff()
+                    .find((st) => st.id === s.userId);
+                  if (!u || u.isActive === false) return;
+
+                  const parts = s.station.split(" ");
+                  const base =
+                    parts.find((p) => !p.includes(":")) ||
+                    parts[parts.length - 1] ||
+                    "";
+
+                  for (const [key, vals] of Object.entries(STATION_GROUPS)) {
+                    if (
+                      vals.some(
+                        (v) =>
+                          sText.includes(v.toUpperCase()) ||
+                          base.toUpperCase().startsWith(v.toUpperCase()),
+                      )
+                    ) {
+                      stationCounts[key] = (stationCounts[key] || 0) + 1;
+                      if (!groupNames[key]) groupNames[key] = [];
+                      groupNames[key].push(u.name);
+                      countedUserIds.add(s.userId);
+                      break;
+                    }
+                  }
+                });
+
+                const locAnesShifts = anesthesiaShifts.filter(
+                  (s) => s.date === statsViewDate && s.location === loc,
+                );
+                const uniqueAnesUserIds = new Set<string>();
+                const anesNames: string[] = [];
+                locAnesShifts.forEach((s) => {
+                  if (!uniqueAnesUserIds.has(s.userId)) {
+                    const u = db
+                      .getAnesthesiaStaff()
+                      .find((st) => st.id === s.userId);
+                    if (u && u.isActive !== false) {
+                      uniqueAnesUserIds.add(s.userId);
+                      anesNames.push(u.name);
+                    }
+                  }
+                });
+
+                return {
+                  stationCounts,
+                  groupNames,
+                  anesCount: uniqueAnesUserIds.size,
+                  anesNames,
+                };
+              };
+
+              const beitouStats = getCountsForLocation("北投");
+              const dazhiStats = getCountsForLocation("大直");
+
+              const renderPersonnelSummary = (stats: any, isHeader: boolean = false) => (
+                <div className={`flex flex-wrap items-center gap-1 ${isHeader ? "" : "mt-1.5 pt-1.5 border-t border-slate-50"}`}>
+                  {Object.entries(DESG_ABBR).map(([key, abbr]) => {
+                    const cnt = stats.stationCounts[key] || 0;
+                    const names = stats.groupNames[key] || [];
+                    return (
+                      <div
+                        key={key}
+                        title={names.length > 0 ? names.join(", ") : "無排班"}
+                        className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-black transition-all cursor-help ${
+                          isHeader
+                            ? cnt > 0
+                              ? "bg-white text-teal-700 shadow-sm"
+                              : "bg-white/20 text-white/40"
+                            : cnt > 0
+                              ? "bg-teal-50 text-teal-700 shadow-sm border border-teal-100"
+                              : "bg-slate-50 text-slate-300 border border-slate-100"
+                        }`}
+                      >
+                        <span>
+                          {abbr}:{cnt}
+                        </span>
+                      </div>
+                    );
+                  })}
+                  <div
+                    title={
+                      stats.anesNames.length > 0
+                        ? stats.anesNames.join(", ")
+                        : "無排班"
+                    }
+                    className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-black transition-all cursor-help ${
+                      isHeader
+                        ? stats.anesCount > 0
+                          ? "bg-rose-100 text-rose-600 shadow-sm"
+                          : "bg-white/20 text-white/40"
+                        : stats.anesCount > 0
+                          ? "bg-rose-50 text-rose-600 shadow-sm border border-rose-100"
+                          : "bg-slate-50 text-slate-300 border border-slate-100"
+                    }`}
+                  >
+                    <span>A:{stats.anesCount}</span>
+                  </div>
+                </div>
+              );
 
               return (
                 <div className="border border-teal-100 rounded-xl mt-2 overflow-hidden bg-white shadow-sm">
@@ -2816,36 +2855,30 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                         </button>
                       )}
                     </div>
-                    {/* Per-designation counts */}
-                    <div className="flex items-center gap-1.5 flex-wrap justify-end">
-                      <span className="text-[10px] text-white/70 font-bold shrink-0">
-                        人員：
-                      </span>
-                      {Object.entries(DESG_ABBR).map(([key, abbr]) => {
-                        const cnt = stationCounts[key] || 0;
-                        const names = groupNames[key] || [];
-                        return (
-                          <div
-                            key={key}
-                            title={
-                              names.length > 0 ? names.join(", ") : "無排班"
-                            }
-                            className={`flex items-center gap-0.5 px-2 py-0.5 rounded-full text-xs font-black transition-all cursor-help ${cnt > 0 ? "bg-white text-teal-700 shadow-sm" : "bg-white/20 text-white/40"}`}
-                          >
-                            <span>
-                              {abbr}:{cnt}
+                    {/* Per-designation counts by location */}
+                    <div className="flex items-center gap-1 flex-wrap justify-end">
+                      {(currentUserLocation === "全部" ||
+                        currentUserLocation === "北投") && (
+                        <div className="flex items-center gap-1.5">
+                          {currentUserLocation === "全部" && (
+                            <span className="text-[10px] text-white/70 font-black ml-1.5">
+                              北投:
                             </span>
-                          </div>
-                        );
-                      })}
-                      <div
-                        title={
-                          anesNames.length > 0 ? anesNames.join(", ") : "無排班"
-                        }
-                        className={`flex items-center gap-0.5 px-2 py-0.5 rounded-full text-xs font-black transition-all cursor-help ${anesCount > 0 ? "bg-rose-100 text-rose-600 shadow-sm" : "bg-white/20 text-white/40"}`}
-                      >
-                        <span>A:{anesCount}</span>
-                      </div>
+                          )}
+                          {renderPersonnelSummary(beitouStats, true)}
+                        </div>
+                      )}
+                      {(currentUserLocation === "全部" ||
+                        currentUserLocation === "大直") && (
+                        <div className="flex items-center gap-1.5">
+                          {currentUserLocation === "全部" && (
+                            <span className="text-[10px] text-white/70 font-black ml-1.5">
+                              大直:
+                            </span>
+                          )}
+                          {renderPersonnelSummary(dazhiStats, true)}
+                        </div>
+                      )}
                     </div>
                   </div>
 
