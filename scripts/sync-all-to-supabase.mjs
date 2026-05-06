@@ -9,7 +9,7 @@ const supabaseKey =
   process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-// --- [1/2] 每日統計 (醫令數與客戶量) ---
+// --- [1/3] 每日統計 (醫令數與客戶量) ---
 async function syncDailyStats(session, startDate, endDate) {
   console.log(`\n[sync-stats] [1/2] 同步每日統計：${startDate} ~ ${endDate}`);
 
@@ -135,7 +135,7 @@ async function syncDailyStats(session, startDate, endDate) {
   console.log(`[sync-stats] ✅ 每日統計同步完成！`);
 }
 
-// --- [2/2] 放射師工作量統計 ---
+// --- [2/3] 放射師工作量統計 ---
 // --- 放射師工作量統計 ---
 // --- 放射師工作量統計 ---
 async function syncRadiographerWorkload(
@@ -328,7 +328,7 @@ async function syncRadiographerWorkload(
   console.log(`[sync-stats] [SF API] ✅ 同步成功！`);
 }
 
-// --- [3/3] 影像醫師工作量分類 (大套/小套) ---
+// --- [1/3] 每日統計 (醫令數與客戶量) ---
 async function syncPhysicianWorkload(session, startDate, endDate) {
   console.log(
     `\n[sync-stats] [3/3] 同步影像醫師工作量分類：${startDate} ~ ${endDate}`,
@@ -543,6 +543,50 @@ if (process.argv[1] === __filename) {
 
     const session = await getSalesforceSession();
 
+    // --- [自動排程/遠端觸發] 偵測到環境變數時，自動執行指定區塊 ---
+    if (process.env.SYNC_BLOCKS) {
+      console.log(
+        `\n[自動排程/遠端觸發] 已偵測到參數，自動執行區塊: ${process.env.SYNC_BLOCKS}`,
+      );
+      const blocks = process.env.SYNC_BLOCKS.split(",").map(Number);
+
+      try {
+        if (blocks.includes(1)) {
+          const end1 = new Date(today);
+          end1.setDate(today.getDate() + 30);
+          await syncDailyStats(session, todayStr, formatDate(end1));
+        }
+        if (blocks.includes(2)) {
+          const y = today.getFullYear();
+          const mo = today.getMonth() + 1;
+          const firstDay = `${y}-${String(mo).padStart(2, "0")}-01`;
+          const lastDay = formatDate(new Date(y, mo, 0));
+          let prevY = y;
+          let prevMo = mo - 1;
+          if (prevMo === 0) {
+            prevMo = 12;
+            prevY--;
+          }
+          const rs = `${prevY}-${String(prevMo).padStart(2, "0")}-26`;
+          const re = `${y}-${String(mo).padStart(2, "0")}-25`;
+          await syncRadiographerWorkload(session, firstDay, lastDay, rs, re);
+        }
+        if (blocks.includes(3)) {
+          const end3 = new Date(today);
+          end3.setDate(today.getDate() + 5);
+          await syncPhysicianWorkload(session, todayStr, formatDate(end3));
+        }
+        rl.close();
+        console.log("\n✨ 自動排程同步作業已順利完成！");
+        process.exit(0);
+      } catch (err) {
+        console.error("\n❌ 自動排程執行失敗:", err);
+        rl.close();
+        process.exit(1);
+      }
+      return; // 結束執行
+    }
+
     // ─── [1/3] 每日統計 ───────────────────────────────────────────
     console.log("\n--- [1/3] 每日統計 (醫令數與客戶量) ---");
     const doBlock1 = await askYesNo("要同步此區塊嗎？");
@@ -576,12 +620,17 @@ if (process.argv[1] === __filename) {
       // 報告校對預設：上個月26號 ~ 本月25號
       let prevY = y;
       let prevMo = mo - 1;
-      if (prevMo === 0) { prevMo = 12; prevY--; }
+      if (prevMo === 0) {
+        prevMo = 12;
+        prevY--;
+      }
       const defaultReportStart = `${prevY}-${String(prevMo).padStart(2, "0")}-26`;
       const defaultReportEnd = `${y}-${String(mo).padStart(2, "0")}-25`;
 
       console.log(`  (各檢查量預設：本月 ${firstDay} ~ ${lastDay})`);
-      console.log(`  (影像報告校對預設：${defaultReportStart} ~ ${defaultReportEnd})`);
+      console.log(
+        `  (影像報告校對預設：${defaultReportStart} ~ ${defaultReportEnd})`,
+      );
 
       const s2 = await askDate("各檢查量開始日期", firstDay);
       const e2 = await askDate("各檢查量結束日期", lastDay);

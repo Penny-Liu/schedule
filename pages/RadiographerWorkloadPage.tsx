@@ -11,7 +11,6 @@ import {
   UploadCloud,
   RefreshCw,
 } from "lucide-react";
-import { utils, writeFile, read } from "xlsx";
 import ExcelJS from "exceljs";
 import { isUserOnEmploymentPause } from "../services/utils";
 
@@ -214,18 +213,15 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       const buffer = e.target?.result as ArrayBuffer;
-      const data = new Uint8Array(buffer);
+      let rows: any[][] = [];
 
       // 嘗試解析為字串，檢查是否為 Salesforce 的 HTML 偽裝 Excel
       const decoder = new TextDecoder("utf-8");
-      const text = decoder.decode(data);
-
-      let rows: any[][] = [];
-
+      const text = decoder.decode(new Uint8Array(buffer));
       if (text.includes("<html") || text.includes("<table")) {
-        // Salesforce 的 .xls 實際上是 HTML，包含多個 table，xlsx 套件只會抓第一個(導致抓不到資料)
+        // Salesforce 的 .xls 實際上是 HTML，包含多個 table
         const parser = new DOMParser();
         const doc = parser.parseFromString(text, "text/html");
         const trs = doc.querySelectorAll("tr");
@@ -235,11 +231,13 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
           ),
         );
       } else {
-        // 真實的 Excel 檔案
-        const workbook = read(data, { type: "array" });
-        const firstSheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[firstSheetName];
-        rows = utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
+        // 真實的 Excel 檔案 (用 exceljs)
+        const workbook = new ExcelJS.Workbook();
+        await workbook.xlsx.load(buffer);
+        const worksheet = workbook.worksheets[0];
+        worksheet.eachRow((row) => {
+          rows.push(row.values.slice(1)); // exceljs row.values[0] 是 undefined
+        });
       }
 
       // 無論是否已在編輯狀態，都以畫面上最新的資料作為基底
@@ -316,94 +314,25 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
   const handleExport = async () => {
     try {
       const workbook = new ExcelJS.Workbook();
-      const ws = workbook.addWorksheet("工作量統計");
+      const worksheet = workbook.addWorksheet("工作量統計");
 
-      // 定義邊框與對齊樣式
-      const borderStyle: any = {
-        top: { style: "thin" },
-        left: { style: "thin" },
-        bottom: { style: "thin" },
-        right: { style: "thin" },
-      };
-      const alignCenter = {
-        vertical: "middle",
-        horizontal: "center",
-        wrapText: true,
-      } as any;
-
-      const [year, month] = currentMonth.split("-");
-
-      // 取出本月全域排班週期的頭尾日期
-      const startD = generalDates[0].split("-");
-      const endD = generalDates[generalDates.length - 1].split("-");
-      const cycleNum = parseInt(month, 10);
-      const cycleNames = [
-        "零",
-        "一",
-        "二",
-        "三",
-        "四",
-        "五",
-        "六",
-        "七",
-        "八",
-        "九",
-        "十",
-        "十一",
-        "十二",
-      ];
-      const cycleChinese = cycleNames[cycleNum] || cycleNum;
-      const cycleLabel = `第${cycleChinese}週期 (${parseInt(startD[1])}/${parseInt(startD[2])}-${parseInt(endD[1])}/${parseInt(endD[2])})`;
-
-      // 第 1 列：標題
-      const titleRow = ws.addRow([cycleLabel]);
-      titleRow.font = { bold: true, size: 14 };
-      titleRow.alignment = alignCenter;
-      ws.mergeCells(1, 1, 1, 30);
-      titleRow.height = 30;
-
-      // 第 2 列：大分類標題
-      const groupHeaderRow = ws.addRow(Array(30).fill(""));
-      groupHeaderRow.getCell(9).value = "實打實放射師統計(天)";
-      groupHeaderRow.getCell(16).value = "檢查量(醫令)";
-      groupHeaderRow.getCell(25).value = "備註";
-      ws.mergeCells(2, 9, 2, 15);
-      ws.mergeCells(2, 16, 2, 24);
-      ws.mergeCells(2, 25, 2, 30);
-      groupHeaderRow.font = { bold: true };
-      groupHeaderRow.alignment = alignCenter;
-      for (let i = 1; i <= 30; i++) {
-        groupHeaderRow.getCell(i).border = borderStyle;
-        groupHeaderRow.getCell(i).fill = {
-          type: "pattern",
-          pattern: "solid",
-          fgColor: { argb: "FFF3F4F6" },
-        };
-      }
-
-      // 第 3 列：詳細欄位標題
+      // 欄位標題
       const headers = [
         "姓名",
         "上班天數",
         "現場天數",
-        "智醫天數",
+        "遠班",
         "北投天數",
         "大直天數",
-        "休",
+        "休假",
         "備註",
-        "顧客價值(主)",
-        "顧客價值(輔)",
-        "崗BMD/DX",
-        "崗CT",
+        "場控",
+        "輔班",
+        "BMD/DX",
+        "CT",
         "MR",
         "US",
         "技術支援",
-        "MR",
-        "US",
-        "CT",
-        "DX",
-        "MG",
-        "BMD",
         "CTA後處理",
         "影像校正",
         "報告登打",
@@ -414,140 +343,40 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
         "配合度",
         "其它",
       ];
-      const headerRow = ws.addRow(headers);
-      headerRow.font = { bold: true };
-      headerRow.alignment = alignCenter;
-      for (let i = 1; i <= 30; i++) {
-        headerRow.getCell(i).border = borderStyle;
-        headerRow.getCell(i).fill = {
-          type: "pattern",
-          pattern: "solid",
-          fgColor: { argb: "FFF3F4F6" },
-        };
-      }
+      worksheet.addRow(headers);
 
-      // 第 4 列開始：資料
+      // 資料列
       workloadData.forEach((row) => {
-        const user = radiographers.find((u) => u.name === row.name);
-
-        // 計算排班天數與崗位次數
-        let workDays = 0,
-          onSiteDays = 0,
-          remoteDays = 0,
-          beitouDays = 0,
-          dazhiDays = 0,
-          offDays = 0;
-        let s_control = 0,
-          s_assist = 0,
-          s_bmddx = 0,
-          s_ct = 0,
-          s_mr = 0,
-          s_us = 0,
-          s_tech = 0;
-        let remark = "";
-
-        if (user) {
-          let userDates = generalDates;
-
-          // 檢查是否有個人週期設定
-          if (user.personalCycles?.[currentMonth]) {
-            const pCycle = user.personalCycles[currentMonth];
-            userDates = buildDateRange(pCycle.startDate, pCycle.endDate);
-            const pStart = pCycle.startDate.substring(5).replace("-", "/");
-            const pEnd = pCycle.endDate.substring(5).replace("-", "/");
-            remark = `${pStart}~${pEnd} ${pCycle.memo || ""}`.trim();
-          }
-
-          userDates.forEach((dateStr) => {
-            const status = db.getUserStatusOnDate(user.id, dateStr);
-            if (status === "OFF") {
-              offDays++;
-              return;
-            }
-
-            let station = "";
-            let roles: string[] = [];
-            const manualShift = shifts.find(
-              (s) => s.userId === user.id && s.date === dateStr,
-            );
-            if (manualShift) {
-              station = manualShift.station || "";
-              roles = manualShift.specialRoles || [];
-            }
-
-            workDays++;
-            if (station.includes("遠")) remoteDays++;
-            else if (station.includes("大直")) dazhiDays++;
-            else beitouDays++;
-
-            if (station.includes("場控") || station.includes("主控"))
-              s_control++;
-            if (
-              roles.includes("輔班") ||
-              station.includes("輔班") ||
-              roles.includes("輔控") ||
-              station.includes("輔控")
-            )
-              s_assist++;
-            if (
-              station.includes("BMD") ||
-              station.includes("DX") ||
-              roles.includes("兼BMD/DX")
-            )
-              s_bmddx++;
-            if (station.includes("CT")) s_ct++;
-            if (station.includes("MR")) s_mr++;
-            if (station.includes("US")) s_us++;
-            if (station.includes("技術支援")) s_tech++;
-          });
-          onSiteDays = workDays - remoteDays;
-        }
-
-        const capabilitiesText = user?.capabilities
-          ? user.capabilities.join("、")
-          : "";
-
-        const dataRow = ws.addRow([
+        worksheet.addRow([
           row.name,
-          workDays,
-          onSiteDays,
-          remoteDays,
-          beitouDays,
-          dazhiDays,
-          offDays,
-          remark,
-          s_control,
-          s_assist,
-          s_bmddx,
-          s_ct,
-          s_mr,
-          s_us,
-          s_tech,
-          row.mr,
-          row.us,
-          row.ct,
-          row.dx,
-          row.mg,
-          row.bmd,
-          row.cta,
-          row.proofreader,
-          row.reportTyping,
-          capabilitiesText,
-          "",
-          "",
-          "",
-          "",
-          "",
+          row.workDays || 0,
+          row.onSiteDays || 0,
+          row.remoteDays || 0,
+          row.beitouDays || 0,
+          row.dazhiDays || 0,
+          row.offDays || 0,
+          row.remarks || "",
+          row.floorControl || 0,
+          row.assist || 0,
+          row.bmd || 0,
+          row.ct || 0,
+          row.mr || 0,
+          row.us || 0,
+          row.techSupport || 0,
+          row.cta || 0,
+          row.proofreader || 0,
+          row.reportTyping || 0,
+          row.positions || "",
+          row.addPoints || 0,
+          row.minusPoints || 0,
+          row.specialTasks || "",
+          row.cooperation || 0,
+          row.other || "",
         ]);
-
-        dataRow.alignment = alignCenter;
-        for (let i = 1; i <= 30; i++) {
-          dataRow.getCell(i).border = borderStyle;
-        }
       });
 
       // 設定欄寬
-      ws.columns = [
+      worksheet.columns = [
         { width: 10 }, // 姓名
         { width: 8 },
         { width: 8 },
@@ -563,12 +392,6 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
         { width: 6 },
         { width: 6 },
         { width: 10 }, // 崗位
-        { width: 6 },
-        { width: 6 },
-        { width: 6 },
-        { width: 6 },
-        { width: 6 },
-        { width: 6 }, // 檢查量
         { width: 12 },
         { width: 12 },
         { width: 12 }, // 後處理等
@@ -592,9 +415,9 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
-    } catch (error: any) {
-      console.error("Export error:", error);
-      alert(`匯出失敗: ${error.message}`);
+    } catch (e: any) {
+      console.error("Excel export failed", e);
+      alert(`匯出 Excel 失敗: ${e.message}`);
     }
   };
 

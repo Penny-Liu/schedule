@@ -20,8 +20,9 @@ import {
   ChevronRight,
   AlertCircle,
   Activity,
+  RefreshCw,
 } from "lucide-react";
-import { utils, writeFile } from "xlsx";
+import ExcelJS from "exceljs";
 import { getEmploymentPause, isUserOnEmploymentPause } from "../services/utils";
 import RadiographerWorkloadPage from "../pages/RadiographerWorkloadPage";
 
@@ -115,6 +116,7 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
   const [radiographers, setRadiographers] = useState<User[]>([]);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   // ── Default dates for a month (already moved up) ──
 
@@ -388,59 +390,104 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
     setSelectedMonth(`${ny}-${String(nm).padStart(2, "0")}`);
   };
 
-  // ── Export Excel ──
-  const handleExport = () => {
+  // ── Trigger Backend Sync ──
+  const handleSyncStats = async () => {
+    const input = window.prompt(
+      "請輸入要同步的區塊 (使用逗號分隔)：\n1: [1/3] 每日統計 (醫令數與客戶量)\n2: [2/3] 各站檢查量\n3: [3/3] 影像醫師工作量分類\n\n例如：輸入 1,3 即代表更新區塊 1 與 3。",
+      "1,3",
+    );
+    if (!input) return;
+
+    const blocks = input
+      .split(",")
+      .map((s) => parseInt(s.trim(), 10))
+      .filter((n) => !isNaN(n));
+    if (blocks.length === 0) {
+      alert("請輸入有效的區塊代碼！");
+      return;
+    }
+
+    setIsSyncing(true);
     try {
-      const excelData = statsData.map((row) => ({
-        姓名: row.name,
-        上班天數: row.totalWork,
-        現場天數: row.onSite,
-        遠班: row.remote,
-        北投天數: row.beitou,
-        大直天數: row.dazhi,
-        休假: row.off,
-        備註: row.remarks,
-        場控: row.floorControl,
-        輔班: row.assist,
-        "BMD/DX": row.bmd,
-        CT: row.ct,
-        MR: row.mr,
-        US: row.us,
-        技術支援: row.techSupport,
-        開機: row.opening,
-        晚班: row.late,
-        排班: row.scheduler,
-        校對: row.proofreader,
-      }));
+      // 假設後端 API 路由為 /api/sync-stats
+      const response = await fetch("/api/sync-stats", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ blocks }),
+      });
 
-      const ws = utils.json_to_sheet(excelData);
-      const wscols = [
-        { wch: 10 },
-        { wch: 8 },
-        { wch: 8 },
-        { wch: 8 },
-        { wch: 8 },
-        { wch: 8 },
-        { wch: 8 },
-        { wch: 12 }, // 備註
-        { wch: 8 },
-        { wch: 8 },
-        { wch: 8 },
-        { wch: 8 },
-        { wch: 8 },
-        { wch: 8 },
-        { wch: 10 },
-        { wch: 8 },
-        { wch: 8 },
-        { wch: 8 },
-        { wch: 8 },
+      if (!response.ok) throw new Error("同步請求失敗，請確認後端服務狀態。");
+      alert(`已成功觸發後台同步！\n(區塊: ${blocks.join(", ")})`);
+    } catch (err: any) {
+      alert(`同步發生錯誤: ${err.message}`);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  // ── Export Excel ──
+  const handleExport = async () => {
+    try {
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet("工作統計");
+      // 欄位標題
+      const headers = [
+        "姓名",
+        "上班天數",
+        "現場天數",
+        "遠班",
+        "北投天數",
+        "大直天數",
+        "休假",
+        "備註",
+        "場控",
+        "輔班",
+        "BMD/DX",
+        "CT",
+        "MR",
+        "US",
+        "技術支援",
+        "開機",
+        "晚班",
+        "排班",
+        "校對",
       ];
-      ws["!cols"] = wscols;
+      worksheet.addRow(headers);
 
-      const wb = utils.book_new();
-      utils.book_append_sheet(wb, ws, "工作統計");
+      // 資料列
+      statsData.forEach((row) => {
+        worksheet.addRow([
+          row.name,
+          row.totalWork,
+          row.onSite,
+          row.remote,
+          row.beitou,
+          row.dazhi,
+          row.off,
+          row.remarks,
+          row.floorControl,
+          row.assist,
+          row.bmd,
+          row.ct,
+          row.mr,
+          row.us,
+          row.techSupport,
+          row.opening,
+          row.late,
+          row.scheduler,
+          row.proofreader,
+        ]);
+      });
+
       const fileName = `工作統計_${selectedCycleId === "rolling" ? currentDate.toISOString().slice(0, 7) : "週期報表"}.xlsx`;
-      writeFile(wb, fileName);
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = fileName;
+      link.click();
     } catch (e) {
       console.error("Excel export failed", e);
       alert("匯出 Excel 失敗，請稍後再試");
@@ -509,6 +556,25 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
                 </button>
               )}
             </div>
+
+            {/* Sync Button */}
+            {isSupervisorOrAdmin && (
+              <button
+                onClick={handleSyncStats}
+                disabled={isSyncing}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-bold transition-all shadow-sm ${
+                  isSyncing
+                    ? "bg-slate-200 text-slate-500 cursor-not-allowed"
+                    : "bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-200"
+                }`}
+              >
+                <RefreshCw
+                  size={14}
+                  className={isSyncing ? "animate-spin" : ""}
+                />
+                {isSyncing ? "同步中..." : "後台同步"}
+              </button>
+            )}
 
             {activeTab === "stats" && (
               <>
