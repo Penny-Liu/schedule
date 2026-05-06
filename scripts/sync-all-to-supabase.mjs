@@ -555,57 +555,64 @@ if (process.argv[1] === __filename) {
     // --- [自動排程/遠端觸發] 偵測到環境變數時，自動執行指定區塊 ---
     if (process.env.SYNC_PAYLOAD || process.env.SYNC_BLOCKS) {
       try {
+        let tasks = [];
         if (process.env.SYNC_PAYLOAD) {
-          const tasks = JSON.parse(process.env.SYNC_PAYLOAD);
-          console.log(`\n[自動排程/遠端觸發] 接收到同步任務，開始執行...`);
-
-          for (const task of tasks) {
-            if (!task.selected) continue;
-
-            if (task.id === 1) {
-              const end1 = new Date(today);
-              end1.setDate(today.getDate() + 30);
-              await syncDailyStats(
-                session,
-                task.start || todayStr,
-                task.end || formatDate(end1),
-              );
-            }
-            if (task.id === 2) {
-              const y = today.getFullYear();
-              const mo = today.getMonth() + 1;
-              const firstDay = `${y}-${String(mo).padStart(2, "0")}-01`;
-              const lastDay = formatDate(new Date(y, mo, 0));
-              let prevY = y;
-              let prevMo = mo - 1;
-              if (prevMo === 0) {
-                prevMo = 12;
-                prevY--;
-              }
-              const rs = `${prevY}-${String(prevMo).padStart(2, "0")}-26`;
-              const re = `${y}-${String(mo).padStart(2, "0")}-25`;
-
-              await syncRadiographerWorkload(
-                session,
-                task.start || firstDay,
-                task.end || lastDay,
-                task.reportStart || rs,
-                task.reportEnd || re,
-              );
-            }
-            if (task.id === 3) {
-              const end3 = new Date(today);
-              end3.setDate(today.getDate() + 5);
-              await syncPhysicianWorkload(
-                session,
-                task.start || todayStr,
-                task.end || formatDate(end3),
-              );
-            }
-          }
+          tasks = JSON.parse(process.env.SYNC_PAYLOAD);
         } else {
-          console.log("\n[自動排程] 使用舊版 SYNC_BLOCKS 參數...");
-          // 若有人還是用舊的 SYNC_BLOCKS，可以當作備用 (防呆)
+          console.log(
+            "\n[自動排程] 使用舊版 SYNC_BLOCKS 參數，轉換為預設任務...",
+          );
+          const blocks = process.env.SYNC_BLOCKS.split(",").map(Number);
+          if (blocks.includes(1)) tasks.push({ id: 1, selected: true });
+          if (blocks.includes(2)) tasks.push({ id: 2, selected: true });
+          if (blocks.includes(3)) tasks.push({ id: 3, selected: true });
+        }
+
+        console.log(`\n[自動排程/遠端觸發] 接收到同步任務，開始執行...`);
+
+        for (const task of tasks) {
+          if (!task.selected) continue;
+
+          if (task.id === 1) {
+            const end1 = new Date(today);
+            end1.setDate(today.getDate() + 30);
+            await syncDailyStats(
+              session,
+              task.start || todayStr,
+              task.end || formatDate(end1),
+            );
+          }
+          if (task.id === 2) {
+            const y = today.getFullYear();
+            const mo = today.getMonth() + 1;
+            const firstDay = `${y}-${String(mo).padStart(2, "0")}-01`;
+            const lastDay = formatDate(new Date(y, mo, 0));
+            let prevY = y;
+            let prevMo = mo - 1;
+            if (prevMo === 0) {
+              prevMo = 12;
+              prevY--;
+            }
+            const rs = `${prevY}-${String(prevMo).padStart(2, "0")}-26`;
+            const re = `${y}-${String(mo).padStart(2, "0")}-25`;
+
+            await syncRadiographerWorkload(
+              session,
+              task.start || firstDay,
+              task.end || lastDay,
+              task.reportStart || rs,
+              task.reportEnd || re,
+            );
+          }
+          if (task.id === 3) {
+            const end3 = new Date(today);
+            end3.setDate(today.getDate() + 5);
+            await syncPhysicianWorkload(
+              session,
+              task.start || todayStr,
+              task.end || formatDate(end3),
+            );
+          }
         }
         rl.close();
         console.log("\n✨ 自動排程同步作業已順利完成！");
