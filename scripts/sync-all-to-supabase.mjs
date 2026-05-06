@@ -541,7 +541,16 @@ if (process.argv[1] === __filename) {
     const today = new Date();
     const todayStr = formatDate(today);
 
-    const session = await getSalesforceSession();
+    let session;
+    try {
+      session = await getSalesforceSession();
+    } catch (err) {
+      console.error(
+        `\n❌ 無法取得 Salesforce 連線憑證 (可能為網路超時或伺服器無回應): ${err.message}`,
+      );
+      rl.close();
+      process.exit(1);
+    }
 
     // --- [自動排程/遠端觸發] 偵測到環境變數時，自動執行指定區塊 ---
     if (process.env.SYNC_BLOCKS) {

@@ -409,15 +409,69 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
 
     setIsSyncing(true);
     try {
-      // 假設後端 API 路由為 /api/sync-stats
-      const response = await fetch("/api/sync-stats", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ blocks }),
-      });
+      // 判斷是否為本地端開發環境
+      const isLocalhost =
+        window.location.hostname === "localhost" ||
+        window.location.hostname === "127.0.0.1";
 
-      if (!response.ok) throw new Error("同步請求失敗，請確認後端服務狀態。");
-      alert(`已成功觸發後台同步！\n(區塊: ${blocks.join(", ")})`);
+      if (isLocalhost) {
+        // 本地端維持原本打本機排程伺服器的邏輯
+        const response = await fetch("/api/sync-stats", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ blocks }),
+        });
+        if (!response.ok) throw new Error("同步請求失敗，請確認後端服務狀態。");
+        alert(`[本地端] 已成功觸發後台同步！\n(區塊: ${blocks.join(", ")})`);
+      } else {
+        // 線上版觸發 GitHub Actions
+        let ghToken = localStorage.getItem("GITHUB_PAT");
+        if (!ghToken) {
+          ghToken = window.prompt(
+            "請輸入您的 GitHub Personal Access Token (PAT) 來觸發雲端同步：\n(只需輸入一次，會儲存在您的瀏覽器中)",
+          );
+          if (!ghToken) return;
+          localStorage.setItem("GITHUB_PAT", ghToken.trim());
+        }
+
+        // 🔴 請將 YOUR_GITHUB_USERNAME 換成您的 GitHub 帳號名稱！
+        const owner = "Penny-Liu";
+        const repo = "schedule";
+        const workflowId = "sync-stats.yml";
+
+        const response = await fetch(
+          `https://api.github.com/repos/${owner}/${repo}/actions/workflows/${workflowId}/dispatches`,
+          {
+            method: "POST",
+            headers: {
+              Accept: "application/vnd.github.v3+json",
+              Authorization: `Bearer ${ghToken}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              ref: "main", // 若您的 GitHub 預設分支是 master，請將這裡改為 master
+              inputs: { blocks: input },
+            }),
+          },
+        );
+
+        if (
+          response.status === 401 ||
+          response.status === 403 ||
+          response.status === 404
+        ) {
+          localStorage.removeItem("GITHUB_PAT");
+          throw new Error(
+            "GitHub Token 無效、沒有 repo 權限，或找不到該儲存庫。請重新整理頁面後再試一次！",
+          );
+        }
+        if (!response.ok)
+          throw new Error(`GitHub API 請求失敗 (狀態碼: ${response.status})`);
+
+        alert(
+          `[雲端] 已成功觸發 GitHub Actions 同步！\n由於雲端背景執行需要時間，請稍後幾分鐘再重新整理頁面查看最新資料。`,
+        );
+      }
     } catch (err: any) {
       alert(`同步發生錯誤: ${err.message}`);
     } finally {
