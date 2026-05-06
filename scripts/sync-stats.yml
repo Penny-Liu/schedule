@@ -29,8 +29,8 @@ jobs:
       - name: 執行同步腳本
         env:
           # 請務必在 GitHub 專案的 Settings -> Secrets and variables -> Actions 中設定這些變數！
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
           SALESFORCE_CLIENT_ID: ${{ secrets.SALESFORCE_CLIENT_ID }}
           SALESFORCE_CLIENT_SECRET: ${{ secrets.SALESFORCE_CLIENT_SECRET }}
           SALESFORCE_USERNAME: ${{ secrets.SALESFORCE_USERNAME }}
