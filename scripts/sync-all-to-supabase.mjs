@@ -33,6 +33,9 @@ async function syncDailyStats(session, startDate, endDate) {
   const seenMR = new Set();
   const seenDazhiClient = new Set(); // 追蹤大直已計數客戶 (日期+Order)
 
+  const beitouOrders = new Set(); // 追蹤北投所有客戶 (日期+Order)
+  const dazhiTargetOrders = new Set(); // 追蹤大直符合條件的客戶 (日期+Order)
+
   const initStats = () => ({
     beitou_clients: 0,
     beitou_gi: 0,
@@ -48,6 +51,7 @@ async function syncDailyStats(session, startDate, endDate) {
     dazhi_ultrasound: 0,
     dazhi_ultrasound_heart: 0,
     dazhi_ultrasound_fibrosis: 0,
+    dazhi_beitou_overlap: 0, // 新增：同時有大直與北投檢查的重疊人數
   });
 
   result.records.forEach((r) => {
@@ -60,6 +64,9 @@ async function syncDailyStats(session, startDate, endDate) {
     const stats = dailyResults[date];
 
     if (loc === "北投") {
+      // 記錄北投的 Order
+      beitouOrders.add(`${date}_${orderId}`);
+
       if (name === "體檢總評") stats.beitou_clients++;
       if (name === "大腸鏡檢查") stats.beitou_gi++;
       if (name.includes("電腦斷層(顯影)")) stats.beitou_cta++;
@@ -91,6 +98,7 @@ async function syncDailyStats(session, startDate, endDate) {
         if (!seenDazhiClient.has(clientKey)) {
           stats.dazhi_clients++;
           seenDazhiClient.add(clientKey);
+          dazhiTargetOrders.add(clientKey); // 記錄大直目標客戶
         }
       }
 
@@ -100,6 +108,16 @@ async function syncDailyStats(session, startDate, endDate) {
         stats.dazhi_ultrasound++;
         if (name.includes("心臟")) stats.dazhi_ultrasound_heart++;
         if (name.includes("肝纖維")) stats.dazhi_ultrasound_fibrosis++;
+      }
+    }
+  });
+
+  // 計算大直與北投的重疊人數
+  dazhiTargetOrders.forEach((clientKey) => {
+    if (beitouOrders.has(clientKey)) {
+      const date = clientKey.split("_")[0];
+      if (dailyResults[date]) {
+        dailyResults[date].dazhi_beitou_overlap++;
       }
     }
   });
