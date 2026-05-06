@@ -8,14 +8,21 @@ export function getSalesforceEnv() {
   const clientSecret = process.env.SALESFORCE_CLIENT_SECRET;
   const username = process.env.SALESFORCE_USERNAME;
   const password = process.env.SALESFORCE_PASSWORD;
-  let loginBase = (
-    process.env.SALESFORCE_LOGIN_BASE_URL || DEFAULT_LOGIN_BASE
-  ).replace(/\/$/, "");
+  let loginBase = (process.env.SALESFORCE_LOGIN_BASE_URL || DEFAULT_LOGIN_BASE)
+    .trim()
+    .replace(/^["']|["']$/g, "")
+    .replace(/\/$/, "");
 
   // 如果網址沒有包含 http:// 或 https://，自動補上 https://
   if (!loginBase.startsWith("http://") && !loginBase.startsWith("https://")) {
     loginBase = `https://${loginBase}`;
   }
+
+  // 防呆機制：如果使用者不小心填到 Lightning 介面網址，自動轉換為 API 專用的 my.salesforce.com 網址
+  loginBase = loginBase.replace(
+    /\.lightning\.force\.com/i,
+    ".my.salesforce.com",
+  );
 
   const missing = [
     ["SALESFORCE_CLIENT_ID", clientId],
