@@ -6,15 +6,17 @@ const app = express();
 app.use(express.json());
 
 // 執行同步腳本的 Helper
-const runSyncBlocks = (blocks) => {
+const runSyncBlocks = (payloadStr) => {
   return new Promise((resolve, reject) => {
-    const blockStr = blocks.join(",");
-    console.log(`[Sync] 開始執行同步，指定區塊: ${blockStr}`);
+    console.log(`[Sync] 開始執行同步任務...`);
+
+    const envObj = { ...process.env };
+    if (payloadStr) envObj.SYNC_PAYLOAD = payloadStr;
 
     // 移除 shell: true 避免 Node 24 跳出警告，並支援跨平台 npm 指令
     const npmCmd = /^win/.test(process.platform) ? "npm.cmd" : "npm";
     const child = spawn(npmCmd, ["run", "sync-stats"], {
-      env: { ...process.env, SYNC_BLOCKS: blockStr },
+      env: envObj,
       stdio: "inherit", // 將輸出導向目前的終端機介面
     });
 
@@ -33,13 +35,13 @@ const runSyncBlocks = (blocks) => {
 // 1. 給前端呼叫的 API 端點
 app.post("/api/sync-stats", async (req, res) => {
   try {
-    const { blocks } = req.body;
-    if (!blocks || !Array.isArray(blocks)) {
-      return res.status(400).json({ error: "無效的區塊參數" });
+    const { syncPayload } = req.body;
+    if (!syncPayload) {
+      return res.status(400).json({ error: "無效的同步參數" });
     }
 
     // 改為 await 等待腳本確實執行完畢，再回應給前端
-    await runSyncBlocks(blocks);
+    await runSyncBlocks(syncPayload);
 
     res.json({ success: true, message: "同步任務已完成！" });
   } catch (err) {
@@ -53,7 +55,11 @@ cron.schedule(
   async () => {
     console.log("⏳ 觸發每日 14:00 自動排程：同步區塊 1 與 3");
     try {
-      await runSyncBlocks([1, 3]);
+      const defaultTasks = JSON.stringify([
+        { id: 1, selected: true },
+        { id: 3, selected: true },
+      ]);
+      await runSyncBlocks(defaultTasks);
       console.log("✅ 每日排程同步完成");
     } catch (err) {
       console.error("❌ 每日排程同步失敗:", err);

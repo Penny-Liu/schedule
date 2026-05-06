@@ -21,6 +21,7 @@ import {
   AlertCircle,
   Activity,
   RefreshCw,
+  X,
 } from "lucide-react";
 import ExcelJS from "exceljs";
 import { getEmploymentPause, isUserOnEmploymentPause } from "../services/utils";
@@ -117,6 +118,55 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
   const [savingId, setSavingId] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [syncModalOpen, setSyncModalOpen] = useState(false);
+  const [syncTasks, setSyncTasks] = useState(() => {
+    const today = new Date();
+    const y = today.getFullYear();
+    const mo = today.getMonth() + 1;
+    const todayStr = `${y}-${String(mo).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+    const end1 = new Date(today);
+    end1.setDate(today.getDate() + 30);
+    const defaultEnd1 = `${end1.getFullYear()}-${String(end1.getMonth() + 1).padStart(2, "0")}-${String(end1.getDate()).padStart(2, "0")}`;
+    const firstDay2 = `${y}-${String(mo).padStart(2, "0")}-01`;
+    const lastDay2 = new Date(y, mo, 0).toISOString().split("T")[0];
+    let prevY = y,
+      prevMo = mo - 1;
+    if (prevMo === 0) {
+      prevMo = 12;
+      prevY--;
+    }
+    const rs2 = `${prevY}-${String(prevMo).padStart(2, "0")}-26`;
+    const re2 = `${y}-${String(mo).padStart(2, "0")}-25`;
+    const end3 = new Date(today);
+    end3.setDate(today.getDate() + 5);
+    const defaultEnd3 = `${end3.getFullYear()}-${String(end3.getMonth() + 1).padStart(2, "0")}-${String(end3.getDate()).padStart(2, "0")}`;
+
+    return [
+      {
+        id: 1,
+        name: "每日統計 (醫令數與客戶量)",
+        selected: true,
+        start: todayStr,
+        end: defaultEnd1,
+      },
+      {
+        id: 2,
+        name: "各站檢查量與影像報告",
+        selected: false,
+        start: firstDay2,
+        end: lastDay2,
+        reportStart: rs2,
+        reportEnd: re2,
+      },
+      {
+        id: 3,
+        name: "影像醫師工作量分類",
+        selected: true,
+        start: todayStr,
+        end: defaultEnd3,
+      },
+    ];
+  });
 
   // ── Default dates for a month (already moved up) ──
 
@@ -390,24 +440,23 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
     setSelectedMonth(`${ny}-${String(nm).padStart(2, "0")}`);
   };
 
-  // ── Trigger Backend Sync ──
-  const handleSyncStats = async () => {
-    const input = window.prompt(
-      "請輸入要同步的區塊 (使用逗號分隔)：\n1: [1/3] 每日統計 (醫令數與客戶量)\n2: [2/3] 各站檢查量\n3: [3/3] 影像醫師工作量分類\n\n例如：輸入 1,3 即代表更新區塊 1 與 3。",
-      "1,3",
+  const updateSyncTask = (id: number, field: string, value: any) => {
+    setSyncTasks((prev) =>
+      prev.map((t) => (t.id === id ? { ...t, [field]: value } : t)),
     );
-    if (!input) return;
+  };
 
-    const blocks = input
-      .split(",")
-      .map((s) => parseInt(s.trim(), 10))
-      .filter((n) => !isNaN(n));
-    if (blocks.length === 0) {
-      alert("請輸入有效的區塊代碼！");
+  // ── Trigger Backend Sync ──
+  const executeSync = async () => {
+    const selectedTasks = syncTasks.filter((t) => t.selected);
+    if (selectedTasks.length === 0) {
+      alert("請至少選擇一個要同步的區塊！");
       return;
     }
 
     setIsSyncing(true);
+    const payloadStr = JSON.stringify(selectedTasks);
+
     try {
       // 判斷是否為本地端開發環境
       const isLocalhost =
@@ -419,10 +468,11 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
         const response = await fetch("/api/sync-stats", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ blocks }),
+          body: JSON.stringify({ syncPayload: payloadStr }),
         });
         if (!response.ok) throw new Error("同步請求失敗，請確認後端服務狀態。");
-        alert(`[本地端] 已成功觸發後台同步！\n(區塊: ${blocks.join(", ")})`);
+        alert(`[本地端] 已成功觸發後台同步！`);
+        setSyncModalOpen(false);
       } else {
         // 線上版觸發 GitHub Actions
         let ghToken = localStorage.getItem("GITHUB_PAT");
@@ -430,7 +480,10 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
           ghToken = window.prompt(
             "請輸入您的 GitHub Personal Access Token (PAT) 來觸發雲端同步：\n(只需輸入一次，會儲存在您的瀏覽器中)",
           );
-          if (!ghToken) return;
+          if (!ghToken) {
+            setIsSyncing(false);
+            return;
+          }
           localStorage.setItem("GITHUB_PAT", ghToken.trim());
         }
 
@@ -450,7 +503,9 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
             },
             body: JSON.stringify({
               ref: "main", // 若您的 GitHub 預設分支是 master，請將這裡改為 master
-              inputs: { blocks: input },
+              inputs: {
+                sync_payload: payloadStr,
+              },
             }),
           },
         );
@@ -471,6 +526,7 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
         alert(
           `[雲端] 已成功觸發 GitHub Actions 同步！\n由於雲端背景執行需要時間，請稍後幾分鐘再重新整理頁面查看最新資料。`,
         );
+        setSyncModalOpen(false);
       }
     } catch (err: any) {
       alert(`同步發生錯誤: ${err.message}`);
@@ -562,6 +618,127 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
 
   return (
     <div className="h-full flex flex-col bg-slate-50">
+      {/* Sync Modal */}
+      {syncModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in duration-200">
+            <div className="px-6 py-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
+              <h3 className="font-bold text-lg text-slate-800 flex items-center gap-2">
+                <RefreshCw size={20} className="text-indigo-600" />
+                後台資料同步設定
+              </h3>
+              <button
+                onClick={() => setSyncModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 transition-colors p-1 rounded-lg hover:bg-slate-200"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="p-6 flex flex-col gap-6 max-h-[70vh] overflow-y-auto">
+              {syncTasks.map((task) => (
+                <div
+                  key={task.id}
+                  className={`border rounded-xl p-4 transition-colors ${task.selected ? "border-indigo-200 bg-indigo-50/30" : "border-slate-200 bg-white"}`}
+                >
+                  <label className="flex items-center gap-3 cursor-pointer mb-2">
+                    <input
+                      type="checkbox"
+                      checked={task.selected}
+                      onChange={(e) =>
+                        updateSyncTask(task.id, "selected", e.target.checked)
+                      }
+                      className="w-5 h-5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                    />
+                    <span
+                      className={`font-bold ${task.selected ? "text-indigo-900" : "text-slate-600"}`}
+                    >
+                      [{task.id}/3] {task.name}
+                    </span>
+                  </label>
+                  {task.selected && (
+                    <div className="mt-4 pl-8 flex flex-col gap-3">
+                      <div className="flex items-center gap-3">
+                        <span className="text-sm font-medium text-slate-600 w-20">
+                          同步區間
+                        </span>
+                        <input
+                          type="date"
+                          value={task.start}
+                          onChange={(e) =>
+                            updateSyncTask(task.id, "start", e.target.value)
+                          }
+                          className="text-sm border border-slate-300 rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-indigo-500"
+                        />
+                        <span className="text-slate-400">~</span>
+                        <input
+                          type="date"
+                          value={task.end}
+                          onChange={(e) =>
+                            updateSyncTask(task.id, "end", e.target.value)
+                          }
+                          className="text-sm border border-slate-300 rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-indigo-500"
+                        />
+                      </div>
+                      {task.id === 2 && (
+                        <div className="flex items-center gap-3">
+                          <span className="text-sm font-medium text-slate-600 w-20">
+                            報告/校對
+                          </span>
+                          <input
+                            type="date"
+                            value={task.reportStart}
+                            onChange={(e) =>
+                              updateSyncTask(
+                                task.id,
+                                "reportStart",
+                                e.target.value,
+                              )
+                            }
+                            className="text-sm border border-slate-300 rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-indigo-500"
+                          />
+                          <span className="text-slate-400">~</span>
+                          <input
+                            type="date"
+                            value={task.reportEnd}
+                            onChange={(e) =>
+                              updateSyncTask(
+                                task.id,
+                                "reportEnd",
+                                e.target.value,
+                              )
+                            }
+                            className="text-sm border border-slate-300 rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-indigo-500"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+            <div className="px-6 py-4 bg-slate-50 flex justify-end gap-3 border-t border-slate-100">
+              <button
+                onClick={() => setSyncModalOpen(false)}
+                className="px-5 py-2 bg-white border border-slate-300 rounded-lg text-sm font-bold text-slate-700 hover:bg-slate-50 transition-colors"
+              >
+                取消
+              </button>
+              <button
+                onClick={executeSync}
+                disabled={isSyncing}
+                className="px-5 py-2 bg-indigo-600 text-white rounded-lg text-sm font-bold hover:bg-indigo-700 flex items-center gap-2 transition-colors disabled:opacity-50"
+              >
+                <RefreshCw
+                  size={16}
+                  className={isSyncing ? "animate-spin" : ""}
+                />
+                {isSyncing ? "處理中..." : "開始同步"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex-none px-6 py-4 bg-white border-b border-slate-200 shadow-sm z-10">
         <div className="flex justify-between items-center">
@@ -614,7 +791,7 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
             {/* Sync Button */}
             {isSupervisorOrAdmin && (
               <button
-                onClick={handleSyncStats}
+                onClick={() => setSyncModalOpen(true)}
                 disabled={isSyncing}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-bold transition-all shadow-sm ${
                   isSyncing

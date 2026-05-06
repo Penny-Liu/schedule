@@ -6,10 +6,9 @@ on:
     - cron: "0 6 * * *"
   workflow_dispatch:
     inputs:
-      blocks:
-        description: "同步區塊 (例如 1,3)"
+      sync_payload:
+        description: "JSON payload for custom sync"
         required: false
-        default: "1,3"
 
 jobs:
   sync:
