@@ -360,13 +360,15 @@ async function syncPhysicianWorkload(session, startDate, endDate) {
         Order__c,
         Image_Report__c, 
         ResourceCategory__c, 
-        CheckupName__c, 
-        CheckStartDate__c
+        CheckupName__c,
+        CheckStartDate__c,
+        Interpretation_Doctor__r.Name,
+        Location__c
       FROM CheckupReservation__c 
       WHERE CheckStartDate__c >= ${startDate}
         AND CheckStartDate__c <= ${endDate}
         AND Checkup_Status__c = '10'
-        AND Location__c = '北投'
+        AND (Location__c LIKE '北投%' OR Location__c LIKE '大直%')
   `.trim();
 
   const result = await runSoqlQuery({ ...session, soql });
@@ -376,7 +378,7 @@ async function syncPhysicianWorkload(session, startDate, endDate) {
   );
 
   // 第一階段：依照 日期 -> 醫令 (Order) 進行彙整，判斷該客戶的套裝類別
-  const orderWorkload = {}; // { date: { orderId: { mrCount, hasSpecialCT, doctors: Set } } }
+  const orderWorkload = {}; // { date: { orderId: { mrCount, hasSpecialCT, location, doctors: Set } } }
 
   records.forEach((r) => {
     const date = r.CheckStartDate__c;
@@ -388,6 +390,7 @@ async function syncPhysicianWorkload(session, startDate, endDate) {
       orderWorkload[date][orderId] = {
         mrCount: 0,
         hasSpecialCT: false,
+        location: (r.Location__c || "").trim(),
         doctors: new Set(),
       };
     }
@@ -412,6 +415,7 @@ async function syncPhysicianWorkload(session, startDate, endDate) {
     let docName =
       r.Image_assignment__r?.Name ||
       r.Order__r?.Image_assignment__r?.Name ||
+      r.Interpretation_Doctor__r?.Name ||
       r.Image_Report__c ||
       "";
     docName = docName.trim();
@@ -427,22 +431,28 @@ async function syncPhysicianWorkload(session, startDate, endDate) {
     if (!doctorStats[date]) doctorStats[date] = {};
 
     Object.values(orders).forEach((data) => {
-      const { mrCount, hasSpecialCT, doctors } = data;
+      const { mrCount, hasSpecialCT, location: rawLocation, doctors } = data;
+      const location = rawLocation.slice(0, 2); // 統一取前兩字：北投、大直
       let category = "";
 
-      // 套裝規則分類 (以 Order 為單位)
-      if (mrCount >= 6 && hasSpecialCT) {
-        category = "大套5";
-      } else if (mrCount >= 1 && mrCount <= 5 && hasSpecialCT) {
-        category = "小套4";
-      } else if (mrCount >= 1 && mrCount <= 5 && !hasSpecialCT) {
-        category = "小套3";
-      } else if (mrCount === 0 && hasSpecialCT) {
-        category = "無2";
-      } else if (mrCount === 0 && !hasSpecialCT) {
-        category = "無1";
-      } else if (mrCount >= 6 && !hasSpecialCT) {
-        category = "大套5(無特檢)";
+      // 套裝規則分類 (以 Order 為單位) - 僅限北投
+      if (location === "北投") {
+        if (mrCount >= 6 && hasSpecialCT) {
+          category = "大套5";
+        } else if (mrCount >= 1 && mrCount <= 5 && hasSpecialCT) {
+          category = "小套4";
+        } else if (mrCount >= 1 && mrCount <= 5 && !hasSpecialCT) {
+          category = "小套3";
+        } else if (mrCount === 0 && hasSpecialCT) {
+          category = "無2";
+        } else if (mrCount === 0 && !hasSpecialCT) {
+          category = "無1";
+        } else if (mrCount >= 6 && !hasSpecialCT) {
+          category = "大套5(無特檢)";
+        }
+      } else if (location === "大直") {
+        // 大直客戶統一為「大直1」
+        category = "大直1";
       }
 
       doctors.forEach((doc) => {
@@ -477,6 +487,7 @@ async function syncPhysicianWorkload(session, startDate, endDate) {
         count_xiao_tao_3: stats.categories["小套3"] || 0,
         count_wu_2: stats.categories["無2"] || 0,
         count_wu_1: stats.categories["無1"] || 0,
+        count_dazhi_1: stats.categories["大直1"] || 0,
         updated_at: new Date().toISOString(),
       });
     });

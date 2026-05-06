@@ -22,10 +22,12 @@ import {
   Activity,
   RefreshCw,
   X,
+  TrendingUp,
 } from "lucide-react";
 import ExcelJS from "exceljs";
 import { getEmploymentPause, isUserOnEmploymentPause } from "../services/utils";
 import RadiographerWorkloadPage from "../pages/RadiographerWorkloadPage";
+import PhysicianWorkloadAnalysis from "../components/dashboard/PhysicianWorkloadAnalysis";
 
 interface StatisticsPageProps {
   currentUser: User;
@@ -33,9 +35,9 @@ interface StatisticsPageProps {
 
 const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
   const cycles = db.getCycles();
-  const [activeTab, setActiveTab] = useState<"stats" | "cycles" | "workload">(
-    "stats",
-  );
+  const [activeTab, setActiveTab] = useState<
+    "stats" | "cycles" | "workload" | "physician"
+  >("stats");
 
   // ── Helper: build date array for a range (Robust to timezone) ──
   const buildDateRange = (startDate: string, endDate: string) => {
@@ -786,6 +788,15 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
                   工作量統計
                 </button>
               )}
+              {isSupervisorOrAdmin && (
+                <button
+                  onClick={() => setActiveTab("physician")}
+                  className={`px-3 py-1.5 rounded text-sm font-bold transition-all ${activeTab === "physician" ? "bg-white text-purple-700 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+                >
+                  <TrendingUp size={14} className="inline mr-1" />
+                  醫師工作量
+                </button>
+              )}
             </div>
 
             {/* Sync Button */}
@@ -1197,6 +1208,11 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
           <div className="absolute inset-0 z-10">
             <RadiographerWorkloadPage currentUser={currentUser} />
           </div>
+        )}
+
+        {/* ── Physician Workload Tab ── */}
+        {activeTab === "physician" && isSupervisorOrAdmin && (
+          <PhysicianWorkloadAnalysis currentUser={currentUser} />
         )}
       </div>
     </div>

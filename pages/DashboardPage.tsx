@@ -5169,6 +5169,7 @@ const DailyManpowerSummary: React.FC<{
     count_xiao_tao_3: number;
     count_wu_2: number;
     count_wu_1: number;
+    count_dazhi_1: number;
   };
   const [physicianWorkload, setPhysicianWorkload] = useState<
     PhysicianWorkloadRow[]
@@ -5178,7 +5179,7 @@ const DailyManpowerSummary: React.FC<{
     supabase
       .from("physician_workload_daily")
       .select(
-        "doctor_name, count_da_tao_5, count_xiao_tao_4, count_xiao_tao_3, count_wu_2, count_wu_1",
+        "doctor_name, count_da_tao_5, count_xiao_tao_4, count_xiao_tao_3, count_wu_2, count_wu_1, count_dazhi_1",
       )
       .eq("date", date)
       .then(({ data }) => {
@@ -5427,18 +5428,21 @@ const DailyManpowerSummary: React.FC<{
         const big = wl.count_da_tao_5;
         const small = wl.count_xiao_tao_4 + wl.count_xiao_tao_3;
         const none = wl.count_wu_2 + wl.count_wu_1;
-        const total = big + small + none;
+        const dazhi = wl.count_dazhi_1 || 0;
+        const total = big + small + none + dazhi;
         const units =
           big * 5 +
           wl.count_xiao_tao_4 * 4 +
           wl.count_xiao_tao_3 * 3 +
           wl.count_wu_2 * 2 +
-          wl.count_wu_1 * 1;
+          wl.count_wu_1 * 1 +
+          dazhi * 1;
         // Compact: only show non-zero categories
         const parts: string[] = [];
         if (big > 0) parts.push(`${big}大`);
         if (small > 0) parts.push(`${small}小`);
         if (none > 0) parts.push(`${none}無`);
+        if (dazhi > 0) parts.push(`${dazhi}直`);
         return `${alias} ${total} (${parts.join(" ")}) → ${units}單位`;
       })
       .filter(Boolean)
@@ -5561,18 +5565,25 @@ BMD :{{bmd}}
         return `${displayAlias}  -(無資料)${suffix ? ` ${suffix}` : ""}`;
       }
 
-      const big = wl.count_da_tao_5;
       const small = wl.count_xiao_tao_4 + wl.count_xiao_tao_3;
       const none = wl.count_wu_2 + wl.count_wu_1;
-      const total = big + small + none;
+      const dazhi = wl.count_dazhi_1 || 0;
+      const total = big + small + none + dazhi;
       const units =
         big * 5 +
         wl.count_xiao_tao_4 * 4 +
         wl.count_xiao_tao_3 * 3 +
         wl.count_wu_2 * 2 +
-        wl.count_wu_1 * 1;
+        wl.count_wu_1 * 1 +
+        dazhi * 1;
 
-      const core = `${displayAlias}  ${total} (${big}大 ${small}小 ${none}無 ) →${units} 單位`;
+      const parts: string[] = [];
+      if (big > 0) parts.push(`${big}大`);
+      if (small > 0) parts.push(`${small}小`);
+      if (none > 0) parts.push(`${none}無`);
+      if (dazhi > 0) parts.push(`${dazhi}直`);
+
+      const core = `${displayAlias}  ${total} (${parts.join(" ")}) →${units} 單位`;
       return suffix ? `${core} ${suffix}` : core;
     };
 
