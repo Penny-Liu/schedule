@@ -362,7 +362,6 @@ async function syncPhysicianWorkload(session, startDate, endDate) {
         ResourceCategory__c, 
         CheckupName__c,
         CheckStartDate__c,
-        Interpretation_Doctor__r.Name,
         Location__c
       FROM CheckupReservation__c 
       WHERE CheckStartDate__c >= ${startDate}
@@ -415,7 +414,6 @@ async function syncPhysicianWorkload(session, startDate, endDate) {
     let docName =
       r.Image_assignment__r?.Name ||
       r.Order__r?.Image_assignment__r?.Name ||
-      r.Interpretation_Doctor__r?.Name ||
       r.Image_Report__c ||
       "";
     docName = docName.trim();
