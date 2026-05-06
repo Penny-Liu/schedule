@@ -5645,7 +5645,7 @@ BMD :{{bmd}}
             const originalUnits = units + (stats.dazhi_clients || 0);
 
             if (overlap > 0) {
-              core = `${alias}  ${total} (${big}大 ${small}小 ${none}無) +大直 ${stats.dazhi_clients} →${finalUnits} 單位 ，原來${originalUnits}單位減去${overlap}位同時有大直和北投的客戶`;
+              core = `${alias}  ${total} (${big}大 ${small}小 ${none}無) +大直 ${stats.dazhi_clients} →${finalUnits} 單位`;
             } else {
               core = `${alias}  ${total} (${big}大 ${small}小 ${none}無) +大直 ${stats.dazhi_clients} →${finalUnits} 單位`;
             }
