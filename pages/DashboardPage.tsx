@@ -159,8 +159,13 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
     db.getHealthMgmtShifts("", ""),
   );
   const [doctorShifts, setDoctorShifts] = useState(() => {
-    const activeDocIds = new Set(db.getDoctors().filter(d => d.isActive !== false).map(d => d.id));
-    return db.getDoctorShifts().filter(s => activeDocIds.has(s.doctorId));
+    const activeDocIds = new Set(
+      db
+        .getDoctors()
+        .filter((d) => d.isActive !== false)
+        .map((d) => d.id),
+    );
+    return db.getDoctorShifts().filter((s) => activeDocIds.has(s.doctorId));
   });
 
   const [stationRequirements, setStationRequirements] = useState(
@@ -267,8 +272,15 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
       setShifts([...db.getShifts("", "")]);
       setHealthMgmtShifts([...db.getHealthMgmtShifts("", "")]);
       setDisplayOrder([...db.getStationDisplayOrder()]);
-      const activeDocIds = new Set(db.getDoctors().filter(d => d.isActive !== false).map(d => d.id));
-      setDoctorShifts(db.getDoctorShifts().filter(s => activeDocIds.has(s.doctorId)));
+      const activeDocIds = new Set(
+        db
+          .getDoctors()
+          .filter((d) => d.isActive !== false)
+          .map((d) => d.id),
+      );
+      setDoctorShifts(
+        db.getDoctorShifts().filter((s) => activeDocIds.has(s.doctorId)),
+      );
     });
     // Always refresh doctor_shifts on mount (bypass initializeData's isLoaded cache)
     db.refreshDoctorShifts();
@@ -3237,7 +3249,8 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                             } else if (
                               st.includes("MR") &&
                               !st.includes("1.5T") &&
-                              ((_dailyStats?.beitou_mr ?? 0) > 0 || (_dailyStats?.beitou_mr_orders ?? 0) > 0)
+                              ((_dailyStats?.beitou_mr ?? 0) > 0 ||
+                                (_dailyStats?.beitou_mr_orders ?? 0) > 0)
                             )
                               _statBadge = {
                                 value: `${_dailyStats!.beitou_mr || 0}/${_dailyStats!.beitou_mr_orders || 0}`,
@@ -3257,32 +3270,39 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                               isSupervisorOrHigher &&
                               st === "US1" &&
                               ((_dailyStats?.beitou_ultrasound ?? 0) > 0 ||
-                               (_dailyStats?.beitou_ultrasound_heart ?? 0) > 0)
+                                (_dailyStats?.beitou_ultrasound_heart ?? 0) > 0)
                             ) {
                               const _us = _dailyStats!.beitou_ultrasound || 0;
-                              const _heart = _dailyStats!.beitou_ultrasound_heart || 0;
-                              const _fibrosis = _dailyStats!.beitou_ultrasound_fibrosis || 0;
+                              const _heart =
+                                _dailyStats!.beitou_ultrasound_heart || 0;
+                              const _fibrosis =
+                                _dailyStats!.beitou_ultrasound_fibrosis || 0;
                               const _adjustedUs = Math.max(0, _us - _fibrosis);
                               _statBadge = {
                                 value: `${_adjustedUs}/${_heart}`,
                                 color: "bg-teal-600",
                                 title: `北投 US1：${_adjustedUs} 超音波 / ${_heart} 心臟`,
                               };
-                            }
-                            else if (
+                            } else if (
                               st === "大直" &&
                               (_dailyStats?.dazhi_clients ?? 0) > 0
                             ) {
                               const _us = _dailyStats!.dazhi_ultrasound || 0;
-                              const _heart = _dailyStats!.dazhi_ultrasound_heart || 0;
-                              const _fibrosis = _dailyStats!.dazhi_ultrasound_fibrosis || 0;
+                              const _heart =
+                                _dailyStats!.dazhi_ultrasound_heart || 0;
+                              const _fibrosis =
+                                _dailyStats!.dazhi_ultrasound_fibrosis || 0;
                               const _adjustedUs = Math.max(0, _us - _fibrosis);
-                              
+
                               _statBadge = {
                                 value: (
                                   <div className="flex flex-col items-center leading-tight py-0.5">
-                                    <span className="text-[11px] font-black">{_dailyStats!.dazhi_clients}</span>
-                                    <span className="text-[9px] opacity-90">{_adjustedUs}/{_heart}</span>
+                                    <span className="text-[11px] font-black">
+                                      {_dailyStats!.dazhi_clients}
+                                    </span>
+                                    <span className="text-[9px] opacity-90">
+                                      {_adjustedUs}/{_heart}
+                                    </span>
                                   </div>
                                 ),
                                 color: "bg-violet-500",
@@ -3714,1165 +3734,1210 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
             >
               {/* ... Table Content ... */}
               <table className="w-full border-collapse bg-white table-fixed">
-              {/* ... Table Header ... */}
-              <thead className="sticky top-0 z-20 shadow-sm">
-                <tr>
-                  {/* Left Sticky Header */}
-                  <th
-                    className={`sticky left-0 z-30 bg-slate-50 / 95 backdrop-blur border-b border-r border-slate-200 shadow-[4px_0_8px_rgba(0, 0, 0, 0.02)] ${isMobile ? (viewMode === "user" ? "p-1 w-[50px] min-w-[50px]" : "p-1 w-[85px] min-w-[85px]") : "p-2 w-[120px] text-left"} `}
-                  >
-                    <div
-                      className={`flex items-center font-bold text-xs text-slate-600 ${isMobile ? "justify-center" : "gap-2"} `}
-                    >
-                      <UserIcon size={14} className="text-teal-600" />
-                      {!isMobile &&
-                        (viewMode === "user" ? "放射師" : "工作崗位")}
-                    </div>
-                  </th>
-                  {viewMode === "user" && (
+                {/* ... Table Header ... */}
+                <thead className="sticky top-0 z-20 shadow-sm">
+                  <tr>
+                    {/* Left Sticky Header */}
                     <th
-                      className={`sticky z-30 bg-slate-50 / 95 backdrop-blur border-b border-r border-slate-200 p-0 w-[50px] shadow-[4px_0_8px_rgba(0, 0, 0, 0.02)] ${isMobile ? "left-[50px]" : "left-[120px]"} `}
+                      className={`sticky left-0 z-30 bg-slate-50 / 95 backdrop-blur border-b border-r border-slate-200 shadow-[4px_0_8px_rgba(0, 0, 0, 0.02)] ${isMobile ? (viewMode === "user" ? "p-1 w-[50px] min-w-[50px]" : "p-1 w-[85px] min-w-[85px]") : "p-2 w-[120px] text-left"} `}
                     >
-                      <div className="p-2 text-center text-[10px] font-bold text-slate-500 uppercase tracking-wider flex flex-col items-center">
-                        <BarChart2 size={12} className="mb-0.5 text-teal-600" />
-                        {!isMobile && "統計"}
+                      <div
+                        className={`flex items-center font-bold text-xs text-slate-600 ${isMobile ? "justify-center" : "gap-2"} `}
+                      >
+                        <UserIcon size={14} className="text-teal-600" />
+                        {!isMobile &&
+                          (viewMode === "user" ? "放射師" : "工作崗位")}
                       </div>
                     </th>
-                  )}
-                  {dateRange.map((date) => {
-                    const d = new Date(date);
-                    const isToday = toLocalISOString(new Date()) === date;
-                    const weekDays = ["日", "一", "二", "三", "四", "五", "六"];
-                    const isWeekend = d.getDay() === 0 || d.getDay() === 6;
-                    const dailyEvents = holidays.filter((h) => h.date === date);
-                    const systemEvents = dailyEvents.filter(
-                      (e) => e.type !== DateEventType.RADIOGRAPHER_NOTE,
-                    );
-                    const radioMemo = dailyEvents.find(
-                      (e) => e.type === DateEventType.RADIOGRAPHER_NOTE,
-                    );
-                    const isClosed = systemEvents.some(
-                      (e) => e.type === DateEventType.CLOSED,
-                    );
-
-                    return (
+                    {viewMode === "user" && (
                       <th
-                        key={date}
-                        className={`border-b border-slate-200 py-1.5 min-w-[52px] text-center cursor-pointer hover:bg-slate-50 transition-colors relative ${isToday ? "bg-teal-50/50" : isClosed ? "bg-slate-100" : "bg-white"} `}
-                        onMouseEnter={() => setHoveredDate(date)}
-                        onMouseLeave={() => setHoveredDate(null)}
-                        onClick={() => {
-                          if (
-                            currentUser.role === UserRole.SYSTEM_ADMIN ||
-                            currentUser.role === UserRole.SUPERVISOR ||
-                            currentUser.role === UserRole.SCHEDULER
-                          ) {
-                            setMemoModal({
-                              date,
-                              content: radioMemo?.name || "",
-                            });
-                          }
-                        }}
+                        className={`sticky z-30 bg-slate-50 / 95 backdrop-blur border-b border-r border-slate-200 p-0 w-[50px] shadow-[4px_0_8px_rgba(0, 0, 0, 0.02)] ${isMobile ? "left-[50px]" : "left-[120px]"} `}
                       >
-                        {/* Tooltip */}
-                        {(systemEvents.length > 0 || radioMemo) &&
-                          hoveredDate === date && (
-                            <div className="absolute top-[80%] left-1/2 -translate-x-1/2 mt-1 w-56 bg-white rounded-xl shadow-2xl border border-slate-200 p-3 z-[100] animate-in fade-in zoom-in duration-150 pointer-events-none">
-                              <div className="flex flex-col gap-2 text-left">
-                                {systemEvents.map((event, idx) => (
-                                  <div
-                                    key={idx}
-                                    className="flex items-start gap-2.5"
-                                  >
-                                    <div className="w-5 h-5 rounded-full bg-red-100 flex items-center justify-center shrink-0">
-                                      <span className="text-[10px]">🚩</span>
-                                    </div>
-                                    <div className="flex flex-col">
-                                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                                        全院事件
-                                      </span>
-                                      <span className="text-xs font-bold text-slate-700">
-                                        {event.name}
-                                      </span>
-                                    </div>
-                                  </div>
-                                ))}
-                                {radioMemo && (
-                                  <div
-                                    className={`flex items-start gap-2.5 ${systemEvents.length > 0 ? "pt-2 border-t border-slate-100" : ""}`}
-                                  >
-                                    <div className="w-5 h-5 rounded-full bg-purple-100 flex items-center justify-center shrink-0">
-                                      <span className="text-[10px]">📝</span>
-                                    </div>
-                                    <div className="flex flex-col">
-                                      <span className="text-[10px] font-bold text-purple-400 uppercase tracking-wider">
-                                        放射師備忘
-                                      </span>
-                                      <span className="text-xs font-bold text-slate-700">
-                                        {radioMemo.name}
-                                      </span>
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                              {/* Arrow */}
-                              <div className="absolute bottom-full left-1/2 -translate-x-1/2 -mb-1 border-8 border-transparent border-b-white"></div>
-                            </div>
-                          )}
-
-                        <div className="flex flex-col items-center gap-0.5">
-                          <div
-                            className={`font-bold text-[11px] leading-tight ${systemEvents.length > 0 ? (systemEvents[0].type === DateEventType.NOTE ? "text-blue-600" : "text-red-600") : isToday ? "text-teal-600" : isWeekend ? "text-red-500" : "text-slate-800"} `}
-                          >
-                            {d.getMonth() + 1}/{d.getDate()}
-                          </div>
-                          <div
-                            className={`text-[10px] opacity-75 leading-tight ${isToday ? "text-teal-600" : isWeekend ? "text-red-500" : "text-slate-700"} `}
-                          >
-                            {weekDays[d.getDay()]}
-                          </div>
-
-                          {/* Event Display Container */}
-                          <div className="flex flex-col gap-0.5 mt-0.5 w-full items-center px-1">
-                            {systemEvents.map((event, idx) => (
-                              <span
-                                key={idx}
-                                className={`text-[9px] px-1 rounded-sm leading-tight w-full truncate border ${event.type === DateEventType.NOTE ? "bg-blue-100 text-blue-700 border-blue-200" : "bg-red-100 text-red-700 border-red-200"}`}
-                              >
-                                {event.name}
-                              </span>
-                            ))}
-                            {radioMemo && (
-                              <span className="text-[9px] px-1 rounded-sm leading-tight w-full truncate bg-purple-100 text-purple-700 border border-purple-200">
-                                📝 {radioMemo.name}
-                              </span>
-                            )}
-                            {radioMemo === undefined &&
-                              systemEvents.length === 0 && (
-                                <div className="h-[12px]"></div>
-                              )}
-                          </div>
+                        <div className="p-2 text-center text-[10px] font-bold text-slate-500 uppercase tracking-wider flex flex-col items-center">
+                          <BarChart2
+                            size={12}
+                            className="mb-0.5 text-teal-600"
+                          />
+                          {!isMobile && "統計"}
                         </div>
                       </th>
-                    );
-                  })}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {viewMode === "user" ? (
-                  // --- User View ---
-                  displayUsers.map((user, idx) => {
-                    const isFirst = idx === 0;
-                    const isLast = idx === displayUsers.length - 1;
-                    // Use personalCycles override if present for current cycle month
-                    const personalCycleData = cycleMonthKey
-                      ? user.personalCycles?.[cycleMonthKey]
-                      : undefined;
-                    const effectiveDateRange =
-                      personalCycleData && currentCycle
-                        ? buildPersonalDateRange(
-                            personalCycleData.startDate,
-                            personalCycleData.endDate,
-                          )
-                        : dateRange;
-                    const workDaysCount = effectiveDateRange.filter((date) => {
-                      const status = getDayShift(user.id, date);
-                      return !status.isOff;
-                    }).length;
-                    const isPersonalCycleCustomized = !!(
-                      personalCycleData &&
-                      currentCycle &&
-                      (personalCycleData.startDate !== currentCycle.startDate ||
-                        personalCycleData.endDate !== currentCycle.endDate)
-                    );
-                    const userCapableStations = allStationsSorted.filter(
-                      (s) =>
-                        user.capabilities?.includes(s) ||
-                        user.learningCapabilities?.includes(s) ||
-                        user.excludedCapabilities?.includes(s) ||
-                        s === StationDefault.UNASSIGNED ||
-                        s === StationDefault.UNASSIGNED ||
-                        s === "未分配",
-                    );
-                    return (
-                      <tr
-                        key={user.id}
-                        className="group hover:bg-slate-50/50 transition-colors"
-                      >
-                        <td
-                          className={`sticky left-0 z-10 bg-white group-hover: bg-slate-50 border-r border-slate-200 shadow-[4px_0_8px_rgba(0, 0, 0, 0.02)] ${isMobile ? "p-1 w-[50px] min-w-[50px]" : "p-2"} `}
+                    )}
+                    {dateRange.map((date) => {
+                      const d = new Date(date);
+                      const isToday = toLocalISOString(new Date()) === date;
+                      const weekDays = [
+                        "日",
+                        "一",
+                        "二",
+                        "三",
+                        "四",
+                        "五",
+                        "六",
+                      ];
+                      const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+                      const dailyEvents = holidays.filter(
+                        (h) => h.date === date,
+                      );
+                      const systemEvents = dailyEvents.filter(
+                        (e) => e.type !== DateEventType.RADIOGRAPHER_NOTE,
+                      );
+                      const radioMemo = dailyEvents.find(
+                        (e) => e.type === DateEventType.RADIOGRAPHER_NOTE,
+                      );
+                      const isClosed = systemEvents.some(
+                        (e) => e.type === DateEventType.CLOSED,
+                      );
+
+                      return (
+                        <th
+                          key={date}
+                          className={`border-b border-slate-200 py-1.5 min-w-[52px] text-center cursor-pointer hover:bg-slate-50 transition-colors relative ${isToday ? "bg-teal-50/50" : isClosed ? "bg-slate-100" : "bg-white"} `}
+                          onMouseEnter={() => setHoveredDate(date)}
+                          onMouseLeave={() => setHoveredDate(null)}
+                          onClick={() => {
+                            if (
+                              currentUser.role === UserRole.SYSTEM_ADMIN ||
+                              currentUser.role === UserRole.SUPERVISOR ||
+                              currentUser.role === UserRole.SCHEDULER
+                            ) {
+                              setMemoModal({
+                                date,
+                                content: radioMemo?.name || "",
+                              });
+                            }
+                          }}
                         >
-                          <div
-                            className={`flex items-center ${isMobile ? "justify-center" : "gap-2"} `}
-                          >
-                            {/* Edit Buttons (Up/Down) */}
-                            {isEditMode && !isMobile && (
-                              <div className="flex flex-col gap-0.5">
-                                <button
-                                  type="button"
-                                  disabled={isFirst}
-                                  onClick={() => handleMoveUser(idx, "up")}
-                                  className={`p-0.5 rounded ${isFirst ? "text-gray-200" : "text-gray-400 hover:text-teal-600 hover:bg-gray-100"} `}
-                                >
-                                  <ChevronUp size={12} />
-                                </button>
-                                <button
-                                  type="button"
-                                  disabled={isLast}
-                                  onClick={() => handleMoveUser(idx, "down")}
-                                  className={`p-0.5 rounded ${isLast ? "text-gray-200" : "text-gray-400 hover:text-teal-600 hover:bg-gray-100"} `}
-                                >
-                                  <ChevronDown size={12} />
-                                </button>
-                              </div>
-                            )}
-
-                            {/* Avatar-Hide on Mobile */}
-                            {!isMobile && (
-                              <div
-                                className="w-7 h-7 rounded-full flex items-center justify-center text-white font-bold text-xs shadow-sm flex-shrink-0 ring-2 ring-white"
-                                style={{
-                                  backgroundColor: user.color || "#9CA3AF",
-                                }}
-                              >
-                                {user.alias || user.name.charAt(0)}
-                              </div>
-                            )}
-
-                            {/* Name / Alias Display */}
-                            <div className="min-w-0">
-                              <div
-                                className={`font-bold truncate leading-tight ${isMobile ? "text-center text-sm" : "text-xs text-slate-800"} `}
-                                style={
-                                  isMobile && user.color
-                                    ? { color: user.color }
-                                    : {}
-                                }
-                              >
-                                {isMobile
-                                  ? user.alias || user.name.charAt(0)
-                                  : user.name}
-                              </div>
-                              {personalCycleData?.memo && (
-                                <div className="text-[9px] text-amber-600 font-normal leading-tight mt-0.5 truncate max-w-[80px]">
-                                  {personalCycleData.memo}
+                          {/* Tooltip */}
+                          {(systemEvents.length > 0 || radioMemo) &&
+                            hoveredDate === date && (
+                              <div className="absolute top-[80%] left-1/2 -translate-x-1/2 mt-1 w-56 bg-white rounded-xl shadow-2xl border border-slate-200 p-3 z-[100] animate-in fade-in zoom-in duration-150 pointer-events-none">
+                                <div className="flex flex-col gap-2 text-left">
+                                  {systemEvents.map((event, idx) => (
+                                    <div
+                                      key={idx}
+                                      className="flex items-start gap-2.5"
+                                    >
+                                      <div className="w-5 h-5 rounded-full bg-red-100 flex items-center justify-center shrink-0">
+                                        <span className="text-[10px]">🚩</span>
+                                      </div>
+                                      <div className="flex flex-col">
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                                          全院事件
+                                        </span>
+                                        <span className="text-xs font-bold text-slate-700">
+                                          {event.name}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  ))}
+                                  {radioMemo && (
+                                    <div
+                                      className={`flex items-start gap-2.5 ${systemEvents.length > 0 ? "pt-2 border-t border-slate-100" : ""}`}
+                                    >
+                                      <div className="w-5 h-5 rounded-full bg-purple-100 flex items-center justify-center shrink-0">
+                                        <span className="text-[10px]">📝</span>
+                                      </div>
+                                      <div className="flex flex-col">
+                                        <span className="text-[10px] font-bold text-purple-400 uppercase tracking-wider">
+                                          放射師備忘
+                                        </span>
+                                        <span className="text-xs font-bold text-slate-700">
+                                          {radioMemo.name}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  )}
                                 </div>
+                                {/* Arrow */}
+                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 -mb-1 border-8 border-transparent border-b-white"></div>
+                              </div>
+                            )}
+
+                          <div className="flex flex-col items-center gap-0.5">
+                            <div
+                              className={`font-bold text-[11px] leading-tight ${systemEvents.length > 0 ? (systemEvents[0].type === DateEventType.NOTE ? "text-blue-600" : "text-red-600") : isToday ? "text-teal-600" : isWeekend ? "text-red-500" : "text-slate-800"} `}
+                            >
+                              {d.getMonth() + 1}/{d.getDate()}
+                            </div>
+                            <div
+                              className={`text-[10px] opacity-75 leading-tight ${isToday ? "text-teal-600" : isWeekend ? "text-red-500" : "text-slate-700"} `}
+                            >
+                              {weekDays[d.getDay()]}
+                            </div>
+
+                            {/* Event Display Container */}
+                            <div className="flex flex-col gap-0.5 mt-0.5 w-full items-center px-1">
+                              {systemEvents.map((event, idx) => (
+                                <span
+                                  key={idx}
+                                  className={`text-[9px] px-1 rounded-sm leading-tight w-full truncate border ${event.type === DateEventType.NOTE ? "bg-blue-100 text-blue-700 border-blue-200" : "bg-red-100 text-red-700 border-red-200"}`}
+                                >
+                                  {event.name}
+                                </span>
+                              ))}
+                              {radioMemo && (
+                                <span className="text-[9px] px-1 rounded-sm leading-tight w-full truncate bg-purple-100 text-purple-700 border border-purple-200">
+                                  📝 {radioMemo.name}
+                                </span>
                               )}
+                              {radioMemo === undefined &&
+                                systemEvents.length === 0 && (
+                                  <div className="h-[12px]"></div>
+                                )}
                             </div>
                           </div>
-                        </td>
-                        {/* Sticky Count Column-Adjust Offset for Mobile */}
-                        <td
-                          className={`sticky z-10 bg-white group-hover: bg-slate-50 border-r border-slate-200 p-0 text-center shadow-[4px_0_8px_rgba(0, 0, 0, 0.02)] ${isMobile ? "left-[50px]" : "left-[120px]"} `}
-                        >
-                          <div
-                            className={`text-[10px] font-bold mx-1.5 py-0.5 rounded-lg border ${isPersonalCycleCustomized ? "text-amber-700 bg-amber-50 border-amber-300" : "text-slate-600 bg-slate-100 border-slate-200"}`}
-                            title={
-                              isPersonalCycleCustomized && personalCycleData
-                                ? `自訂週期: ${personalCycleData.startDate} ~ ${personalCycleData.endDate}`
-                                : undefined
-                            }
-                          >
-                            {workDaysCount}
-                          </div>
-                        </td>
-                        {dateRange.map((date) => {
-                          const { station, specialRoles, isOff } = getDayShift(
-                            user.id,
-                            date,
-                          );
-                          const isToday = toLocalISOString(new Date()) === date;
-                          const pendingReq = getPendingRequest(user.id, date);
-                          const event = holidays.find((h) => h.date === date);
-                          const isClosed = event?.type === DateEventType.CLOSED;
-                          const isLearning =
-                            station &&
-                            user.learningCapabilities?.includes(station);
-
-                          return (
-                            <td
-                              key={date}
-                              className={`p-0.5 border-r border-slate-100 align-top h-16 ${isToday ? "bg-teal-50/10" : ""} ${isOff ? "bg-slate-100/60" : isClosed ? "bg-slate-100/30" : ""} relative`}
-                            >
-                              {pendingReq && getLeaveBadge(pendingReq.type)}
-                              {isOff ? (
-                                <div className="h-full w-full flex flex-col items-center justify-center gap-1">
-                                  <span className="text-slate-300 font-bold select-none text-[12px]">
-                                    休
-                                  </span>
-                                  {isEditMode && (
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        handleUpdateShift(
-                                          user.id,
-                                          date,
-                                          "未分配",
-                                          [],
-                                        )
-                                      }
-                                      className="text-[10px] text-teal-600 hover:text-white hover:bg-teal-500 bg-white border border-teal-200 px-1.5 rounded shadow-sm transition-all"
-                                    >
-                                      +
-                                    </button>
-                                  )}
-                                </div>
-                              ) : (
-                                <div className="flex flex-col gap-1 h-full justify-start pt-1 items-center">
-                                  {isEditMode ? (
-                                    <select
-                                      value={station || ""}
-                                      onChange={(e) =>
-                                        handleUpdateShift(
-                                          user.id,
-                                          date,
-                                          e.target.value || SYSTEM_OFF,
-                                          specialRoles,
-                                        )
-                                      }
-                                      className="w-full text-[10px] py-1 px-0.5 border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-teal-500 outline-none font-medium text-slate-800"
-                                    >
-                                      <option value="">...</option>
-                                      {userCapableStations.map((s) => (
-                                        <option key={s} value={s}>
-                                          {s}
-                                        </option>
-                                      ))}
-                                      <option value={SYSTEM_OFF}>休假</option>
-                                    </select>
-                                  ) : station ? (
-                                    <div
-                                      className={`flex items-center justify-center px-1 py-1 rounded-md shadow-sm border w-full max-w-[50px] ${getStationStyle(station)} `}
-                                    >
-                                      <span className="text-[10px] font-bold truncate tracking-tight">
-                                        {station}
-                                      </span>
-                                      {isLearning && (
-                                        <span className="text-[9px] bg-white/50 text-slate-900 font-extrabold px-0.5 rounded-lg ml-0.5 leading-none">
-                                          學
-                                        </span>
-                                      )}
-                                    </div>
-                                  ) : (
-                                    <div className="flex-1 flex items-center justify-center">
-                                      <div className="text-[10px] text-slate-300 font-light">
-                                        -
-                                      </div>
-                                    </div>
-                                  )}
-                                  {isEditMode ? (
-                                    <div className="flex flex-wrap gap-0.5 justify-center">
-                                      {specialRolesList.map((role) => {
-                                        const isSelected =
-                                          specialRoles.includes(role);
-                                        return (
-                                          <button
-                                            key={role}
-                                            type="button"
-                                            onClick={() =>
-                                              handleSpecialRoleToggle(
-                                                user.id,
-                                                date,
-                                                role,
-                                                station ||
-                                                  StationDefault.UNASSIGNED,
-                                                specialRoles,
-                                              )
-                                            }
-                                            className={`px-1 py-0.5 text-[9px] rounded-lg border transition-all font-bold ${isSelected ? "bg-purple-600 text-white border-purple-600" : "bg-white text-slate-400 border-slate-200 hover:border-purple-300 hover:text-purple-500"} `}
-                                          >
-                                            {role === SPECIAL_ROLES.DUAL_BMD
-                                              ? "兼B/D"
-                                              : role ===
-                                                  SPECIAL_ROLES.DAZHI_SUPPORT
-                                                ? "大直"
-                                                : role[0]}
-                                          </button>
-                                        );
-                                      })}
-                                    </div>
-                                  ) : (
-                                    specialRoles.length > 0 && (
-                                      <div className="flex flex-wrap gap-0.5 justify-center w-full">
-                                        {specialRoles.map((role) => (
-                                          <span
-                                            key={role}
-                                            className={`w-full text-center px-0.5 rounded-[2px] text-[10px] leading-tight font-extrabold border mb-0.5 ${
-                                              role === SPECIAL_ROLES.OPENING
-                                                ? "bg-blue-100/80 text-blue-900 border-blue-200/50"
-                                                : role === SPECIAL_ROLES.LATE
-                                                  ? "bg-amber-100/80 text-amber-900 border-amber-200/50"
-                                                  : role ===
-                                                      SPECIAL_ROLES.ASSIST
-                                                    ? "bg-emerald-100/80 text-emerald-900 border-emerald-200/50"
-                                                    : role ===
-                                                        SPECIAL_ROLES.SCHEDULER
-                                                      ? "bg-red-100/80 text-red-900 border-red-200/50"
-                                                      : "bg-purple-100 text-purple-700 border-purple-200"
-                                            } `}
-                                          >
-                                            {role}
-                                          </span>
-                                        ))}
-                                      </div>
-                                    )
-                                  )}
-                                </div>
-                              )}
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    );
-                  })
-                ) : (
-                  // --- Station View (Unified & Reorderable) ---
-                  <>
-                    {rowConfigs.map((row, idx) => {
+                        </th>
+                      );
+                    })}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {viewMode === "user" ? (
+                    // --- User View ---
+                    displayUsers.map((user, idx) => {
                       const isFirst = idx === 0;
-                      const isLast = idx === rowConfigs.length - 1;
+                      const isLast = idx === displayUsers.length - 1;
+                      // Use personalCycles override if present for current cycle month
+                      const personalCycleData = cycleMonthKey
+                        ? user.personalCycles?.[cycleMonthKey]
+                        : undefined;
+                      const effectiveDateRange =
+                        personalCycleData && currentCycle
+                          ? buildPersonalDateRange(
+                              personalCycleData.startDate,
+                              personalCycleData.endDate,
+                            )
+                          : dateRange;
+                      const workDaysCount = effectiveDateRange.filter(
+                        (date) => {
+                          const status = getDayShift(user.id, date);
+                          return !status.isOff;
+                        },
+                      ).length;
+                      const isPersonalCycleCustomized = !!(
+                        personalCycleData &&
+                        currentCycle &&
+                        (personalCycleData.startDate !==
+                          currentCycle.startDate ||
+                          personalCycleData.endDate !== currentCycle.endDate)
+                      );
+                      const userCapableStations = allStationsSorted.filter(
+                        (s) =>
+                          user.capabilities?.includes(s) ||
+                          user.learningCapabilities?.includes(s) ||
+                          user.excludedCapabilities?.includes(s) ||
+                          s === StationDefault.UNASSIGNED ||
+                          s === StationDefault.UNASSIGNED ||
+                          s === "未分配",
+                      );
                       return (
                         <tr
-                          key={row.id}
-                          className="group hover:bg-slate-50/50 transition-colors relative"
+                          key={user.id}
+                          className="group hover:bg-slate-50/50 transition-colors"
                         >
                           <td
-                            className={`sticky left-0 z-10 bg-white group-hover: bg-slate-50 border-r border-slate-200 shadow-[4px_0_8px_rgba(0, 0, 0, 0.02)] ${isMobile ? "p-1 w-[85px] min-w-[85px]" : "p-2"} `}
+                            className={`sticky left-0 z-10 bg-white group-hover: bg-slate-50 border-r border-slate-200 shadow-[4px_0_8px_rgba(0, 0, 0, 0.02)] ${isMobile ? "p-1 w-[50px] min-w-[50px]" : "p-2"} `}
                           >
-                            <div className="flex items-center justify-between">
-                              <div
-                                className={`flex items-center gap-1.5 font-bold ${isMobile ? "text-sm" : "text-xs"} px-2 py-1.5 rounded-md border ${row.colorClass} flex-1 mr-1`}
-                              >
-                                <div className="truncate">{row.label}</div>
-                              </div>
-                              {isEditMode && (
+                            <div
+                              className={`flex items-center ${isMobile ? "justify-center" : "gap-2"} `}
+                            >
+                              {/* Edit Buttons (Up/Down) */}
+                              {isEditMode && !isMobile && (
                                 <div className="flex flex-col gap-0.5">
                                   <button
+                                    type="button"
                                     disabled={isFirst}
-                                    onClick={() => handleMoveRow(idx, "up")}
+                                    onClick={() => handleMoveUser(idx, "up")}
                                     className={`p-0.5 rounded ${isFirst ? "text-gray-200" : "text-gray-400 hover:text-teal-600 hover:bg-gray-100"} `}
                                   >
                                     <ChevronUp size={12} />
                                   </button>
                                   <button
+                                    type="button"
                                     disabled={isLast}
-                                    onClick={() => handleMoveRow(idx, "down")}
+                                    onClick={() => handleMoveUser(idx, "down")}
                                     className={`p-0.5 rounded ${isLast ? "text-gray-200" : "text-gray-400 hover:text-teal-600 hover:bg-gray-100"} `}
                                   >
                                     <ChevronDown size={12} />
                                   </button>
                                 </div>
                               )}
+
+                              {/* Avatar-Hide on Mobile */}
+                              {!isMobile && (
+                                <div
+                                  className="w-7 h-7 rounded-full flex items-center justify-center text-white font-bold text-xs shadow-sm flex-shrink-0 ring-2 ring-white"
+                                  style={{
+                                    backgroundColor: user.color || "#9CA3AF",
+                                  }}
+                                >
+                                  {user.alias || user.name.charAt(0)}
+                                </div>
+                              )}
+
+                              {/* Name / Alias Display */}
+                              <div className="min-w-0">
+                                <div
+                                  className={`font-bold truncate leading-tight ${isMobile ? "text-center text-sm" : "text-xs text-slate-800"} `}
+                                  style={
+                                    isMobile && user.color
+                                      ? { color: user.color }
+                                      : {}
+                                  }
+                                >
+                                  {isMobile
+                                    ? user.alias || user.name.charAt(0)
+                                    : user.name}
+                                </div>
+                                {personalCycleData?.memo && (
+                                  <div className="text-[9px] text-amber-600 font-normal leading-tight mt-0.5 truncate max-w-[80px]">
+                                    {personalCycleData.memo}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </td>
+                          {/* Sticky Count Column-Adjust Offset for Mobile */}
+                          <td
+                            className={`sticky z-10 bg-white group-hover: bg-slate-50 border-r border-slate-200 p-0 text-center shadow-[4px_0_8px_rgba(0, 0, 0, 0.02)] ${isMobile ? "left-[50px]" : "left-[120px]"} `}
+                          >
+                            <div
+                              className={`text-[10px] font-bold mx-1.5 py-0.5 rounded-lg border ${isPersonalCycleCustomized ? "text-amber-700 bg-amber-50 border-amber-300" : "text-slate-600 bg-slate-100 border-slate-200"}`}
+                              title={
+                                isPersonalCycleCustomized && personalCycleData
+                                  ? `自訂週期: ${personalCycleData.startDate} ~ ${personalCycleData.endDate}`
+                                  : undefined
+                              }
+                            >
+                              {workDaysCount}
                             </div>
                           </td>
                           {dateRange.map((date) => {
-                            const staff = row.getData(date);
-                            // Sort staff: Certified First, Learners Last
-                            const sortedStaff = [...staff].sort((a, b) => {
-                              if (!a.user || !b.user) return 0;
-                              const isALearner =
-                                a.user.learningCapabilities?.includes(
-                                  row.label,
-                                );
-                              const isBLearner =
-                                b.user.learningCapabilities?.includes(
-                                  row.label,
-                                );
-
-                              // Primary Sort: Learners go to bottom
-                              if (isALearner && !isBLearner) return 1;
-                              if (!isALearner && isBLearner) return -1;
-
-                              // Secondary Sort: Alphabetical Name
-                              return (a.user.name || "").localeCompare(
-                                b.user.name || "",
-                              );
-                            });
-
+                            const { station, specialRoles, isOff } =
+                              getDayShift(user.id, date);
                             const isToday =
                               toLocalISOString(new Date()) === date;
+                            const pendingReq = getPendingRequest(user.id, date);
+                            const event = holidays.find((h) => h.date === date);
+                            const isClosed =
+                              event?.type === DateEventType.CLOSED;
+                            const isLearning =
+                              station &&
+                              user.learningCapabilities?.includes(station);
 
-                            // Salesforce Stats Badge logic (Daily per cell)
-                            const dStats = db.getDailyStats(date);
-                            let cellBadge: {
-                              val: number | string | JSX.Element;
-                              bg: string;
-                              text: string;
-                              labelStyle: string;
-                              isHeart?: boolean;
-                              isCustomLayout?: boolean;
-                            } | null = null;
-                            if (dStats) {
-                              if (
-                                row.label === "US1" &&
-                                isSupervisorOrHigher &&
-                                ((dStats.beitou_ultrasound ?? 0) > 0 ||
-                                  (dStats.beitou_ultrasound_heart ?? 0) > 0)
-                              ) {
-                                const _us = dStats.beitou_ultrasound || 0;
-                                const _heart = dStats.beitou_ultrasound_heart || 0;
-                                const _fibrosis = dStats.beitou_ultrasound_fibrosis || 0;
-                                const _adjustedUs = Math.max(0, _us - _fibrosis);
-                                cellBadge = {
-                                  val: `${_adjustedUs}/${_heart}`,
-                                  bg: "bg-teal-600",
-                                  text: "text-white",
-                                  labelStyle: "",
-                                };
-                              } else if (
-                                row.label.includes("場控") &&
-                                (dStats.beitou_clients ?? 0) > 0
-                              )
-                                cellBadge = {
-                                  val: dStats.beitou_clients,
-                                  bg: "bg-red-500",
-                                  text: "text-white",
-                                  labelStyle: "",
-                                };
-                              else if (
-                                row.label.includes("MR") &&
-                                !row.label.includes("1.5T") &&
-                                isSupervisorOrHigher &&
-                                ((dStats.beitou_mr ?? 0) > 0 || (dStats.beitou_mr_orders ?? 0) > 0)
-                              )
-                                cellBadge = {
-                                  val: `${dStats.beitou_mr || 0}/${dStats.beitou_mr_orders || 0}`,
-                                  bg: "bg-orange-500",
-                                  text: "text-white",
-                                  labelStyle: "",
-                                };
-                              else if (
-                                row.label.includes("CT") &&
-                                (dStats.beitou_cta ?? 0) > 0
-                              )
-                                cellBadge = {
-                                  val: dStats.beitou_cta,
-                                  bg: "bg-blue-500",
-                                  text: "text-white",
-                                  labelStyle: "",
-                                  isHeart: true,
-                                };
-                              else if (
-                                row.label === "大直" &&
-                                (dStats.dazhi_clients ?? 0) > 0
-                              ) {
-                                const _us = dStats.dazhi_ultrasound || 0;
-                                const _heart = dStats.dazhi_ultrasound_heart || 0;
-                                const _fibrosis = dStats.dazhi_ultrasound_fibrosis || 0;
-                                const _adjustedUs = Math.max(0, _us - _fibrosis);
-                                cellBadge = {
-                                  val: (
-                                    <div className="flex flex-col items-center leading-[1.1] py-0.5 min-w-[3rem]">
-                                      <span className="text-xs font-black">{dStats.dazhi_clients}</span>
-                                      <span className="text-[10px] opacity-90">{_adjustedUs}/{_heart}</span>
-                                    </div>
-                                  ),
-                                  bg: "bg-violet-500",
-                                  text: "text-white",
-                                  labelStyle: "",
-                                  isCustomLayout: true,
-                                };
-                              }
-                            }
-
-                            // Unified Cell Content Logic for both Roles and Stations (Chips)
                             return (
                               <td
                                 key={date}
-                                className={`p-0.5 border-r border-slate-100 align-top h-16 ${isToday ? "bg-teal-50/10" : ""} `}
+                                className={`p-0.5 border-r border-slate-100 align-top h-16 ${isToday ? "bg-teal-50/10" : ""} ${isOff ? "bg-slate-100/60" : isClosed ? "bg-slate-100/30" : ""} relative`}
                               >
-                                <div className="h-full flex flex-col items-center justify-start relative group/cell">
-                                  {cellBadge && (
-                                    <div
-                                      className="w-full flex justify-center mb-1 mt-0.5"
-                                      title="當日統計數量"
-                                    >
-                                      {cellBadge.isHeart ? (
-                                        <div className="relative flex items-center justify-center transition-transform hover:scale-125">
-                                          <Heart
-                                            size={20}
-                                            className="text-red-500 fill-red-500"
-                                          />
-                                          <span className="absolute text-white text-[10px] font-black pb-0.5">
-                                            {cellBadge.val}
+                                {pendingReq && getLeaveBadge(pendingReq.type)}
+                                {isOff ? (
+                                  <div className="h-full w-full flex flex-col items-center justify-center gap-1">
+                                    <span className="text-slate-300 font-bold select-none text-[12px]">
+                                      休
+                                    </span>
+                                    {isEditMode && (
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          handleUpdateShift(
+                                            user.id,
+                                            date,
+                                            "未分配",
+                                            [],
+                                          )
+                                        }
+                                        className="text-[10px] text-teal-600 hover:text-white hover:bg-teal-500 bg-white border border-teal-200 px-1.5 rounded shadow-sm transition-all"
+                                      >
+                                        +
+                                      </button>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <div className="flex flex-col gap-1 h-full justify-start pt-1 items-center">
+                                    {isEditMode ? (
+                                      <select
+                                        value={station || ""}
+                                        onChange={(e) =>
+                                          handleUpdateShift(
+                                            user.id,
+                                            date,
+                                            e.target.value || SYSTEM_OFF,
+                                            specialRoles,
+                                          )
+                                        }
+                                        className="w-full text-[10px] py-1 px-0.5 border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-teal-500 outline-none font-medium text-slate-800"
+                                      >
+                                        <option value="">...</option>
+                                        {userCapableStations.map((s) => (
+                                          <option key={s} value={s}>
+                                            {s}
+                                          </option>
+                                        ))}
+                                        <option value={SYSTEM_OFF}>休假</option>
+                                      </select>
+                                    ) : station ? (
+                                      <div
+                                        className={`flex items-center justify-center px-1 py-1 rounded-md shadow-sm border w-full max-w-[50px] ${getStationStyle(station)} `}
+                                      >
+                                        <span className="text-[10px] font-bold truncate tracking-tight">
+                                          {station}
+                                        </span>
+                                        {isLearning && (
+                                          <span className="text-[9px] bg-white/50 text-slate-900 font-extrabold px-0.5 rounded-lg ml-0.5 leading-none">
+                                            學
                                           </span>
+                                        )}
+                                      </div>
+                                    ) : (
+                                      <div className="flex-1 flex items-center justify-center">
+                                        <div className="text-[10px] text-slate-300 font-light">
+                                          -
                                         </div>
-                                      ) : (
-                                        <div
-                                          className={`${cellBadge.bg} ${cellBadge.text} font-bold shadow-sm flex items-center justify-center ${
-                                            (cellBadge as any).isCustomLayout
-                                              ? "rounded-lg px-2"
-                                              : "text-[10px] px-2 py-[2px] rounded"
-                                          }`}
-                                        >
-                                          {cellBadge.labelStyle && (
-                                            <span className="opacity-90 font-medium text-[9px] mr-1">
-                                              {cellBadge.labelStyle}
+                                      </div>
+                                    )}
+                                    {isEditMode ? (
+                                      <div className="flex flex-wrap gap-0.5 justify-center">
+                                        {specialRolesList.map((role) => {
+                                          const isSelected =
+                                            specialRoles.includes(role);
+                                          return (
+                                            <button
+                                              key={role}
+                                              type="button"
+                                              onClick={() =>
+                                                handleSpecialRoleToggle(
+                                                  user.id,
+                                                  date,
+                                                  role,
+                                                  station ||
+                                                    StationDefault.UNASSIGNED,
+                                                  specialRoles,
+                                                )
+                                              }
+                                              className={`px-1 py-0.5 text-[9px] rounded-lg border transition-all font-bold ${isSelected ? "bg-purple-600 text-white border-purple-600" : "bg-white text-slate-400 border-slate-200 hover:border-purple-300 hover:text-purple-500"} `}
+                                            >
+                                              {role === SPECIAL_ROLES.DUAL_BMD
+                                                ? "兼B/D"
+                                                : role ===
+                                                    SPECIAL_ROLES.DAZHI_SUPPORT
+                                                  ? "大直"
+                                                  : role[0]}
+                                            </button>
+                                          );
+                                        })}
+                                      </div>
+                                    ) : (
+                                      specialRoles.length > 0 && (
+                                        <div className="flex flex-wrap gap-0.5 justify-center w-full">
+                                          {specialRoles.map((role) => (
+                                            <span
+                                              key={role}
+                                              className={`w-full text-center px-0.5 rounded-[2px] text-[10px] leading-tight font-extrabold border mb-0.5 ${
+                                                role === SPECIAL_ROLES.OPENING
+                                                  ? "bg-blue-100/80 text-blue-900 border-blue-200/50"
+                                                  : role === SPECIAL_ROLES.LATE
+                                                    ? "bg-amber-100/80 text-amber-900 border-amber-200/50"
+                                                    : role ===
+                                                        SPECIAL_ROLES.ASSIST
+                                                      ? "bg-emerald-100/80 text-emerald-900 border-emerald-200/50"
+                                                      : role ===
+                                                          SPECIAL_ROLES.SCHEDULER
+                                                        ? "bg-red-100/80 text-red-900 border-red-200/50"
+                                                        : "bg-purple-100 text-purple-700 border-purple-200"
+                                              } `}
+                                            >
+                                              {role}
                                             </span>
-                                          )}
-                                          <span
-                                            className={
-                                              (cellBadge as any).isCustomLayout
-                                                ? ""
-                                                : "leading-none text-[11px]"
-                                            }
-                                          >
-                                            {cellBadge.val}
-                                          </span>
+                                          ))}
                                         </div>
-                                      )}
-                                    </div>
-                                  )}
-                                  <div
-                                    className={`flex flex-wrap gap-1 justify-center w-full px-0.5 ${!cellBadge ? "pt-1" : ""}`}
-                                  >
-                                    {sortedStaff.map((item, i) => {
-                                      const isOpening =
-                                        item.shift.specialRoles.includes(
-                                          SPECIAL_ROLES.OPENING,
-                                        );
-                                      const isLate =
-                                        item.shift.specialRoles.includes(
-                                          SPECIAL_ROLES.LATE,
-                                        );
-                                      const isAssist =
-                                        item.shift.specialRoles.includes(
-                                          SPECIAL_ROLES.ASSIST,
-                                        );
-                                      const isScheduler =
-                                        item.shift.specialRoles.includes(
-                                          SPECIAL_ROLES.SCHEDULER,
-                                        );
-                                      const isDualBMD =
-                                        item.shift.specialRoles.includes(
-                                          SPECIAL_ROLES.DUAL_BMD,
-                                        );
-                                      const isDazhiSupport =
-                                        item.shift.specialRoles.includes(
-                                          SPECIAL_ROLES.DAZHI_SUPPORT,
-                                        );
+                                      )
+                                    )}
+                                  </div>
+                                )}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      );
+                    })
+                  ) : (
+                    // --- Station View (Unified & Reorderable) ---
+                    <>
+                      {rowConfigs.map((row, idx) => {
+                        const isFirst = idx === 0;
+                        const isLast = idx === rowConfigs.length - 1;
+                        return (
+                          <tr
+                            key={row.id}
+                            className="group hover:bg-slate-50/50 transition-colors relative"
+                          >
+                            <td
+                              className={`sticky left-0 z-10 bg-white group-hover: bg-slate-50 border-r border-slate-200 shadow-[4px_0_8px_rgba(0, 0, 0, 0.02)] ${isMobile ? "p-1 w-[85px] min-w-[85px]" : "p-2"} `}
+                            >
+                              <div className="flex items-center justify-between">
+                                <div
+                                  className={`flex items-center gap-1.5 font-bold ${isMobile ? "text-sm" : "text-xs"} px-2 py-1.5 rounded-md border ${row.colorClass} flex-1 mr-1`}
+                                >
+                                  <div className="truncate">{row.label}</div>
+                                </div>
+                                {isEditMode && (
+                                  <div className="flex flex-col gap-0.5">
+                                    <button
+                                      disabled={isFirst}
+                                      onClick={() => handleMoveRow(idx, "up")}
+                                      className={`p-0.5 rounded ${isFirst ? "text-gray-200" : "text-gray-400 hover:text-teal-600 hover:bg-gray-100"} `}
+                                    >
+                                      <ChevronUp size={12} />
+                                    </button>
+                                    <button
+                                      disabled={isLast}
+                                      onClick={() => handleMoveRow(idx, "down")}
+                                      className={`p-0.5 rounded ${isLast ? "text-gray-200" : "text-gray-400 hover:text-teal-600 hover:bg-gray-100"} `}
+                                    >
+                                      <ChevronDown size={12} />
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            </td>
+                            {dateRange.map((date) => {
+                              const staff = row.getData(date);
+                              // Sort staff: Certified First, Learners Last
+                              const sortedStaff = [...staff].sort((a, b) => {
+                                if (!a.user || !b.user) return 0;
+                                const isALearner =
+                                  a.user.learningCapabilities?.includes(
+                                    row.label,
+                                  );
+                                const isBLearner =
+                                  b.user.learningCapabilities?.includes(
+                                    row.label,
+                                  );
 
-                                      // LEAVE STATUS CHECK
-                                      const activeLeave = db
-                                        .getLeaves()
-                                        .find(
-                                          (l) =>
-                                            l.userId === item.user!.id &&
-                                            (l.status ===
-                                              LeaveStatus.APPROVED ||
-                                              l.status ===
-                                                LeaveStatus.PENDING) &&
-                                            date >= l.startDate &&
-                                            date <= l.endDate,
-                                        );
+                                // Primary Sort: Learners go to bottom
+                                if (isALearner && !isBLearner) return 1;
+                                if (!isALearner && isBLearner) return -1;
 
-                                      const isPreLeave =
-                                        activeLeave?.type ===
-                                        LeaveType.PRE_SCHEDULED;
-                                      const isLongLeave =
-                                        activeLeave?.type ===
-                                        LeaveType.LONG_LEAVE;
-                                      const isCancelLeave =
-                                        activeLeave?.type ===
-                                        LeaveType.CANCEL_LEAVE;
-                                      const isSwapShift =
-                                        activeLeave?.type ===
-                                        LeaveType.SWAP_SHIFT;
-                                      const isPending =
-                                        activeLeave?.status ===
-                                        LeaveStatus.PENDING;
-                                      // Wait, if they are in Station View, they are WORKING.
-                                      // Why would they have a leave record?
-                                      // 1. Cancel Leave -> We show they are working. User wants to see "Cancel Leave" badge.
-                                      // 2. Swap Shift -> If they are the one working (Target), we might track that via a DIFFERENT record?
-                                      //    Or if the Requestor is working? No, Requestor is OFF.
-                                      //    So if item.user is here, they are working.
-                                      //    Visual Request: "Show if this person has Pre/Cancel/Long/Swap".
+                                // Secondary Sort: Alphabetical Name
+                                return (a.user.name || "").localeCompare(
+                                  b.user.name || "",
+                                );
+                              });
 
-                                      // Only show suffix if the row itself isn't that role
-                                      const showSuffix = row.type === "STATION";
+                              const isToday =
+                                toLocalISOString(new Date()) === date;
 
-                                      // Use Station Theme Color instead of User Color
-                                      let chipClass = getStationChipStyle(
-                                        row.label,
-                                      );
+                              // Salesforce Stats Badge logic (Daily per cell)
+                              const dStats = db.getDailyStats(date);
+                              let cellBadge: {
+                                val: number | string | JSX.Element;
+                                bg: string;
+                                text: string;
+                                labelStyle: string;
+                                isHeart?: boolean;
+                                isCustomLayout?: boolean;
+                              } | null = null;
+                              if (dStats) {
+                                if (
+                                  row.label === "US1" &&
+                                  isSupervisorOrHigher &&
+                                  ((dStats.beitou_ultrasound ?? 0) > 0 ||
+                                    (dStats.beitou_ultrasound_heart ?? 0) > 0)
+                                ) {
+                                  const _us = dStats.beitou_ultrasound || 0;
+                                  const _heart =
+                                    dStats.beitou_ultrasound_heart || 0;
+                                  const _fibrosis =
+                                    dStats.beitou_ultrasound_fibrosis || 0;
+                                  const _adjustedUs = Math.max(
+                                    0,
+                                    _us - _fibrosis,
+                                  );
+                                  cellBadge = {
+                                    val: `${_adjustedUs}/${_heart}`,
+                                    bg: "bg-teal-600",
+                                    text: "text-white",
+                                    labelStyle: "",
+                                  };
+                                } else if (
+                                  row.label.includes("場控") &&
+                                  (dStats.beitou_clients ?? 0) > 0
+                                )
+                                  cellBadge = {
+                                    val: dStats.beitou_clients,
+                                    bg: "bg-red-500",
+                                    text: "text-white",
+                                    labelStyle: "",
+                                  };
+                                else if (
+                                  row.label.includes("MR") &&
+                                  !row.label.includes("1.5T") &&
+                                  isSupervisorOrHigher &&
+                                  ((dStats.beitou_mr ?? 0) > 0 ||
+                                    (dStats.beitou_mr_orders ?? 0) > 0)
+                                )
+                                  cellBadge = {
+                                    val: `${dStats.beitou_mr || 0}/${dStats.beitou_mr_orders || 0}`,
+                                    bg: "bg-orange-500",
+                                    text: "text-white",
+                                    labelStyle: "",
+                                  };
+                                else if (
+                                  row.label.includes("CT") &&
+                                  (dStats.beitou_cta ?? 0) > 0
+                                )
+                                  cellBadge = {
+                                    val: dStats.beitou_cta,
+                                    bg: "bg-blue-500",
+                                    text: "text-white",
+                                    labelStyle: "",
+                                    isHeart: true,
+                                  };
+                                else if (
+                                  row.label === "大直" &&
+                                  (dStats.dazhi_clients ?? 0) > 0
+                                ) {
+                                  const _us = dStats.dazhi_ultrasound || 0;
+                                  const _heart =
+                                    dStats.dazhi_ultrasound_heart || 0;
+                                  const _fibrosis =
+                                    dStats.dazhi_ultrasound_fibrosis || 0;
+                                  const _adjustedUs = Math.max(
+                                    0,
+                                    _us - _fibrosis,
+                                  );
+                                  cellBadge = {
+                                    val: (
+                                      <div className="flex flex-col items-center leading-[1.1] py-0.5 min-w-[3rem]">
+                                        <span className="text-xs font-black">
+                                          {dStats.dazhi_clients}
+                                        </span>
+                                        <span className="text-[10px] opacity-90">
+                                          {_adjustedUs}/{_heart}
+                                        </span>
+                                      </div>
+                                    ),
+                                    bg: "bg-violet-500",
+                                    text: "text-white",
+                                    labelStyle: "",
+                                    isCustomLayout: true,
+                                  };
+                                }
+                              }
 
-                                      // Check if this user is a Learner for this specific station
-                                      const isLearner =
-                                        item.user?.learningCapabilities?.includes(
-                                          row.label,
-                                        );
-                                      // Revert: White override logic for learners in Station View
-                                      if (isLearner) {
-                                        chipClass =
-                                          "bg-white text-slate-500 border-slate-200 border-dashed";
-                                      }
-
-                                      return (
-                                        <div
-                                          key={i}
-                                          className={`px-1 py-1 rounded-lg text-sm font-bold shadow-sm flex flex-col items-center w-full max-w-[60px] relative group / chip border ${chipClass} `}
-                                        >
-                                          <span className="truncate text-xs leading-tight mb-0.5 whitespace-nowrap flex items-center gap-0.5">
-                                            {item.user?.name
-                                              ? formatName(item.user.name)
-                                              : ""}
-                                            {isLearner && (
-                                              <span className="text-[9px]">
-                                                (學)
+                              // Unified Cell Content Logic for both Roles and Stations (Chips)
+                              return (
+                                <td
+                                  key={date}
+                                  className={`p-0.5 border-r border-slate-100 align-top h-16 ${isToday ? "bg-teal-50/10" : ""} `}
+                                >
+                                  <div className="h-full flex flex-col items-center justify-start relative group/cell">
+                                    {cellBadge && (
+                                      <div
+                                        className="w-full flex justify-center mb-1 mt-0.5"
+                                        title="當日統計數量"
+                                      >
+                                        {cellBadge.isHeart ? (
+                                          <div className="relative flex items-center justify-center transition-transform hover:scale-125">
+                                            <Heart
+                                              size={20}
+                                              className="text-red-500 fill-red-500"
+                                            />
+                                            <span className="absolute text-white text-[10px] font-black pb-0.5">
+                                              {cellBadge.val}
+                                            </span>
+                                          </div>
+                                        ) : (
+                                          <div
+                                            className={`${cellBadge.bg} ${cellBadge.text} font-bold shadow-sm flex items-center justify-center ${
+                                              (cellBadge as any).isCustomLayout
+                                                ? "rounded-lg px-2"
+                                                : "text-[10px] px-2 py-[2px] rounded"
+                                            }`}
+                                          >
+                                            {cellBadge.labelStyle && (
+                                              <span className="opacity-90 font-medium text-[9px] mr-1">
+                                                {cellBadge.labelStyle}
                                               </span>
                                             )}
-                                          </span>
+                                            <span
+                                              className={
+                                                (cellBadge as any)
+                                                  .isCustomLayout
+                                                  ? ""
+                                                  : "leading-none text-[11px]"
+                                              }
+                                            >
+                                              {cellBadge.val}
+                                            </span>
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
+                                    <div
+                                      className={`flex flex-wrap gap-1 justify-center w-full px-0.5 ${!cellBadge ? "pt-1" : ""}`}
+                                    >
+                                      {sortedStaff.map((item, i) => {
+                                        const isOpening =
+                                          item.shift.specialRoles.includes(
+                                            SPECIAL_ROLES.OPENING,
+                                          );
+                                        const isLate =
+                                          item.shift.specialRoles.includes(
+                                            SPECIAL_ROLES.LATE,
+                                          );
+                                        const isAssist =
+                                          item.shift.specialRoles.includes(
+                                            SPECIAL_ROLES.ASSIST,
+                                          );
+                                        const isScheduler =
+                                          item.shift.specialRoles.includes(
+                                            SPECIAL_ROLES.SCHEDULER,
+                                          );
+                                        const isDualBMD =
+                                          item.shift.specialRoles.includes(
+                                            SPECIAL_ROLES.DUAL_BMD,
+                                          );
+                                        const isDazhiSupport =
+                                          item.shift.specialRoles.includes(
+                                            SPECIAL_ROLES.DAZHI_SUPPORT,
+                                          );
 
-                                          {/* Leave / Status Indicators */}
-                                          {activeLeave && (
-                                            <div className="flex gap-0.5 mb-0.5">
-                                              {isPreLeave && (
-                                                <span
-                                                  className={`text-[8px] ${isPending ? "bg-blue-300" : "bg-blue-500"} text-white px-0.5 rounded leading-none scale-90`}
-                                                >
-                                                  預
-                                                </span>
-                                              )}
-                                              {isCancelLeave && (
-                                                <span
-                                                  className={`text-[8px] ${isPending ? "bg-emerald-300" : "bg-emerald-500"} text-white px-0.5 rounded leading-none scale-90`}
-                                                >
-                                                  銷
-                                                </span>
-                                              )}
-                                              {isLongLeave && (
-                                                <span
-                                                  className={`text-[8px] ${isPending ? "bg-purple-300" : "bg-purple-500"} text-white px-0.5 rounded leading-none scale-90`}
-                                                >
-                                                  長
-                                                </span>
-                                              )}
-                                              {isSwapShift && (
-                                                <span
-                                                  className={`text-[8px] ${isPending ? "bg-amber-300" : "bg-amber-500"} text-white px-0.5 rounded leading-none scale-90`}
-                                                >
-                                                  換
-                                                </span>
-                                              )}
-                                            </div>
-                                          )}
+                                        // LEAVE STATUS CHECK
+                                        const activeLeave = db
+                                          .getLeaves()
+                                          .find(
+                                            (l) =>
+                                              l.userId === item.user!.id &&
+                                              (l.status ===
+                                                LeaveStatus.APPROVED ||
+                                                l.status ===
+                                                  LeaveStatus.PENDING) &&
+                                              date >= l.startDate &&
+                                              date <= l.endDate,
+                                          );
 
-                                          {showSuffix &&
-                                            (isOpening ||
-                                              isLate ||
-                                              isAssist ||
-                                              isScheduler ||
-                                              isDualBMD ||
-                                              isDazhiSupport) && (
-                                              <div className="flex flex-col gap-0.5 mt-0.5 w-full items-center">
-                                                {isOpening && (
-                                                  <span className="w-full text-center bg-blue-100/80 px-0.5 rounded-[2px] text-[10px] leading-tight text-blue-900 font-extrabold border border-blue-200/50">
-                                                    開機
+                                        const isPreLeave =
+                                          activeLeave?.type ===
+                                          LeaveType.PRE_SCHEDULED;
+                                        const isLongLeave =
+                                          activeLeave?.type ===
+                                          LeaveType.LONG_LEAVE;
+                                        const isCancelLeave =
+                                          activeLeave?.type ===
+                                          LeaveType.CANCEL_LEAVE;
+                                        const isSwapShift =
+                                          activeLeave?.type ===
+                                          LeaveType.SWAP_SHIFT;
+                                        const isPending =
+                                          activeLeave?.status ===
+                                          LeaveStatus.PENDING;
+                                        // Wait, if they are in Station View, they are WORKING.
+                                        // Why would they have a leave record?
+                                        // 1. Cancel Leave -> We show they are working. User wants to see "Cancel Leave" badge.
+                                        // 2. Swap Shift -> If they are the one working (Target), we might track that via a DIFFERENT record?
+                                        //    Or if the Requestor is working? No, Requestor is OFF.
+                                        //    So if item.user is here, they are working.
+                                        //    Visual Request: "Show if this person has Pre/Cancel/Long/Swap".
+
+                                        // Only show suffix if the row itself isn't that role
+                                        const showSuffix =
+                                          row.type === "STATION";
+
+                                        // Use Station Theme Color instead of User Color
+                                        let chipClass = getStationChipStyle(
+                                          row.label,
+                                        );
+
+                                        // Check if this user is a Learner for this specific station
+                                        const isLearner =
+                                          item.user?.learningCapabilities?.includes(
+                                            row.label,
+                                          );
+                                        // Revert: White override logic for learners in Station View
+                                        if (isLearner) {
+                                          chipClass =
+                                            "bg-white text-slate-500 border-slate-200 border-dashed";
+                                        }
+
+                                        return (
+                                          <div
+                                            key={i}
+                                            className={`px-1 py-1 rounded-lg text-sm font-bold shadow-sm flex flex-col items-center w-full max-w-[60px] relative group / chip border ${chipClass} `}
+                                          >
+                                            <span className="truncate text-xs leading-tight mb-0.5 whitespace-nowrap flex items-center gap-0.5">
+                                              {item.user?.name
+                                                ? formatName(item.user.name)
+                                                : ""}
+                                              {isLearner && (
+                                                <span className="text-[9px]">
+                                                  (學)
+                                                </span>
+                                              )}
+                                            </span>
+
+                                            {/* Leave / Status Indicators */}
+                                            {activeLeave && (
+                                              <div className="flex gap-0.5 mb-0.5">
+                                                {isPreLeave && (
+                                                  <span
+                                                    className={`text-[8px] ${isPending ? "bg-blue-300" : "bg-blue-500"} text-white px-0.5 rounded leading-none scale-90`}
+                                                  >
+                                                    預
                                                   </span>
                                                 )}
-                                                {isLate && (
-                                                  <span className="w-full text-center bg-amber-100/80 px-0.5 rounded-[2px] text-[10px] leading-tight text-amber-900 font-extrabold border border-amber-200/50">
-                                                    晚班
+                                                {isCancelLeave && (
+                                                  <span
+                                                    className={`text-[8px] ${isPending ? "bg-emerald-300" : "bg-emerald-500"} text-white px-0.5 rounded leading-none scale-90`}
+                                                  >
+                                                    銷
                                                   </span>
                                                 )}
-                                                {isAssist && (
-                                                  <span className="w-full text-center bg-emerald-100/80 px-0.5 rounded-[2px] text-[10px] leading-tight text-emerald-900 font-extrabold border border-emerald-200/50">
-                                                    輔班
+                                                {isLongLeave && (
+                                                  <span
+                                                    className={`text-[8px] ${isPending ? "bg-purple-300" : "bg-purple-500"} text-white px-0.5 rounded leading-none scale-90`}
+                                                  >
+                                                    長
                                                   </span>
                                                 )}
-                                                {isScheduler && (
-                                                  <span className="w-full text-center bg-red-100/80 px-0.5 rounded-[2px] text-[10px] leading-tight text-red-900 font-extrabold border border-red-200/50">
-                                                    排班
-                                                  </span>
-                                                )}
-                                                {isDualBMD && (
-                                                  <span className="w-full text-center bg-purple-100/80 px-0.5 rounded-[2px] text-[10px] leading-tight text-purple-900 font-extrabold border border-purple-200/50">
-                                                    兼BMD/DX
-                                                  </span>
-                                                )}
-                                                {isDazhiSupport && (
-                                                  <span className="w-full text-center bg-violet-100/80 px-0.5 rounded-[2px] text-[10px] leading-tight text-violet-900 font-extrabold border border-violet-200/50">
-                                                    {row.label.includes("大直")
-                                                      ? "遠班"
-                                                      : "大直支援"}
+                                                {isSwapShift && (
+                                                  <span
+                                                    className={`text-[8px] ${isPending ? "bg-amber-300" : "bg-amber-500"} text-white px-0.5 rounded leading-none scale-90`}
+                                                  >
+                                                    換
                                                   </span>
                                                 )}
                                               </div>
                                             )}
 
-                                          {isEditMode && (
+                                            {showSuffix &&
+                                              (isOpening ||
+                                                isLate ||
+                                                isAssist ||
+                                                isScheduler ||
+                                                isDualBMD ||
+                                                isDazhiSupport) && (
+                                                <div className="flex flex-col gap-0.5 mt-0.5 w-full items-center">
+                                                  {isOpening && (
+                                                    <span className="w-full text-center bg-blue-100/80 px-0.5 rounded-[2px] text-[10px] leading-tight text-blue-900 font-extrabold border border-blue-200/50">
+                                                      開機
+                                                    </span>
+                                                  )}
+                                                  {isLate && (
+                                                    <span className="w-full text-center bg-amber-100/80 px-0.5 rounded-[2px] text-[10px] leading-tight text-amber-900 font-extrabold border border-amber-200/50">
+                                                      晚班
+                                                    </span>
+                                                  )}
+                                                  {isAssist && (
+                                                    <span className="w-full text-center bg-emerald-100/80 px-0.5 rounded-[2px] text-[10px] leading-tight text-emerald-900 font-extrabold border border-emerald-200/50">
+                                                      輔班
+                                                    </span>
+                                                  )}
+                                                  {isScheduler && (
+                                                    <span className="w-full text-center bg-red-100/80 px-0.5 rounded-[2px] text-[10px] leading-tight text-red-900 font-extrabold border border-red-200/50">
+                                                      排班
+                                                    </span>
+                                                  )}
+                                                  {isDualBMD && (
+                                                    <span className="w-full text-center bg-purple-100/80 px-0.5 rounded-[2px] text-[10px] leading-tight text-purple-900 font-extrabold border border-purple-200/50">
+                                                      兼BMD/DX
+                                                    </span>
+                                                  )}
+                                                  {isDazhiSupport && (
+                                                    <span className="w-full text-center bg-violet-100/80 px-0.5 rounded-[2px] text-[10px] leading-tight text-violet-900 font-extrabold border border-violet-200/50">
+                                                      {row.label.includes(
+                                                        "大直",
+                                                      )
+                                                        ? "遠班"
+                                                        : "大直支援"}
+                                                    </span>
+                                                  )}
+                                                </div>
+                                              )}
+
+                                            {isEditMode && (
+                                              <button
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  if (row.type === "STATION")
+                                                    handleRemoveUserFromStation(
+                                                      item.user!.id,
+                                                      date,
+                                                      row.label,
+                                                    );
+                                                  else
+                                                    handleRemoveUserFromRole(
+                                                      item.user!.id,
+                                                      date,
+                                                      row.label,
+                                                    );
+                                                }}
+                                                className={`absolute-top-1-right-1 bg-white text-red-500 rounded-full p-0.5 transition-opacity shadow-sm border border-red-100 z-10 ${isMobile && isEditMode ? "opacity-100" : "opacity-0 group-hover/chip:opacity-100"} `}
+                                              >
+                                                <X size={8} />
+                                              </button>
+                                            )}
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                    {isEditMode && (
+                                      <div
+                                        className={`mt-1 w-full flex justify-center transition-opacity ${isMobile && isEditMode ? "opacity-100" : "opacity-0 group-hover/cell:opacity-100"} `}
+                                      >
+                                        <div className="relative w-full max-w-[40px]">
+                                          <button className="w-full flex justify-center bg-slate-100 hover:bg-slate-200 rounded-lg text-slate-400 text-[10px] border border-slate-200">
+                                            <Plus size={10} />
+                                          </button>
+                                          <select
+                                            className="absolute inset-0 opacity-0 cursor-pointer"
+                                            value=""
+                                            onChange={(e) => {
+                                              if (e.target.value) {
+                                                if (row.type === "STATION") {
+                                                  handleAddUserToStation(
+                                                    e.target.value,
+                                                    date,
+                                                    row.label,
+                                                  );
+                                                } else {
+                                                  handleAddUserToRole(
+                                                    e.target.value,
+                                                    date,
+                                                    row.label,
+                                                  );
+                                                }
+                                              }
+                                            }}
+                                          >
+                                            <option value="">選擇人員</option>
+                                            {row.type === "STATION"
+                                              ? getAssignableCandidates(
+                                                  row.label,
+                                                  date,
+                                                ).map((u) => (
+                                                  <option
+                                                    key={u.id}
+                                                    value={u.id}
+                                                  >
+                                                    {u.name} (
+                                                    {u.alias || u.name[0]})
+                                                  </option>
+                                                ))
+                                              : getCandidatesForRole(
+                                                  row.label,
+                                                  date,
+                                                ).map((u) => (
+                                                  <option
+                                                    key={u.id}
+                                                    value={u.id}
+                                                  >
+                                                    {u.name} (
+                                                    {u.alias || u.name[0]})
+                                                  </option>
+                                                ))}
+                                          </select>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        );
+                      })}
+
+                      {/* --- Doctor Schedule Rows (Admin/Supervisor Only) or All? User said "崗位視角" --- */}
+
+                      <tr className="bg-slate-100 border-t-4 border-slate-300">
+                        <td
+                          colSpan={dateRange.length + 1}
+                          className="p-1 px-3 font-bold text-slate-700"
+                        >
+                          醫師人力配置
+                        </td>
+                      </tr>
+
+                      {["上班醫師", "影像", "遠班", "支援"].map((rowLabel) => {
+                        return (
+                          <tr
+                            key={`doc-${rowLabel}`}
+                            className="bg-white border-t border-slate-200"
+                          >
+                            <td
+                              className={`sticky left-0 z-10 bg-slate-50/95 backdrop-blur border-r border-slate-200 shadow-[4px_0_8px_rgba(0,0,0,0.02)] ${isMobile ? "p-1 w-[85px] min-w-[85px]" : "p-2"}`}
+                            >
+                              <div className="flex flex-col items-end pr-2">
+                                <div className="text-xs font-bold text-slate-600">
+                                  {rowLabel}
+                                </div>
+                              </div>
+                            </td>
+                            {dateRange.map((date) => {
+                              // 1. Get all shifts for this date
+                              const allShifts = db
+                                .getDoctorShifts()
+                                .filter((s) => s.date === date);
+
+                              // 2. Filter & Group by station field
+                              const shiftsHere = allShifts.filter((s) => {
+                                const doc = db
+                                  .getDoctors()
+                                  .find((d) => d.id === s.doctorId);
+                                // Filter: Must be Radiology
+                                if (!doc?.specialty?.includes("放射"))
+                                  return false;
+
+                                // Simple station-based grouping
+                                const st = s.station;
+
+                                if (rowLabel === "上班醫師") {
+                                  // Show doctors with station = '未分配'
+                                  if (st !== "未分配") return false;
+
+                                  // Exclude doctors who are OFF, on leave, or have no scheduled station
+                                  if (
+                                    !s.scheduled_station ||
+                                    s.scheduled_station === "X" ||
+                                    s.scheduled_station === "OFF"
+                                  )
+                                    return false;
+
+                                  // Exclude Taichung doctors (As requested)
+                                  if (s.location === "台中") return false;
+
+                                  // Strict Location Filter:
+                                  // Only show if Location is '北投' (or empty) OR scheduled_station includes '遠'
+                                  const isBeitou =
+                                    s.location === "北投" || !s.location;
+                                  const isRemote =
+                                    s.scheduled_station?.includes("遠");
+
+                                  return isBeitou || isRemote;
+                                } else if (rowLabel === "影像") {
+                                  return st === "影像";
+                                } else if (rowLabel === "遠班") {
+                                  return st.includes("遠");
+                                } else if (rowLabel === "支援") {
+                                  return st === "支援";
+                                }
+                                return false;
+                              });
+
+                              const isToday =
+                                date === new Date().toISOString().split("T")[0];
+                              const isReadOnlyRow = rowLabel === "上班醫師";
+
+                              // Sort shifts by doctor display order
+                              shiftsHere.sort((a, b) => {
+                                const docA = db
+                                  .getDoctors()
+                                  .find((d) => d.id === a.doctorId);
+                                const docB = db
+                                  .getDoctors()
+                                  .find((d) => d.id === b.doctorId);
+                                return (
+                                  (docA?.displayOrder || 0) -
+                                  (docB?.displayOrder || 0)
+                                );
+                              });
+
+                              // Highlight 'Today' only for '上班醫師' row as pale yellow
+                              const cellBg =
+                                isReadOnlyRow && isToday
+                                  ? "bg-amber-100 ring-2 ring-amber-200 ring-inset"
+                                  : "";
+
+                              return (
+                                <td
+                                  key={date}
+                                  className={`p-1 border-r border-gray-100 align-top min-w-[120px] ${cellBg}`}
+                                >
+                                  <div className="flex flex-col gap-1">
+                                    {shiftsHere.map((s) => {
+                                      const doc = db
+                                        .getDoctors()
+                                        .find((d) => d.id === s.doctorId);
+                                      // Display Logic:
+                                      // For '上班醫師' (Summary Row), prefer scheduled_station (CT, MR...) if available
+                                      // For others, show nothing specific (just Name) as row implies station
+                                      const displayStation =
+                                        rowLabel === "上班醫師" &&
+                                        s.scheduled_station
+                                          ? s.scheduled_station
+                                          : rowLabel === "上班醫師"
+                                            ? s.station
+                                            : "";
+
+                                      const isSupervisor =
+                                        currentUser.role ===
+                                          UserRole.SYSTEM_ADMIN ||
+                                        currentUser.role ===
+                                          UserRole.SUPERVISOR;
+
+                                      // Style: Minimalist text-only (no cards)
+                                      const itemStyle = isReadOnlyRow
+                                        ? "text-gray-700"
+                                        : "text-teal-700 font-medium";
+
+                                      return (
+                                        <div
+                                          key={s.id}
+                                          className={`flex items-center justify-center relative px-1 py-0.5 rounded-lg text-xs hover:bg-gray-100 transition-colors ${itemStyle}`}
+                                          style={{
+                                            cursor: isSupervisor
+                                              ? "pointer"
+                                              : "default",
+                                          }}
+                                          draggable={isSupervisor && isEditMode}
+                                          onDragStart={(e) => {
+                                            e.dataTransfer.setData(
+                                              "text/plain",
+                                              JSON.stringify({
+                                                doctorId: doc.id,
+                                                fromDate: date,
+                                                fromStation: s.station,
+                                              }),
+                                            );
+                                          }}
+                                          title={s.scheduled_station}
+                                        >
+                                          {s.scheduled_station === "支援" && (
+                                            <span className="text-[10px] mr-0.5">
+                                              🟡
+                                            </span>
+                                          )}
+                                          {s.scheduled_station === "解說" && (
+                                            <span className="text-[10px] mr-0.5">
+                                              🔴
+                                            </span>
+                                          )}
+                                          <span className="whitespace-nowrap">
+                                            {doc?.alias || doc?.name}
+                                          </span>
+                                          {displayStation && (
+                                            <span
+                                              className={`${isReadOnlyRow ? "text-slate-500" : "text-teal-600"} text-[9px] scale-90 font-medium ml-1`}
+                                            >
+                                              ({displayStation})
+                                            </span>
+                                          )}
+
+                                          {isSupervisor && isEditMode && (
                                             <button
+                                              type="button"
                                               onClick={(e) => {
                                                 e.stopPropagation();
-                                                if (row.type === "STATION")
-                                                  handleRemoveUserFromStation(
-                                                    item.user!.id,
-                                                    date,
-                                                    row.label,
-                                                  );
-                                                else
-                                                  handleRemoveUserFromRole(
-                                                    item.user!.id,
-                                                    date,
-                                                    row.label,
-                                                  );
+                                                db.assignDoctor(
+                                                  doc?.id || "",
+                                                  date,
+                                                  "未分配",
+                                                );
+                                                showToast(
+                                                  "已移回上班醫師",
+                                                  "success",
+                                                );
                                               }}
-                                              className={`absolute-top-1-right-1 bg-white text-red-500 rounded-full p-0.5 transition-opacity shadow-sm border border-red-100 z-10 ${isMobile && isEditMode ? "opacity-100" : "opacity-0 group-hover/chip:opacity-100"} `}
+                                              className={`${isReadOnlyRow ? "text-slate-400 hover:text-red-400" : "text-teal-600 hover:text-red-500"} absolute right-0.5`}
                                             >
-                                              <X size={8} />
+                                              &times;
                                             </button>
                                           )}
                                         </div>
                                       );
                                     })}
-                                  </div>
-                                  {isEditMode && (
-                                    <div
-                                      className={`mt-1 w-full flex justify-center transition-opacity ${isMobile && isEditMode ? "opacity-100" : "opacity-0 group-hover/cell:opacity-100"} `}
-                                    >
-                                      <div className="relative w-full max-w-[40px]">
-                                        <button className="w-full flex justify-center bg-slate-100 hover:bg-slate-200 rounded-lg text-slate-400 text-[10px] border border-slate-200">
-                                          <Plus size={10} />
-                                        </button>
-                                        <select
-                                          className="absolute inset-0 opacity-0 cursor-pointer"
-                                          value=""
-                                          onChange={(e) => {
-                                            if (e.target.value) {
-                                              if (row.type === "STATION") {
-                                                handleAddUserToStation(
+
+                                    {(currentUser.role ===
+                                      UserRole.SYSTEM_ADMIN ||
+                                      currentUser.role ===
+                                        UserRole.SUPERVISOR) &&
+                                      isEditMode && (
+                                        <div className="relative w-4 h-4 bg-slate-100 hover:bg-slate-200 rounded-lg text-slate-400 text-[10px] border border-slate-200 flex items-center justify-center">
+                                          +
+                                          <select
+                                            className="w-full h-full opacity-0 absolute inset-0 cursor-pointer"
+                                            onChange={(e) => {
+                                              if (e.target.value) {
+                                                // Determine target station based on row
+                                                let targetStation = "未分配";
+                                                if (rowLabel === "影像")
+                                                  targetStation = "影像";
+                                                if (rowLabel === "遠班")
+                                                  targetStation = "遠";
+                                                if (rowLabel === "支援")
+                                                  targetStation = "支援";
+
+                                                db.assignDoctor(
                                                   e.target.value,
                                                   date,
-                                                  row.label,
+                                                  targetStation,
                                                 );
-                                              } else {
-                                                handleAddUserToRole(
-                                                  e.target.value,
-                                                  date,
-                                                  row.label,
+                                                showToast(
+                                                  "已指派醫師",
+                                                  "success",
                                                 );
+                                                e.target.value = ""; // Reset
                                               }
-                                            }
-                                          }}
-                                        >
-                                          <option value="">選擇人員</option>
-                                          {row.type === "STATION"
-                                            ? getAssignableCandidates(
-                                                row.label,
-                                                date,
-                                              ).map((u) => (
-                                                <option key={u.id} value={u.id}>
-                                                  {u.name} (
-                                                  {u.alias || u.name[0]})
-                                                </option>
-                                              ))
-                                            : getCandidatesForRole(
-                                                row.label,
-                                                date,
-                                              ).map((u) => (
-                                                <option key={u.id} value={u.id}>
-                                                  {u.name} (
-                                                  {u.alias || u.name[0]})
+                                            }}
+                                            value=""
+                                          >
+                                            <option value="">+</option>
+                                            {db
+                                              .getDoctors()
+                                              .filter((d) => {
+                                                // 1. Filter logic based on row
+                                                const shift = db.getDoctorShift(
+                                                  d.id,
+                                                  date,
+                                                );
+
+                                                if (rowLabel === "上班醫師") {
+                                                  // For "Working Doctors": Show doctors with NO shift (to add them)
+                                                  if (shift) return false;
+                                                } else {
+                                                  // For Assignment Rows: Show ONLY available doctors (from "Working Doctors" pool)
+                                                  // Must have shift AND station must be '未分配'
+                                                  if (!shift) return false;
+                                                  if (
+                                                    shift.station !== "未分配"
+                                                  )
+                                                    return false;
+                                                }
+
+                                                // 2. Must be Radiology
+                                                if (
+                                                  !d.specialty?.includes("放射")
+                                                )
+                                                  return false;
+                                                return true;
+                                              })
+                                              .map((d) => (
+                                                <option key={d.id} value={d.id}>
+                                                  {d.name}
                                                 </option>
                                               ))}
-                                        </select>
-                                      </div>
-                                    </div>
-                                  )}
-                                </div>
-                              </td>
-                            );
-                          })}
-                        </tr>
-                      );
-                    })}
-
-                    {/* --- Doctor Schedule Rows (Admin/Supervisor Only) or All? User said "崗位視角" --- */}
-
-                    <tr className="bg-slate-100 border-t-4 border-slate-300">
-                      <td
-                        colSpan={dateRange.length + 1}
-                        className="p-1 px-3 font-bold text-slate-700"
-                      >
-                        醫師人力配置
-                      </td>
-                    </tr>
-
-                    {["上班醫師", "影像", "遠班", "支援"].map((rowLabel) => {
-                      return (
-                        <tr
-                          key={`doc-${rowLabel}`}
-                          className="bg-white border-t border-slate-200"
-                        >
-                          <td
-                            className={`sticky left-0 z-10 bg-slate-50/95 backdrop-blur border-r border-slate-200 shadow-[4px_0_8px_rgba(0,0,0,0.02)] ${isMobile ? "p-1 w-[85px] min-w-[85px]" : "p-2"}`}
-                          >
-                            <div className="flex flex-col items-end pr-2">
-                              <div className="text-xs font-bold text-slate-600">
-                                {rowLabel}
-                              </div>
-                            </div>
-                          </td>
-                          {dateRange.map((date) => {
-                            // 1. Get all shifts for this date
-                            const allShifts = db
-                              .getDoctorShifts()
-                              .filter((s) => s.date === date);
-
-                            // 2. Filter & Group by station field
-                            const shiftsHere = allShifts.filter((s) => {
-                              const doc = db
-                                .getDoctors()
-                                .find((d) => d.id === s.doctorId);
-                              // Filter: Must be Radiology
-                              if (!doc?.specialty?.includes("放射"))
-                                return false;
-
-                              // Simple station-based grouping
-                              const st = s.station;
-
-                              if (rowLabel === "上班醫師") {
-                                // Show doctors with station = '未分配'
-                                if (st !== "未分配") return false;
-
-                                // Exclude doctors who are OFF, on leave, or have no scheduled station
-                                if (
-                                  !s.scheduled_station ||
-                                  s.scheduled_station === "X" ||
-                                  s.scheduled_station === "OFF"
-                                )
-                                  return false;
-
-                                // Exclude Taichung doctors (As requested)
-                                if (s.location === "台中") return false;
-
-                                // Strict Location Filter:
-                                // Only show if Location is '北投' (or empty) OR scheduled_station includes '遠'
-                                const isBeitou =
-                                  s.location === "北投" || !s.location;
-                                const isRemote =
-                                  s.scheduled_station?.includes("遠");
-
-                                return isBeitou || isRemote;
-                              } else if (rowLabel === "影像") {
-                                return st === "影像";
-                              } else if (rowLabel === "遠班") {
-                                return st.includes("遠");
-                              } else if (rowLabel === "支援") {
-                                return st === "支援";
-                              }
-                              return false;
-                            });
-
-                            const isToday =
-                              date === new Date().toISOString().split("T")[0];
-                            const isReadOnlyRow = rowLabel === "上班醫師";
-
-                            // Sort shifts by doctor display order
-                            shiftsHere.sort((a, b) => {
-                              const docA = db
-                                .getDoctors()
-                                .find((d) => d.id === a.doctorId);
-                              const docB = db
-                                .getDoctors()
-                                .find((d) => d.id === b.doctorId);
-                              return (
-                                (docA?.displayOrder || 0) -
-                                (docB?.displayOrder || 0)
+                                          </select>
+                                        </div>
+                                      )}
+                                  </div>
+                                </td>
                               );
-                            });
-
-                            // Highlight 'Today' only for '上班醫師' row as pale yellow
-                            const cellBg =
-                              isReadOnlyRow && isToday
-                                ? "bg-amber-100 ring-2 ring-amber-200 ring-inset"
-                                : "";
-
-                            return (
-                              <td
-                                key={date}
-                                className={`p-1 border-r border-gray-100 align-top min-w-[120px] ${cellBg}`}
-                              >
-                                <div className="flex flex-col gap-1">
-                                  {shiftsHere.map((s) => {
-                                    const doc = db
-                                      .getDoctors()
-                                      .find((d) => d.id === s.doctorId);
-                                    // Display Logic:
-                                    // For '上班醫師' (Summary Row), prefer scheduled_station (CT, MR...) if available
-                                    // For others, show nothing specific (just Name) as row implies station
-                                    const displayStation =
-                                      rowLabel === "上班醫師" &&
-                                      s.scheduled_station
-                                        ? s.scheduled_station
-                                        : rowLabel === "上班醫師"
-                                          ? s.station
-                                          : "";
-
-                                    const isSupervisor =
-                                      currentUser.role ===
-                                        UserRole.SYSTEM_ADMIN ||
-                                      currentUser.role === UserRole.SUPERVISOR;
-
-                                    // Style: Minimalist text-only (no cards)
-                                    const itemStyle = isReadOnlyRow
-                                      ? "text-gray-700"
-                                      : "text-teal-700 font-medium";
-
-                                    return (
-                                      <div
-                                        key={s.id}
-                                        className={`flex items-center justify-center relative px-1 py-0.5 rounded-lg text-xs hover:bg-gray-100 transition-colors ${itemStyle}`}
-                                        style={{
-                                          cursor: isSupervisor
-                                            ? "pointer"
-                                            : "default",
-                                        }}
-                                        draggable={isSupervisor && isEditMode}
-                                        onDragStart={(e) => {
-                                          e.dataTransfer.setData(
-                                            "text/plain",
-                                            JSON.stringify({
-                                              doctorId: doc.id,
-                                              fromDate: date,
-                                              fromStation: s.station,
-                                            }),
-                                          );
-                                        }}
-                                        title={s.scheduled_station}
-                                      >
-                                        {s.scheduled_station === "支援" && (
-                                          <span className="text-[10px] mr-0.5">
-                                            🟡
-                                          </span>
-                                        )}
-                                        {s.scheduled_station === "解說" && (
-                                          <span className="text-[10px] mr-0.5">
-                                            🔴
-                                          </span>
-                                        )}
-                                        <span className="whitespace-nowrap">
-                                          {doc?.alias || doc?.name}
-                                        </span>
-                                        {displayStation && (
-                                          <span
-                                            className={`${isReadOnlyRow ? "text-slate-500" : "text-teal-600"} text-[9px] scale-90 font-medium ml-1`}
-                                          >
-                                            ({displayStation})
-                                          </span>
-                                        )}
-
-                                        {isSupervisor && isEditMode && (
-                                          <button
-                                            type="button"
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              db.assignDoctor(
-                                                doc?.id || "",
-                                                date,
-                                                "未分配",
-                                              );
-                                              showToast(
-                                                "已移回上班醫師",
-                                                "success",
-                                              );
-                                            }}
-                                            className={`${isReadOnlyRow ? "text-slate-400 hover:text-red-400" : "text-teal-600 hover:text-red-500"} absolute right-0.5`}
-                                          >
-                                            &times;
-                                          </button>
-                                        )}
-                                      </div>
-                                    );
-                                  })}
-
-                                  {(currentUser.role ===
-                                    UserRole.SYSTEM_ADMIN ||
-                                    currentUser.role === UserRole.SUPERVISOR) &&
-                                    isEditMode && (
-                                      <div className="relative w-4 h-4 bg-slate-100 hover:bg-slate-200 rounded-lg text-slate-400 text-[10px] border border-slate-200 flex items-center justify-center">
-                                        +
-                                        <select
-                                          className="w-full h-full opacity-0 absolute inset-0 cursor-pointer"
-                                          onChange={(e) => {
-                                            if (e.target.value) {
-                                              // Determine target station based on row
-                                              let targetStation = "未分配";
-                                              if (rowLabel === "影像")
-                                                targetStation = "影像";
-                                              if (rowLabel === "遠班")
-                                                targetStation = "遠";
-                                              if (rowLabel === "支援")
-                                                targetStation = "支援";
-
-                                              db.assignDoctor(
-                                                e.target.value,
-                                                date,
-                                                targetStation,
-                                              );
-                                              showToast(
-                                                "已指派醫師",
-                                                "success",
-                                              );
-                                              e.target.value = ""; // Reset
-                                            }
-                                          }}
-                                          value=""
-                                        >
-                                          <option value="">+</option>
-                                          {db
-                                            .getDoctors()
-                                            .filter((d) => {
-                                              // 1. Filter logic based on row
-                                              const shift = db.getDoctorShift(
-                                                d.id,
-                                                date,
-                                              );
-
-                                              if (rowLabel === "上班醫師") {
-                                                // For "Working Doctors": Show doctors with NO shift (to add them)
-                                                if (shift) return false;
-                                              } else {
-                                                // For Assignment Rows: Show ONLY available doctors (from "Working Doctors" pool)
-                                                // Must have shift AND station must be '未分配'
-                                                if (!shift) return false;
-                                                if (shift.station !== "未分配")
-                                                  return false;
-                                              }
-
-                                              // 2. Must be Radiology
-                                              if (
-                                                !d.specialty?.includes("放射")
-                                              )
-                                                return false;
-                                              return true;
-                                            })
-                                            .map((d) => (
-                                              <option key={d.id} value={d.id}>
-                                                {d.name}
-                                              </option>
-                                            ))}
-                                        </select>
-                                      </div>
-                                    )}
-                                </div>
-                              </td>
-                            );
-                          })}
-                        </tr>
-                      );
-                    })}
-                    {/* --- Daily Stats Rows (Admin/Supervisor Only) --- */}
-                    <DailyStatsRows
-                      currentUser={currentUser}
-                      dateRange={dateRange}
-                      isMobile={isMobile}
-                    />
-                  </>
-                )}
-              </tbody>
-            </table>
+                            })}
+                          </tr>
+                        );
+                      })}
+                      {/* --- Daily Stats Rows (Admin/Supervisor Only) --- */}
+                      <DailyStatsRows
+                        currentUser={currentUser}
+                        dateRange={dateRange}
+                        isMobile={isMobile}
+                      />
+                    </>
+                  )}
+                </tbody>
+              </table>
             </div>
             {/* ... (Footer legend) ... */}
             <div className="hidden lg:flex shrink-0 p-4 border-t border-slate-200 bg-white gap-6 text-xs text-slate-500 font-medium">
@@ -5105,12 +5170,16 @@ const DailyManpowerSummary: React.FC<{
     count_wu_2: number;
     count_wu_1: number;
   };
-  const [physicianWorkload, setPhysicianWorkload] = useState<PhysicianWorkloadRow[]>([]);
+  const [physicianWorkload, setPhysicianWorkload] = useState<
+    PhysicianWorkloadRow[]
+  >([]);
 
   useEffect(() => {
     supabase
       .from("physician_workload_daily")
-      .select("doctor_name, count_da_tao_5, count_xiao_tao_4, count_xiao_tao_3, count_wu_2, count_wu_1")
+      .select(
+        "doctor_name, count_da_tao_5, count_xiao_tao_4, count_xiao_tao_3, count_wu_2, count_wu_1",
+      )
       .eq("date", date)
       .then(({ data }) => {
         if (data) setPhysicianWorkload(data as PhysicianWorkloadRow[]);
@@ -5347,7 +5416,11 @@ const DailyManpowerSummary: React.FC<{
           ? physicianWorkload.find((w) => {
               const dbName = w.doctor_name.trim();
               const localName = doc.name.trim();
-              return dbName === localName || dbName.includes(localName) || localName.includes(dbName);
+              return (
+                dbName === localName ||
+                dbName.includes(localName) ||
+                localName.includes(dbName)
+              );
             })
           : undefined;
         if (!wl) return null;
@@ -5356,8 +5429,11 @@ const DailyManpowerSummary: React.FC<{
         const none = wl.count_wu_2 + wl.count_wu_1;
         const total = big + small + none;
         const units =
-          big * 5 + wl.count_xiao_tao_4 * 4 + wl.count_xiao_tao_3 * 3 +
-          wl.count_wu_2 * 2 + wl.count_wu_1 * 1;
+          big * 5 +
+          wl.count_xiao_tao_4 * 4 +
+          wl.count_xiao_tao_3 * 3 +
+          wl.count_wu_2 * 2 +
+          wl.count_wu_1 * 1;
         // Compact: only show non-zero categories
         const parts: string[] = [];
         if (big > 0) parts.push(`${big}大`);
@@ -5463,7 +5539,11 @@ BMD :{{bmd}}
     };
 
     // Helper: build workload summary string — lookup by doctorId to avoid alias collision
-    const buildDocWorkloadStr = (doctorId: string, displayAlias: string, suffix: string): string => {
+    const buildDocWorkloadStr = (
+      doctorId: string,
+      displayAlias: string,
+      suffix: string,
+    ): string => {
       const doc = doctors.find((d) => d.id === doctorId);
       const wl = doc
         ? physicianWorkload.find((w) => {
@@ -5541,8 +5621,15 @@ BMD :{{bmd}}
             : undefined;
 
           let core: string;
+          const overlap = (stats as any).dazhi_beitou_overlap || 0;
+          const actualDazhiUnits = (stats.dazhi_clients || 0) - overlap;
+
           if (!wl) {
-            core = `${alias}  -(無資料) +大直 ${stats.dazhi_clients}`;
+            if (overlap > 0) {
+              core = `${alias}  -(無資料) +大直 ${stats.dazhi_clients} →扣除${overlap}位重疊客戶`;
+            } else {
+              core = `${alias}  -(無資料) +大直 ${stats.dazhi_clients}`;
+            }
           } else {
             const big = wl.count_da_tao_5;
             const small = wl.count_xiao_tao_4 + wl.count_xiao_tao_3;
@@ -5554,7 +5641,14 @@ BMD :{{bmd}}
               wl.count_xiao_tao_3 * 3 +
               wl.count_wu_2 * 2 +
               wl.count_wu_1 * 1;
-            core = `${alias}  ${total} (${big}大 ${small}小 ${none}無) +大直 ${stats.dazhi_clients} →${units + stats.dazhi_clients} 單位`;
+            const finalUnits = units + actualDazhiUnits;
+            const originalUnits = units + (stats.dazhi_clients || 0);
+
+            if (overlap > 0) {
+              core = `${alias}  ${total} (${big}大 ${small}小 ${none}無) +大直 ${stats.dazhi_clients} →${finalUnits} 單位 ，原來${originalUnits}單位減去${overlap}位同時有大直和北投的客戶`;
+            } else {
+              core = `${alias}  ${total} (${big}大 ${small}小 ${none}無) +大直 ${stats.dazhi_clients} →${finalUnits} 單位`;
+            }
           }
 
           if (s.scheduled_station === "解說") {
