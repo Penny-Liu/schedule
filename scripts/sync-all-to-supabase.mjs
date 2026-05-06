@@ -15,7 +15,7 @@ async function syncDailyStats(session, startDate, endDate) {
 
   // 一次性抓取整個區間的資料，取代原本跑 31 次報表的低效做法
   const soql = `
-      SELECT CheckupName__c, Location__c, Order__c, CheckStartDate__c, ResourceCategory__c
+      SELECT CheckupName__c, Location__c, Order__c, Order__r.MedicalRecordNo__c, CheckStartDate__c, ResourceCategory__c
       FROM CheckupReservation__c 
       WHERE (Location__c = '北投' OR Location__c = '大直')
         AND CheckStartDate__c >= ${startDate}
@@ -58,21 +58,22 @@ async function syncDailyStats(session, startDate, endDate) {
     const date = r.CheckStartDate__c;
     const loc = r.Location__c;
     const name = r.CheckupName__c || "";
-    const orderId = r.Order__c;
+    // 優先使用病歷號來識別唯一客戶，若無病歷號則退回使用醫令單號
+    const clientId = r.Order__r?.MedicalRecordNo__c || r.Order__c;
 
     if (!dailyResults[date]) dailyResults[date] = initStats();
     const stats = dailyResults[date];
 
     if (loc === "北投") {
-      // 記錄北投的 Order
-      beitouOrders.add(`${date}_${orderId}`);
+      // 記錄北投的 Client
+      beitouOrders.add(`${date}_${clientId}`);
 
       if (name === "體檢總評") stats.beitou_clients++;
       if (name === "大腸鏡檢查") stats.beitou_gi++;
       if (name.includes("電腦斷層(顯影)")) stats.beitou_cta++;
       if (name.includes("磁振造影") || name.includes("MR")) {
         stats.beitou_mr_orders++;
-        const mrKey = `${date}_${orderId}`;
+        const mrKey = `${date}_${clientId}`;
         if (!seenMR.has(mrKey)) {
           stats.beitou_mr++;
           seenMR.add(mrKey);
@@ -94,7 +95,7 @@ async function syncDailyStats(session, startDate, endDate) {
         ["US", "DX", "BMD"].includes(cat);
 
       if (isClientTarget) {
-        const clientKey = `${date}_${orderId}`;
+        const clientKey = `${date}_${clientId}`;
         if (!seenDazhiClient.has(clientKey)) {
           stats.dazhi_clients++;
           seenDazhiClient.add(clientKey);
