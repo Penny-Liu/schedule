@@ -15,7 +15,7 @@ async function syncDailyStats(session, startDate, endDate) {
 
   // 一次性抓取整個區間的資料，取代原本跑 31 次報表的低效做法
   const soql = `
-      SELECT CheckupName__c, Location__c, Order__c, Order__r.MedicalRecordNo__c, CheckStartDate__c, ResourceCategory__c
+      SELECT CheckupName__c, Location__c, Order__c, MedicalRecordNo__c, CheckStartDate__c, ResourceCategory__c
       FROM CheckupReservation__c 
       WHERE (Location__c = '北投' OR Location__c = '大直')
         AND CheckStartDate__c >= ${startDate}
@@ -58,8 +58,8 @@ async function syncDailyStats(session, startDate, endDate) {
     const date = r.CheckStartDate__c;
     const loc = r.Location__c;
     const name = r.CheckupName__c || "";
-    // 優先使用病歷號來識別唯一客戶，若無病歷號則退回使用醫令單號
-    const clientId = r.Order__r?.MedicalRecordNo__c || r.Order__c;
+    // 使用病歷號來識別唯一客戶，若無病歷號則退回使用醫令單號
+    const clientId = r.MedicalRecordNo__c || r.Order__c;
 
     if (!dailyResults[date]) dailyResults[date] = initStats();
     const stats = dailyResults[date];
