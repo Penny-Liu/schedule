@@ -358,6 +358,7 @@ async function syncPhysicianWorkload(session, startDate, endDate) {
         Image_assignment__r.Name, 
         Order__r.Image_assignment__r.Name,
         Order__c,
+        MedicalRecordNo__c,
         Image_Report__c, 
         ResourceCategory__c, 
         CheckupName__c,
@@ -416,11 +417,14 @@ async function syncPhysicianWorkload(session, startDate, endDate) {
 
     if (!orderWorkload[date]) orderWorkload[date] = {};
     if (!orderWorkload[date][orderId]) {
+      // patientKey: 病歷號優先，否則用醫令號（同一客戶不同院區的聯結鍵）
+      const patientKey = (r.MedicalRecordNo__c || orderId).trim();
       orderWorkload[date][orderId] = {
         mrCount: 0,
         hasSpecialCT: false,
         location: (r.Location__c || "").trim(),
         doctors: new Set(),
+        patientKey,
       };
     }
 
@@ -452,6 +456,18 @@ async function syncPhysicianWorkload(session, startDate, endDate) {
     }
   });
 
+  // 第一階段後：建立「北投客戶鍵 Set」供大直重疊判斷使用
+  // { date: Set<patientKey> } - 記錄當天有北投預約的病歷號
+  const beitouPatientsByDate = {};
+  Object.entries(orderWorkload).forEach(([date, orders]) => {
+    Object.values(orders).forEach((data) => {
+      if (data.location.slice(0, 2) === "北投") {
+        if (!beitouPatientsByDate[date]) beitouPatientsByDate[date] = new Set();
+        beitouPatientsByDate[date].add(data.patientKey);
+      }
+    });
+  });
+
   // 第二階段：依照 醫師 進行統計 (計算該醫師負責了多少個 大套/小套 客戶)
   const doctorStats = {}; // { date: { docName: { categories: {}, totalMR: 0 } } }
 
@@ -459,7 +475,7 @@ async function syncPhysicianWorkload(session, startDate, endDate) {
     if (!doctorStats[date]) doctorStats[date] = {};
 
     Object.values(orders).forEach((data) => {
-      const { mrCount, hasSpecialCT, location: rawLocation, doctors } = data;
+      const { mrCount, hasSpecialCT, location: rawLocation, doctors, patientKey } = data;
       const location = rawLocation.slice(0, 2); // 統一取前兩字：北投、大直
       let category = "";
 
@@ -479,8 +495,11 @@ async function syncPhysicianWorkload(session, startDate, endDate) {
           category = "大套5(無特檢)";
         }
       } else if (location === "大直") {
-        // 大直客戶統一為「大直1」
-        category = "大直1";
+        // 大直：若同一客戶當天在北投也有預約 → 重疊，不計入大直1
+        const isBeitouOverlap = beitouPatientsByDate[date]?.has(patientKey) ?? false;
+        if (!isBeitouOverlap) {
+          category = "大直1";
+        }
       }
 
       // 大直：若 Salesforce 記錄上沒有醫師名字，改用當天遠班醫師（來自排班系統）

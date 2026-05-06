@@ -5565,6 +5565,7 @@ BMD :{{bmd}}
         return `${displayAlias}  -(無資料)${suffix ? ` ${suffix}` : ""}`;
       }
 
+      const big = wl.count_da_tao_5;
       const small = wl.count_xiao_tao_4 + wl.count_xiao_tao_3;
       const none = wl.count_wu_2 + wl.count_wu_1;
       const dazhi = wl.count_dazhi_1 || 0;
