@@ -376,6 +376,36 @@ async function syncPhysicianWorkload(session, startDate, endDate) {
     `[sync-stats] 🔍 雲端原始抓取到 ${records.length} 筆項次 (進行客戶/醫師分類解析...)`,
   );
 
+  // --- 前置：從 Supabase 撈遠班排班，建立「日期 → 遠班醫師名稱 Set」對應表 ---
+  // 大直院區的預約在 Salesforce 不記錄判讀醫師，需從排班系統補齊
+  const { data: doctorShiftsData } = await supabase
+    .from("doctor_shifts")
+    .select("date, doctor_id, station")
+    .gte("date", startDate)
+    .lte("date", endDate)
+    .or("station.eq.遠,station.eq.遠班,station.eq.遠距");
+
+  const { data: doctorsData } = await supabase
+    .from("doctors")
+    .select("id, name");
+
+  const doctorIdToName = {};
+  (doctorsData || []).forEach((d) => {
+    doctorIdToName[d.id] = d.name;
+  });
+
+  // { date: Set<doctorName> }
+  const remoteDoctorsByDate = {};
+  (doctorShiftsData || []).forEach((s) => {
+    const docName = doctorIdToName[s.doctor_id];
+    if (!docName) return;
+    if (!remoteDoctorsByDate[s.date]) remoteDoctorsByDate[s.date] = new Set();
+    remoteDoctorsByDate[s.date].add(docName);
+  });
+  console.log(
+    `[sync-stats] 📅 從排班表取得 ${Object.keys(remoteDoctorsByDate).length} 天的遠班醫師資料，用於補充大直判讀量。`,
+  );
+
   // 第一階段：依照 日期 -> 醫令 (Order) 進行彙整，判斷該客戶的套裝類別
   const orderWorkload = {}; // { date: { orderId: { mrCount, hasSpecialCT, location, doctors: Set } } }
 
@@ -453,7 +483,13 @@ async function syncPhysicianWorkload(session, startDate, endDate) {
         category = "大直1";
       }
 
-      doctors.forEach((doc) => {
+      // 大直：若 Salesforce 記錄上沒有醫師名字，改用當天遠班醫師（來自排班系統）
+      const effectiveDoctors =
+        location === "大直" && doctors.size === 0
+          ? (remoteDoctorsByDate[date] || new Set())
+          : doctors;
+
+      effectiveDoctors.forEach((doc) => {
         if (!doctorStats[date][doc]) {
           doctorStats[date][doc] = { categories: {}, totalMR: 0 };
         }
