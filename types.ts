@@ -34,6 +34,8 @@ export const PERMISSIONS = {
   EDIT_HEALTH_MGMT: "health_mgmt_edit",
   VIEW_ANESTHESIA: "anesthesia_view",
   EDIT_ANESTHESIA: "anesthesia_edit",
+  VIEW_ADMINISTRATIVE: "administrative_view",
+  EDIT_ADMINISTRATIVE: "administrative_edit",
 };
 
 export const PERMISSION_LABELS: Record<string, string> = {
@@ -52,6 +54,8 @@ export const PERMISSION_LABELS: Record<string, string> = {
   [PERMISSIONS.EDIT_HEALTH_MGMT]: "編輯健管排班",
   [PERMISSIONS.VIEW_ANESTHESIA]: "查看麻護排班",
   [PERMISSIONS.EDIT_ANESTHESIA]: "編輯麻護排班",
+  [PERMISSIONS.VIEW_ADMINISTRATIVE]: "查看行政排班",
+  [PERMISSIONS.EDIT_ADMINISTRATIVE]: "編輯行政排班",
 };
 
 export type HMDesignation =

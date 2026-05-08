@@ -16,6 +16,7 @@ import PhysicianSettingsPage from "./pages/PhysicianSettingsPage";
 import DoctorStatisticsPage from "./pages/DoctorStatisticsPage";
 import CloudSchedulePage from "./pages/CloudSchedulePage";
 import HealthMgmtPage from "./pages/HealthMgmtPage";
+import AdministrativeSchedulePage from "./pages/AdministrativeSchedulePage";
 
 // Error Boundary Component
 class ErrorBoundary extends React.Component<
@@ -205,6 +206,8 @@ const App: React.FC = () => {
         return <CloudSchedulePage currentUser={currentUser} />;
       case "health_mgmt":
         return <HealthMgmtPage currentUser={currentUser} />;
+      case "administrative_schedule":
+        return <AdministrativeSchedulePage currentUser={currentUser} />;
       default:
         return <DashboardPage currentUser={currentUser} />;
     }

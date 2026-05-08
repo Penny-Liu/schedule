@@ -478,7 +478,9 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
   // Sync doctors with DB and handle updates
   useEffect(() => {
     const refreshDoctors = () => {
-      setDoctors(db.getDoctors().filter((d) => d.isActive !== false && !d.isPartTime));
+      setDoctors(
+        db.getDoctors().filter((d) => d.isActive !== false && !d.isPartTime),
+      );
     };
     refreshDoctors();
     return db.subscribe(refreshDoctors);
@@ -567,6 +569,69 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
       ? "daily"
       : "personnel";
   });
+
+  // 行政人員相關狀態
+  const [administrativeStaff, setAdministrativeStaff] = useState<any[]>([]);
+  const [administrativeShifts, setAdministrativeShifts] = useState<any[]>([]);
+
+  // 載入行政人員和排班數據
+  useEffect(() => {
+    const loadAdministrativeData = async () => {
+      if (dateRange.length === 0) return;
+
+      try {
+        const [staffRes, shiftsRes] = await Promise.all([
+          supabase
+            .from("administrative_staff")
+            .select("*")
+            .eq("is_active", true),
+          supabase
+            .from("administrative_shifts")
+            .select("*")
+            .gte("date", dateRange[0])
+            .lte("date", dateRange[dateRange.length - 1]),
+        ]);
+
+        if (staffRes.error) throw staffRes.error;
+        if (shiftsRes.error) throw shiftsRes.error;
+
+        setAdministrativeStaff(staffRes.data || []);
+        setAdministrativeShifts(shiftsRes.data || []);
+      } catch (error) {
+        console.error("Error loading administrative data:", error);
+      }
+    };
+
+    loadAdministrativeData();
+  }, [currentDate]);
+
+  // 根據日期和地點獲取值班人員（按部門分組）
+  const getAdminStaffByDateAndLocation = (date: string, location: string) => {
+    const dayShifts = administrativeShifts.filter(
+      (s) => s.date === date && s.location === location,
+    );
+
+    const grouped: Record<string, string[]> = {
+      客服: [],
+      智基: [],
+      資訊: [],
+      報告: [],
+      行政: [],
+    };
+
+    dayShifts.forEach((shift) => {
+      const staff = administrativeStaff.find((s) => s.id === shift.staff_id);
+      if (staff && grouped[staff.category]) {
+        const displayName = staff.phone
+          ? `${staff.name} (${staff.phone})`
+          : staff.name;
+        grouped[staff.category].push(displayName);
+      }
+    });
+
+    return grouped;
+  };
+
   const [isQuickExcludeMode, setIsQuickExcludeMode] = useState(false);
   const [isReorderMode, setIsReorderMode] = useState(false);
 
@@ -769,7 +834,7 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
   // Subscribe to database changes
   useEffect(() => {
     const handleDataChange = () => {
-      setDoctors(db.getDoctors().filter(d => d.isActive !== false));
+      setDoctors(db.getDoctors().filter((d) => d.isActive !== false));
       setShifts(db.getDoctorShifts());
       setStaffShifts(db.shifts);
       setIsLocked(db.isMonthLocked(currentYearMonth));
@@ -780,7 +845,7 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
 
     // Ensure data is loaded
     db.initializeData().then(() => {
-      setDoctors(db.getDoctors().filter(d => d.isActive !== false));
+      setDoctors(db.getDoctors().filter((d) => d.isActive !== false));
       setShifts(db.getDoctorShifts());
       setStaffShifts(db.shifts);
       setHolidays(db.getHolidays());
@@ -3283,7 +3348,11 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
                               onClick={async (e) => {
                                 e.stopPropagation();
                                 await db.reorderDoctor(doc.id, "up");
-                                setDoctors(db.getDoctors().filter(d => d.isActive !== false));
+                                setDoctors(
+                                  db
+                                    .getDoctors()
+                                    .filter((d) => d.isActive !== false),
+                                );
                               }}
                               className="text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg p-0.5 transition-colors disabled:opacity-20 disabled:cursor-not-allowed"
                               disabled={doctors.indexOf(doc) === 0}
@@ -3305,7 +3374,11 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
                               onClick={async (e) => {
                                 e.stopPropagation();
                                 await db.reorderDoctor(doc.id, "down");
-                                setDoctors(db.getDoctors().filter(d => d.isActive !== false));
+                                setDoctors(
+                                  db
+                                    .getDoctors()
+                                    .filter((d) => d.isActive !== false),
+                                );
                               }}
                               className="text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg p-0.5 transition-colors disabled:opacity-20 disabled:cursor-not-allowed"
                               disabled={
@@ -4549,6 +4622,88 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
                               );
                             });
                           })()}
+
+                          {/* 行政人員行 */}
+                          {(() => {
+                            const ALL_CATEGORIES = [
+                              "客服",
+                              "智基",
+                              "資訊",
+                              "報告",
+                              "行政",
+                            ];
+                            // 預先計算每一天的資料，避免重複呼叫
+                            const adminDataByDate = dateRange.map((date) => ({
+                              date,
+                              data: getAdminStaffByDateAndLocation(
+                                date,
+                                location,
+                              ),
+                            }));
+
+                            // 找出這個月這個院區有排班的部門
+                            const activeCategories = ALL_CATEGORIES.filter(
+                              (category) =>
+                                adminDataByDate.some(
+                                  ({ data }) =>
+                                    data[category] && data[category].length > 0,
+                                ),
+                            );
+
+                            if (activeCategories.length === 0) {
+                              return (
+                                <tr className="bg-purple-50/50 border-b border-purple-100 group hover:bg-purple-50/80 transition-colors">
+                                  <td
+                                    className={`sticky left-0 z-10 bg-purple-50/80 backdrop-blur border-r border-purple-200 shadow-[4px_0_8px_rgba(0,0,0,0.02)] ${isMobile ? "p-1 w-[85px] min-w-[85px]" : "p-2"}`}
+                                  >
+                                    <div className="text-xs font-bold text-purple-800 flex items-center justify-end pr-2">
+                                      值班人員
+                                    </div>
+                                  </td>
+                                  {dateRange.map((date) => (
+                                    <td
+                                      key={`admin-empty-${date}`}
+                                      className="text-[11px] p-1.5 text-center bg-purple-50/40 border-r border-gray-100 h-auto"
+                                    >
+                                      <span className="text-gray-300">-</span>
+                                    </td>
+                                  ))}
+                                </tr>
+                              );
+                            }
+
+                            return activeCategories.map((category) => (
+                              <tr
+                                key={`admin-row-${category}`}
+                                className="bg-purple-50/50 border-b border-purple-100 group hover:bg-purple-50/80 transition-colors"
+                              >
+                                <td
+                                  className={`sticky left-0 z-10 bg-purple-50/80 backdrop-blur border-r border-purple-200 shadow-[4px_0_8px_rgba(0,0,0,0.02)] ${isMobile ? "p-1 w-[85px] min-w-[85px]" : "p-2"}`}
+                                >
+                                  <div className="text-xs font-bold text-purple-800 flex items-center justify-end pr-2">
+                                    {category}
+                                  </div>
+                                </td>
+                                {adminDataByDate.map(({ date, data }) => {
+                                  const names = data[category] || [];
+                                  return (
+                                    <td
+                                      key={`admin-${date}-${category}`}
+                                      className="text-[11px] p-1.5 text-center bg-purple-50/40 border-r border-gray-100 h-auto"
+                                    >
+                                      {names.length > 0 ? (
+                                        <span className="text-purple-900 font-medium">
+                                          {names.join("、")}
+                                        </span>
+                                      ) : (
+                                        <span className="text-gray-300">-</span>
+                                      )}
+                                    </td>
+                                  );
+                                })}
+                              </tr>
+                            ));
+                          })()}
                         </>
                       )}
                     </React.Fragment>
@@ -4584,71 +4739,76 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
                 });
 
                 return (
-                  <div key={loc} className="space-y-4">
+                  <div
+                    key={loc}
+                    className="bg-white rounded-[24px] shadow-sm border border-slate-200/60 overflow-hidden flex flex-col mb-4"
+                  >
                     <div
-                      className="flex items-center justify-between border-b border-gray-200 pb-2 cursor-pointer hover:bg-slate-50 transition-colors rounded-lg group"
+                      className="px-5 py-4 md:px-6 md:py-5 border-b border-slate-100 flex items-center justify-between cursor-pointer hover:bg-slate-50 transition-colors"
                       onClick={() => toggleLocationCollapse(loc)}
                     >
                       <div className="flex items-center gap-4">
-                        <h2
-                          className={`font-bold text-base px-4 py-1 rounded-full text-white shadow-md ${LOCATION_COLORS[loc]?.split(" ")[0] || "bg-gray-500"}`}
-                        >
+                        <div
+                          className={`w-2 h-8 rounded-full ${LOCATION_COLORS[loc]?.split(" ")[0] || "bg-slate-500"}`}
+                        ></div>
+                        <h2 className="text-xl font-black text-slate-800 tracking-tight">
                           {loc}區
                         </h2>
                         {collapsedLocations.includes(loc) && (
-                          <span className="text-xs text-slate-400 font-medium group-hover:text-slate-600 transition-colors">
-                            點擊展開內容...
+                          <span className="text-xs text-slate-400 font-medium ml-2">
+                            (點擊展開)
                           </span>
                         )}
                       </div>
                       <div className="pr-2">
                         {collapsedLocations.includes(loc) ? (
-                          <ChevronRight size={20} className="text-slate-300" />
+                          <ChevronRight size={20} className="text-slate-400" />
                         ) : (
-                          <ChevronDown size={20} className="text-slate-300" />
+                          <ChevronDown size={20} className="text-slate-400" />
                         )}
                       </div>
                     </div>
 
                     {!collapsedLocations.includes(loc) && (
-                      <>
-                        <div className="space-y-4 animate-in fade-in slide-in-from-top-1 duration-200">
+                      <div className="p-5 md:p-6 flex flex-col gap-6 bg-slate-50/30">
+                        {/* Stats Section */}
+                        <div className="animate-in fade-in slide-in-from-top-1 duration-200">
                           {(() => {
                             const stats = db.getDailyStats(
                               toLocalISOString(currentDate),
                             );
                             if (loc === "北投") {
                               return (
-                                <div className="flex flex-wrap items-center gap-3">
-                                  <div className="flex items-center gap-1.5 bg-slate-100 px-3 py-1.5 rounded-full border border-slate-200 shadow-sm">
-                                    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                  <div className="bg-white rounded-2xl p-4 border border-slate-100 shadow-[0_2px_10px_rgba(0,0,0,0.02)] flex flex-col justify-center transition-all hover:shadow-md">
+                                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">
                                       北投客戶數
                                     </span>
-                                    <span className="text-base font-black text-slate-800">
+                                    <span className="text-2xl font-black text-slate-800">
                                       {stats?.beitou_clients || 0}
                                     </span>
                                   </div>
-                                  <div className="flex items-center gap-1.5 bg-blue-50 px-3 py-1.5 rounded-full border border-blue-100 shadow-sm">
-                                    <span className="text-[11px] font-bold text-blue-500 uppercase tracking-wider">
+                                  <div className="bg-white rounded-2xl p-4 border border-blue-100 shadow-[0_2px_10px_rgba(0,0,0,0.02)] flex flex-col justify-center transition-all hover:shadow-md">
+                                    <span className="text-[11px] font-bold text-blue-400 uppercase tracking-wider mb-1">
                                       MR 數
                                     </span>
-                                    <span className="text-base font-black text-blue-700">
+                                    <span className="text-2xl font-black text-blue-700">
                                       {stats?.beitou_mr || 0}
                                     </span>
                                   </div>
-                                  <div className="flex items-center gap-1.5 bg-emerald-50 px-3 py-1.5 rounded-full border border-emerald-100 shadow-sm">
-                                    <span className="text-[11px] font-bold text-emerald-500 uppercase tracking-wider">
+                                  <div className="bg-white rounded-2xl p-4 border border-emerald-100 shadow-[0_2px_10px_rgba(0,0,0,0.02)] flex flex-col justify-center transition-all hover:shadow-md">
+                                    <span className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider mb-1">
                                       GI(北投)
                                     </span>
-                                    <span className="text-base font-black text-emerald-700">
+                                    <span className="text-2xl font-black text-emerald-700">
                                       {stats?.beitou_gi || 0}
                                     </span>
                                   </div>
-                                  <div className="flex items-center gap-1.5 bg-amber-50 px-3 py-1.5 rounded-full border border-amber-100 shadow-sm">
-                                    <span className="text-[11px] font-bold text-amber-600 uppercase tracking-wider">
+                                  <div className="bg-white rounded-2xl p-4 border border-amber-100 shadow-[0_2px_10px_rgba(0,0,0,0.02)] flex flex-col justify-center transition-all hover:shadow-md">
+                                    <span className="text-[11px] font-bold text-amber-400 uppercase tracking-wider mb-1">
                                       CTA 數
                                     </span>
-                                    <span className="text-base font-black text-amber-700">
+                                    <span className="text-2xl font-black text-amber-700">
                                       {stats?.beitou_cta || 0}
                                     </span>
                                   </div>
@@ -4657,35 +4817,41 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
                             }
                             if (loc === "大直") {
                               return (
-                                <div className="flex flex-wrap items-center gap-3">
-                                  <div className="flex items-center gap-1.5 bg-slate-100 px-3 py-1.5 rounded-full border border-slate-200 shadow-sm">
-                                    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                                      大直客戶數
-                                    </span>
-                                    <div className="flex flex-col items-center">
-                                      <div className="flex items-center gap-1.5">
-                                        <span className="text-[10px] text-slate-400">
-                                          健：
-                                        </span>
-                                        <span className="text-base font-black text-slate-800">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                  <div className="bg-white rounded-2xl p-4 border border-slate-100 shadow-[0_2px_10px_rgba(0,0,0,0.02)] flex items-center justify-between transition-all hover:shadow-md">
+                                    <div className="flex-1">
+                                      <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1 block">
+                                        大直客戶數
+                                      </span>
+                                      <div className="flex items-baseline gap-2">
+                                        <span className="text-2xl font-black text-slate-800">
                                           {stats?.dazhi_clients || 0}
                                         </span>
-                                      </div>
-                                      <div className="flex items-center gap-1.5 mt-1 border-t border-slate-100 pt-1">
-                                        <span className="text-[10px] text-slate-400">
-                                          代：
+                                        <span className="text-xs font-bold text-slate-400">
+                                          健
                                         </span>
-                                        <span className="text-sm font-bold text-slate-600">
+                                      </div>
+                                    </div>
+                                    <div className="w-px h-10 bg-slate-100 mx-4"></div>
+                                    <div className="flex-1">
+                                      <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1 block">
+                                        代謝客戶
+                                      </span>
+                                      <div className="flex items-baseline gap-2">
+                                        <span className="text-2xl font-black text-slate-800">
                                           {stats?.dazhi_metabolism_clients || 0}
+                                        </span>
+                                        <span className="text-xs font-bold text-slate-400">
+                                          代
                                         </span>
                                       </div>
                                     </div>
                                   </div>
-                                  <div className="flex items-center gap-1.5 bg-emerald-50 px-3 py-1.5 rounded-full border border-emerald-100 shadow-sm">
-                                    <span className="text-[11px] font-bold text-emerald-500 uppercase tracking-wider">
+                                  <div className="bg-white rounded-2xl p-4 border border-emerald-100 shadow-[0_2px_10px_rgba(0,0,0,0.02)] flex flex-col justify-center transition-all hover:shadow-md">
+                                    <span className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider mb-1">
                                       GI(大直)
                                     </span>
-                                    <span className="text-base font-black text-emerald-700">
+                                    <span className="text-2xl font-black text-emerald-700">
                                       {stats?.dazhi_gi || 0}
                                     </span>
                                   </div>
@@ -4694,170 +4860,215 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
                             }
                             return null;
                           })()}
-                          <div className="flex-1 h-px bg-gray-100"></div>
                         </div>
 
-                        {/* Main/Assistant (Rad + HM Staff) Row for this Location - Skip for Taichung */}
-                        {loc !== "台中" && (
-                          <div className="flex flex-col md:flex-row gap-4 mb-4">
-                            {(() => {
-                              const dateStr = toLocalISOString(currentDate);
-                              const radShifts = db.shifts.filter(
-                                (s) => s.date === dateStr,
-                              );
-                              const hmShifts = db
-                                .getHealthMgmtShifts()
-                                .filter((s) => s.date === dateStr);
-                              const radUsers = db.getUsers();
-                              const hmStaff = db.getHealthMgmtStaff();
+                        {/* Main/Assistant/Admin Grid */}
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                          {(() => {
+                            const dateStr = toLocalISOString(currentDate);
+                            const radShifts = db.shifts.filter(
+                              (s) => s.date === dateStr,
+                            );
+                            const hmShifts = db
+                              .getHealthMgmtShifts()
+                              .filter((s) => s.date === dateStr);
+                            const radUsers = db.getUsers();
+                            const hmStaff = db.getHealthMgmtStaff();
 
-                              const locMainRadNames =
-                                loc === "北投"
-                                  ? radShifts
-                                      .filter((s) => {
-                                        const u = radUsers.find(
-                                          (user) => user.id === s.userId,
-                                        );
-                                        const effectiveLoc =
-                                          s.location || "北投";
-                                        return (
-                                          u?.isRadiographer &&
-                                          effectiveLoc === "北投" &&
-                                          (s.station?.includes("場控") ||
-                                            s.station === "主" ||
-                                            s.station === "主控")
-                                        );
-                                      })
-                                      .map(
-                                        (s) =>
-                                          radUsers.find(
-                                            (u) => u.id === s.userId,
-                                          )?.name,
-                                      )
-                                      .filter(Boolean)
-                                  : [];
+                            const adminStaffByDept =
+                              getAdminStaffByDateAndLocation(dateStr, loc);
+                            const hasAdminStaff = Object.values(
+                              adminStaffByDept,
+                            ).some((names) => names.length > 0);
 
-                              const locMainHMNames = hmShifts
-                                .filter((s) => {
-                                  const shiftLoc =
-                                    s.location ||
-                                    hmStaff.find((st) => st.id === s.userId)
-                                      ?.location;
-                                  return (
-                                    shiftLoc === loc &&
-                                    ((s.task || "").includes("主控") ||
-                                      (s.station || "").includes("主控"))
-                                  );
-                                })
-                                .map(
-                                  (s) =>
-                                    hmStaff.find((st) => st.id === s.userId)
-                                      ?.name,
-                                )
-                                .filter(Boolean);
+                            const locMainRadNames =
+                              loc === "北投"
+                                ? radShifts
+                                    .filter((s) => {
+                                      const u = radUsers.find(
+                                        (user) => user.id === s.userId,
+                                      );
+                                      const effectiveLoc = s.location || "北投";
+                                      return (
+                                        u?.isRadiographer &&
+                                        effectiveLoc === "北投" &&
+                                        (s.station?.includes("場控") ||
+                                          s.station === "主" ||
+                                          s.station === "主控")
+                                      );
+                                    })
+                                    .map(
+                                      (s) =>
+                                        radUsers.find((u) => u.id === s.userId)
+                                          ?.name,
+                                    )
+                                    .filter(Boolean)
+                                : [];
 
-                              const locMainNamesJoined =
-                                Array.from(
-                                  new Set([
-                                    ...locMainRadNames,
-                                    ...locMainHMNames,
-                                  ]),
-                                ).join(" / ") || "-";
+                            const locMainHMNames = hmShifts
+                              .filter((s) => {
+                                const shiftLoc =
+                                  s.location ||
+                                  hmStaff.find((st) => st.id === s.userId)
+                                    ?.location;
+                                return (
+                                  shiftLoc === loc &&
+                                  ((s.task || "").includes("主控") ||
+                                    (s.station || "").includes("主控"))
+                                );
+                              })
+                              .map(
+                                (s) =>
+                                  hmStaff.find((st) => st.id === s.userId)
+                                    ?.name,
+                              )
+                              .filter(Boolean);
 
-                              const locAssistRadNames =
-                                loc === "北投"
-                                  ? radShifts
-                                      .filter((s) => {
-                                        const u = radUsers.find(
-                                          (user) => user.id === s.userId,
-                                        );
-                                        const effectiveLoc =
-                                          s.location || "北投";
-                                        return (
-                                          u?.isRadiographer &&
-                                          effectiveLoc === "北投" &&
-                                          (s.specialRoles?.includes("輔班") ||
-                                            s.station === "輔" ||
-                                            s.station === "輔控")
-                                        );
-                                      })
-                                      .map(
-                                        (s) =>
-                                          radUsers.find(
-                                            (u) => u.id === s.userId,
-                                          )?.name,
-                                      )
-                                      .filter(Boolean)
-                                  : [];
+                            const locMainNamesJoined =
+                              Array.from(
+                                new Set([
+                                  ...locMainRadNames,
+                                  ...locMainHMNames,
+                                ]),
+                              ).join(" / ") || "-";
 
-                              const locAssistHMNames = hmShifts
-                                .filter((s) => {
-                                  const shiftLoc =
-                                    s.location ||
-                                    hmStaff.find((st) => st.id === s.userId)
-                                      ?.location;
-                                  return (
-                                    shiftLoc === loc &&
-                                    ((s.task || "").includes("輔控") ||
-                                      (s.station || "").includes("輔控"))
-                                  );
-                                })
-                                .map(
-                                  (s) =>
-                                    hmStaff.find((st) => st.id === s.userId)
-                                      ?.name,
-                                )
-                                .filter(Boolean);
+                            const locAssistRadNames =
+                              loc === "北投"
+                                ? radShifts
+                                    .filter((s) => {
+                                      const u = radUsers.find(
+                                        (user) => user.id === s.userId,
+                                      );
+                                      const effectiveLoc = s.location || "北投";
+                                      return (
+                                        u?.isRadiographer &&
+                                        effectiveLoc === "北投" &&
+                                        (s.specialRoles?.includes("輔班") ||
+                                          s.station === "輔" ||
+                                          s.station === "輔控")
+                                      );
+                                    })
+                                    .map(
+                                      (s) =>
+                                        radUsers.find((u) => u.id === s.userId)
+                                          ?.name,
+                                    )
+                                    .filter(Boolean)
+                                : [];
 
-                              const locAssistNamesJoined =
-                                Array.from(
-                                  new Set([
-                                    ...locAssistRadNames,
-                                    ...locAssistHMNames,
-                                  ]),
-                                ).join(" / ") || "-";
+                            const locAssistHMNames = hmShifts
+                              .filter((s) => {
+                                const shiftLoc =
+                                  s.location ||
+                                  hmStaff.find((st) => st.id === s.userId)
+                                    ?.location;
+                                return (
+                                  shiftLoc === loc &&
+                                  ((s.task || "").includes("輔控") ||
+                                    (s.station || "").includes("輔控"))
+                                );
+                              })
+                              .map(
+                                (s) =>
+                                  hmStaff.find((st) => st.id === s.userId)
+                                    ?.name,
+                              )
+                              .filter(Boolean);
 
-                              return (
-                                <>
-                                  <div className="flex-1 flex items-center gap-3 bg-gradient-to-br from-white to-amber-50/50 border border-amber-200/60 rounded-xl p-3 shadow-sm">
-                                    <div className="w-10 h-10 rounded-full bg-amber-50 flex items-center justify-center text-amber-500 shadow-sm ring-1 ring-amber-100">
-                                      <Star
+                            const locAssistNamesJoined =
+                              Array.from(
+                                new Set([
+                                  ...locAssistRadNames,
+                                  ...locAssistHMNames,
+                                ]),
+                              ).join(" / ") || "-";
+
+                            return (
+                              <>
+                                {loc !== "台中" && (
+                                  <>
+                                    <div className="bg-white rounded-2xl p-4 border border-amber-100 shadow-[0_2px_10px_rgba(0,0,0,0.02)] flex items-start gap-4">
+                                      <div className="w-10 h-10 rounded-full bg-amber-50 flex items-center justify-center shrink-0">
+                                        <Star
+                                          size={18}
+                                          className="text-amber-500"
+                                        />
+                                      </div>
+                                      <div>
+                                        <div className="text-[11px] font-bold text-amber-500 uppercase tracking-wider mb-1">
+                                          主班 (場控)
+                                        </div>
+                                        <div className="text-sm font-bold text-slate-800 leading-relaxed">
+                                          {locMainNamesJoined}
+                                        </div>
+                                      </div>
+                                    </div>
+                                    <div className="bg-white rounded-2xl p-4 border border-orange-100 shadow-[0_2px_10px_rgba(0,0,0,0.02)] flex items-start gap-4">
+                                      <div className="w-10 h-10 rounded-full bg-orange-50 flex items-center justify-center shrink-0">
+                                        <Shield
+                                          size={18}
+                                          className="text-orange-500"
+                                        />
+                                      </div>
+                                      <div>
+                                        <div className="text-[11px] font-bold text-orange-500 uppercase tracking-wider mb-1">
+                                          輔控
+                                        </div>
+                                        <div className="text-sm font-bold text-slate-800 leading-relaxed">
+                                          {locAssistNamesJoined}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </>
+                                )}
+                                {hasAdminStaff ? (
+                                  <div
+                                    className={`bg-white rounded-2xl p-4 border border-purple-100 shadow-[0_2px_10px_rgba(0,0,0,0.02)] flex items-start gap-4 ${loc === "台中" ? "col-span-full md:col-span-1" : ""}`}
+                                  >
+                                    <div className="w-10 h-10 rounded-full bg-purple-50 flex items-center justify-center shrink-0">
+                                      <Users
                                         size={18}
-                                        className="fill-amber-400"
+                                        className="text-purple-600"
                                       />
                                     </div>
-                                    <div>
-                                      <div className="text-[10px] font-bold text-amber-600/80 uppercase tracking-widest mb-0.5">
-                                        主班 (場控)
+                                    <div className="flex-1">
+                                      <div className="text-[11px] font-bold text-purple-500 uppercase tracking-wider mb-1.5">
+                                        值班人員
                                       </div>
-                                      <div className="text-[15px] font-black text-amber-900">
-                                        {locMainNamesJoined}
+                                      <div className="flex flex-col gap-1.5">
+                                        {Object.entries(adminStaffByDept).map(
+                                          ([category, names]) =>
+                                            names.length > 0 && (
+                                              <div
+                                                key={category}
+                                                className="text-xs leading-tight"
+                                              >
+                                                <span className="font-bold text-purple-700">
+                                                  {category}：
+                                                </span>
+                                                <span className="text-slate-700 font-medium">
+                                                  {names.join("、")}
+                                                </span>
+                                              </div>
+                                            ),
+                                        )}
                                       </div>
                                     </div>
                                   </div>
-                                  <div className="flex-1 flex items-center gap-3 bg-gradient-to-br from-white to-orange-50/50 border border-orange-200/60 rounded-xl p-3 shadow-sm">
-                                    <div className="w-10 h-10 rounded-full bg-orange-50 flex items-center justify-center text-orange-500 shadow-sm ring-1 ring-orange-100">
-                                      <Shield
-                                        size={18}
-                                        className="fill-orange-400"
-                                      />
+                                ) : (
+                                  loc !== "台中" && (
+                                    <div className="bg-white/50 rounded-2xl p-4 border border-slate-100 border-dashed flex items-center justify-center text-slate-400 text-xs font-bold">
+                                      無值班人員
                                     </div>
-                                    <div>
-                                      <div className="text-[10px] font-bold text-orange-600/80 uppercase tracking-widest mb-0.5">
-                                        輔控
-                                      </div>
-                                      <div className="text-[15px] font-black text-orange-900">
-                                        {locAssistNamesJoined}
-                                      </div>
-                                    </div>
-                                  </div>
-                                </>
-                              );
-                            })()}
-                          </div>
-                        )}
+                                  )
+                                )}
+                              </>
+                            );
+                          })()}
+                        </div>
 
-                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                        {/* Station Cards Grid */}
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
                           {locStations.map((config) => {
                             const st = config.name;
                             // User Request: Daily View restore original (do not show Late Shift card)
@@ -5102,13 +5313,13 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
                             return (
                               <div
                                 key={`${loc}-${st}`}
-                                className={`group rounded-2xl border p-4 shadow-sm flex flex-col h-full transition-all duration-300 ${isShort ? "border-red-200 bg-red-50/10 hover:shadow-red-100/50" : `${theme.card} hover:shadow-md`}`}
+                                className={`bg-white rounded-2xl border transition-all duration-300 flex flex-col h-full overflow-hidden ${isShort ? "ring-2 ring-red-400 border-red-400" : `${theme.cardBorder} shadow-sm`}`}
                               >
                                 <div
-                                  className={`flex justify-between items-center mb-4 pb-3 border-b ${theme.border}`}
+                                  className={`px-4 py-3 flex justify-between items-center border-b border-white/50 ${theme.headerBg}`}
                                 >
                                   <h3
-                                    className={`font-extrabold flex items-center gap-2 text-[15px] tracking-wide ${theme.title}`}
+                                    className={`font-black text-[15px] flex items-center gap-2 ${theme.title}`}
                                   >
                                     {st}
                                     {isShort && (
@@ -5119,13 +5330,13 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
                                     )}
                                   </h3>
                                   <span
-                                    className={`text-[11px] font-bold px-2.5 py-1 rounded-full shadow-[inset_0_1px_2px_rgba(0,0,0,0.05)] border ${isShort ? "bg-red-50 text-red-600 border-red-100" : theme.badgeNormal}`}
+                                    className={`text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm ${theme.badge}`}
                                   >
-                                    {displayShifts.length} / {req} 人
+                                    {displayShifts.length} / {req}
                                   </span>
                                 </div>
 
-                                <div className="space-y-2.5 flex-1">
+                                <div className="flex-1 flex flex-col p-2 bg-slate-50/40 gap-1.5">
                                   {displayShifts.length > 0 ? (
                                     displayShifts.map((s) => {
                                       const doc = doctors.find(
@@ -5137,57 +5348,50 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
                                       return (
                                         <div
                                           key={s.id}
-                                          className={`relative flex items-start gap-3 p-3 rounded-xl border transition-all duration-200 overflow-hidden ${isSimulated ? "bg-amber-50/80 border-dashed border-amber-300 animate-[pulse_2s_ease-in-out_infinite]" : "bg-white border-slate-100 shadow-[0_2px_4px_rgba(0,0,0,0.02)]"} ${canEdit ? `cursor-pointer hover:-translate-y-[2px] hover:shadow-lg ${theme.border.replace("border-", "hover:border-")}` : "cursor-not-allowed"}`}
+                                          className={`relative flex items-center gap-3 p-2.5 rounded-xl border bg-white shadow-sm transition-all duration-200 cursor-pointer ${isSimulated ? "border-amber-300 border-dashed bg-amber-50" : `border-slate-100 ${theme.itemHover}`}`}
                                           onClick={() =>
                                             canEdit &&
                                             handleCellClick(s.doctorId, s.date)
                                           }
                                         >
-                                          {/* Indicator bar on the left edge */}
                                           <div
-                                            className={`absolute left-0 top-0 bottom-0 w-1 ${isSimulated ? "bg-amber-400" : theme.avatarEdge}`}
-                                          ></div>
-                                          <div
-                                            className={`shrink-0 w-10 h-10 rounded-full flex items-center justify-center font-black text-[13px] shadow-sm ring-2 ring-offset-1 z-10 ${isSimulated ? "bg-amber-100 text-amber-700 ring-amber-50" : `${theme.avatarBg} ${theme.avatarRing}`}`}
+                                            className={`w-9 h-9 rounded-full flex items-center justify-center font-black text-[13px] shrink-0 ${theme.avatarBg} ${theme.avatarRing} ring-2 ring-offset-1`}
                                           >
                                             {doc?.alias}
                                           </div>
-                                          <div className="flex-1 min-w-0 pt-0.5 z-10">
-                                            <div className="flex justify-between items-start gap-2 mb-1">
-                                              <div
-                                                className={`font-bold truncate flex items-center gap-1.5 text-[14px] ${theme.title}`}
+                                          <div className="flex-1 min-w-0">
+                                            <div className="flex justify-between items-start gap-2 mb-0.5">
+                                              <span
+                                                className={`font-bold text-sm truncate ${theme.title}`}
                                               >
                                                 {doc?.name}
-                                                {suffix && (
-                                                  <span className="text-[9px] text-teal-700 bg-teal-50 px-1.5 py-0.5 rounded-md border border-teal-100/50 tracking-wider font-bold whitespace-nowrap">
-                                                    {suffix}
-                                                  </span>
-                                                )}
-                                              </div>
+                                              </span>
                                               {s.workTime && (
-                                                <div className="shrink-0 text-[10px] font-bold text-slate-500 bg-slate-50/80 px-1.5 py-0.5 rounded-lg flex items-center gap-1 shadow-[inset_0_1px_1px_rgba(0,0,0,0.02)] border border-slate-100/50">
-                                                  <Clock
-                                                    size={10}
-                                                    className="text-slate-400"
-                                                  />{" "}
+                                                <span className="text-[9px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded flex items-center gap-0.5 shrink-0">
+                                                  <Clock size={9} />{" "}
                                                   {s.workTime}
-                                                </div>
+                                                </span>
                                               )}
                                             </div>
-                                            <div className="flex flex-wrap gap-1.5">
+                                            <div className="flex flex-wrap gap-1 mt-1">
+                                              {suffix && (
+                                                <span className="text-[9px] text-teal-700 bg-teal-50 px-1.5 py-0.5 rounded border border-teal-100 font-bold">
+                                                  {suffix}
+                                                </span>
+                                              )}
                                               {s.task && (
                                                 <span
-                                                  className={`text-[10px] px-2 py-0.5 rounded-lg border font-bold tracking-wide ${s.task.includes("晚班") ? "text-red-700 bg-red-50/80 border-red-100/50" : "text-blue-700 bg-blue-50/80 border-blue-100/50"}`}
+                                                  className={`text-[9px] px-1.5 py-0.5 rounded border font-bold ${s.task.includes("晚班") ? "text-red-700 bg-red-50 border-red-100" : "text-blue-700 bg-blue-50 border-blue-100"}`}
                                                 >
                                                   {s.task}
                                                 </span>
                                               )}
                                               {s.note && (
-                                                <span className="text-[10px] text-amber-700 bg-amber-50/80 px-1.5 py-0.5 rounded-lg border border-amber-100/50 font-bold break-words flex flex-wrap items-center gap-1 leading-tight w-full">
-                                                  <span className="text-amber-500 shrink-0">
-                                                    📝
-                                                  </span>{" "}
-                                                  <span>{s.note}</span>
+                                                <span
+                                                  className="text-[9px] text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-100 truncate w-full"
+                                                  title={s.note}
+                                                >
+                                                  📝 {s.note}
                                                 </span>
                                               )}
                                             </div>
@@ -5205,17 +5409,23 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
                                           toLocalISOString(currentDate),
                                         )
                                       }
-                                      className={`group/empty h-full min-h-[5.5rem] flex flex-col items-center justify-center text-[13px] border-2 border-dashed rounded-xl transition-all duration-300 font-bold ${canEdit ? `cursor-pointer ${theme.emptyBorder}` : "border-slate-100 bg-slate-50/30 cursor-not-allowed text-slate-400"}`}
+                                      className={`flex-1 flex flex-col items-center justify-center py-4 rounded-xl border-2 border-dashed transition-all duration-300 ${canEdit ? "border-slate-200 hover:border-teal-300 hover:bg-teal-50/30 cursor-pointer" : "border-slate-100 bg-slate-50/50 cursor-not-allowed"}`}
                                     >
                                       <div
-                                        className={`w-8 h-8 rounded-full bg-white shadow-sm border border-slate-100 flex items-center justify-center mb-1.5 transition-all duration-300 ${canEdit ? theme.emptyIconBg : ""}`}
+                                        className={`w-8 h-8 rounded-full bg-white shadow-sm border border-slate-100 flex items-center justify-center mb-1.5 ${canEdit ? theme.emptyIconBg : ""}`}
                                       >
                                         <Plus
                                           size={16}
-                                          className={`transition-colors ${canEdit ? theme.emptyIconText : "text-slate-200"}`}
+                                          className={
+                                            canEdit
+                                              ? theme.title
+                                              : "text-slate-300"
+                                          }
                                         />
                                       </div>
-                                      <span className="opacity-70 tracking-widest">
+                                      <span
+                                        className={`text-[10px] font-bold ${canEdit ? theme.title : "text-slate-400"}`}
+                                      >
                                         指派醫師
                                       </span>
                                     </div>
@@ -5225,7 +5435,7 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
                             );
                           })}
                         </div>
-                      </>
+                      </div>
                     )}
                   </div>
                 );
