@@ -16,8 +16,9 @@ import PhysicianSettingsPage from "./pages/PhysicianSettingsPage";
 import DoctorStatisticsPage from "./pages/DoctorStatisticsPage";
 import CloudSchedulePage from "./pages/CloudSchedulePage";
 import HealthMgmtPage from "./pages/HealthMgmtPage";
-import AdministrativeSchedulePage from "./pages/AdministrativeSchedulePage";
-
+import AdministrativeSchedulePage, {
+  AdministrativeCategory,
+} from "./pages/AdministrativeSchedulePage";
 // Error Boundary Component
 class ErrorBoundary extends React.Component<
   { children: React.ReactNode },
@@ -207,7 +208,27 @@ const App: React.FC = () => {
       case "health_mgmt":
         return <HealthMgmtPage currentUser={currentUser} />;
       case "administrative_schedule":
-        return <AdministrativeSchedulePage currentUser={currentUser} />;
+        return (
+          <AdministrativeSchedulePage
+            currentUser={currentUser}
+            categories={[
+              AdministrativeCategory.CUSTOMER_SERVICE,
+              AdministrativeCategory.GENERAL_AFFAIRS,
+              AdministrativeCategory.IT,
+              AdministrativeCategory.REPORTING,
+              AdministrativeCategory.ADMIN,
+            ]}
+            title="行政排班管理"
+          />
+        );
+      case "gene_schedule":
+        return (
+          <AdministrativeSchedulePage
+            currentUser={currentUser}
+            categories={[AdministrativeCategory.GENE]}
+            title="基因排班管理"
+          />
+        );
       default:
         return <DashboardPage currentUser={currentUser} />;
     }

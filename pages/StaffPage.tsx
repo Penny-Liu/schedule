@@ -977,6 +977,10 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                         ],
                       },
                       {
+                        title: "基因業務",
+                        perms: ["VIEW_GENE", "EDIT_GENE"],
+                      },
+                      {
                         title: "影像雲",
                         perms: [
                           PERMISSIONS.VIEW_CLOUD_SCHEDULE,
@@ -1053,7 +1057,12 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                                 htmlFor={`perm_${value}`}
                                 className="text-xs text-gray-700 cursor-pointer hover:text-teal-700 transition-colors"
                               >
-                                {PERMISSION_LABELS[value] || value}
+                                {PERMISSION_LABELS[value] ||
+                                  (value === "VIEW_GENE"
+                                    ? "檢視基因排班"
+                                    : value === "EDIT_GENE"
+                                      ? "編輯基因排班"
+                                      : value)}
                               </label>
                             </div>
                           ))}

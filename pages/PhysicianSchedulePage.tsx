@@ -571,7 +571,6 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
   });
 
   // 行政人員相關狀態
-  const [administrativeStaff, setAdministrativeStaff] = useState<any[]>([]);
   const [administrativeShifts, setAdministrativeShifts] = useState<any[]>([]);
 
   // 載入行政人員和排班數據
@@ -580,22 +579,14 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
       if (dateRange.length === 0) return;
 
       try {
-        const [staffRes, shiftsRes] = await Promise.all([
-          supabase
-            .from("administrative_staff")
-            .select("*")
-            .eq("is_active", true),
-          supabase
-            .from("administrative_shifts")
-            .select("*")
-            .gte("date", dateRange[0])
-            .lte("date", dateRange[dateRange.length - 1]),
-        ]);
+        const shiftsRes = await supabase
+          .from("administrative_shifts")
+          .select("*")
+          .gte("date", dateRange[0])
+          .lte("date", dateRange[dateRange.length - 1]);
 
-        if (staffRes.error) throw staffRes.error;
         if (shiftsRes.error) throw shiftsRes.error;
 
-        setAdministrativeStaff(staffRes.data || []);
         setAdministrativeShifts(shiftsRes.data || []);
       } catch (error) {
         console.error("Error loading administrative data:", error);
@@ -617,15 +608,12 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
       資訊: [],
       報告: [],
       行政: [],
+      基因: [],
     };
 
     dayShifts.forEach((shift) => {
-      const staff = administrativeStaff.find((s) => s.id === shift.staff_id);
-      if (staff && grouped[staff.category]) {
-        const displayName = staff.phone
-          ? `${staff.name} (${staff.phone})`
-          : staff.name;
-        grouped[staff.category].push(displayName);
+      if (shift.category && grouped[shift.category]) {
+        grouped[shift.category].push(shift.staff_names);
       }
     });
 
@@ -1792,6 +1780,45 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
             });
 
             targetRows.push(hmRow);
+          }
+
+          // 加入「基因」排班列
+          if (loc === "北投" || loc === "大直") {
+            const geneRow: any[] = [
+              {
+                content: "基因",
+                styles: {
+                  fontStyle: "bold",
+                  halign: "center",
+                  fontSize: 8,
+                  minCellHeight: 5.0,
+                  fillColor: [236, 253, 245], // 淡綠色背景 (emerald-50)
+                  textColor: [6, 78, 59], // 深綠色文字 (emerald-900)
+                },
+              },
+            ];
+
+            dateRange.forEach((date) => {
+              const adminData = getAdminStaffByDateAndLocation(date, loc);
+              const geneNamesStr = adminData["基因"] || [];
+              const displayList = Array.from(
+                new Set(
+                  geneNamesStr.flatMap((str) =>
+                    str
+                      .split(",")
+                      .map((n) => n.trim())
+                      .filter(Boolean),
+                  ),
+                ),
+              );
+
+              geneRow.push({
+                content: displayList.length > 0 ? displayList.join("\n") : "-",
+                styles: { halign: "center", fontSize: 8, minCellHeight: 5.0 },
+              });
+            });
+
+            targetRows.push(geneRow);
           }
 
           const processedStationNames: string[] = [];
@@ -4288,6 +4315,55 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
                                             <div
                                               key={`${name}-${i}`}
                                               className="text-[12px] md:text-[13px] font-normal leading-tight whitespace-nowrap tracking-tight py-0.5 text-slate-900"
+                                            >
+                                              {name}
+                                            </div>
+                                          ))
+                                        : "-"}
+                                    </td>
+                                  );
+                                })}
+                              </tr>
+
+                              {/* 基因排班 */}
+                              <tr className="bg-emerald-50/30 border-b border-emerald-100 group hover:bg-emerald-50/50 transition-colors">
+                                <td
+                                  className={`sticky left-0 z-10 bg-emerald-50/80 backdrop-blur border-r border-emerald-200 shadow-[4px_0_8px_rgba(0,0,0,0.02)] ${isMobile ? "p-1 w-[85px] min-w-[85px]" : "p-2"}`}
+                                >
+                                  <div className="text-xs font-bold text-emerald-800 flex items-center justify-end pr-2">
+                                    基因
+                                  </div>
+                                </td>
+                                {dateRange.map((date) => {
+                                  const adminData =
+                                    getAdminStaffByDateAndLocation(
+                                      date,
+                                      location,
+                                    );
+                                  const geneNamesStr = adminData["基因"] || [];
+
+                                  // 處理多個字串和逗號分隔的名稱，合併並去除空白
+                                  const displayList = Array.from(
+                                    new Set(
+                                      geneNamesStr.flatMap((str) =>
+                                        str
+                                          .split(",")
+                                          .map((n) => n.trim())
+                                          .filter(Boolean),
+                                      ),
+                                    ),
+                                  );
+
+                                  return (
+                                    <td
+                                      key={date}
+                                      className="p-1 border-r border-emerald-50 text-center min-w-[44px] md:min-w-[46px]"
+                                    >
+                                      {displayList.length > 0
+                                        ? displayList.map((name, i) => (
+                                            <div
+                                              key={`${name}-${i}`}
+                                              className="text-[12px] md:text-[13px] font-bold leading-tight whitespace-nowrap tracking-tight py-0.5 text-emerald-800"
                                             >
                                               {name}
                                             </div>

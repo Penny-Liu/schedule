@@ -50,6 +50,53 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { loadChineseFontToDoc } from "../services/pdfUtils";
 
+// 統一且精準的站點分類器：保證「統計區」與「卡片區」分類絕對一致
+export const getMatchedGroupId = (sText: string) => {
+  const stationParts = sText.split(/[\s,]+/);
+  const baseStation =
+    stationParts.find((p) => !p.includes(":")) ||
+    stationParts[stationParts.length - 1] ||
+    "";
+
+  // 1. 強制前綴鎖定：如果開頭是 H,G,R,D,M,P 且後面接的是空白或中文（如 "M" 或 "M抽血櫃"），直接鎖定該組
+  const prefixMatch = baseStation.match(/^([HGRDMP])($|[^A-Z])/);
+  if (prefixMatch) return prefixMatch[1];
+
+  // 2. 關鍵字模糊比對 (若無前綴)
+  const STATION_GROUPS: Record<string, string[]> = {
+    H: ["H", "健管", "接待"],
+    G: ["G", "腸胃", "診1", "診2", "POR", "流動", "洗滌"],
+    R: [
+      "R",
+      "行政",
+      "行政人員",
+      "櫃台",
+      "櫃枱",
+      "櫃1",
+      "櫃2",
+      "櫃3",
+      "櫃助",
+      "櫃",
+    ],
+    D: ["D", "代謝", "營養", "營1", "營2"],
+    M: ["M", "醫檢", "檢驗"],
+    P: ["P", "藥師"],
+  };
+
+  for (const [key, vals] of Object.entries(STATION_GROUPS)) {
+    if (
+      vals.some((v) => {
+        const vUpper = v.toUpperCase();
+        if (vUpper.length === 1 && /[A-Z]/.test(vUpper))
+          return baseStation === vUpper;
+        return sText.includes(vUpper) || baseStation.startsWith(vUpper);
+      })
+    )
+      return key;
+  }
+  return null;
+};
+
 interface HealthMgmtPageProps {
   currentUser: User;
 }
@@ -338,16 +385,36 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
   useEffect(() => {
     let isInitialLoad = true;
     const loadData = () => {
-      setHealthMgmtStaff(db.getHealthMgmtStaff());
-      setShifts(db.getHealthMgmtShifts());
+      const hmStaffData = db.getHealthMgmtStaff();
+      setHealthMgmtStaff(hmStaffData);
+      const hmShiftsData = db.getHealthMgmtShifts().filter((s) => {
+        const staff = hmStaffData.find((st) => st.id === s.userId);
+        if (staff && staff.terminationDate && s.date > staff.terminationDate)
+          return false;
+        return true;
+      });
+      setShifts(hmShiftsData);
+
       setHmStations(db.getHealthMgmtStations(currentUserLocation));
       setHmTasks(db.getHealthMgmtTasks(currentUserLocation));
       setHmTimes(db.getHealthMgmtTimes(currentUserLocation));
       const cycles = db.getHealthMgmtCycles();
       setHmCycles(cycles);
       setHolidays(db.getHolidays());
-      setAnesthesiaStaff(db.getAnesthesiaStaff());
-      setAnesthesiaShifts(db.getAnesthesiaShifts());
+
+      const anesStaffData = db.getAnesthesiaStaff();
+      setAnesthesiaStaff(anesStaffData);
+      const anesShiftsData = db.getAnesthesiaShifts().filter((s) => {
+        const staff = anesStaffData.find((st) => st.id === s.userId);
+        if (
+          staff &&
+          (staff as any).terminationDate &&
+          s.date > (staff as any).terminationDate
+        )
+          return false;
+        return true;
+      });
+      setAnesthesiaShifts(anesShiftsData);
 
       if (isInitialLoad) {
         // Auto-select current cycle if not already set or if it's 'month'
@@ -1461,6 +1528,151 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
     }
   };
 
+  // 批次掃描與清理異常資料 (包含離職人員、清除空殼、重複排班)
+  const handleCleanupData = async () => {
+    if (
+      !window.confirm(
+        "確定要執行清理嗎？\n系統將會掃描並刪除：\n1. 離職日之後的異常排班\n2. 狀態為「清除」或空值的無效排班\n3. 同日期的重複異常資料\n\n此操作無法復原。",
+      )
+    )
+      return;
+
+    setIsSaving(true);
+    try {
+      // --- 健管排班清理 ---
+      const allHmShifts = db.getHealthMgmtShifts();
+      const hmShiftMap = new Map<string, HealthMgmtShift[]>();
+      allHmShifts.forEach((s) => {
+        const key = `${s.userId}-${s.date}`;
+        if (!hmShiftMap.has(key)) hmShiftMap.set(key, []);
+        hmShiftMap.get(key)!.push(s);
+      });
+
+      const hmIdsToDelete: string[] = [];
+      hmShiftMap.forEach((userShifts, key) => {
+        const userId = key.split("-")[0];
+        const shiftDate = userShifts[0].date;
+        const staff = healthMgmtStaff.find((s) => s.id === userId);
+
+        const isAfterTermination =
+          staff && staff.terminationDate && shiftDate > staff.terminationDate;
+
+        if (isAfterTermination) {
+          userShifts.forEach((s) => hmIdsToDelete.push(s.id));
+        } else if (userShifts.length > 1) {
+          const validShifts = userShifts.filter(
+            (s) =>
+              s.station &&
+              !s.station.includes("清除") &&
+              !s.station.includes("未分配"),
+          );
+          const shiftToKeep =
+            validShifts.length > 0
+              ? validShifts[validShifts.length - 1]
+              : userShifts[userShifts.length - 1];
+          userShifts.forEach((s) => {
+            if (s.id !== shiftToKeep.id) hmIdsToDelete.push(s.id);
+          });
+        } else {
+          const s = userShifts[0];
+          if (
+            !s.station ||
+            s.station.includes("清除") ||
+            s.station.includes("未分配")
+          ) {
+            hmIdsToDelete.push(s.id);
+          }
+        }
+      });
+
+      // --- 麻護排班清理 ---
+      const allAnesShifts = db.getAnesthesiaShifts();
+      const anesShiftMap = new Map<string, AnesthesiaShift[]>();
+      allAnesShifts.forEach((s) => {
+        const key = `${s.userId}-${s.date}`;
+        if (!anesShiftMap.has(key)) anesShiftMap.set(key, []);
+        anesShiftMap.get(key)!.push(s);
+      });
+
+      const anesIdsToDelete: string[] = [];
+      anesShiftMap.forEach((userShifts, key) => {
+        const userId = key.split("-")[0];
+        const shiftDate = userShifts[0].date;
+        const staff = anesthesiaStaff.find((s) => s.id === userId);
+
+        const isAfterTermination =
+          staff &&
+          (staff as any).terminationDate &&
+          shiftDate > (staff as any).terminationDate;
+
+        if (isAfterTermination) {
+          userShifts.forEach((s) => anesIdsToDelete.push(s.id));
+        } else if (userShifts.length > 1) {
+          const validShifts = userShifts.filter(
+            (s) =>
+              s.station &&
+              !s.station.includes("清除") &&
+              !s.station.includes("未分配"),
+          );
+          const shiftToKeep =
+            validShifts.length > 0
+              ? validShifts[validShifts.length - 1]
+              : userShifts[userShifts.length - 1];
+          userShifts.forEach((s) => {
+            if (s.id !== shiftToKeep.id) anesIdsToDelete.push(s.id);
+          });
+        } else {
+          const s = userShifts[0];
+          if (
+            !s.station ||
+            s.station.includes("清除") ||
+            s.station.includes("未分配")
+          ) {
+            anesIdsToDelete.push(s.id);
+          }
+        }
+      });
+
+      const uniqueHmIds = Array.from(new Set(hmIdsToDelete)).filter(
+        (id) => id && id !== "temp" && id !== "",
+      );
+      const uniqueAnesIds = Array.from(new Set(anesIdsToDelete)).filter(
+        (id) => id && id !== "temp" && id !== "",
+      );
+
+      if (uniqueHmIds.length === 0 && uniqueAnesIds.length === 0) {
+        alert("掃描完成，目前資料庫很乾淨，沒有發現需要清理的異常排班！");
+        return;
+      }
+
+      // 執行刪除
+      if (uniqueHmIds.length > 0) {
+        const { error } = await supabase
+          .from("health_mgmt_shifts")
+          .delete()
+          .in("id", uniqueHmIds);
+        if (error) throw error;
+      }
+      if (uniqueAnesIds.length > 0) {
+        const { error } = await supabase
+          .from("anesthesia_shifts")
+          .delete()
+          .in("id", uniqueAnesIds);
+        if (error) throw error;
+      }
+
+      alert(
+        `清理完成！\n成功移除了 ${uniqueHmIds.length} 筆健管異常紀錄\n成功移除了 ${uniqueAnesIds.length} 筆麻護異常紀錄`,
+      );
+      window.location.reload(); // 重新載入以刷新最新乾淨的資料
+    } catch (err: any) {
+      console.error(err);
+      alert("清理失敗：" + (err.message || "未知錯誤"));
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   return (
     <div className="p-1 md:p-2 w-full h-full flex flex-col overflow-hidden bg-slate-50">
       <ConfirmModal
@@ -2554,6 +2766,19 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                   >
                     <FileSpreadsheet size={13} /> Excel
                   </button>
+                  {currentUser.role === UserRole.SYSTEM_ADMIN && (
+                    <>
+                      <div className="w-[1px] h-3 bg-teal-200 mx-0.5" />
+                      <button
+                        onClick={handleCleanupData}
+                        disabled={isSaving}
+                        className="px-2 py-0.5 hover:bg-white rounded-md text-xs font-bold text-red-600 flex items-center gap-1 transition-all disabled:opacity-50"
+                        title="清理異常與離職人員排班"
+                      >
+                        <Trash2 size={13} /> 清理異常
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -2658,15 +2883,6 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
               const isStatsToday =
                 statsViewDate === toLocalISOString(new Date());
 
-              const STATION_GROUPS: Record<string, string[]> = {
-                H: ["H", "健管", "接待"],
-                G: ["G", "腸胃", "診1", "診2", "POR", "流動", "洗滌"],
-                R: ["R", "行政", "櫃台", "櫃1", "櫃2", "櫃3", "櫃助"],
-                D: ["D", "代謝", "營養", "營1", "營2"],
-                M: ["M", "醫檢", "檢驗"],
-                P: ["P", "藥師"],
-              };
-
               const DESG_ABBR: Record<string, string> = {
                 H: "H",
                 G: "G",
@@ -2691,8 +2907,15 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                 const countedUserIds = new Set<string>();
 
                 locShifts.forEach((s) => {
+                  // 僅使用 station 進行比對，與主畫面卡片分類邏輯完全一致，避免 task 造成跨組誤判
                   const sText = (s.station || "").toUpperCase();
-                  if (!sText || sText.includes("休") || sText.includes("V"))
+                  if (
+                    !sText ||
+                    sText.includes("休") ||
+                    sText.includes("V") ||
+                    sText.includes("清除") ||
+                    sText.includes("未分配")
+                  )
                     return;
                   if (countedUserIds.has(s.userId)) return;
 
@@ -2701,26 +2924,13 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                     .find((st) => st.id === s.userId);
                   if (!u || u.isActive === false) return;
 
-                  const parts = s.station.split(" ");
-                  const base =
-                    parts.find((p) => !p.includes(":")) ||
-                    parts[parts.length - 1] ||
-                    "";
-
-                  for (const [key, vals] of Object.entries(STATION_GROUPS)) {
-                    if (
-                      vals.some(
-                        (v) =>
-                          sText.includes(v.toUpperCase()) ||
-                          base.toUpperCase().startsWith(v.toUpperCase()),
-                      )
-                    ) {
-                      stationCounts[key] = (stationCounts[key] || 0) + 1;
-                      if (!groupNames[key]) groupNames[key] = [];
-                      groupNames[key].push(u.name);
-                      countedUserIds.add(s.userId);
-                      break;
-                    }
+                  const matchedKey = getMatchedGroupId(sText);
+                  if (matchedKey) {
+                    stationCounts[matchedKey] =
+                      (stationCounts[matchedKey] || 0) + 1;
+                    if (!groupNames[matchedKey]) groupNames[matchedKey] = [];
+                    groupNames[matchedKey].push(u.name);
+                    countedUserIds.add(s.userId);
                   }
                 });
 
@@ -2752,8 +2962,13 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
               const beitouStats = getCountsForLocation("北投");
               const dazhiStats = getCountsForLocation("大直");
 
-              const renderPersonnelSummary = (stats: any, isHeader: boolean = false) => (
-                <div className={`flex flex-wrap items-center gap-1 ${isHeader ? "" : "mt-1.5 pt-1.5 border-t border-slate-50"}`}>
+              const renderPersonnelSummary = (
+                stats: any,
+                isHeader: boolean = false,
+              ) => (
+                <div
+                  className={`flex flex-wrap items-center gap-1 ${isHeader ? "" : "mt-1.5 pt-1.5 border-t border-slate-50"}`}
+                >
                   {Object.entries(DESG_ABBR).map(([key, abbr]) => {
                     const cnt = stats.stationCounts[key] || 0;
                     const names = stats.groupNames[key] || [];
@@ -4032,14 +4247,53 @@ const HMTodayView: React.FC<{
   const [editingTime, setEditingTime] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const filteredShifts = useMemo(
-    () => shifts.filter((s) => s.date === dateStr),
-    [shifts, dateStr],
-  );
-  const filteredAnes = useMemo(
-    () => anesthesiaShifts.filter((s) => s.date === dateStr),
-    [anesthesiaShifts, dateStr],
-  );
+  const filteredShifts = useMemo(() => {
+    const dayShifts = shifts.filter((s) => s.date === dateStr);
+    const uniqueMap = new Map<string, HealthMgmtShift>();
+    dayShifts.forEach((s) => {
+      if (!uniqueMap.has(s.userId)) {
+        uniqueMap.set(s.userId, s);
+      } else {
+        const existing = uniqueMap.get(s.userId)!;
+        const isExistingInvalid =
+          !existing.station ||
+          existing.station.includes("清除") ||
+          existing.station.includes("未分配");
+        const isNewValid =
+          s.station &&
+          !s.station.includes("清除") &&
+          !s.station.includes("未分配");
+        if (isExistingInvalid && isNewValid) {
+          uniqueMap.set(s.userId, s);
+        }
+      }
+    });
+    return Array.from(uniqueMap.values());
+  }, [shifts, dateStr]);
+
+  const filteredAnes = useMemo(() => {
+    const dayShifts = anesthesiaShifts.filter((s) => s.date === dateStr);
+    const uniqueMap = new Map<string, AnesthesiaShift>();
+    dayShifts.forEach((s) => {
+      if (!uniqueMap.has(s.userId)) {
+        uniqueMap.set(s.userId, s);
+      } else {
+        const existing = uniqueMap.get(s.userId)!;
+        const isExistingInvalid =
+          !existing.station ||
+          existing.station.includes("清除") ||
+          existing.station.includes("未分配");
+        const isNewValid =
+          s.station &&
+          !s.station.includes("清除") &&
+          !s.station.includes("未分配");
+        if (isExistingInvalid && isNewValid) {
+          uniqueMap.set(s.userId, s);
+        }
+      }
+    });
+    return Array.from(uniqueMap.values());
+  }, [anesthesiaShifts, dateStr]);
 
   const groups = useMemo(() => {
     // User Request: Use categorized view for ALL locations (Beitou, Dazhi, All)
@@ -4143,6 +4397,7 @@ const HMTodayView: React.FC<{
           if (
             !st.trim() ||
             st === "清除" ||
+            st === "未分配" ||
             st.includes("休") ||
             st.includes("V")
           )
@@ -4165,7 +4420,13 @@ const HMTodayView: React.FC<{
       assignments = filteredShifts
         .filter((s) => {
           const sText = (s.station || "").toUpperCase();
-          if (!sText || sText.includes("休") || sText.includes("V"))
+          if (
+            !sText ||
+            sText.includes("休") ||
+            sText.includes("V") ||
+            sText.includes("清除") ||
+            sText.includes("未分配")
+          )
             return false;
 
           const u = staff.find((st) => st.id === s.userId);
@@ -4181,10 +4442,7 @@ const HMTodayView: React.FC<{
           const shiftLoc = s.location || u.location || "";
           if (location !== "全部" && shiftLoc !== location) return false;
 
-          return group.stations.some((st) => {
-            const stUpper = st.toUpperCase();
-            return sText.includes(stUpper) || baseStation.startsWith(stUpper);
-          });
+          return getMatchedGroupId(sText) === group.id;
         })
         .map((s) => {
           const u = staff.find((st) => st.id === s.userId);

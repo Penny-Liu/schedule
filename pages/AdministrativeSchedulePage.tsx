@@ -34,6 +34,8 @@ import { toLocalISOString, generateUUID } from "../services/utils";
 
 interface AdministrativeSchedulePageProps {
   currentUser: any;
+  categories?: AdministrativeCategory[];
+  title?: string;
 }
 
 // 行政人員分類
@@ -43,66 +45,41 @@ export enum AdministrativeCategory {
   IT = "資訊",
   REPORTING = "報告",
   ADMIN = "行政",
+  GENE = "基因",
 }
 
-// 行政人員接口
+// 行政建檔人員接口
 export interface AdministrativeStaff {
   id: string;
   name: string;
   category: AdministrativeCategory;
-  isActive: boolean;
-  hireDate?: string;
-  terminationDate?: string;
-  displayOrder?: number;
-  phone?: string;
+  is_active: boolean;
 }
 
-const mapStaffFromDb = (row: any): AdministrativeStaff => ({
-  id: row.id,
-  name: row.name,
-  category: row.category,
-  isActive: row.is_active,
-  hireDate: row.hire_date,
-  terminationDate: row.termination_date,
-  displayOrder: row.display_order,
-  phone: row.phone,
-});
-
-const mapStaffToDb = (staff: AdministrativeStaff) => ({
-  id: staff.id,
-  name: staff.name,
-  category: staff.category,
-  is_active: staff.isActive,
-  hire_date: staff.hireDate,
-  termination_date: staff.terminationDate,
-  display_order: staff.displayOrder,
-  phone: staff.phone,
-});
-
-// 行政排班接口
+// 行政排班接口 - 修改為部門為主
 export interface AdministrativeShift {
   id: string;
-  staffId: string;
+  category: AdministrativeCategory;
   date: string;
-  shiftType: string; // 改為統一使用 "上班"，保留 string 兼容舊資料
+  staffNames: string; // 值班人員名字，多人用逗號分隔
   location: "北投" | "大直";
   notes?: string;
 }
 
 const mapShiftFromDb = (row: any): AdministrativeShift => ({
   id: row.id,
-  staffId: row.staff_id,
+  category: row.category,
   date: row.date,
-  shiftType: row.shift_type,
+  staffNames: row.staff_names,
   location: row.location,
   notes: row.notes,
 });
 
 const mapShiftToDb = (shift: AdministrativeShift) => ({
   id: shift.id,
-  staff_id: shift.staffId,
+  category: shift.category,
   date: shift.date,
-  shift_type: shift.shiftType,
+  staff_names: shift.staffNames,
   location: shift.location,
   notes: shift.notes,
 });
@@ -116,45 +93,68 @@ const CATEGORY_COLORS: Record<AdministrativeCategory, string> = {
   [AdministrativeCategory.IT]: "bg-purple-500 border-purple-600",
   [AdministrativeCategory.REPORTING]: "bg-orange-500 border-orange-600",
   [AdministrativeCategory.ADMIN]: "bg-gray-500 border-gray-600",
+  [AdministrativeCategory.GENE]: "bg-pink-500 border-pink-600",
 };
 
 const AdministrativeSchedulePage: React.FC<AdministrativeSchedulePageProps> = ({
   currentUser,
+  categories,
+  title = "行政排班管理",
 }) => {
+  const displayCategories = categories || Object.values(AdministrativeCategory);
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [staffList, setStaffList] = useState<AdministrativeStaff[]>([]);
   const [shifts, setShifts] = useState<AdministrativeShift[]>([]);
-  const [selectedStaff, setSelectedStaff] =
-    useState<AdministrativeStaff | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [showStaffModal, setShowStaffModal] = useState(false);
-  const [editingStaff, setEditingStaff] = useState<AdministrativeStaff | null>(
-    null,
-  );
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [confirmAction, setConfirmAction] = useState<() => void>(() => {});
   const [isDirty, setIsDirty] = useState(false);
   const [holidays, setHolidays] = useState(() => db.getHolidays());
 
+  // 人員管理相關狀態
+  const [staffList, setStaffList] = useState<AdministrativeStaff[]>([]);
+  const [showStaffManager, setShowStaffManager] = useState(false);
+  const [newStaffName, setNewStaffName] = useState("");
+  const [newStaffCategory, setNewStaffCategory] =
+    useState<AdministrativeCategory>(displayCategories[0]);
+  const [isSubmittingStaff, setIsSubmittingStaff] = useState(false);
+
   const [editingCell, setEditingCell] = useState<{
-    staff: AdministrativeStaff;
+    category: AdministrativeCategory;
     date: string;
     shift?: AdministrativeShift;
   } | null>(null);
 
+  // 人員視角與快速排班狀態
+  const [viewMode, setViewMode] = useState<"department" | "personnel">(
+    "department",
+  );
+  const [isQuickMode, setIsQuickMode] = useState(false);
+  const [quickLocation, setQuickLocation] = useState<"北投" | "大直" | "清除">(
+    "北投",
+  );
+  const [personnelEditingCell, setPersonnelEditingCell] = useState<{
+    staff: AdministrativeStaff;
+    date: string;
+    currentLocation: "北投" | "大直" | null;
+  } | null>(null);
+
+  // 用於編輯與快速選擇的狀態
+  const [historicalNames, setHistoricalNames] = useState<
+    Record<string, string[]>
+  >({});
+  const [editStaffNames, setEditStaffNames] = useState("");
+  const [editLocation, setEditLocation] = useState<"北投" | "大直">("北投");
+
+  // 自動偵測當前是否為純「基因排班」頁面，使用專屬權限
+  const isGeneOnly =
+    categories?.length === 1 && categories[0] === AdministrativeCategory.GENE;
+  const requiredPermission = isGeneOnly
+    ? "EDIT_GENE"
+    : PERMISSIONS.EDIT_ADMINISTRATIVE;
+
   const canEdit =
     currentUser?.role === UserRole.SYSTEM_ADMIN ||
-    currentUser?.permissions?.includes(PERMISSIONS.EDIT_ADMINISTRATIVE);
-
-  const staffGroups = useMemo(() => {
-    const categories = Object.values(AdministrativeCategory);
-    return categories
-      .map((category) => ({
-        category,
-        members: staffList.filter((staff) => staff.category === category),
-      }))
-      .filter((group) => group.members.length > 0);
-  }, [staffList]);
+    currentUser?.permissions?.includes(requiredPermission);
 
   // 追蹤未儲存狀態，用於攔截頁面切換或關閉
   useEffect(() => {
@@ -185,25 +185,22 @@ const AdministrativeSchedulePage: React.FC<AdministrativeSchedulePageProps> = ({
     return () => unsubscribe();
   }, []);
 
-  // 載入行政人員和排班資料
+  // 載入排班資料
   useEffect(() => {
-    loadStaff();
     loadShifts();
+    loadStaff();
   }, [currentDate]);
 
   const loadStaff = async () => {
-    try {
-      const { data, error } = await supabase
-        .from("administrative_staff")
-        .select("*")
-        .eq("is_active", true)
-        .order("display_order", { ascending: true });
-
-      if (error) throw error;
-      setStaffList((data || []).map(mapStaffFromDb));
-    } catch (error) {
-      console.error("載入行政人員失敗:", error);
+    let query = supabase
+      .from("administrative_staff")
+      .select("*")
+      .eq("is_active", true);
+    if (categories) {
+      query = query.in("category", categories);
     }
+    const { data, error } = await query;
+    if (!error && data) setStaffList(data);
   };
 
   const loadShifts = async () => {
@@ -219,11 +216,16 @@ const AdministrativeSchedulePage: React.FC<AdministrativeSchedulePageProps> = ({
     );
 
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from("administrative_shifts")
         .select("*")
         .gte("date", startDate.toISOString().split("T")[0])
         .lte("date", endDate.toISOString().split("T")[0]);
+      if (categories) {
+        query = query.in("category", categories);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
       setShifts((data || []).map(mapShiftFromDb));
@@ -233,152 +235,71 @@ const AdministrativeSchedulePage: React.FC<AdministrativeSchedulePageProps> = ({
     }
   };
 
-  // 儲存排班
-  const saveShifts = async () => {
-    setIsLoading(true);
-    try {
-      // 先刪除當月的舊資料
-      const startDate = new Date(
-        currentDate.getFullYear(),
-        currentDate.getMonth(),
-        1,
-      );
-      const endDate = new Date(
-        currentDate.getFullYear(),
-        currentDate.getMonth() + 1,
-        0,
-      );
-
-      await supabase
-        .from("administrative_shifts")
-        .delete()
-        .gte("date", startDate.toISOString().split("T")[0])
-        .lte("date", endDate.toISOString().split("T")[0]);
-
-      // 插入新資料
-      if (shifts.length > 0) {
-        const dbShifts = shifts.map(mapShiftToDb);
-        const { error } = await supabase
-          .from("administrative_shifts")
-          .insert(dbShifts);
-
-        if (error) throw error;
-      }
-
-      setIsDirty(false);
-      alert("儲存成功！");
-    } catch (error) {
-      console.error("儲存失敗:", error);
-      const message =
-        error && typeof error === "object" && "message" in error
-          ? (error as any).message
-          : JSON.stringify(error);
-      alert(`儲存失敗：${message}`);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // 新增/編輯行政人員
-  const saveStaff = async (staff: AdministrativeStaff) => {
-    try {
-      const { error } = await supabase
-        .from("administrative_staff")
-        .upsert(mapStaffToDb(staff));
-
-      if (error) throw error;
-
-      setShowStaffModal(false);
-      setEditingStaff(null);
-      loadStaff();
-    } catch (error) {
-      console.error("儲存人員失敗:", error);
-      const message =
-        error && typeof error === "object" && "message" in error
-          ? (error as any).message
-          : JSON.stringify(error);
-      alert(`儲存失敗：${message}`);
-    }
-  };
-
-  // 刪除行政人員
-  const deleteStaff = async (staffId: string) => {
-    setConfirmAction(() => async () => {
+  // 載入歷史常用人員名單
+  useEffect(() => {
+    const fetchHistoricalNames = async () => {
       try {
-        const { error } = await supabase
-          .from("administrative_staff")
-          .update({ is_active: false })
-          .eq("id", staffId);
+        // 取得最近的 1000 筆排班紀錄來提煉常用名單
+        let query = supabase
+          .from("administrative_shifts")
+          .select("category, staff_names")
+          .order("created_at", { ascending: false })
+          .limit(1000);
+        if (categories) {
+          query = query.in("category", categories);
+        }
 
-        if (error) throw error;
+        const { data, error } = await query;
 
-        loadStaff();
-        setShowConfirmModal(false);
-      } catch (error) {
-        console.error("刪除人員失敗:", error);
-        alert("刪除失敗，請重試");
+        if (!error && data) {
+          const nameMap: Record<string, Set<string>> = {};
+          displayCategories.forEach((c) => (nameMap[c] = new Set()));
+
+          data.forEach((row: any) => {
+            if (row.category && nameMap[row.category] && row.staff_names) {
+              row.staff_names.split(",").forEach((n: string) => {
+                const trimmed = n.trim();
+                if (trimmed) nameMap[row.category].add(trimmed);
+              });
+            }
+          });
+
+          const result: Record<string, string[]> = {};
+          for (const cat in nameMap) {
+            result[cat] = Array.from(nameMap[cat]).sort();
+          }
+          setHistoricalNames(result);
+        }
+      } catch (err) {
+        console.error("載入歷史人員名單失敗:", err);
       }
-    });
-    setShowConfirmModal(true);
+    };
+    fetchHistoricalNames();
+  }, []);
+
+  // 獲取指定日期和部門的班別
+  const getShiftForDateAndCategory = (
+    category: AdministrativeCategory,
+    dateStr: string,
+  ) => {
+    return shifts.find((s) => s.category === category && s.date === dateStr);
   };
 
-  // 快速排班功能
-  const quickSchedule = (
-    staff: AdministrativeStaff,
-    shiftType: string,
-    location: string,
-  ) => {
-    const daysInMonth = new Date(
-      currentDate.getFullYear(),
-      currentDate.getMonth() + 1,
-      0,
-    ).getDate();
-
-    const newShifts: AdministrativeShift[] = [];
-
-    for (let day = 1; day <= daysInMonth; day++) {
-      const date = new Date(
-        currentDate.getFullYear(),
-        currentDate.getMonth(),
-        day,
-      );
-      const dateStr = date.toISOString().split("T")[0];
-
-      // 檢查是否為假日（週六、日）
-      const isWeekend = date.getDay() === 0 || date.getDay() === 6;
-      const isNationalHoliday = holidays.some(
-        (h) =>
-          h.date === dateStr &&
-          (h.type === DateEventType.NATIONAL ||
-            h.type === DateEventType.CLOSED),
-      );
-
-      // 快速排班預設只排平日與非國定假日 (若要排假日可透過點擊單格手動新增)
-      if (isWeekend || isNationalHoliday) continue;
-
-      // 檢查是否已存在排班
-      const existingShift = shifts.find(
-        (s) =>
-          s.staffId === staff.id &&
-          s.date === dateStr &&
-          s.location === location,
-      );
-
-      if (!existingShift) {
-        newShifts.push({
-          id: generateUUID(),
-          staffId: staff.id,
-          date: dateStr,
-          shiftType: shiftType as any,
-          location: location as any,
-        });
+  // 處理月份切換，攔截未儲存狀態
+  const handleMonthChange = (direction: 1 | -1) => {
+    if (isDirty) {
+      if (!window.confirm("您有未儲存的排班變更，確定要放棄並切換月份嗎？")) {
+        return;
       }
     }
-
-    if (newShifts.length > 0) {
-      setShifts((prev) => [...prev, ...newShifts]);
-      setIsDirty(true);
-    }
+    setCurrentDate(
+      new Date(
+        currentDate.getFullYear(),
+        currentDate.getMonth() + direction,
+        1,
+      ),
+    );
+    setIsDirty(false);
   };
 
   // 匯出為 PDF
@@ -390,55 +311,81 @@ const AdministrativeSchedulePage: React.FC<AdministrativeSchedulePageProps> = ({
     });
 
     pdf.setFontSize(16);
-    pdf.text(`行政排班表 - ${monthName}`, 20, 20);
+    pdf.text(`${title} - ${monthName}`, 20, 20);
 
-    const tableData = staffList.map((staff) => {
-      const staffShifts = shifts.filter((s) => s.staffId === staff.id);
-      const row = [staff.name, staff.category];
+    const tableData =
+      viewMode === "department"
+        ? displayCategories.map((category) => {
+            const categoryShifts = shifts.filter(
+              (s) => s.category === category,
+            );
+            const row = [category];
 
-      // 為每一天添加班別
-      const daysInMonth = new Date(
-        currentDate.getFullYear(),
-        currentDate.getMonth() + 1,
-        0,
-      ).getDate();
-      for (let day = 1; day <= daysInMonth; day++) {
-        const dateStr = new Date(
-          currentDate.getFullYear(),
-          currentDate.getMonth(),
-          day,
-        )
-          .toISOString()
-          .split("T")[0];
-        const shift = staffShifts.find((s) => s.date === dateStr);
-        row.push(shift ? `${shift.shiftType}(${shift.location})` : "");
-      }
-
-      return row;
-    });
+            // 為每一天添加值班人員
+            for (let day = 1; day <= daysInMonth; day++) {
+              const dateStr = new Date(
+                currentDate.getFullYear(),
+                currentDate.getMonth(),
+                day,
+              )
+                .toISOString()
+                .split("T")[0];
+              const shift = categoryShifts.find((s) => s.date === dateStr);
+              if (shift) {
+                const formattedNames = shift.staffNames
+                  .split(",")
+                  .map((n) => n.trim())
+                  .filter(Boolean)
+                  .join("\n");
+                row.push(`${formattedNames}\n(${shift.location})`);
+              } else {
+                row.push("");
+              }
+            }
+            return row;
+          })
+        : staffList
+            .filter((s) => displayCategories.includes(s.category))
+            .map((staff) => {
+              const row = [staff.name];
+              for (let day = 1; day <= daysInMonth; day++) {
+                const dateStr = new Date(
+                  currentDate.getFullYear(),
+                  currentDate.getMonth(),
+                  day,
+                )
+                  .toISOString()
+                  .split("T")[0];
+                let assignedLoc = "";
+                const shiftsForDateAndCat = shifts.filter(
+                  (s) => s.category === staff.category && s.date === dateStr,
+                );
+                shiftsForDateAndCat.forEach((s) => {
+                  if (
+                    s.staffNames
+                      .split(",")
+                      .map((n) => n.trim())
+                      .includes(staff.name)
+                  )
+                    assignedLoc = s.location;
+                });
+                row.push(assignedLoc);
+              }
+              return row;
+            });
 
     autoTable(pdf, {
       head: [
         [
-          "姓名",
-          "分類",
-          ...Array.from(
-            {
-              length: new Date(
-                currentDate.getFullYear(),
-                currentDate.getMonth() + 1,
-                0,
-              ).getDate(),
-            },
-            (_, i) => `${i + 1}日`,
-          ),
+          viewMode === "department" ? "部門" : "人員",
+          ...Array.from({ length: daysInMonth }, (_, i) => `${i + 1}日`),
         ],
       ],
       body: tableData,
       startY: 30,
       didParseCell: (data: any) => {
-        if (data.column.index >= 2) {
-          const day = data.column.index - 1;
+        if (data.column.index >= 1) {
+          const day = data.column.index;
           const dateObj = new Date(
             currentDate.getFullYear(),
             currentDate.getMonth(),
@@ -464,39 +411,179 @@ const AdministrativeSchedulePage: React.FC<AdministrativeSchedulePageProps> = ({
       },
     });
 
-    pdf.save(`行政排班表_${monthName}.pdf`);
+    pdf.save(`${title}_${monthName}.pdf`);
   };
 
-  // 計算月份的天數
-  const daysInMonth = useMemo(() => {
-    return new Date(
-      currentDate.getFullYear(),
-      currentDate.getMonth() + 1,
-      0,
-    ).getDate();
-  }, [currentDate]);
+  // 處理人員視角下的格子點擊（快速排班切換）
+  const handleToggleStaff = (
+    staff: AdministrativeStaff,
+    dateStr: string,
+    targetLoc: "北投" | "大直" | null,
+  ) => {
+    setShifts((prev) => {
+      let newShifts = [...prev];
 
-  // 獲取指定日期的班別
-  const getShiftForDate = (staffId: string, dateStr: string) => {
-    return shifts.find((s) => s.staffId === staffId && s.date === dateStr);
-  };
+      // 1. 先將這個人從該部門當天的所有排班中移除
+      const relevantShifts = newShifts.filter(
+        (s) => s.category === staff.category && s.date === dateStr,
+      );
+      for (const s of relevantShifts) {
+        const names = s.staffNames
+          .split(",")
+          .map((n) => n.trim())
+          .filter(Boolean);
+        const filteredNames = names.filter((n) => n !== staff.name);
 
-  // 處理月份切換，攔截未儲存狀態
-  const handleMonthChange = (direction: 1 | -1) => {
-    if (isDirty) {
-      if (!window.confirm("您有未儲存的排班變更，確定要放棄並切換月份嗎？")) {
-        return;
+        if (filteredNames.length === 0) {
+          newShifts = newShifts.filter((x) => x.id !== s.id);
+        } else {
+          const idx = newShifts.findIndex((x) => x.id === s.id);
+          newShifts[idx] = {
+            ...newShifts[idx],
+            staffNames: filteredNames.join(", "),
+          };
+        }
       }
-    }
-    setCurrentDate(
-      new Date(
-        currentDate.getFullYear(),
-        currentDate.getMonth() + direction,
-        1,
-      ),
-    );
-    setIsDirty(false);
+
+      // 2. 如果有指定新地點，將他加進去
+      if (targetLoc) {
+        const targetShiftIdx = newShifts.findIndex(
+          (s) =>
+            s.category === staff.category &&
+            s.date === dateStr &&
+            s.location === targetLoc,
+        );
+        if (targetShiftIdx >= 0) {
+          const names = newShifts[targetShiftIdx].staffNames
+            .split(",")
+            .map((n) => n.trim())
+            .filter(Boolean);
+          if (!names.includes(staff.name)) {
+            names.push(staff.name);
+            newShifts[targetShiftIdx] = {
+              ...newShifts[targetShiftIdx],
+              staffNames: names.join(", "),
+            };
+          }
+        } else {
+          newShifts.push({
+            id: generateUUID(),
+            category: staff.category,
+            date: dateStr,
+            staffNames: staff.name,
+            location: targetLoc,
+          });
+        }
+      }
+
+      return newShifts;
+    });
+    setIsDirty(true);
   };
+
+  // 儲存排班資料到 Supabase
+  const saveShifts = async () => {
+    setIsLoading(true);
+    try {
+      // 1. 取得當月資料庫中原有的排班 ID (用來比對哪些被刪除了)
+      const startDate = new Date(
+        currentDate.getFullYear(),
+        currentDate.getMonth(),
+        1,
+      )
+        .toISOString()
+        .split("T")[0];
+      const endDate = new Date(
+        currentDate.getFullYear(),
+        currentDate.getMonth() + 1,
+        0,
+      )
+        .toISOString()
+        .split("T")[0];
+
+      let fetchQuery = supabase
+        .from("administrative_shifts")
+        .select("id")
+        .gte("date", startDate)
+        .lte("date", endDate);
+      if (categories) {
+        fetchQuery = fetchQuery.in("category", categories);
+      }
+
+      const { data: existingData, error: fetchError } = await fetchQuery;
+
+      if (fetchError) throw fetchError;
+
+      const existingIds = existingData?.map((d) => d.id) || [];
+      const currentIds = shifts.map((s) => s.id);
+      const idsToDelete = existingIds.filter((id) => !currentIds.includes(id));
+
+      // 2. 刪除被清空的排班
+      if (idsToDelete.length > 0) {
+        const { error: deleteError } = await supabase
+          .from("administrative_shifts")
+          .delete()
+          .in("id", idsToDelete);
+        if (deleteError) throw deleteError;
+      }
+
+      // 3. 新增或更新現在的排班
+      if (shifts.length > 0) {
+        const dbShifts = shifts.map(mapShiftToDb);
+        const { error: upsertError } = await supabase
+          .from("administrative_shifts")
+          .upsert(dbShifts);
+        if (upsertError) throw upsertError;
+      }
+
+      setIsDirty(false);
+      alert("排班已成功儲存！");
+    } catch (error: any) {
+      console.error("儲存排班失敗:", error);
+      alert("儲存失敗：" + (error.message || "未知錯誤"));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // 新增人員
+  const handleAddStaff = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newStaffName.trim() || isSubmittingStaff) return;
+    setIsSubmittingStaff(true);
+    const { data, error } = await supabase
+      .from("administrative_staff")
+      .insert([
+        {
+          name: newStaffName.trim(),
+          category: newStaffCategory,
+          is_active: true,
+        },
+      ])
+      .select();
+    if (!error && data) {
+      setStaffList([...staffList, data[0]]);
+      setNewStaffName("");
+    }
+    setIsSubmittingStaff(false);
+  };
+
+  // 停用/刪除人員
+  const handleDeleteStaff = async (id: string) => {
+    if (!window.confirm("確定要移除此固定人員嗎？")) return;
+    const { error } = await supabase
+      .from("administrative_staff")
+      .update({ is_active: false })
+      .eq("id", id);
+    if (!error) setStaffList(staffList.filter((s) => s.id !== id));
+  };
+
+  // 計算當月天數
+  const daysInMonth = new Date(
+    currentDate.getFullYear(),
+    currentDate.getMonth() + 1,
+    0,
+  ).getDate();
 
   return (
     <div className="h-full flex flex-col bg-gray-50 relative">
@@ -506,10 +593,10 @@ const AdministrativeSchedulePage: React.FC<AdministrativeSchedulePageProps> = ({
           <div className="mb-6">
             <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-2">
               <Briefcase className="w-8 h-8 text-blue-600" />
-              行政排班管理
+              {title}
             </h1>
             <p className="text-gray-600 mt-1">
-              管理行政人員排班，支援快速假日排班功能
+              管理人員排班，支援快速假日排班功能
             </p>
           </div>
 
@@ -538,19 +625,70 @@ const AdministrativeSchedulePage: React.FC<AdministrativeSchedulePageProps> = ({
                 </button>
               </div>
 
+              {/* 視角切換與快速排班 */}
+              <div className="flex items-center gap-4">
+                <div className="flex items-center bg-slate-100 rounded-lg p-1 border border-slate-200">
+                  <button
+                    onClick={() => {
+                      setViewMode("department");
+                      setIsQuickMode(false);
+                    }}
+                    className={`px-3 py-1 rounded-md text-xs font-bold transition-all ${viewMode === "department" ? "bg-white text-blue-700 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+                  >
+                    部門視角
+                  </button>
+                  <button
+                    onClick={() => setViewMode("personnel")}
+                    className={`px-3 py-1 rounded-md text-xs font-bold transition-all ${viewMode === "personnel" ? "bg-white text-blue-700 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+                  >
+                    人員視角
+                  </button>
+                </div>
+
+                {viewMode === "personnel" && canEdit && (
+                  <div className="flex items-center gap-2 animate-in fade-in zoom-in duration-200">
+                    <button
+                      onClick={() => setIsQuickMode(!isQuickMode)}
+                      className={`px-3 py-1.5 rounded-lg text-sm font-bold transition-all border flex items-center gap-1 ${
+                        isQuickMode
+                          ? "bg-indigo-600 text-white border-indigo-700 shadow-sm"
+                          : "bg-white text-slate-500 border-slate-200 hover:bg-slate-50"
+                      }`}
+                    >
+                      快速排班 {isQuickMode && "ON"}
+                    </button>
+                    {isQuickMode && (
+                      <select
+                        value={quickLocation}
+                        onChange={(e) =>
+                          setQuickLocation(
+                            e.target.value as "北投" | "大直" | "清除",
+                          )
+                        }
+                        className="px-2 py-1.5 text-sm border border-indigo-200 bg-indigo-50 text-indigo-700 rounded-lg outline-none font-bold"
+                      >
+                        {LOCATIONS.map((loc) => (
+                          <option key={loc} value={loc}>
+                            {loc}
+                          </option>
+                        ))}
+                        <option value="清除">清除</option>
+                      </select>
+                    )}
+                  </div>
+                )}
+              </div>
+
               {/* 操作按鈕 */}
               <div className="flex items-center gap-2">
                 {canEdit && (
                   <>
                     <button
-                      onClick={() => {
-                        setEditingStaff(null);
-                        setShowStaffModal(true);
-                      }}
-                      className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
+                      onClick={() => setShowStaffManager(true)}
+                      className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors shadow-sm"
                     >
-                      <UserPlus className="w-4 h-4" />
-                      新增人員
+                      <Users className="w-4 h-4" />
+                      人員管理
                     </button>
                     <button
                       onClick={saveShifts}
@@ -581,42 +719,6 @@ const AdministrativeSchedulePage: React.FC<AdministrativeSchedulePageProps> = ({
             </div>
           </div>
 
-          {/* 快速排班面板 */}
-          {selectedStaff && canEdit && (
-            <div className="bg-white rounded-lg shadow-sm border p-4 mb-6">
-              <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                <User className="w-5 h-5" />
-                快速排班 - {selectedStaff.name} ({selectedStaff.category})
-              </h3>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {SHIFT_TYPES.map((shiftType) => (
-                  <div key={shiftType} className="space-y-2">
-                    <h4 className="font-medium text-sm">{shiftType}</h4>
-                    <div className="flex gap-2">
-                      {LOCATIONS.map((location) => (
-                        <button
-                          key={location}
-                          onClick={() =>
-                            quickSchedule(selectedStaff, shiftType, location)
-                          }
-                          className="px-3 py-1 bg-blue-100 text-blue-700 rounded text-sm hover:bg-blue-200"
-                        >
-                          {location}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <button
-                onClick={() => setSelectedStaff(null)}
-                className="mt-4 px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600"
-              >
-                取消選擇
-              </button>
-            </div>
-          )}
-
           {/* 排班表格 */}
           <div className="bg-white rounded-lg shadow-sm border overflow-hidden flex flex-col">
             <div className="overflow-auto max-h-[70vh]">
@@ -624,10 +726,7 @@ const AdministrativeSchedulePage: React.FC<AdministrativeSchedulePageProps> = ({
                 <thead className="sticky top-0 z-30 shadow-sm bg-gray-50">
                   <tr>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sticky left-0 top-0 bg-gray-50 z-30 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] border-r border-gray-200 border-b">
-                      人員
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-50 sticky top-0 z-20 border-r border-gray-200 border-b">
-                      分類
+                      {viewMode === "department" ? "部門" : "人員"}
                     </th>
                     {Array.from({ length: daysInMonth }, (_, i) => {
                       const date = new Date(
@@ -672,52 +771,26 @@ const AdministrativeSchedulePage: React.FC<AdministrativeSchedulePageProps> = ({
                         </th>
                       );
                     })}
-                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider sticky right-0 top-0 bg-gray-50 z-30 shadow-[-2px_0_5px_-2px_rgba(0,0,0,0.1)] border-l border-gray-200 border-b">
-                      操作
-                    </th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {staffGroups.map((group) => (
-                    <React.Fragment key={group.category}>
-                      <tr className="bg-gray-100">
-                        <td
-                          colSpan={3 + daysInMonth}
-                          className="px-4 py-2 text-left text-sm font-bold text-gray-700 bg-slate-100 sticky left-0 z-10"
-                        >
-                          {group.category}
-                        </td>
-                      </tr>
-                      {group.members.map((staff) => (
+                  {viewMode === "department"
+                    ? displayCategories.map((category) => (
                         <tr
-                          key={staff.id}
+                          key={category}
                           className="hover:bg-slate-50 transition-colors"
                         >
                           <td className="px-4 py-3 whitespace-nowrap sticky left-0 bg-white z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] border-r border-gray-100">
                             <div className="flex items-center gap-2">
-                              <button
-                                onClick={() =>
-                                  setSelectedStaff(
-                                    selectedStaff?.id === staff.id
-                                      ? null
-                                      : staff,
-                                  )
-                                }
-                                className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-medium ${CATEGORY_COLORS[staff.category]}`}
+                              <div
+                                className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-medium ${CATEGORY_COLORS[category]}`}
                               >
-                                {staff.name.charAt(0)}
-                              </button>
+                                {category.charAt(0)}
+                              </div>
                               <span className="font-medium text-gray-900">
-                                {staff.name}
+                                {category}
                               </span>
                             </div>
-                          </td>
-                          <td className="px-4 py-3 whitespace-nowrap border-r border-gray-100">
-                            <span
-                              className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${CATEGORY_COLORS[staff.category]} text-white`}
-                            >
-                              {staff.category}
-                            </span>
                           </td>
                           {Array.from({ length: daysInMonth }, (_, i) => {
                             const dateStr = new Date(
@@ -727,27 +800,45 @@ const AdministrativeSchedulePage: React.FC<AdministrativeSchedulePageProps> = ({
                             )
                               .toISOString()
                               .split("T")[0];
-                            const shift = getShiftForDate(staff.id, dateStr);
+                            const shift = getShiftForDateAndCategory(
+                              category,
+                              dateStr,
+                            );
                             return (
                               <td
                                 key={i}
                                 onClick={() => {
                                   if (canEdit) {
                                     setEditingCell({
-                                      staff,
+                                      category,
                                       date: dateStr,
                                       shift,
                                     });
+                                    setEditStaffNames(shift?.staffNames || "");
+                                    setEditLocation(shift?.location || "北投");
                                   }
                                 }}
                                 className={`px-2 py-3 text-center border-r border-gray-100 ${canEdit ? "cursor-pointer hover:bg-blue-50 transition-colors" : ""}`}
                               >
                                 {shift ? (
-                                  <div className="text-xs">
-                                    <div className="font-medium text-gray-800">
-                                      {shift.shiftType}
+                                  <div className="text-xs flex flex-col items-center">
+                                    <div className="font-medium text-gray-800 flex flex-col">
+                                      {shift.staffNames
+                                        .split(",")
+                                        .map((name, nameIdx) => {
+                                          const trimmed = name.trim();
+                                          if (!trimmed) return null;
+                                          return (
+                                            <span
+                                              key={nameIdx}
+                                              className="whitespace-nowrap"
+                                            >
+                                              {trimmed}
+                                            </span>
+                                          );
+                                        })}
                                     </div>
-                                    <div className="text-gray-500 text-[10px]">
+                                    <div className="text-gray-500 text-[10px] mt-0.5">
                                       ({shift.location})
                                     </div>
                                   </div>
@@ -757,35 +848,89 @@ const AdministrativeSchedulePage: React.FC<AdministrativeSchedulePageProps> = ({
                               </td>
                             );
                           })}
-                          <td className="px-4 py-3 text-center whitespace-nowrap sticky right-0 bg-white z-10 border-l shadow-[-2px_0_5px_-2px_rgba(0,0,0,0.1)]">
-                            {canEdit ? (
-                              <div className="flex items-center gap-2 justify-center">
-                                <button
-                                  onClick={() => {
-                                    setEditingStaff(staff);
-                                    setShowStaffModal(true);
-                                  }}
-                                  className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                                  title="編輯人員"
-                                >
-                                  <Edit className="w-4 h-4" />
-                                </button>
-                                <button
-                                  onClick={() => deleteStaff(staff.id)}
-                                  className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                  title="刪除人員"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
-                              </div>
-                            ) : (
-                              <span className="text-gray-400 text-xs">-</span>
-                            )}
-                          </td>
                         </tr>
-                      ))}
-                    </React.Fragment>
-                  ))}
+                      ))
+                    : staffList
+                        .filter((s) => displayCategories.includes(s.category))
+                        .map((staff) => (
+                          <tr
+                            key={staff.id}
+                            className="hover:bg-slate-50 transition-colors"
+                          >
+                            <td className="px-4 py-3 whitespace-nowrap sticky left-0 bg-white z-10 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] border-r border-gray-100">
+                              <div className="font-bold text-gray-900">
+                                {staff.name}
+                              </div>
+                              <div className="text-[10px] text-gray-500">
+                                {staff.category}
+                              </div>
+                            </td>
+                            {Array.from({ length: daysInMonth }, (_, i) => {
+                              const dateStr = new Date(
+                                currentDate.getFullYear(),
+                                currentDate.getMonth(),
+                                i + 1,
+                              )
+                                .toISOString()
+                                .split("T")[0];
+                              const shiftsForDateAndCat = shifts.filter(
+                                (s) =>
+                                  s.category === staff.category &&
+                                  s.date === dateStr,
+                              );
+                              let assignedLoc: "北投" | "大直" | null = null;
+                              shiftsForDateAndCat.forEach((s) => {
+                                const names = s.staffNames
+                                  .split(",")
+                                  .map((n) => n.trim());
+                                if (names.includes(staff.name)) {
+                                  assignedLoc = s.location;
+                                }
+                              });
+
+                              return (
+                                <td
+                                  key={i}
+                                  onClick={() => {
+                                    if (!canEdit) return;
+                                    if (isQuickMode) {
+                                      handleToggleStaff(
+                                        staff,
+                                        dateStr,
+                                        quickLocation === "清除"
+                                          ? null
+                                          : assignedLoc === quickLocation
+                                            ? null
+                                            : (quickLocation as
+                                                | "北投"
+                                                | "大直"),
+                                      );
+                                    } else {
+                                      setPersonnelEditingCell({
+                                        staff,
+                                        date: dateStr,
+                                        currentLocation: assignedLoc,
+                                      });
+                                    }
+                                  }}
+                                  className={`px-1 py-2 text-center border-r border-gray-100 transition-colors ${canEdit ? "cursor-pointer" : ""} ${assignedLoc === "北投" ? "bg-blue-50 hover:bg-blue-100" : assignedLoc === "大直" ? "bg-orange-50 hover:bg-orange-100" : "hover:bg-gray-50"}`}
+                                >
+                                  {assignedLoc ? (
+                                    <span
+                                      className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${assignedLoc === "北投" ? "text-blue-700 bg-blue-100 border border-blue-200 shadow-sm" : "text-orange-700 bg-orange-100 border border-orange-200 shadow-sm"}`}
+                                    >
+                                      {assignedLoc}
+                                    </span>
+                                  ) : (
+                                    <span className="text-gray-200 hover:text-gray-400 opacity-0 hover:opacity-100 transition-opacity select-none">
+                                      +
+                                    </span>
+                                  )}
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        ))}
                 </tbody>
               </table>
             </div>
@@ -796,7 +941,7 @@ const AdministrativeSchedulePage: React.FC<AdministrativeSchedulePageProps> = ({
             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
               <div className="bg-white rounded-lg p-6 w-full max-w-sm">
                 <h3 className="text-lg font-semibold mb-4">
-                  編輯排班 - {editingCell.staff.name}
+                  編輯排班 - {editingCell.category}
                 </h3>
                 <p className="text-sm text-gray-500 mb-4">
                   日期: {editingCell.date}
@@ -804,20 +949,83 @@ const AdministrativeSchedulePage: React.FC<AdministrativeSchedulePageProps> = ({
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      班別
+                      值班人員
                     </label>
-                    <select
-                      id="cellShiftType"
+                    <input
+                      id="cellStaffNames"
+                      type="text"
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 outline-none"
-                      defaultValue={editingCell.shift?.shiftType || "上班"}
-                    >
-                      {SHIFT_TYPES.map((st) => (
-                        <option key={st} value={st}>
-                          {st}
-                        </option>
-                      ))}
-                    </select>
+                      value={editStaffNames}
+                      onChange={(e) => setEditStaffNames(e.target.value)}
+                      placeholder="輸入值班人員名字，多人用逗號分隔"
+                    />
                   </div>
+
+                  {/* 常用人員快速點擊區 */}
+                  {(() => {
+                    const currentCategoryNames = new Set([
+                      ...(historicalNames[editingCell.category] || []),
+                      ...staffList
+                        .filter((s) => s.category === editingCell.category)
+                        .map((s) => s.name),
+                    ]);
+                    shifts
+                      .filter((s) => s.category === editingCell.category)
+                      .forEach((s) => {
+                        s.staffNames.split(",").forEach((n) => {
+                          const trimmed = n.trim();
+                          if (trimmed) currentCategoryNames.add(trimmed);
+                        });
+                      });
+                    const availableNames =
+                      Array.from(currentCategoryNames).sort();
+
+                    if (availableNames.length === 0) return null;
+
+                    return (
+                      <div className="pt-1">
+                        <label className="block text-xs font-medium text-gray-500 mb-1.5">
+                          固定名單與常用人員 (點擊加入/移除)
+                        </label>
+                        <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto p-1 custom-scrollbar">
+                          {availableNames.map((name) => {
+                            const currentNames = editStaffNames
+                              .split(",")
+                              .map((n) => n.trim())
+                              .filter(Boolean);
+                            const isSelected = currentNames.includes(name);
+                            return (
+                              <button
+                                key={name}
+                                type="button"
+                                onClick={() => {
+                                  if (isSelected) {
+                                    setEditStaffNames(
+                                      currentNames
+                                        .filter((n) => n !== name)
+                                        .join(", "),
+                                    );
+                                  } else {
+                                    setEditStaffNames(
+                                      [...currentNames, name].join(", "),
+                                    );
+                                  }
+                                }}
+                                className={`px-2.5 py-1 text-xs rounded-full border transition-colors ${
+                                  isSelected
+                                    ? "bg-blue-500 text-white border-blue-600 shadow-sm"
+                                    : "bg-gray-50 text-gray-600 border-gray-200 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200"
+                                }`}
+                              >
+                                {name}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })()}
+
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       地點
@@ -825,7 +1033,10 @@ const AdministrativeSchedulePage: React.FC<AdministrativeSchedulePageProps> = ({
                     <select
                       id="cellShiftLocation"
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 outline-none"
-                      defaultValue={editingCell.shift?.location || "北投"}
+                      value={editLocation}
+                      onChange={(e) =>
+                        setEditLocation(e.target.value as "北投" | "大直")
+                      }
                     >
                       {LOCATIONS.map((loc) => (
                         <option key={loc} value={loc}>
@@ -861,40 +1072,39 @@ const AdministrativeSchedulePage: React.FC<AdministrativeSchedulePageProps> = ({
                     </button>
                     <button
                       onClick={() => {
-                        const type = (
-                          document.getElementById(
-                            "cellShiftType",
-                          ) as HTMLSelectElement
-                        ).value;
-                        const loc = (
-                          document.getElementById(
-                            "cellShiftLocation",
-                          ) as HTMLSelectElement
-                        ).value;
+                        const staffNames = editStaffNames.trim();
+                        const loc = editLocation;
 
-                        if (editingCell.shift) {
+                        if (staffNames) {
+                          if (editingCell.shift) {
+                            setShifts((prev) =>
+                              prev.map((s) =>
+                                s.id === editingCell.shift!.id
+                                  ? {
+                                      ...s,
+                                      staffNames,
+                                      location: loc as any,
+                                    }
+                                  : s,
+                              ),
+                            );
+                          } else {
+                            setShifts((prev) => [
+                              ...prev,
+                              {
+                                id: generateUUID(),
+                                category: editingCell.category,
+                                date: editingCell.date,
+                                staffNames,
+                                location: loc as any,
+                              },
+                            ]);
+                          }
+                        } else if (editingCell.shift) {
+                          // 如果清空了名字但原本有資料，刪除該排班
                           setShifts((prev) =>
-                            prev.map((s) =>
-                              s.id === editingCell.shift!.id
-                                ? {
-                                    ...s,
-                                    shiftType: type as any,
-                                    location: loc as any,
-                                  }
-                                : s,
-                            ),
+                            prev.filter((s) => s.id !== editingCell.shift!.id),
                           );
-                        } else {
-                          setShifts((prev) => [
-                            ...prev,
-                            {
-                              id: generateUUID(),
-                              staffId: editingCell.staff.id,
-                              date: editingCell.date,
-                              shiftType: type as any,
-                              location: loc as any,
-                            },
-                          ]);
                         }
                         setIsDirty(true);
                         setEditingCell(null);
@@ -909,21 +1119,66 @@ const AdministrativeSchedulePage: React.FC<AdministrativeSchedulePageProps> = ({
             </div>
           )}
 
-          {/* 人員管理模態框 */}
-          {showStaffModal && (
+          {/* 人員單格視角編輯框 */}
+          {personnelEditingCell && (
             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-              <div className="bg-white rounded-lg p-6 w-full max-w-md">
-                <h3 className="text-lg font-semibold mb-4">
-                  {editingStaff ? "編輯人員" : "新增人員"}
+              <div className="bg-white rounded-lg p-6 w-full max-w-sm animate-in zoom-in-95 duration-200">
+                <h3 className="text-lg font-bold text-gray-800 mb-1">
+                  指派人員 - {personnelEditingCell.staff.name}
                 </h3>
-                <StaffForm
-                  staff={editingStaff}
-                  onSave={saveStaff}
-                  onCancel={() => {
-                    setShowStaffModal(false);
-                    setEditingStaff(null);
-                  }}
-                />
+                <p className="text-sm text-gray-500 mb-5">
+                  日期: {personnelEditingCell.date}
+                </p>
+                <div className="flex flex-col gap-3">
+                  <button
+                    onClick={() => {
+                      handleToggleStaff(
+                        personnelEditingCell.staff,
+                        personnelEditingCell.date,
+                        "北投",
+                      );
+                      setPersonnelEditingCell(null);
+                    }}
+                    className={`px-4 py-3 rounded-lg font-bold border transition-colors ${personnelEditingCell.currentLocation === "北投" ? "bg-blue-500 text-white border-blue-600 shadow-md" : "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100"}`}
+                  >
+                    上班 (北投)
+                  </button>
+                  <button
+                    onClick={() => {
+                      handleToggleStaff(
+                        personnelEditingCell.staff,
+                        personnelEditingCell.date,
+                        "大直",
+                      );
+                      setPersonnelEditingCell(null);
+                    }}
+                    className={`px-4 py-3 rounded-lg font-bold border transition-colors ${personnelEditingCell.currentLocation === "大直" ? "bg-orange-500 text-white border-orange-600 shadow-md" : "bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100"}`}
+                  >
+                    上班 (大直)
+                  </button>
+                  <div className="h-px bg-gray-100 my-1"></div>
+                  <button
+                    onClick={() => {
+                      handleToggleStaff(
+                        personnelEditingCell.staff,
+                        personnelEditingCell.date,
+                        null,
+                      );
+                      setPersonnelEditingCell(null);
+                    }}
+                    className={`px-4 py-3 rounded-lg font-bold border transition-colors ${personnelEditingCell.currentLocation === null ? "bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed" : "bg-white text-red-600 border-red-200 hover:bg-red-50"}`}
+                  >
+                    清除 / 標記為休假
+                  </button>
+                </div>
+                <div className="mt-6 flex justify-end">
+                  <button
+                    onClick={() => setPersonnelEditingCell(null)}
+                    className="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded-lg font-medium transition-colors"
+                  >
+                    取消
+                  </button>
+                </div>
               </div>
             </div>
           )}
@@ -936,116 +1191,107 @@ const AdministrativeSchedulePage: React.FC<AdministrativeSchedulePageProps> = ({
             onConfirm={confirmAction}
             onCancel={() => setShowConfirmModal(false)}
           />
+
+          {/* 人員管理模態框 */}
+          {showStaffManager && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[100] p-4">
+              <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[85vh]">
+                <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-indigo-50">
+                  <h3 className="font-bold text-gray-800 flex items-center gap-2">
+                    <Users size={18} className="text-indigo-600" />{" "}
+                    各部門固定人員管理
+                  </h3>
+                  <button
+                    onClick={() => setShowStaffManager(false)}
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
+                <div className="p-6 overflow-y-auto custom-scrollbar">
+                  <form
+                    onSubmit={handleAddStaff}
+                    className="flex flex-wrap md:flex-nowrap gap-2 mb-6 bg-gray-50 p-4 rounded-lg border border-gray-100"
+                  >
+                    <input
+                      type="text"
+                      value={newStaffName}
+                      onChange={(e) => setNewStaffName(e.target.value)}
+                      placeholder="輸入人員姓名"
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500 min-w-[150px]"
+                      required
+                    />
+                    <select
+                      value={newStaffCategory}
+                      onChange={(e) =>
+                        setNewStaffCategory(
+                          e.target.value as AdministrativeCategory,
+                        )
+                      }
+                      className="px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
+                    >
+                      {displayCategories.map((cat) => (
+                        <option key={cat} value={cat}>
+                          {cat}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="submit"
+                      disabled={isSubmittingStaff}
+                      className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-bold flex items-center gap-1 hover:bg-indigo-700 disabled:opacity-50"
+                    >
+                      <Plus size={16} /> 新增人員
+                    </button>
+                  </form>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {displayCategories.map((cat) => {
+                      const catStaff = staffList.filter(
+                        (s) => s.category === cat,
+                      );
+                      if (catStaff.length === 0) return null;
+                      return (
+                        <div
+                          key={cat}
+                          className="border border-gray-200 rounded-lg p-3 bg-white shadow-sm"
+                        >
+                          <h4 className="font-bold text-sm text-gray-700 border-b pb-2 mb-2">
+                            {cat}{" "}
+                            <span className="text-gray-400 font-normal text-xs">
+                              ({catStaff.length})
+                            </span>
+                          </h4>
+                          <div className="flex flex-col gap-2">
+                            {catStaff.map((staff) => (
+                              <div
+                                key={staff.id}
+                                className="flex justify-between items-center bg-gray-50 px-2 py-1.5 rounded border border-gray-100 hover:border-indigo-200 transition-colors"
+                              >
+                                <span className="text-sm font-medium text-gray-700">
+                                  {staff.name}
+                                </span>
+                                <button
+                                  onClick={() => handleDeleteStaff(staff.id)}
+                                  className="text-red-400 hover:text-red-600 p-1"
+                                  title="刪除"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
-  );
-};
-
-// 人員表單組件
-const StaffForm: React.FC<{
-  staff: AdministrativeStaff | null;
-  onSave: (staff: AdministrativeStaff) => void;
-  onCancel: () => void;
-}> = ({ staff, onSave, onCancel }) => {
-  const [formData, setFormData] = useState<AdministrativeStaff>(
-    staff || {
-      id: generateUUID(),
-      name: "",
-      category: AdministrativeCategory.ADMIN,
-      isActive: true,
-      displayOrder: 0,
-    },
-  );
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    onSave(formData);
-  };
-
-  return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          姓名
-        </label>
-        <input
-          type="text"
-          value={formData.name}
-          onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          required
-        />
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          分類
-        </label>
-        <select
-          value={formData.category}
-          onChange={(e) =>
-            setFormData({
-              ...formData,
-              category: e.target.value as AdministrativeCategory,
-            })
-          }
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          {Object.values(AdministrativeCategory).map((category) => (
-            <option key={category} value={category}>
-              {category}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          電話
-        </label>
-        <input
-          type="tel"
-          value={formData.phone || ""}
-          onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
-      </div>
-
-      <div className="flex items-center gap-2 pt-2">
-        <input
-          type="checkbox"
-          id="isActive"
-          checked={formData.isActive}
-          onChange={(e) =>
-            setFormData({ ...formData, isActive: e.target.checked })
-          }
-          className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
-        />
-        <label
-          htmlFor="isActive"
-          className="text-sm font-medium text-gray-700 cursor-pointer"
-        >
-          在職中 (Active)
-        </label>
-      </div>
-
-      <div className="flex gap-2 pt-4">
-        <button
-          type="submit"
-          className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-        >
-          儲存
-        </button>
-        <button
-          type="button"
-          onClick={onCancel}
-          className="flex-1 px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600"
-        >
-          取消
-        </button>
-      </div>
-    </form>
   );
 };
 

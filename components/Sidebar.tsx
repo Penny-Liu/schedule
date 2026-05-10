@@ -138,6 +138,12 @@ const Sidebar: React.FC<SidebarProps> = ({
           icon: CalendarClock,
           permission: PERMISSIONS.EDIT_ADMINISTRATIVE,
         },
+        {
+          id: "gene_schedule",
+          label: "基因排班",
+          icon: CalendarClock,
+          permission: "EDIT_GENE",
+        },
       ],
     },
     {
