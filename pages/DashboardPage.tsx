@@ -601,6 +601,67 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
     }
   };
 
+  const handleBulkClear = async (clearType: "station" | "role") => {
+    const typeName = clearType === "station" ? "崗位" : "特殊任務";
+    if (
+      !confirm(
+        `確定要清除此區間 (${scheduleRange.start} ~ ${scheduleRange.end}) 內所有放射師的「${typeName}」嗎？\n(休假及留停人員將不受影響)`,
+      )
+    )
+      return;
+
+    setIsProcessing(true);
+    try {
+      const targetShifts = shifts.filter(
+        (s) =>
+          s.date >= scheduleRange.start &&
+          s.date <= scheduleRange.end &&
+          s.station !== SYSTEM_OFF &&
+          s.station !== "OFF" &&
+          s.station !== "休假" &&
+          !s.station.includes("休"),
+      );
+
+      const activeRadIds = new Set(allRadiographers.map((u) => u.id));
+      const shiftsToUpdate = targetShifts.filter((s) =>
+        activeRadIds.has(s.userId),
+      );
+
+      const promises = shiftsToUpdate
+        .map((s) => {
+          const newStation =
+            clearType === "station" ? StationDefault.UNASSIGNED : s.station;
+          const newRoles = clearType === "role" ? [] : s.specialRoles || [];
+
+          if (
+            s.station === newStation &&
+            JSON.stringify(s.specialRoles || []) === JSON.stringify(newRoles)
+          )
+            return null;
+
+          return db.upsertShift({
+            ...s,
+            station: newStation,
+            specialRoles: newRoles,
+          });
+        })
+        .filter((p) => p !== null);
+
+      if (promises.length > 0) {
+        await Promise.all(promises);
+        setShifts([...db.getShifts("", "")]);
+        showToast(`已成功清除 ${promises.length} 筆${typeName}！`, "success");
+      } else {
+        showToast("沒有需要清除的資料", "success");
+      }
+    } catch (err) {
+      console.error(err);
+      showToast("清除失敗", "error");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   const handleExportExcel = async () => {
     setIsExporting(true);
     try {
@@ -670,6 +731,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                 [SPECIAL_ROLES.ASSIST]: "輔",
                 [SPECIAL_ROLES.SCHEDULER]: "排",
                 [SPECIAL_ROLES.DAZHI_SUPPORT]: "支",
+                配合銷假: "銷",
               };
               const rolesShort = specialRoles
                 .map((r) => roleMap[r] || r[0])
@@ -860,6 +922,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                 [SPECIAL_ROLES.LATE]: "晚班",
                 [SPECIAL_ROLES.ASSIST]: "輔班",
                 [SPECIAL_ROLES.SCHEDULER]: "排班",
+                配合銷假: "配合銷假",
               };
               let roleLabels = s.shift.specialRoles.map((r) => roleMap[r] || r);
               text += `\n(${roleLabels.join(",")})`;
@@ -1000,6 +1063,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
         [SPECIAL_ROLES.LATE]: [165, 42, 42], // Brown
         [SPECIAL_ROLES.ASSIST]: [0, 128, 0], // Green
         [SPECIAL_ROLES.SCHEDULER]: [255, 20, 147], // Deep Pink (User requested Pink)
+        配合銷假: [192, 38, 211], // Fuchsia
       };
 
       if (viewMode === "user") {
@@ -1395,6 +1459,8 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                   color = roleColors[SPECIAL_ROLES.ASSIST];
                 else if (roles.includes(SPECIAL_ROLES.SCHEDULER))
                   color = roleColors[SPECIAL_ROLES.SCHEDULER];
+                else if (roles.includes("配合銷假"))
+                  color = roleColors["配合銷假"];
 
                 doc.setTextColor(color[0], color[1], color[2]);
                 doc.text(
@@ -1485,6 +1551,8 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                       color = roleColors[SPECIAL_ROLES.ASSIST];
                     else if (s.roles.includes(SPECIAL_ROLES.SCHEDULER))
                       color = roleColors[SPECIAL_ROLES.SCHEDULER];
+                    else if (s.roles.includes("配合銷假"))
+                      color = roleColors["配合銷假"];
 
                     doc.setTextColor(color[0], color[1], color[2]);
 
@@ -1497,6 +1565,8 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                       roleLabel = "輔班";
                     else if (s.roles.includes(SPECIAL_ROLES.SCHEDULER))
                       roleLabel = "排班";
+                    else if (s.roles.includes("配合銷假"))
+                      roleLabel = "配合銷假";
 
                     if (!roleLabel) roleLabel = s.roles[0]; // Fallback
 
@@ -1718,22 +1788,25 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
 
     // 2. Enforce Conflicts
     if (newRoles.includes(role)) {
-      // New Rule: Opening (開機) and Assist (輔班) CAN Coexist.
-      // All other roles are strictly mutually exclusive.
-
-      if (role === SPECIAL_ROLES.OPENING) {
-        // Opening allows Assist
+      if (role === "配合銷假") {
+        // 「配合銷假」可以與任何其他任務共存，不作過濾
+      } else if (role === SPECIAL_ROLES.OPENING) {
         newRoles = newRoles.filter(
-          (r) => r === SPECIAL_ROLES.OPENING || r === SPECIAL_ROLES.ASSIST,
+          (r) =>
+            r === SPECIAL_ROLES.OPENING ||
+            r === SPECIAL_ROLES.ASSIST ||
+            r === "配合銷假",
         );
       } else if (role === SPECIAL_ROLES.ASSIST) {
-        // Assist allows Opening
         newRoles = newRoles.filter(
-          (r) => r === SPECIAL_ROLES.ASSIST || r === SPECIAL_ROLES.OPENING,
+          (r) =>
+            r === SPECIAL_ROLES.ASSIST ||
+            r === SPECIAL_ROLES.OPENING ||
+            r === "配合銷假",
         );
       } else {
-        // Any other role (Late, Scheduler, etc) -> Clears ALL others
-        newRoles = [role];
+        // 其他任務互斥，但保留「配合銷假」
+        newRoles = newRoles.filter((r) => r === role || r === "配合銷假");
       }
     }
     handleUpdateShift(
@@ -2143,6 +2216,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
     SPECIAL_ROLES.SCHEDULER,
     SPECIAL_ROLES.DAZHI_SUPPORT,
     SPECIAL_ROLES.DUAL_BMD,
+    "配合銷假",
   ];
 
   const allStationsSorted = useMemo(() => {
@@ -2857,6 +2931,33 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                       <span className="hidden lg:inline">特殊</span>
                     </button>
 
+                    <button
+                      onClick={() => handleBulkClear("station")}
+                      disabled={isProcessing || isCycleConfirmed}
+                      className={`px-2.5 py-1 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm ${
+                        isProcessing || isCycleConfirmed
+                          ? "bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200"
+                          : "bg-white text-red-600 border border-red-200 hover:bg-red-50"
+                      }`}
+                      title="一鍵清除所有崗位 (保留休假)"
+                    >
+                      <Trash2 size={12} />
+                      <span className="hidden lg:inline">清崗位</span>
+                    </button>
+                    <button
+                      onClick={() => handleBulkClear("role")}
+                      disabled={isProcessing || isCycleConfirmed}
+                      className={`px-2.5 py-1 rounded-md text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm ${
+                        isProcessing || isCycleConfirmed
+                          ? "bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200"
+                          : "bg-white text-orange-600 border border-orange-200 hover:bg-orange-50"
+                      }`}
+                      title="一鍵清除所有任務 (保留休假)"
+                    >
+                      <Trash2 size={12} />
+                      <span className="hidden lg:inline">清任務</span>
+                    </button>
+
                     {currentUser.role === UserRole.SYSTEM_ADMIN && (
                       <button
                         onClick={async () => {
@@ -2884,7 +2985,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                         title="清除非放射師(行政/健管)被錯誤排入的班表"
                       >
                         <span className="hidden lg:inline">
-                          清除錯誤排班(非放射師)
+                          清除非放射師排班
                         </span>
                       </button>
                     )}
@@ -4062,11 +4163,12 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                           handleUpdateShift(
                                             user.id,
                                             date,
-                                            e.target.value || SYSTEM_OFF,
+                                            e.target.value ||
+                                              StationDefault.UNASSIGNED,
                                             specialRoles,
                                           )
                                         }
-                                        className="w-full text-[10px] py-1 px-0.5 border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-teal-500 outline-none font-medium text-slate-800"
+                                        className="w-full text-[10px] py-0.5 px-0.5 border border-blue-200 rounded-[4px] bg-blue-50 text-blue-800 hover:bg-blue-100 focus:ring-2 focus:ring-blue-400 outline-none font-bold transition-colors"
                                       >
                                         <option value="">...</option>
                                         {userCapableStations.map((s) => (
@@ -4097,35 +4199,79 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                       </div>
                                     )}
                                     {isEditMode ? (
-                                      <div className="flex flex-wrap gap-0.5 justify-center">
-                                        {specialRolesList.map((role) => {
-                                          const isSelected =
-                                            specialRoles.includes(role);
-                                          return (
-                                            <button
-                                              key={role}
-                                              type="button"
-                                              onClick={() =>
+                                      <div className="flex flex-col gap-0.5 w-full mt-0.5">
+                                        {specialRoles.length > 0 && (
+                                          <div className="flex flex-wrap gap-0.5 justify-center w-full">
+                                            {specialRoles.map((role) => (
+                                              <div
+                                                key={role}
+                                                className="flex items-center gap-0.5 bg-purple-100 text-purple-700 border border-purple-200 px-1 py-0.5 rounded-[4px] text-[9px] font-bold leading-tight"
+                                              >
+                                                <span>
+                                                  {role ===
+                                                  SPECIAL_ROLES.DUAL_BMD
+                                                    ? "兼B/D"
+                                                    : role ===
+                                                        SPECIAL_ROLES.DAZHI_SUPPORT
+                                                      ? "大直"
+                                                      : role === "配合銷假"
+                                                        ? "銷假"
+                                                        : role[0]}
+                                                </span>
+                                                <button
+                                                  type="button"
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleSpecialRoleToggle(
+                                                      user.id,
+                                                      date,
+                                                      role,
+                                                      station ||
+                                                        StationDefault.UNASSIGNED,
+                                                      specialRoles,
+                                                    );
+                                                  }}
+                                                  className="text-purple-400 hover:text-purple-600"
+                                                >
+                                                  <X size={8} />
+                                                </button>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        )}
+                                        {specialRolesList.filter(
+                                          (r) => !specialRoles.includes(r),
+                                        ).length > 0 && (
+                                          <select
+                                            value=""
+                                            onChange={(e) => {
+                                              if (e.target.value) {
                                                 handleSpecialRoleToggle(
                                                   user.id,
                                                   date,
-                                                  role,
+                                                  e.target.value,
                                                   station ||
                                                     StationDefault.UNASSIGNED,
                                                   specialRoles,
-                                                )
+                                                );
                                               }
-                                              className={`px-1 py-0.5 text-[9px] rounded-lg border transition-all font-bold ${isSelected ? "bg-purple-600 text-white border-purple-600" : "bg-white text-slate-400 border-slate-200 hover:border-purple-300 hover:text-purple-500"} `}
-                                            >
-                                              {role === SPECIAL_ROLES.DUAL_BMD
-                                                ? "兼B/D"
-                                                : role ===
-                                                    SPECIAL_ROLES.DAZHI_SUPPORT
-                                                  ? "大直"
-                                                  : role[0]}
-                                            </button>
-                                          );
-                                        })}
+                                            }}
+                                            className="w-full text-[9px] py-0.5 px-0.5 border border-dashed border-slate-300 rounded-[4px] bg-slate-50 text-slate-500 hover:bg-slate-100 hover:text-slate-700 focus:ring-1 focus:ring-slate-400 outline-none font-bold text-center appearance-none cursor-pointer transition-colors"
+                                            style={{ textAlignLast: "center" }}
+                                          >
+                                            <option value="">+ 任務</option>
+                                            {specialRolesList
+                                              .filter(
+                                                (r) =>
+                                                  !specialRoles.includes(r),
+                                              )
+                                              .map((r) => (
+                                                <option key={r} value={r}>
+                                                  {r}
+                                                </option>
+                                              ))}
+                                          </select>
+                                        )}
                                       </div>
                                     ) : (
                                       specialRoles.length > 0 && (
@@ -4144,7 +4290,9 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                       : role ===
                                                           SPECIAL_ROLES.SCHEDULER
                                                         ? "bg-red-100/80 text-red-900 border-red-200/50"
-                                                        : "bg-purple-100 text-purple-700 border-purple-200"
+                                                        : role === "配合銷假"
+                                                          ? "bg-fuchsia-100/80 text-fuchsia-900 border-fuchsia-200/50"
+                                                          : "bg-purple-100 text-purple-700 border-purple-200"
                                               } `}
                                             >
                                               {role}
@@ -4403,6 +4551,10 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                           item.shift.specialRoles.includes(
                                             SPECIAL_ROLES.DAZHI_SUPPORT,
                                           );
+                                        const isCoopCancel =
+                                          item.shift.specialRoles.includes(
+                                            "配合銷假",
+                                          );
 
                                         // LEAVE STATUS CHECK
                                         const activeLeave = db
@@ -4517,7 +4669,8 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                 isAssist ||
                                                 isScheduler ||
                                                 isDualBMD ||
-                                                isDazhiSupport) && (
+                                                isDazhiSupport ||
+                                                isCoopCancel) && (
                                                 <div className="flex flex-col gap-0.5 mt-0.5 w-full items-center">
                                                   {isOpening && (
                                                     <span className="w-full text-center bg-blue-100/80 px-0.5 rounded-[2px] text-[10px] leading-tight text-blue-900 font-extrabold border border-blue-200/50">
@@ -4551,6 +4704,11 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                       )
                                                         ? "遠班"
                                                         : "大直支援"}
+                                                    </span>
+                                                  )}
+                                                  {isCoopCancel && (
+                                                    <span className="w-full text-center bg-fuchsia-100/80 px-0.5 rounded-[2px] text-[10px] leading-tight text-fuchsia-900 font-extrabold border border-fuchsia-200/50">
+                                                      配合銷假
                                                     </span>
                                                   )}
                                                 </div>

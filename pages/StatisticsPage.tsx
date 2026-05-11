@@ -301,6 +301,8 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
         }
       }
 
+      const coopDates: string[] = [];
+
       effectiveRange.forEach((dateStr) => {
         // Cloud Proofreading count should be independent of OFF status
         const cloudShifts = cloudSchedule.filter((cs) => {
@@ -356,6 +358,11 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
           roles = manualShift.specialRoles || [];
         }
 
+        if (roles.includes("配合銷假")) {
+          const d = new Date(dateStr);
+          coopDates.push(`${d.getMonth() + 1}/${d.getDate()}`);
+        }
+
         stats.totalWork++;
 
         if (station.includes("遠")) stats.remote++;
@@ -374,6 +381,13 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
         if (roles.includes(SPECIAL_ROLES.LATE)) stats.late++;
         if (roles.includes(SPECIAL_ROLES.SCHEDULER)) stats.scheduler++;
       });
+
+      if (coopDates.length > 0) {
+        const coopStr = `配合調度: ${coopDates.join(", ")}`;
+        stats.remarks = stats.remarks
+          ? `${stats.remarks}；${coopStr}`
+          : coopStr;
+      }
 
       stats.onSite = stats.totalWork - stats.remote;
       return stats;
