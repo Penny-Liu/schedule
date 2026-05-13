@@ -177,10 +177,10 @@ const AdministrativeSchedulePage: React.FC<AdministrativeSchedulePageProps> = ({
   // 載入全院假日設定
   useEffect(() => {
     const unsubscribe = db.subscribe(() => {
-      setHolidays(db.getHolidays());
+      setHolidays([...db.getHolidays()]);
     });
     db.initializeData().then(() => {
-      setHolidays(db.getHolidays());
+      setHolidays([...db.getHolidays()]);
     });
     return () => unsubscribe();
   }, []);
@@ -219,8 +219,8 @@ const AdministrativeSchedulePage: React.FC<AdministrativeSchedulePageProps> = ({
       let query = supabase
         .from("administrative_shifts")
         .select("id, category, date, staff_names, location, notes")
-        .gte("date", startDate.toISOString().split("T")[0])
-        .lte("date", endDate.toISOString().split("T")[0]);
+        .gte("date", toLocalISOString(startDate))
+        .lte("date", toLocalISOString(endDate));
       if (categories) {
         query = query.in("category", categories);
       }
@@ -323,13 +323,12 @@ const AdministrativeSchedulePage: React.FC<AdministrativeSchedulePageProps> = ({
 
             // 為每一天添加值班人員
             for (let day = 1; day <= daysInMonth; day++) {
-              const dateStr = new Date(
+              const dateObj = new Date(
                 currentDate.getFullYear(),
                 currentDate.getMonth(),
                 day,
-              )
-                .toISOString()
-                .split("T")[0];
+              );
+              const dateStr = toLocalISOString(dateObj);
               const shift = categoryShifts.find((s) => s.date === dateStr);
               if (shift) {
                 const formattedNames = shift.staffNames
@@ -349,13 +348,12 @@ const AdministrativeSchedulePage: React.FC<AdministrativeSchedulePageProps> = ({
             .map((staff) => {
               const row = [staff.name];
               for (let day = 1; day <= daysInMonth; day++) {
-                const dateStr = new Date(
+                const dateObj = new Date(
                   currentDate.getFullYear(),
                   currentDate.getMonth(),
                   day,
-                )
-                  .toISOString()
-                  .split("T")[0];
+                );
+                const dateStr = toLocalISOString(dateObj);
                 let assignedLoc = "";
                 const shiftsForDateAndCat = shifts.filter(
                   (s) => s.category === staff.category && s.date === dateStr,
@@ -486,20 +484,12 @@ const AdministrativeSchedulePage: React.FC<AdministrativeSchedulePageProps> = ({
     setIsLoading(true);
     try {
       // 1. 取得當月資料庫中原有的排班 ID (用來比對哪些被刪除了)
-      const startDate = new Date(
-        currentDate.getFullYear(),
-        currentDate.getMonth(),
-        1,
-      )
-        .toISOString()
-        .split("T")[0];
-      const endDate = new Date(
-        currentDate.getFullYear(),
-        currentDate.getMonth() + 1,
-        0,
-      )
-        .toISOString()
-        .split("T")[0];
+      const startDate = toLocalISOString(
+        new Date(currentDate.getFullYear(), currentDate.getMonth(), 1),
+      );
+      const endDate = toLocalISOString(
+        new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0),
+      );
 
       let fetchQuery = supabase
         .from("administrative_shifts")
@@ -734,7 +724,7 @@ const AdministrativeSchedulePage: React.FC<AdministrativeSchedulePageProps> = ({
                         currentDate.getMonth(),
                         i + 1,
                       );
-                      const dateStr = date.toISOString().split("T")[0];
+                      const dateStr = toLocalISOString(date);
                       const isWeekend =
                         date.getDay() === 0 || date.getDay() === 6;
                       const holidayEvent = holidays.find(
@@ -793,13 +783,22 @@ const AdministrativeSchedulePage: React.FC<AdministrativeSchedulePageProps> = ({
                             </div>
                           </td>
                           {Array.from({ length: daysInMonth }, (_, i) => {
-                            const dateStr = new Date(
+                            const dateObj = new Date(
                               currentDate.getFullYear(),
                               currentDate.getMonth(),
                               i + 1,
-                            )
-                              .toISOString()
-                              .split("T")[0];
+                            );
+                            const dateStr = toLocalISOString(dateObj);
+                            const isWeekend =
+                              dateObj.getDay() === 0 || dateObj.getDay() === 6;
+                            const holidayEvent = holidays.find(
+                              (h) =>
+                                h.date === dateStr &&
+                                (h.type === DateEventType.NATIONAL ||
+                                  h.type === DateEventType.CLOSED),
+                            );
+                            const isHoliday = isWeekend || !!holidayEvent;
+
                             const shift = getShiftForDateAndCategory(
                               category,
                               dateStr,
@@ -818,7 +817,7 @@ const AdministrativeSchedulePage: React.FC<AdministrativeSchedulePageProps> = ({
                                     setEditLocation(shift?.location || "北投");
                                   }
                                 }}
-                                className={`px-2 py-3 text-center border-r border-gray-100 ${canEdit ? "cursor-pointer hover:bg-blue-50 transition-colors" : ""}`}
+                                className={`px-2 py-3 text-center border-r border-gray-100 ${canEdit ? "cursor-pointer hover:bg-blue-50 transition-colors" : ""} ${isHoliday && !shift ? "bg-red-50/40 hover:bg-red-100/50" : ""}`}
                               >
                                 {shift ? (
                                   <div className="text-xs flex flex-col items-center">
@@ -866,13 +865,23 @@ const AdministrativeSchedulePage: React.FC<AdministrativeSchedulePageProps> = ({
                               </div>
                             </td>
                             {Array.from({ length: daysInMonth }, (_, i) => {
-                              const dateStr = new Date(
+                              const dateObj = new Date(
                                 currentDate.getFullYear(),
                                 currentDate.getMonth(),
                                 i + 1,
-                              )
-                                .toISOString()
-                                .split("T")[0];
+                              );
+                              const dateStr = toLocalISOString(dateObj);
+                              const isWeekend =
+                                dateObj.getDay() === 0 ||
+                                dateObj.getDay() === 6;
+                              const holidayEvent = holidays.find(
+                                (h) =>
+                                  h.date === dateStr &&
+                                  (h.type === DateEventType.NATIONAL ||
+                                    h.type === DateEventType.CLOSED),
+                              );
+                              const isHoliday = isWeekend || !!holidayEvent;
+
                               const shiftsForDateAndCat = shifts.filter(
                                 (s) =>
                                   s.category === staff.category &&
@@ -913,7 +922,7 @@ const AdministrativeSchedulePage: React.FC<AdministrativeSchedulePageProps> = ({
                                       });
                                     }
                                   }}
-                                  className={`px-1 py-2 text-center border-r border-gray-100 transition-colors ${canEdit ? "cursor-pointer" : ""} ${assignedLoc === "北投" ? "bg-blue-50 hover:bg-blue-100" : assignedLoc === "大直" ? "bg-orange-50 hover:bg-orange-100" : "hover:bg-gray-50"}`}
+                                  className={`px-1 py-2 text-center border-r border-gray-100 transition-colors ${canEdit ? "cursor-pointer" : ""} ${assignedLoc === "北投" ? "bg-blue-50 hover:bg-blue-100" : assignedLoc === "大直" ? "bg-orange-50 hover:bg-orange-100" : isHoliday ? "bg-red-50/40 hover:bg-red-100/50" : "hover:bg-gray-50"}`}
                                 >
                                   {assignedLoc ? (
                                     <span

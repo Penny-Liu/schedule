@@ -3290,7 +3290,9 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
                         h.type === DateEventType.CLOSED,
                     );
                     const note = hList.find(
-                      (h) => h.type === DateEventType.NOTE,
+                      (h) =>
+                        h.type === DateEventType.NOTE ||
+                        h.type === DateEventType.MEETING,
                     );
                     const doctorNote = hList.find(
                       (h) => h.type === DateEventType.DOCTOR_NOTE,
@@ -3801,7 +3803,7 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
                       >
                         <div className="flex flex-col items-center gap-0.5">
                           <div
-                            className={`font-bold text-[10px] leading-tight ${isToday ? "text-teal-600" : isWeekend || holiday ? "text-red-500" : "text-slate-800"}`}
+                            className={`font-bold text-[11px] leading-tight ${systemEvents.length > 0 ? (systemEvents[0].type === DateEventType.NOTE || systemEvents[0].type === DateEventType.MEETING ? "text-blue-600" : "text-red-600") : isToday ? "text-teal-600" : isWeekend ? "text-red-500" : "text-slate-800"} `}
                           >
                             {d.getMonth() + 1}/{d.getDate()}
                           </div>
