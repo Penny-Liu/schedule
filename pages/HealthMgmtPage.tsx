@@ -3282,6 +3282,12 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                         const d = new Date(date);
                         const isWeekend = d.getDay() === 0 || d.getDay() === 6;
                         const isToday = date === toLocalISOString(new Date());
+                        const holiday = holidays.find(
+                          (h) =>
+                            h.date === date &&
+                            (h.type === "NATIONAL" || h.type === "CLOSED"),
+                        );
+                        const isHoliday = isWeekend || !!holiday;
 
                         return (
                           <th
@@ -3290,7 +3296,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                               "px-0.5 py-0.5 text-center border-r border-slate-100 min-w-[40px] sticky top-0 z-50 " +
                               (isToday
                                 ? "bg-teal-50"
-                                : isWeekend
+                                : isHoliday
                                   ? "bg-red-50"
                                   : "bg-white") +
                               " border-b border-slate-200"
@@ -3301,7 +3307,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                                 "font-bold text-[11px] leading-tight " +
                                 (isToday
                                   ? "text-teal-600"
-                                  : isWeekend
+                                  : isHoliday
                                     ? "text-red-500"
                                     : "text-slate-800")
                               }
@@ -3313,7 +3319,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                                 "text-[10px] opacity-75 leading-tight " +
                                 (isToday
                                   ? "text-teal-600"
-                                  : isWeekend
+                                  : isHoliday
                                     ? "text-red-500"
                                     : "text-slate-700")
                               }
@@ -3324,6 +3330,14 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                                 ]
                               }
                             </div>
+                            {holiday && (
+                              <div
+                                className="text-[9px] mt-0.5 px-1 rounded-sm bg-red-100 text-red-700 truncate max-w-[40px] mx-auto leading-tight"
+                                title={holiday.name}
+                              >
+                                {holiday.name}
+                              </div>
+                            )}
                           </th>
                         );
                       })}
@@ -3384,6 +3398,16 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                           </div>
                         </td>
                         {dateRange.map((date) => {
+                          const d = new Date(date);
+                          const isWeekend =
+                            d.getDay() === 0 || d.getDay() === 6;
+                          const holiday = holidays.find(
+                            (h) =>
+                              h.date === date &&
+                              (h.type === "NATIONAL" || h.type === "CLOSED"),
+                          );
+                          const isHoliday = isWeekend || !!holiday;
+
                           const shift = shifts.find(
                             (s) => s.userId === staff.id && s.date === date,
                           );
@@ -3405,7 +3429,9 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                           }
 
                           // Determine cell style like PhysicianSchedulePage
-                          let cellBg = "hover:bg-gray-50";
+                          let cellBg = isHoliday
+                            ? "bg-red-50/30 hover:bg-red-50"
+                            : "hover:bg-gray-50";
                           if (isQuickScheduleMode) {
                             cellBg =
                               quickScheduleStation || quickScheduleTask

@@ -1789,43 +1789,71 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
             targetRows.push(hmRow);
           }
 
-          // 加入「基因」排班列
+          // 加入「基因」及「行政」等排班列
           if (loc === "北投" || loc === "大直") {
-            const geneRow: any[] = [
-              {
-                content: "基因",
-                styles: {
-                  fontStyle: "bold",
-                  halign: "center",
-                  fontSize: 8,
-                  minCellHeight: 5.0,
-                  fillColor: [236, 253, 245], // 淡綠色背景 (emerald-50)
-                  textColor: [6, 78, 59], // 深綠色文字 (emerald-900)
-                },
-              },
+            const adminCategories = [
+              "基因",
+              "客服",
+              "智基",
+              "資訊",
+              "報告",
+              "行政",
             ];
 
-            dateRange.forEach((date) => {
-              const adminData = getAdminStaffByDateAndLocation(date, loc);
-              const geneNamesStr = adminData["基因"] || [];
-              const displayList = Array.from(
-                new Set(
-                  geneNamesStr.flatMap((str) =>
-                    str
-                      .split(",")
-                      .map((n) => n.trim())
-                      .filter(Boolean),
-                  ),
-                ),
-              );
+            adminCategories.forEach((category) => {
+              let shouldShow = category === "基因"; // 基因預設常駐顯示
+              if (!shouldShow) {
+                shouldShow = dateRange.some((date) => {
+                  const adminData = getAdminStaffByDateAndLocation(date, loc);
+                  return adminData[category] && adminData[category].length > 0;
+                });
+              }
 
-              geneRow.push({
-                content: displayList.length > 0 ? displayList.join("\n") : "-",
-                styles: { halign: "center", fontSize: 8, minCellHeight: 5.0 },
-              });
+              if (shouldShow) {
+                const adminRow: any[] = [
+                  {
+                    content: category,
+                    styles: {
+                      fontStyle: "bold",
+                      halign: "center",
+                      fontSize: 8,
+                      minCellHeight: 5.0,
+                      fillColor:
+                        category === "基因" ? [236, 253, 245] : [250, 245, 255], // 基因綠底 / 行政紫底
+                      textColor:
+                        category === "基因" ? [6, 78, 59] : [107, 33, 168],
+                    },
+                  },
+                ];
+
+                dateRange.forEach((date) => {
+                  const adminData = getAdminStaffByDateAndLocation(date, loc);
+                  const namesStr = adminData[category] || [];
+                  const displayList = Array.from(
+                    new Set(
+                      namesStr.flatMap((str) =>
+                        str
+                          .split(",")
+                          .map((n) => n.trim())
+                          .filter(Boolean),
+                      ),
+                    ),
+                  );
+
+                  adminRow.push({
+                    content:
+                      displayList.length > 0 ? displayList.join("\n") : "-",
+                    styles: {
+                      halign: "center",
+                      fontSize: 8,
+                      minCellHeight: 5.0,
+                    },
+                  });
+                });
+
+                targetRows.push(adminRow);
+              }
             });
-
-            targetRows.push(geneRow);
           }
 
           const processedStationNames: string[] = [];
