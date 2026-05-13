@@ -194,7 +194,7 @@ const AdministrativeSchedulePage: React.FC<AdministrativeSchedulePageProps> = ({
   const loadStaff = async () => {
     let query = supabase
       .from("administrative_staff")
-      .select("*")
+      .select("id, name, category, is_active")
       .eq("is_active", true);
     if (categories) {
       query = query.in("category", categories);
@@ -218,7 +218,7 @@ const AdministrativeSchedulePage: React.FC<AdministrativeSchedulePageProps> = ({
     try {
       let query = supabase
         .from("administrative_shifts")
-        .select("*")
+        .select("id, category, date, staff_names, location, notes")
         .gte("date", startDate.toISOString().split("T")[0])
         .lte("date", endDate.toISOString().split("T")[0]);
       if (categories) {
@@ -244,7 +244,7 @@ const AdministrativeSchedulePage: React.FC<AdministrativeSchedulePageProps> = ({
           .from("administrative_shifts")
           .select("category, staff_names")
           .order("created_at", { ascending: false })
-          .limit(1000);
+          .limit(200);
         if (categories) {
           query = query.in("category", categories);
         }

@@ -46,13 +46,17 @@ const PhysicianWorkloadAnalysis: React.FC<PhysicianWorkloadAnalysisProps> = ({
 }) => {
   const [startDate, setStartDate] = useState(() => {
     const today = new Date();
-    const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
-    return firstDay.toISOString().split("T")[0];
+    const y = today.getFullYear();
+    const m = String(today.getMonth() + 1).padStart(2, "0");
+    return `${y}-${m}-01`;
   });
 
   const [endDate, setEndDate] = useState(() => {
     const today = new Date();
-    return today.toISOString().split("T")[0];
+    const y = today.getFullYear();
+    const m = String(today.getMonth() + 1).padStart(2, "0");
+    const lastDay = new Date(y, today.getMonth() + 1, 0).getDate();
+    return `${y}-${m}-${String(lastDay).padStart(2, "0")}`;
   });
 
   const [workloadData, setWorkloadData] = useState<PhysicianWorkloadData[]>([]);
@@ -123,7 +127,7 @@ const PhysicianWorkloadAnalysis: React.FC<PhysicianWorkloadAnalysisProps> = ({
         doctor.total_xiao_tao_3 * 3 +
         doctor.total_wu_2 * 2 +
         doctor.total_wu_1 * 1 +
-        doctor.total_dazhi_1 * 0.6;
+        doctor.total_dazhi_1 * 0.8;
     });
 
     // 按「單位/天」從高到低排序
@@ -160,7 +164,7 @@ const PhysicianWorkloadAnalysis: React.FC<PhysicianWorkloadAnalysisProps> = ({
         "小套3",
         "無2",
         "無1",
-        "直0.6",
+        "直0.8",
         "總判讀醫令",
         "總單位數",
         "判讀天數",
@@ -188,17 +192,17 @@ const PhysicianWorkloadAnalysis: React.FC<PhysicianWorkloadAnalysisProps> = ({
       aggregatedData.forEach((doctor) => {
         const unitPerDay =
           doctor.dates_count > 0
-            ? (doctor.total_units / doctor.dates_count).toFixed(2)
+            ? Number((doctor.total_units / doctor.dates_count).toFixed(1))
             : 0;
         const row = worksheet.addRow([
           doctor.doctor_name,
-          doctor.total_da_tao_5,
-          doctor.total_xiao_tao_4,
-          doctor.total_xiao_tao_3,
-          doctor.total_wu_2,
-          doctor.total_wu_1,
-          doctor.total_dazhi_1,
-          doctor.total_mr,
+          doctor.total_da_tao_5.toFixed(1),
+          doctor.total_xiao_tao_4.toFixed(1),
+          doctor.total_xiao_tao_3.toFixed(1),
+          doctor.total_wu_2.toFixed(1),
+          doctor.total_wu_1.toFixed(1),
+          doctor.total_dazhi_1.toFixed(1),
+          doctor.total_mr.toFixed(1),
           doctor.total_units,
           doctor.dates_count,
           unitPerDay,
@@ -215,7 +219,11 @@ const PhysicianWorkloadAnalysis: React.FC<PhysicianWorkloadAnalysisProps> = ({
 
           // 數字格式
           if (colNumber > 1) {
-            cell.numFmt = "0";
+            if (colNumber === 10) {
+              cell.numFmt = "0";
+            } else {
+              cell.numFmt = "0.0";
+            }
           }
 
           // 突出顯示總單位數較高的醫師
@@ -392,36 +400,36 @@ const PhysicianWorkloadAnalysis: React.FC<PhysicianWorkloadAnalysisProps> = ({
                       {doctor.doctor_name}
                     </td>
                     <td className="px-4 py-3 text-center text-slate-700">
-                      {doctor.total_da_tao_5}
+                      {doctor.total_da_tao_5.toFixed(1)}
                     </td>
                     <td className="px-4 py-3 text-center text-slate-700">
-                      {doctor.total_xiao_tao_4}
+                      {doctor.total_xiao_tao_4.toFixed(1)}
                     </td>
                     <td className="px-4 py-3 text-center text-slate-700">
-                      {doctor.total_xiao_tao_3}
+                      {doctor.total_xiao_tao_3.toFixed(1)}
                     </td>
                     <td className="px-4 py-3 text-center text-slate-700">
-                      {doctor.total_wu_2}
+                      {doctor.total_wu_2.toFixed(1)}
                     </td>
                     <td className="px-4 py-3 text-center text-slate-700">
-                      {doctor.total_wu_1}
+                      {doctor.total_wu_1.toFixed(1)}
                     </td>
                     <td className="px-4 py-3 text-center text-slate-700">
-                      {doctor.total_dazhi_1}
+                      {doctor.total_dazhi_1.toFixed(1)}
                     </td>
                     <td className="px-4 py-3 text-center text-slate-700">
-                      {doctor.total_mr}
+                      {doctor.total_mr.toFixed(1)}
                     </td>
                     <td className="px-4 py-3 text-center font-bold text-teal-700 bg-teal-50 text-lg">
-                      {doctor.total_units}
+                      {doctor.total_units.toFixed(1)}
                     </td>
                     <td className="px-4 py-3 text-center text-slate-700">
                       {doctor.dates_count}
                     </td>
                     <td className="px-4 py-3 text-center font-bold text-purple-700 bg-purple-50">
                       {doctor.dates_count > 0
-                        ? (doctor.total_units / doctor.dates_count).toFixed(2)
-                        : 0}
+                        ? (doctor.total_units / doctor.dates_count).toFixed(1)
+                        : "0.0"}
                     </td>
                   </tr>
                 ))}
@@ -439,16 +447,18 @@ const PhysicianWorkloadAnalysis: React.FC<PhysicianWorkloadAnalysisProps> = ({
             </div>
             <div className="text-center">
               <div className="text-2xl font-bold text-slate-800">
-                {aggregatedData.reduce((sum, d) => sum + d.total_units, 0)}
+                {aggregatedData
+                  .reduce((sum, d) => sum + d.total_units, 0)
+                  .toFixed(1)}
               </div>
               <div className="text-xs text-slate-600 font-medium">總單位數</div>
             </div>
             <div className="text-center">
               <div className="text-2xl font-bold text-slate-800">
-                {Math.round(
+                {(
                   aggregatedData.reduce((sum, d) => sum + d.total_units, 0) /
-                    aggregatedData.length,
-                )}
+                  (aggregatedData.length || 1)
+                ).toFixed(1)}
               </div>
               <div className="text-xs text-slate-600 font-medium">
                 平均單位數
@@ -456,7 +466,9 @@ const PhysicianWorkloadAnalysis: React.FC<PhysicianWorkloadAnalysisProps> = ({
             </div>
             <div className="text-center">
               <div className="text-2xl font-bold text-slate-800">
-                {aggregatedData.reduce((sum, d) => sum + d.total_mr, 0)}
+                {aggregatedData
+                  .reduce((sum, d) => sum + d.total_mr, 0)
+                  .toFixed(1)}
               </div>
               <div className="text-xs text-slate-600 font-medium">
                 總判讀醫令

@@ -581,7 +581,7 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
       try {
         const shiftsRes = await supabase
           .from("administrative_shifts")
-          .select("*")
+          .select("category, date, staff_names, location")
           .gte("date", dateRange[0])
           .lte("date", dateRange[dateRange.length - 1]);
 

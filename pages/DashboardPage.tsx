@@ -5587,20 +5587,21 @@ const DailyManpowerSummary: React.FC<{
         const small = wl.count_xiao_tao_4 + wl.count_xiao_tao_3;
         const none = wl.count_wu_2 + wl.count_wu_1;
         const dazhi = wl.count_dazhi_1 || 0;
-        const total = big + small + none + dazhi;
-        const units =
+        const total = (big + small + none + dazhi).toFixed(1);
+        const units = (
           big * 5 +
           wl.count_xiao_tao_4 * 4 +
           wl.count_xiao_tao_3 * 3 +
           wl.count_wu_2 * 2 +
           wl.count_wu_1 * 1 +
-          dazhi * 1;
+          dazhi * 1
+        ).toFixed(1);
         // Compact: only show non-zero categories
         const parts: string[] = [];
-        if (big > 0) parts.push(`${big}大`);
-        if (small > 0) parts.push(`${small}小`);
-        if (none > 0) parts.push(`${none}無`);
-        if (dazhi > 0) parts.push(`${dazhi}直`);
+        if (big > 0) parts.push(`${Number(big.toFixed(1))}大`);
+        if (small > 0) parts.push(`${Number(small.toFixed(1))}小`);
+        if (none > 0) parts.push(`${Number(none.toFixed(1))}無`);
+        if (dazhi > 0) parts.push(`${Number(dazhi.toFixed(1))}直`);
         return `${alias} ${total} (${parts.join(" ")}) → ${units}單位`;
       })
       .filter(Boolean)
@@ -5727,20 +5728,21 @@ BMD :{{bmd}}
       const small = wl.count_xiao_tao_4 + wl.count_xiao_tao_3;
       const none = wl.count_wu_2 + wl.count_wu_1;
       const dazhi = wl.count_dazhi_1 || 0;
-      const total = big + small + none + dazhi;
-      const units =
+      const total = (big + small + none + dazhi).toFixed(1);
+      const units = (
         big * 5 +
         wl.count_xiao_tao_4 * 4 +
         wl.count_xiao_tao_3 * 3 +
         wl.count_wu_2 * 2 +
         wl.count_wu_1 * 1 +
-        dazhi * 1;
+        dazhi * 1
+      ).toFixed(1);
 
       const parts: string[] = [];
-      if (big > 0) parts.push(`${big}大`);
-      if (small > 0) parts.push(`${small}小`);
-      if (none > 0) parts.push(`${none}無`);
-      if (dazhi > 0) parts.push(`${dazhi}直`);
+      if (big > 0) parts.push(`${Number(big.toFixed(1))}大`);
+      if (small > 0) parts.push(`${Number(small.toFixed(1))}小`);
+      if (none > 0) parts.push(`${Number(none.toFixed(1))}無`);
+      if (dazhi > 0) parts.push(`${Number(dazhi.toFixed(1))}直`);
 
       const core = `${displayAlias}  ${total} (${parts.join(" ")}) →${units} 單位`;
       return suffix ? `${core} ${suffix}` : core;
@@ -5804,20 +5806,20 @@ BMD :{{bmd}}
             const big = wl.count_da_tao_5;
             const small = wl.count_xiao_tao_4 + wl.count_xiao_tao_3;
             const none = wl.count_wu_2 + wl.count_wu_1;
-            const total = big + small + none;
+            const total = (big + small + none).toFixed(1);
             const units =
               big * 5 +
               wl.count_xiao_tao_4 * 4 +
               wl.count_xiao_tao_3 * 3 +
               wl.count_wu_2 * 2 +
               wl.count_wu_1 * 1;
-            const finalUnits = units + actualDazhiUnits;
+            const finalUnits = (units + actualDazhiUnits).toFixed(1);
             const originalUnits = units + (stats.dazhi_clients || 0);
 
             if (overlap > 0) {
-              core = `${alias}  ${total} (${big}大 ${small}小 ${none}無) +大直 ${stats.dazhi_clients} →${finalUnits} 單位`;
+              core = `${alias}  ${total} (${Number(big.toFixed(1))}大 ${Number(small.toFixed(1))}小 ${Number(none.toFixed(1))}無) +大直 ${stats.dazhi_clients} →${finalUnits} 單位`;
             } else {
-              core = `${alias}  ${total} (${big}大 ${small}小 ${none}無) +大直 ${stats.dazhi_clients} →${finalUnits} 單位`;
+              core = `${alias}  ${total} (${Number(big.toFixed(1))}大 ${Number(small.toFixed(1))}小 ${Number(none.toFixed(1))}無) +大直 ${stats.dazhi_clients} →${finalUnits} 單位`;
             }
           }
 
