@@ -55,11 +55,15 @@ interface PhysicianSchedulePageProps {
 }
 import { toLocalISOString, generateUUID } from "../services/utils";
 
+const formatDateLocal = (date: Date) => {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+};
+
 const isMobile =
   typeof window !== "undefined" ? window.innerWidth < 1024 : false;
-
-// Alias for internal use if needed
-const propsToLocalISOString = toLocalISOString;
 
 const isGIStation = (name: string) =>
   (name || "").includes("GI") || (name || "").includes("腸胃");
@@ -99,7 +103,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({
     staffShifts: any[],
     users: any[],
   ) => {
-    const dateStr = propsToLocalISOString(date);
+    const dateStr = formatDateLocal(date);
     const dayShifts = shifts.filter(
       (s) => s.date === dateStr && (s.location === "北投" || !s.location),
     );
@@ -206,7 +210,7 @@ GI：${stats?.beitou_gi || 0} 台`;
     shifts: any[],
     doctors: Doctor[],
   ) => {
-    const dateStr = propsToLocalISOString(date);
+    const dateStr = formatDateLocal(date);
     const dayShifts = shifts.filter(
       (s) => s.date === dateStr && s.location === "大直",
     );
@@ -699,7 +703,7 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
     const dates = [];
     for (let i = 1; i <= daysInMonth; i++) {
       const d = new Date(year, month, i);
-      dates.push(toLocalISOString(d));
+      dates.push(formatDateLocal(d));
     }
     return dates;
   }, [currentDate, isMobile, viewMode]); // Recalculate on date, mode or resize
@@ -1222,7 +1226,8 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
       let giEndIndex = -1;
 
       const dateHeaders = dateRange.map((date) => {
-        const d = new Date(date);
+        const [y, m, day] = date.split("-").map(Number);
+        const d = new Date(y, m - 1, day);
         return `${d.getMonth() + 1}/${d.getDate()} \n${weekDays[d.getDay()]}`;
       });
 
@@ -1278,7 +1283,8 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
           // Header Styling
           if (data.section === "head" && data.column.index > 0) {
             const dateStr = dateRange[data.column.index - 1];
-            const d = new Date(dateStr);
+            const [y, m, day] = dateStr.split("-").map(Number);
+            const d = new Date(y, m - 1, day);
             const isHoliday = holidays.some(
               (h) =>
                 h.date === dateStr &&
@@ -1293,7 +1299,8 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
             // Apply light gray background to weekends for both views
             if (data.column.index > 0) {
               const dateStr = dateRange[data.column.index - 1];
-              const d = new Date(dateStr);
+              const [y, m, day] = dateStr.split("-").map(Number);
+              const d = new Date(y, m - 1, day);
               const isHoliday = holidays.some(
                 (h) =>
                   h.date === dateStr &&
@@ -2480,6 +2487,87 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
           currentRowIndex++;
         }
 
+        // 加入「基因」及「行政」等排班列
+        if (locationName === "北投" || locationName === "大直") {
+          const adminCategories = [
+            "基因",
+            "客服",
+            "智基",
+            "資訊",
+            "報告",
+            "行政",
+          ];
+          adminCategories.forEach((category) => {
+            let shouldShow = category === "基因"; // 基因預設常駐顯示
+            if (!shouldShow) {
+              shouldShow = dateRange.some((dateStr) => {
+                const adminData = getAdminStaffByDateAndLocation(
+                  dateStr,
+                  locationName,
+                );
+                return adminData[category] && adminData[category].length > 0;
+              });
+            }
+
+            if (shouldShow) {
+              const rowAdmin = sheet1.getRow(currentRowIndex);
+              rowAdmin.getCell(1).value = category;
+              rowAdmin.getCell(1).border = borderStyle;
+              rowAdmin.getCell(1).alignment = alignCenter;
+
+              if (category === "基因") {
+                rowAdmin.getCell(1).fill = {
+                  type: "pattern",
+                  pattern: "solid",
+                  fgColor: { argb: "FFECFDF5" },
+                };
+                rowAdmin.getCell(1).font = {
+                  ...fontBase,
+                  bold: true,
+                  color: { argb: "FF064E3B" },
+                };
+              } else {
+                rowAdmin.getCell(1).fill = {
+                  type: "pattern",
+                  pattern: "solid",
+                  fgColor: { argb: "FFFAF5FF" },
+                };
+                rowAdmin.getCell(1).font = {
+                  ...fontBase,
+                  bold: true,
+                  color: { argb: "FF6B21A8" },
+                };
+              }
+
+              dateRange.forEach((dateStr, colIdx) => {
+                const adminData = getAdminStaffByDateAndLocation(
+                  dateStr,
+                  locationName,
+                );
+                const namesStr = adminData[category] || [];
+                const displayList = Array.from(
+                  new Set(
+                    namesStr.flatMap((str) =>
+                      str
+                        .split(",")
+                        .map((n) => n.trim())
+                        .filter(Boolean),
+                    ),
+                  ),
+                );
+
+                const cell = rowAdmin.getCell(colIdx + 2);
+                cell.value =
+                  displayList.length > 0 ? displayList.join("\n") : "-";
+                cell.border = borderStyle;
+                cell.alignment = alignCenter;
+                cell.font = { ...fontBase, bold: false };
+              });
+              currentRowIndex++;
+            }
+          });
+        }
+
         // Stations
         const processedStations: string[] = [];
         locStations.forEach((stationConfig) => {
@@ -2852,8 +2940,8 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
     setIsAutoScheduling(true);
     try {
       await db.autoScheduleDoctors(
-        toLocalISOString(currentDate),
-        toLocalISOString(currentDate),
+        formatDateLocal(currentDate),
+        formatDateLocal(currentDate),
       );
       alert("單日排班完成！");
     } catch (error) {
@@ -2865,7 +2953,7 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
   };
 
   const handleClearDay = async () => {
-    const targetDate = toLocalISOString(currentDate);
+    const targetDate = formatDateLocal(currentDate);
 
     // 檢查是否有手動排班記錄
     const dayShifts = db.getDoctorShifts().filter((s) => s.date === targetDate);
@@ -2983,7 +3071,7 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
               title="點擊切換日期"
             >
               {viewMode === "daily"
-                ? `${toLocalISOString(currentDate)} (${["日", "一", "二", "三", "四", "五", "六"][currentDate.getDay()]})`
+                ? `${formatDateLocal(currentDate)} (${["日", "一", "二", "三", "四", "五", "六"][currentDate.getDay()]})`
                 : `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, "0")}`}
               <CalendarIcon
                 size={14}
@@ -2993,7 +3081,7 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
                 ref={dateInputRef}
                 type="date"
                 className="absolute opacity-0 invisible"
-                value={toLocalISOString(currentDate)}
+                value={formatDateLocal(currentDate)}
                 onChange={handleDateChange}
               />
             </div>
@@ -3784,8 +3872,9 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
                     </div>
                   </th>
                   {dateRange.map((date) => {
-                    const d = new Date(date);
-                    const isToday = date === toLocalISOString(new Date());
+                    const [y, m, day] = date.split("-").map(Number);
+                    const d = new Date(y, m - 1, day);
+                    const isToday = date === formatDateLocal(new Date());
                     const isWeekend = d.getDay() === 0 || d.getDay() === 6;
                     const dailyHolidays = db
                       .getHolidays()
@@ -3794,6 +3883,11 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
                       (h) =>
                         h.type === DateEventType.NATIONAL ||
                         h.type === DateEventType.CLOSED,
+                    );
+                    const systemEvents = dailyHolidays.filter(
+                      (e) =>
+                        e.type !== DateEventType.RADIOGRAPHER_NOTE &&
+                        e.type !== DateEventType.DOCTOR_NOTE,
                     );
 
                     return (
@@ -4770,8 +4864,16 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
                                       className="text-[11px] p-1.5 text-center bg-purple-50/40 border-r border-gray-100 h-auto"
                                     >
                                       {names.length > 0 ? (
-                                        <span className="text-purple-900 font-medium">
-                                          {names.join("、")}
+                                        <span className="text-purple-900 font-medium flex flex-col items-center justify-center">
+                                          {names
+                                            .flatMap((nameStr) =>
+                                              nameStr.split(","),
+                                            )
+                                            .map((name) => name.trim())
+                                            .filter(Boolean)
+                                            .map((name, i) => (
+                                              <div key={i}>{name}</div>
+                                            ))}
                                         </span>
                                       ) : (
                                         <span className="text-gray-300">-</span>
@@ -4943,7 +5045,7 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
                         {/* Main/Assistant/Admin Grid */}
                         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                           {(() => {
-                            const dateStr = toLocalISOString(currentDate);
+                            const dateStr = formatDateLocal(currentDate);
                             const radShifts = db.shifts.filter(
                               (s) => s.date === dateStr,
                             );
@@ -5484,7 +5586,7 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
                                         handleStationCellClick(
                                           st,
                                           loc,
-                                          toLocalISOString(currentDate),
+                                          formatDateLocal(currentDate),
                                         )
                                       }
                                       className={`flex-1 flex flex-col items-center justify-center py-4 rounded-xl border-2 border-dashed transition-all duration-300 ${canEdit ? "border-slate-200 hover:border-teal-300 hover:bg-teal-50/30 cursor-pointer" : "border-slate-100 bg-slate-50/50 cursor-not-allowed"}`}
@@ -5646,7 +5748,9 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
                   </thead>
                   <tbody className="divide-y divide-gray-100">
                     {dateRange.map((date) => {
-                      const dayOfWeek = new Date(date).getDay(); // Sun=0, Mon=1, ..., Sat=6
+                      const [y, m, day] = date.split("-").map(Number);
+                      const d = new Date(y, m - 1, day);
+                      const dayOfWeek = d.getDay(); // Sun=0, Mon=1, ..., Sat=6
                       const dayLabel = [
                         "日",
                         "一",
@@ -6249,7 +6353,8 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
 
             <div className="p-2 overflow-y-auto">
               {(() => {
-                const dayOfWeek = new Date(assignModal.date).getDay();
+                const [y, m, day] = assignModal.date.split("-").map(Number);
+                const dayOfWeek = new Date(y, m - 1, day).getDay();
                 const skilledDocs = doctors.filter((d) => {
                   if (assignModal.station === "晚班" && d.isPartTime)
                     return false;

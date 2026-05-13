@@ -38,6 +38,13 @@ interface AdministrativeSchedulePageProps {
   title?: string;
 }
 
+const formatDateLocal = (date: Date) => {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+};
+
 // 行政人員分類
 export enum AdministrativeCategory {
   CUSTOMER_SERVICE = "客服",
@@ -121,7 +128,6 @@ const AdministrativeSchedulePage: React.FC<AdministrativeSchedulePageProps> = ({
   const [editingCell, setEditingCell] = useState<{
     category: AdministrativeCategory;
     date: string;
-    shift?: AdministrativeShift;
   } | null>(null);
 
   // 人員視角與快速排班狀態
@@ -142,8 +148,11 @@ const AdministrativeSchedulePage: React.FC<AdministrativeSchedulePageProps> = ({
   const [historicalNames, setHistoricalNames] = useState<
     Record<string, string[]>
   >({});
-  const [editStaffNames, setEditStaffNames] = useState("");
-  const [editLocation, setEditLocation] = useState<"北投" | "大直">("北投");
+  const [editStaffBeitou, setEditStaffBeitou] = useState("");
+  const [editStaffDazhi, setEditStaffDazhi] = useState("");
+  const [activeEditField, setActiveEditField] = useState<"北投" | "大直">(
+    "北投",
+  );
 
   // 自動偵測當前是否為純「基因排班」頁面，使用專屬權限
   const isGeneOnly =
@@ -219,8 +228,8 @@ const AdministrativeSchedulePage: React.FC<AdministrativeSchedulePageProps> = ({
       let query = supabase
         .from("administrative_shifts")
         .select("id, category, date, staff_names, location, notes")
-        .gte("date", toLocalISOString(startDate))
-        .lte("date", toLocalISOString(endDate));
+        .gte("date", formatDateLocal(startDate))
+        .lte("date", formatDateLocal(endDate));
       if (categories) {
         query = query.in("category", categories);
       }
@@ -277,12 +286,12 @@ const AdministrativeSchedulePage: React.FC<AdministrativeSchedulePageProps> = ({
     fetchHistoricalNames();
   }, []);
 
-  // 獲取指定日期和部門的班別
-  const getShiftForDateAndCategory = (
+  // 獲取指定日期和部門的所有班別 (支援北投與大直同時存在)
+  const getShiftsForDateAndCategory = (
     category: AdministrativeCategory,
     dateStr: string,
   ) => {
-    return shifts.find((s) => s.category === category && s.date === dateStr);
+    return shifts.filter((s) => s.category === category && s.date === dateStr);
   };
 
   // 處理月份切換，攔截未儲存狀態
@@ -328,15 +337,22 @@ const AdministrativeSchedulePage: React.FC<AdministrativeSchedulePageProps> = ({
                 currentDate.getMonth(),
                 day,
               );
-              const dateStr = toLocalISOString(dateObj);
-              const shift = categoryShifts.find((s) => s.date === dateStr);
-              if (shift) {
-                const formattedNames = shift.staffNames
-                  .split(",")
-                  .map((n) => n.trim())
-                  .filter(Boolean)
-                  .join("\n");
-                row.push(`${formattedNames}\n(${shift.location})`);
+              const dateStr = formatDateLocal(dateObj);
+              const dayShifts = categoryShifts.filter(
+                (s) => s.date === dateStr,
+              );
+              if (dayShifts.length > 0) {
+                const text = dayShifts
+                  .map((s) => {
+                    const formattedNames = s.staffNames
+                      .split(",")
+                      .map((n) => n.trim())
+                      .filter(Boolean)
+                      .join("\n");
+                    return `${formattedNames}\n(${s.location})`;
+                  })
+                  .join("\n---\n");
+                row.push(text);
               } else {
                 row.push("");
               }
@@ -353,7 +369,7 @@ const AdministrativeSchedulePage: React.FC<AdministrativeSchedulePageProps> = ({
                   currentDate.getMonth(),
                   day,
                 );
-                const dateStr = toLocalISOString(dateObj);
+                const dateStr = formatDateLocal(dateObj);
                 let assignedLoc = "";
                 const shiftsForDateAndCat = shifts.filter(
                   (s) => s.category === staff.category && s.date === dateStr,
@@ -484,10 +500,10 @@ const AdministrativeSchedulePage: React.FC<AdministrativeSchedulePageProps> = ({
     setIsLoading(true);
     try {
       // 1. 取得當月資料庫中原有的排班 ID (用來比對哪些被刪除了)
-      const startDate = toLocalISOString(
+      const startDate = formatDateLocal(
         new Date(currentDate.getFullYear(), currentDate.getMonth(), 1),
       );
-      const endDate = toLocalISOString(
+      const endDate = formatDateLocal(
         new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0),
       );
 
@@ -522,7 +538,7 @@ const AdministrativeSchedulePage: React.FC<AdministrativeSchedulePageProps> = ({
         const dbShifts = shifts.map(mapShiftToDb);
         const { error: upsertError } = await supabase
           .from("administrative_shifts")
-          .upsert(dbShifts);
+          .upsert(dbShifts, { onConflict: "category,date,location" });
         if (upsertError) throw upsertError;
       }
 
@@ -724,7 +740,7 @@ const AdministrativeSchedulePage: React.FC<AdministrativeSchedulePageProps> = ({
                         currentDate.getMonth(),
                         i + 1,
                       );
-                      const dateStr = toLocalISOString(date);
+                      const dateStr = formatDateLocal(date);
                       const isWeekend =
                         date.getDay() === 0 || date.getDay() === 6;
                       const holidayEvent = holidays.find(
@@ -788,7 +804,7 @@ const AdministrativeSchedulePage: React.FC<AdministrativeSchedulePageProps> = ({
                               currentDate.getMonth(),
                               i + 1,
                             );
-                            const dateStr = toLocalISOString(dateObj);
+                            const dateStr = formatDateLocal(dateObj);
                             const isWeekend =
                               dateObj.getDay() === 0 || dateObj.getDay() === 6;
                             const holidayEvent = holidays.find(
@@ -799,7 +815,7 @@ const AdministrativeSchedulePage: React.FC<AdministrativeSchedulePageProps> = ({
                             );
                             const isHoliday = isWeekend || !!holidayEvent;
 
-                            const shift = getShiftForDateAndCategory(
+                            const dayShifts = getShiftsForDateAndCategory(
                               category,
                               dateStr,
                             );
@@ -811,35 +827,56 @@ const AdministrativeSchedulePage: React.FC<AdministrativeSchedulePageProps> = ({
                                     setEditingCell({
                                       category,
                                       date: dateStr,
-                                      shift,
                                     });
-                                    setEditStaffNames(shift?.staffNames || "");
-                                    setEditLocation(shift?.location || "北投");
+                                    const bShift = dayShifts.find(
+                                      (s) => s.location === "北投",
+                                    );
+                                    const dShift = dayShifts.find(
+                                      (s) => s.location === "大直",
+                                    );
+                                    setEditStaffBeitou(
+                                      bShift?.staffNames || "",
+                                    );
+                                    setEditStaffDazhi(dShift?.staffNames || "");
+                                    setActiveEditField(
+                                      bShift?.staffNames
+                                        ? "北投"
+                                        : dShift?.staffNames
+                                          ? "大直"
+                                          : "北投",
+                                    );
                                   }
                                 }}
-                                className={`px-2 py-3 text-center border-r border-gray-100 ${canEdit ? "cursor-pointer hover:bg-blue-50 transition-colors" : ""} ${isHoliday && !shift ? "bg-red-50/40 hover:bg-red-100/50" : ""}`}
+                                className={`px-2 py-3 text-center border-r border-gray-100 ${canEdit ? "cursor-pointer hover:bg-blue-50 transition-colors" : ""} ${isHoliday && dayShifts.length === 0 ? "bg-red-50/40 hover:bg-red-100/50" : ""}`}
                               >
-                                {shift ? (
+                                {dayShifts.length > 0 ? (
                                   <div className="text-xs flex flex-col items-center">
-                                    <div className="font-medium text-gray-800 flex flex-col">
-                                      {shift.staffNames
-                                        .split(",")
-                                        .map((name, nameIdx) => {
-                                          const trimmed = name.trim();
-                                          if (!trimmed) return null;
-                                          return (
-                                            <span
-                                              key={nameIdx}
-                                              className="whitespace-nowrap"
-                                            >
-                                              {trimmed}
-                                            </span>
-                                          );
-                                        })}
-                                    </div>
-                                    <div className="text-gray-500 text-[10px] mt-0.5">
-                                      ({shift.location})
-                                    </div>
+                                    {dayShifts.map((shift, sIdx) => (
+                                      <div
+                                        key={shift.id}
+                                        className={`flex flex-col items-center w-full ${sIdx > 0 ? "mt-1 pt-1 border-t border-gray-200" : ""}`}
+                                      >
+                                        <div className="font-medium text-gray-800 flex flex-col">
+                                          {shift.staffNames
+                                            .split(",")
+                                            .map((name, nameIdx) => {
+                                              const trimmed = name.trim();
+                                              if (!trimmed) return null;
+                                              return (
+                                                <span
+                                                  key={nameIdx}
+                                                  className="whitespace-nowrap"
+                                                >
+                                                  {trimmed}
+                                                </span>
+                                              );
+                                            })}
+                                        </div>
+                                        <div className="text-gray-500 text-[10px] mt-0.5">
+                                          ({shift.location})
+                                        </div>
+                                      </div>
+                                    ))}
                                   </div>
                                 ) : (
                                   <span className="text-gray-300">-</span>
@@ -957,16 +994,33 @@ const AdministrativeSchedulePage: React.FC<AdministrativeSchedulePageProps> = ({
                 </p>
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      值班人員
+                    <label
+                      className={`block text-sm font-medium mb-1 ${activeEditField === "北投" ? "text-blue-600" : "text-gray-700"}`}
+                    >
+                      北投 值班人員 {activeEditField === "北投" && "(編輯中)"}
                     </label>
                     <input
-                      id="cellStaffNames"
                       type="text"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 outline-none"
-                      value={editStaffNames}
-                      onChange={(e) => setEditStaffNames(e.target.value)}
-                      placeholder="輸入值班人員名字，多人用逗號分隔"
+                      className={`w-full px-3 py-2 border rounded-md outline-none transition-colors ${activeEditField === "北投" ? "ring-2 ring-blue-500 border-blue-500 bg-blue-50" : "border-gray-300 focus:border-blue-300"}`}
+                      value={editStaffBeitou}
+                      onFocus={() => setActiveEditField("北投")}
+                      onChange={(e) => setEditStaffBeitou(e.target.value)}
+                      placeholder="輸入北投值班人員，多人用逗號分隔"
+                    />
+                  </div>
+                  <div>
+                    <label
+                      className={`block text-sm font-medium mb-1 ${activeEditField === "大直" ? "text-orange-600" : "text-gray-700"}`}
+                    >
+                      大直 值班人員 {activeEditField === "大直" && "(編輯中)"}
+                    </label>
+                    <input
+                      type="text"
+                      className={`w-full px-3 py-2 border rounded-md outline-none transition-colors ${activeEditField === "大直" ? "ring-2 ring-orange-500 border-orange-500 bg-orange-50" : "border-gray-300 focus:border-orange-300"}`}
+                      value={editStaffDazhi}
+                      onFocus={() => setActiveEditField("大直")}
+                      onChange={(e) => setEditStaffDazhi(e.target.value)}
+                      placeholder="輸入大直值班人員，多人用逗號分隔"
                     />
                   </div>
 
@@ -991,38 +1045,43 @@ const AdministrativeSchedulePage: React.FC<AdministrativeSchedulePageProps> = ({
 
                     if (availableNames.length === 0) return null;
 
+                    const currentNames = (
+                      activeEditField === "北投"
+                        ? editStaffBeitou
+                        : editStaffDazhi
+                    )
+                      .split(",")
+                      .map((n) => n.trim())
+                      .filter(Boolean);
+
                     return (
                       <div className="pt-1">
                         <label className="block text-xs font-medium text-gray-500 mb-1.5">
-                          固定名單與常用人員 (點擊加入/移除)
+                          固定名單與常用人員 (點擊快速帶入)
                         </label>
                         <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto p-1 custom-scrollbar">
                           {availableNames.map((name) => {
-                            const currentNames = editStaffNames
-                              .split(",")
-                              .map((n) => n.trim())
-                              .filter(Boolean);
                             const isSelected = currentNames.includes(name);
                             return (
                               <button
                                 key={name}
                                 type="button"
                                 onClick={() => {
-                                  if (isSelected) {
-                                    setEditStaffNames(
-                                      currentNames
-                                        .filter((n) => n !== name)
-                                        .join(", "),
-                                    );
+                                  const newNames = isSelected
+                                    ? currentNames.filter((n) => n !== name)
+                                    : [...currentNames, name];
+                                  const joined = newNames.join(", ");
+                                  if (activeEditField === "北投") {
+                                    setEditStaffBeitou(joined);
                                   } else {
-                                    setEditStaffNames(
-                                      [...currentNames, name].join(", "),
-                                    );
+                                    setEditStaffDazhi(joined);
                                   }
                                 }}
                                 className={`px-2.5 py-1 text-xs rounded-full border transition-colors ${
                                   isSelected
-                                    ? "bg-blue-500 text-white border-blue-600 shadow-sm"
+                                    ? activeEditField === "北投"
+                                      ? "bg-blue-500 text-white border-blue-600 shadow-sm"
+                                      : "bg-orange-500 text-white border-orange-600 shadow-sm"
                                     : "bg-gray-50 text-gray-600 border-gray-200 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200"
                                 }`}
                               >
@@ -1034,44 +1093,26 @@ const AdministrativeSchedulePage: React.FC<AdministrativeSchedulePageProps> = ({
                       </div>
                     );
                   })()}
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      地點
-                    </label>
-                    <select
-                      id="cellShiftLocation"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 outline-none"
-                      value={editLocation}
-                      onChange={(e) =>
-                        setEditLocation(e.target.value as "北投" | "大直")
-                      }
-                    >
-                      {LOCATIONS.map((loc) => (
-                        <option key={loc} value={loc}>
-                          {loc}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
                 </div>
                 <div className="flex justify-between mt-6">
-                  {editingCell.shift ? (
-                    <button
-                      onClick={() => {
-                        setShifts((prev) =>
-                          prev.filter((s) => s.id !== editingCell.shift!.id),
-                        );
-                        setIsDirty(true);
-                        setEditingCell(null);
-                      }}
-                      className="px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg font-medium transition-colors"
-                    >
-                      清除
-                    </button>
-                  ) : (
-                    <div></div>
-                  )}
+                  <button
+                    onClick={() => {
+                      setShifts((prev) =>
+                        prev.filter(
+                          (s) =>
+                            !(
+                              s.category === editingCell.category &&
+                              s.date === editingCell.date
+                            ),
+                        ),
+                      );
+                      setIsDirty(true);
+                      setEditingCell(null);
+                    }}
+                    className="px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg font-medium transition-colors"
+                  >
+                    清空此日排班
+                  </button>
                   <div className="flex gap-2">
                     <button
                       onClick={() => setEditingCell(null)}
@@ -1081,40 +1122,47 @@ const AdministrativeSchedulePage: React.FC<AdministrativeSchedulePageProps> = ({
                     </button>
                     <button
                       onClick={() => {
-                        const staffNames = editStaffNames.trim();
-                        const loc = editLocation;
-
-                        if (staffNames) {
-                          if (editingCell.shift) {
-                            setShifts((prev) =>
-                              prev.map((s) =>
-                                s.id === editingCell.shift!.id
-                                  ? {
-                                      ...s,
-                                      staffNames,
-                                      location: loc as any,
-                                    }
-                                  : s,
+                        setShifts((prev) => {
+                          const next = prev.filter(
+                            (s) =>
+                              !(
+                                s.category === editingCell.category &&
+                                s.date === editingCell.date
                               ),
-                            );
-                          } else {
-                            setShifts((prev) => [
-                              ...prev,
-                              {
-                                id: generateUUID(),
-                                category: editingCell.category,
-                                date: editingCell.date,
-                                staffNames,
-                                location: loc as any,
-                              },
-                            ]);
-                          }
-                        } else if (editingCell.shift) {
-                          // 如果清空了名字但原本有資料，刪除該排班
-                          setShifts((prev) =>
-                            prev.filter((s) => s.id !== editingCell.shift!.id),
                           );
-                        }
+                          const oldBeitou = prev.find(
+                            (s) =>
+                              s.category === editingCell.category &&
+                              s.date === editingCell.date &&
+                              s.location === "北投",
+                          );
+                          const oldDazhi = prev.find(
+                            (s) =>
+                              s.category === editingCell.category &&
+                              s.date === editingCell.date &&
+                              s.location === "大直",
+                          );
+
+                          if (editStaffBeitou.trim()) {
+                            next.push({
+                              id: oldBeitou?.id || generateUUID(),
+                              category: editingCell.category,
+                              date: editingCell.date,
+                              staffNames: editStaffBeitou.trim(),
+                              location: "北投",
+                            });
+                          }
+                          if (editStaffDazhi.trim()) {
+                            next.push({
+                              id: oldDazhi?.id || generateUUID(),
+                              category: editingCell.category,
+                              date: editingCell.date,
+                              staffNames: editStaffDazhi.trim(),
+                              location: "大直",
+                            });
+                          }
+                          return next;
+                        });
                         setIsDirty(true);
                         setEditingCell(null);
                       }}
