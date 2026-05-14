@@ -775,7 +775,13 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
             if (cellValue === "休") {
               // White
             } else {
-              if (cellValue.includes("MR"))
+              if (cellValue.includes("銷"))
+                cell.fill = {
+                  type: "pattern",
+                  pattern: "solid",
+                  fgColor: { argb: "FFF87171" }, // Red-400 for Coord/Cancel Leave
+                };
+              else if (cellValue.includes("MR"))
                 cell.fill = {
                   type: "pattern",
                   pattern: "solid",
@@ -1331,14 +1337,19 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
             if (raw === "休") {
               data.cell.styles.fillColor = [255, 255, 255]; // White (User Requested)
             } else if (raw && typeof raw === "object" && "station" in raw) {
-              const station = raw.station;
-              if (station) {
-                if (station === SYSTEM_OFF) {
-                  data.cell.styles.fillColor = [255, 255, 255]; // White (User Requested)
-                } else {
-                  const style = getPDFStyle(station);
-                  if (style) {
-                    data.cell.styles.fillColor = style.fillColor;
+              const roles = (raw as any).roles || [];
+              if (roles.includes("配合銷假")) {
+                data.cell.styles.fillColor = [248, 113, 113]; // Red-400
+              } else {
+                const station = raw.station;
+                if (station) {
+                  if (station === SYSTEM_OFF) {
+                    data.cell.styles.fillColor = [255, 255, 255]; // White (User Requested)
+                  } else {
+                    const style = getPDFStyle(station);
+                    if (style) {
+                      data.cell.styles.fillColor = style.fillColor;
+                    }
                   }
                 }
               }
@@ -3203,13 +3214,8 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                           match = true;
                         else if (stationName === "大直") {
                           if (
-                            s.station?.includes("遠") &&
-                            s.specialRoles.includes(SPECIAL_ROLES.DAZHI_SUPPORT)
-                          )
-                            match = true;
-                          if (
                             s.station === "大直" ||
-                            s.station?.includes("支援")
+                            s.specialRoles.includes(SPECIAL_ROLES.DAZHI_SUPPORT)
                           )
                             match = true;
                         } else if (s.station === stationName) match = true;
@@ -4125,11 +4131,14 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                             const isLearning =
                               station &&
                               user.learningCapabilities?.includes(station);
+                            const isCoopCancel =
+                              specialRoles.includes("配合銷假");
 
                             return (
                               <td
                                 key={date}
                                 className={`p-0.5 border-r border-slate-100 align-top h-16 ${isToday ? "bg-teal-50/10" : ""} ${isOff ? "bg-slate-100/60" : isClosed ? "bg-slate-100/30" : ""} relative`}
+                                className={`p-0.5 border-r border-slate-100 align-top h-16 ${isToday ? "bg-teal-50/10" : ""} ${isOff ? "bg-slate-100/60" : isClosed ? "bg-slate-100/30" : isCoopCancel ? "bg-pink-500" : ""} relative`}
                               >
                                 {pendingReq && getLeaveBadge(pendingReq.type)}
                                 {isOff ? (
@@ -5106,6 +5115,10 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                     <span>休假 / 非工作日</span>
                   </div>
                   <div className="flex items-center gap-2">
+                    <span className="w-3 h-3 bg-red-400 border border-red-500 rounded-sm"></span>{" "}
+                    <span>配合銷假 (銷)</span>
+                  </div>
+                  <div className="flex items-center gap-2">
                     <span className="w-3 h-3 bg-orange-100 border border-orange-200 rounded-sm"></span>{" "}
                     <span>MR</span>
                   </div>
@@ -5587,15 +5600,15 @@ const DailyManpowerSummary: React.FC<{
         const small = wl.count_xiao_tao_4 + wl.count_xiao_tao_3;
         const none = wl.count_wu_2 + wl.count_wu_1;
         const dazhi = wl.count_dazhi_1 || 0;
-        const total = (big + small + none + dazhi).toFixed(1);
-        const units = (
+        const total = Math.round(big + small + none + dazhi).toString();
+        const units = Math.round(
           big * 5 +
-          wl.count_xiao_tao_4 * 4 +
-          wl.count_xiao_tao_3 * 3 +
-          wl.count_wu_2 * 2 +
-          wl.count_wu_1 * 1 +
-          dazhi * 1
-        ).toFixed(1);
+            wl.count_xiao_tao_4 * 4 +
+            wl.count_xiao_tao_3 * 3 +
+            wl.count_wu_2 * 2 +
+            wl.count_wu_1 * 1 +
+            dazhi * 1,
+        ).toString();
         // Compact: only show non-zero categories
         const parts: string[] = [];
         if (big > 0) parts.push(`${Number(big.toFixed(1))}大`);
@@ -5728,15 +5741,15 @@ BMD :{{bmd}}
       const small = wl.count_xiao_tao_4 + wl.count_xiao_tao_3;
       const none = wl.count_wu_2 + wl.count_wu_1;
       const dazhi = wl.count_dazhi_1 || 0;
-      const total = (big + small + none + dazhi).toFixed(1);
-      const units = (
+      const total = Math.round(big + small + none + dazhi).toString();
+      const units = Math.round(
         big * 5 +
-        wl.count_xiao_tao_4 * 4 +
-        wl.count_xiao_tao_3 * 3 +
-        wl.count_wu_2 * 2 +
-        wl.count_wu_1 * 1 +
-        dazhi * 1
-      ).toFixed(1);
+          wl.count_xiao_tao_4 * 4 +
+          wl.count_xiao_tao_3 * 3 +
+          wl.count_wu_2 * 2 +
+          wl.count_wu_1 * 1 +
+          dazhi * 1,
+      ).toString();
 
       const parts: string[] = [];
       if (big > 0) parts.push(`${Number(big.toFixed(1))}大`);
@@ -5806,14 +5819,14 @@ BMD :{{bmd}}
             const big = wl.count_da_tao_5;
             const small = wl.count_xiao_tao_4 + wl.count_xiao_tao_3;
             const none = wl.count_wu_2 + wl.count_wu_1;
-            const total = (big + small + none).toFixed(1);
+            const total = Math.round(big + small + none).toString();
             const units =
               big * 5 +
               wl.count_xiao_tao_4 * 4 +
               wl.count_xiao_tao_3 * 3 +
               wl.count_wu_2 * 2 +
               wl.count_wu_1 * 1;
-            const finalUnits = (units + actualDazhiUnits).toFixed(1);
+            const finalUnits = Math.round(units + actualDazhiUnits).toString();
             const originalUnits = units + (stats.dazhi_clients || 0);
 
             if (overlap > 0) {
