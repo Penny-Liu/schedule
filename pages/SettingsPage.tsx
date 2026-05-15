@@ -2020,6 +2020,7 @@ BMD :{{bmd}}
                         <option value="health_mgmt">健管</option>
                         <option value="cloud_schedule">影像雲</option>
                         <option value="anesthesia">麻護</option>
+                        <option value="meeting_room">會議室</option>
                       </select>
                     </div>
                     <div className="space-y-1 text-sm text-gray-600">
@@ -2083,7 +2084,19 @@ BMD :{{bmd}}
                             </span>
                             <span className="text-gray-500">•</span>
                             <span className="text-gray-600 capitalize">
-                              {log.module.replace("_", " ")}
+                              {log.module === "meeting_room"
+                                ? "會議室"
+                                : log.module === "cloud_schedule"
+                                  ? "影像雲"
+                                  : log.module === "health_mgmt"
+                                    ? "健管"
+                                    : log.module === "radiographer"
+                                      ? "放射師"
+                                      : log.module === "physician"
+                                        ? "醫師"
+                                        : log.module === "anesthesia"
+                                          ? "麻護"
+                                          : log.module.replace("_", " ")}
                             </span>
                           </div>
                           <div className="mt-1 text-sm text-gray-700">

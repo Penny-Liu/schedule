@@ -13,6 +13,7 @@ import {
   Cloud,
   Calendar,
   Activity,
+  Building2,
 } from "lucide-react";
 import { User, UserRole, PERMISSIONS } from "../types";
 import { getRoleLabel } from "../services/utils";
@@ -143,6 +144,12 @@ const Sidebar: React.FC<SidebarProps> = ({
           label: "基因排班",
           icon: CalendarClock,
           permission: "EDIT_GENE",
+        },
+        {
+          id: "meeting_room",
+          label: "會議室",
+          icon: Building2,
+          permission: null, // 權限設為 null，代表開放給所有人使用
         },
       ],
     },

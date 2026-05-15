@@ -19,6 +19,7 @@ import HealthMgmtPage from "./pages/HealthMgmtPage";
 import AdministrativeSchedulePage, {
   AdministrativeCategory,
 } from "./pages/AdministrativeSchedulePage";
+import MeetingRoomPage from "./pages/MeetingRoomPage";
 // Error Boundary Component
 class ErrorBoundary extends React.Component<
   { children: React.ReactNode },
@@ -229,6 +230,8 @@ const App: React.FC = () => {
             title="基因排班管理"
           />
         );
+      case "meeting_room":
+        return <MeetingRoomPage currentUser={currentUser} />;
       default:
         return <DashboardPage currentUser={currentUser} />;
     }

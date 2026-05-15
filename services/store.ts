@@ -27,6 +27,7 @@ import {
   AnesthesiaShift,
   OperationLog,
   RadiographerWorkload,
+  MeetingRoomBooking,
 } from "../types";
 import { MOCK_USERS, MOCK_LEAVES } from "./mockData";
 import { supabase } from "./supabaseClient";
@@ -119,6 +120,7 @@ class Store {
   currentUser: User | null = null;
   operationLogs: OperationLog[] = [];
   workloads: RadiographerWorkload[] = [];
+  meetingRoomBookings: MeetingRoomBooking[] = [];
   isLoaded: boolean = false;
   connectionStatus: { type: "Supabase" | "Mock"; details?: string } = {
     type: "Supabase",
@@ -347,6 +349,7 @@ class Store {
         anesthesiaStaffRes,
         anesthesiaShiftsRes,
         workloadsRes,
+        meetingRoomsRes,
       ] = await Promise.all([
         this.fetchPaginated("users"),
         this.fetchAllShifts(),
@@ -359,6 +362,7 @@ class Store {
         this.fetchPaginated("anesthesia_staff"),
         this.fetchPaginated("anesthesia_shifts"),
         this.fetchAllWorkloads(),
+        this.fetchPaginated("meeting_room_bookings"),
       ]);
       console.log("[Store] Data loaded. Errors:", {
         users: usersRes.error,
@@ -648,7 +652,10 @@ class Store {
           id: w.id,
           year: w.year,
           month: w.month,
-          date: w.year && w.month ? `${w.year}-${String(w.month).padStart(2, '0')}` : '',
+          date:
+            w.year && w.month
+              ? `${w.year}-${String(w.month).padStart(2, "0")}`
+              : "",
           radiographerName: w.radiographerName || w.radiographer_name || "",
           mr: w.mr || 0,
           us: w.us || 0,
@@ -659,6 +666,18 @@ class Store {
           cta: w.ctaPostProcessing || w.cta_post_processing || 0,
           reportTyping: w.reportEntry || w.report_entry || 0,
           proofreader: w.imageProofing || w.image_proofing || 0,
+        }));
+      }
+
+      if (meetingRoomsRes && meetingRoomsRes.data) {
+        this.meetingRoomBookings = meetingRoomsRes.data.map((b: any) => ({
+          id: b.id,
+          date: b.date,
+          startTime: b.start_time,
+          endTime: b.end_time,
+          unit: b.unit,
+          purpose: b.purpose,
+          userId: b.user_id,
         }));
       }
 
@@ -766,7 +785,16 @@ BMD :{{bmd}}
         report_entry: w.reportTyping,
         imageProofing: w.proofreader,
         image_proofing: w.proofreader,
-        total: (w.mr || 0) + (w.us || 0) + (w.ct || 0) + (w.dx || 0) + (w.mg || 0) + (w.bmd || 0) + (w.cta || 0) + (w.reportTyping || 0) + (w.proofreader || 0)
+        total:
+          (w.mr || 0) +
+          (w.us || 0) +
+          (w.ct || 0) +
+          (w.dx || 0) +
+          (w.mg || 0) +
+          (w.bmd || 0) +
+          (w.cta || 0) +
+          (w.reportTyping || 0) +
+          (w.proofreader || 0),
       };
 
       if (w.id) {
@@ -791,14 +819,20 @@ BMD :{{bmd}}
 
       // Update local state
       const existingIdx = this.workloads.findIndex(
-        (work) => work.radiographerName === w.radiographerName && work.year === w.year && work.month === w.month
+        (work) =>
+          work.radiographerName === w.radiographerName &&
+          work.year === w.year &&
+          work.month === w.month,
       );
-      
+
       const fullWorkload: RadiographerWorkload = {
         id: w.id,
         year: w.year!,
         month: w.month!,
-        date: w.year && w.month ? `${w.year}-${String(w.month).padStart(2, '0')}` : '',
+        date:
+          w.year && w.month
+            ? `${w.year}-${String(w.month).padStart(2, "0")}`
+            : "",
         radiographerName: w.radiographerName!,
         mr: w.mr || 0,
         us: w.us || 0,
@@ -1010,6 +1044,11 @@ BMD :{{bmd}}
         "postgres_changes",
         { event: "*", schema: "public", table: "anesthesia_shifts" },
         (payload) => this.handleRealtimeAnesShiftUpdate(payload),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "meeting_room_bookings" },
+        (payload) => this.handleRealtimeMeetingRoomUpdate(payload),
       )
       .subscribe((status) => {
         if (status === "SUBSCRIBED") {
@@ -1322,6 +1361,108 @@ BMD :{{bmd}}
       );
       this.notifyListeners();
     }
+  }
+
+  // --- Meeting Room Bookings ---
+  getMeetingRoomBookings() {
+    return [...this.meetingRoomBookings];
+  }
+
+  async addMeetingRoomBookings(bookings: MeetingRoomBooking[]) {
+    this.meetingRoomBookings.push(...bookings);
+    this.notifyListeners();
+
+    try {
+      const records = bookings.map((b) => ({
+        id: b.id,
+        date: b.date,
+        start_time: b.startTime,
+        end_time: b.endTime,
+        unit: b.unit,
+        purpose: b.purpose,
+        user_id: b.userId,
+      }));
+      const { error } = await supabase
+        .from("meeting_room_bookings")
+        .insert(records);
+      if (error) throw error;
+
+      // 記錄操作日誌
+      if (bookings.length > 0) {
+        this.logOperation("assign", "meeting_room", {
+          date: bookings[0].date,
+          station: bookings[0].unit,
+          task: bookings[0].purpose,
+          affectedCount: bookings.length,
+          note: `預約會議室 (${bookings[0].startTime}~${bookings[0].endTime})`,
+        });
+      }
+    } catch (e) {
+      console.error("Failed to add meeting room bookings:", e);
+      const ids = bookings.map((b) => b.id);
+      this.meetingRoomBookings = this.meetingRoomBookings.filter(
+        (b) => !ids.includes(b.id),
+      );
+      this.notifyListeners();
+      throw e;
+    }
+  }
+
+  async deleteMeetingRoomBooking(id: string) {
+    const bookingToDel = this.meetingRoomBookings.find((b) => b.id === id);
+    this.meetingRoomBookings = this.meetingRoomBookings.filter(
+      (b) => b.id !== id,
+    );
+    this.notifyListeners();
+
+    try {
+      const { error } = await supabase
+        .from("meeting_room_bookings")
+        .delete()
+        .eq("id", id);
+      if (error) throw error;
+
+      // 記錄操作日誌
+      if (bookingToDel) {
+        this.logOperation("delete", "meeting_room", {
+          date: bookingToDel.date,
+          station: bookingToDel.unit,
+          task: bookingToDel.purpose,
+          note: `取消會議室預約 (${bookingToDel.startTime}~${bookingToDel.endTime})`,
+        });
+      }
+    } catch (e) {
+      console.error("Failed to delete meeting room booking:", e);
+      throw e;
+    }
+  }
+
+  private handleRealtimeMeetingRoomUpdate(payload: any) {
+    const { eventType, new: newRecord, old: oldRecord } = payload;
+    if (eventType === "INSERT" || eventType === "UPDATE") {
+      const mapped: MeetingRoomBooking = {
+        id: newRecord.id,
+        date: newRecord.date,
+        startTime: newRecord.start_time,
+        endTime: newRecord.end_time,
+        unit: newRecord.unit,
+        purpose: newRecord.purpose,
+        userId: newRecord.user_id,
+      };
+      const index = this.meetingRoomBookings.findIndex(
+        (b) => b.id === mapped.id,
+      );
+      if (index !== -1) {
+        this.meetingRoomBookings[index] = mapped;
+      } else {
+        this.meetingRoomBookings.push(mapped);
+      }
+    } else if (eventType === "DELETE") {
+      this.meetingRoomBookings = this.meetingRoomBookings.filter(
+        (b) => b.id !== oldRecord.id,
+      );
+    }
+    this.notifyListeners();
   }
 
   private handleRealtimeSettingsUpdate(payload: any) {

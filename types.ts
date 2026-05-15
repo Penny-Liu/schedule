@@ -379,7 +379,8 @@ export interface OperationLog {
     | "physician"
     | "health_mgmt"
     | "anesthesia"
-    | "cloud_schedule";
+    | "cloud_schedule"
+    | "meeting_room";
   details: {
     date?: string;
     dateRange?: { start: string; end: string };
@@ -410,4 +411,14 @@ export interface RadiographerWorkload {
   cta: number;
   reportTyping: number;
   proofreader: number;
+}
+
+export interface MeetingRoomBooking {
+  id: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  unit: string;
+  purpose: string;
+  userId: string;
 }
