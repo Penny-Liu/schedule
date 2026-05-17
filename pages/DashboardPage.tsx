@@ -3187,7 +3187,6 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                     if (!isHmType) {
                       // 1. Look in Radiographers
                       allRadiographers.forEach((u) => {
-                        if (u.isPartTime) return;
                         const s = getDayShift(u.id, dateStr);
                         let match = false;
                         if (stationName === "遠距" && s.station?.includes("遠"))

@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import { User, UserRole, DateEventType, MeetingRoomBooking } from "../types";
 import { db } from "../services/store";
 import {
@@ -34,8 +34,107 @@ const generateTimeSlots = () => {
 };
 const TIME_SLOTS = generateTimeSlots();
 
+// 依照租借單位取得專屬主題色
+const getUnitColorTheme = (unit: string) => {
+  const u = unit || "";
+  if (u.includes("基因")) {
+    return {
+      cardBg: "bg-pink-50 hover:bg-pink-100",
+      cardBorder: "border-pink-500",
+      textMain: "text-pink-900",
+      textSub: "text-pink-700",
+      textMuted: "text-pink-500",
+      icon: "text-pink-400 hover:text-red-500",
+      badge: "bg-pink-100 border-pink-200 text-pink-700",
+      listBg: "bg-white hover:bg-pink-50",
+    };
+  }
+  if (u.includes("業務")) {
+    return {
+      cardBg: "bg-orange-50 hover:bg-orange-100",
+      cardBorder: "border-orange-500",
+      textMain: "text-orange-900",
+      textSub: "text-orange-700",
+      textMuted: "text-orange-500",
+      icon: "text-orange-400 hover:text-red-500",
+      badge: "bg-orange-100 border-orange-200 text-orange-700",
+      listBg: "bg-white hover:bg-orange-50",
+    };
+  }
+  if (u.includes("資訊") || u.includes("IT")) {
+    return {
+      cardBg: "bg-purple-50 hover:bg-purple-100",
+      cardBorder: "border-purple-500",
+      textMain: "text-purple-900",
+      textSub: "text-purple-700",
+      textMuted: "text-purple-500",
+      icon: "text-purple-400 hover:text-red-500",
+      badge: "bg-purple-100 border-purple-200 text-purple-700",
+      listBg: "bg-white hover:bg-purple-50",
+    };
+  }
+  if (
+    u.includes("護理") ||
+    u.includes("健管") ||
+    u.includes("門診") ||
+    u.includes("醫療")
+  ) {
+    return {
+      cardBg: "bg-emerald-50 hover:bg-emerald-100",
+      cardBorder: "border-emerald-500",
+      textMain: "text-emerald-900",
+      textSub: "text-emerald-700",
+      textMuted: "text-emerald-500",
+      icon: "text-emerald-400 hover:text-red-500",
+      badge: "bg-emerald-100 border-emerald-200 text-emerald-700",
+      listBg: "bg-white hover:bg-emerald-50",
+    };
+  }
+  if (u.includes("客服")) {
+    return {
+      cardBg: "bg-blue-50 hover:bg-blue-100",
+      cardBorder: "border-blue-500",
+      textMain: "text-blue-900",
+      textSub: "text-blue-700",
+      textMuted: "text-blue-500",
+      icon: "text-blue-400 hover:text-red-500",
+      badge: "bg-blue-100 border-blue-200 text-blue-700",
+      listBg: "bg-white hover:bg-blue-50",
+    };
+  }
+  if (
+    u.includes("行政") ||
+    u.includes("人資") ||
+    u.includes("財務") ||
+    u.includes("管理")
+  ) {
+    return {
+      cardBg: "bg-slate-100 hover:bg-slate-200",
+      cardBorder: "border-slate-500",
+      textMain: "text-slate-900",
+      textSub: "text-slate-700",
+      textMuted: "text-slate-500",
+      icon: "text-slate-400 hover:text-red-500",
+      badge: "bg-slate-200 border-slate-300 text-slate-700",
+      listBg: "bg-white hover:bg-slate-50",
+    };
+  }
+  // Default (Indigo)
+  return {
+    cardBg: "bg-indigo-50 hover:bg-indigo-100",
+    cardBorder: "border-indigo-500",
+    textMain: "text-indigo-900",
+    textSub: "text-indigo-700",
+    textMuted: "text-indigo-500",
+    icon: "text-indigo-400 hover:text-red-500",
+    badge: "bg-indigo-100 border-indigo-200 text-indigo-600",
+    listBg: "bg-white hover:bg-indigo-50",
+  };
+};
+
 const MeetingRoomPage: React.FC<MeetingRoomPageProps> = ({ currentUser }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
+  const dateInputRef = useRef<HTMLInputElement>(null);
 
   // 與 Supabase 串接的真實資料庫狀態
   const [bookings, setBookings] = useState<MeetingRoomBooking[]>(() =>
@@ -127,6 +226,15 @@ const MeetingRoomPage: React.FC<MeetingRoomPageProps> = ({ currentUser }) => {
       name: ["日", "一", "二", "三", "四", "五", "六"][dateObj.getDay()],
     };
   }, [formData.date]);
+
+  // 處理自訂日期跳轉
+  const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    if (val) {
+      const [y, m, d] = val.split("-").map(Number);
+      setCurrentDate(new Date(y, m - 1, d));
+    }
+  };
 
   // 取得衝突的預約紀錄
   const getConflicts = (date: string, start: string, end: string) => {
@@ -371,7 +479,15 @@ const MeetingRoomPage: React.FC<MeetingRoomPageProps> = ({ currentUser }) => {
             >
               <ChevronLeft size={20} />
             </button>
-            <div className="font-bold text-slate-700 min-w-[200px] text-center text-sm">
+            <div
+              className="relative font-bold text-slate-700 min-w-[200px] text-center text-sm cursor-pointer hover:text-teal-600 transition-colors flex items-center justify-center gap-1.5 group select-none"
+              onClick={() =>
+                dateInputRef.current?.showPicker
+                  ? dateInputRef.current.showPicker()
+                  : dateInputRef.current?.click()
+              }
+              title="點擊選擇日期"
+            >
               {weekDays[0].toLocaleDateString("zh-TW", {
                 month: "short",
                 day: "numeric",
@@ -381,6 +497,17 @@ const MeetingRoomPage: React.FC<MeetingRoomPageProps> = ({ currentUser }) => {
                 month: "short",
                 day: "numeric",
               })}
+              <CalendarIcon
+                size={14}
+                className="text-slate-400 group-hover:text-teal-500"
+              />
+              <input
+                ref={dateInputRef}
+                type="date"
+                className="absolute opacity-0 invisible"
+                value={toLocalISOString(currentDate)}
+                onChange={handleDateChange}
+              />
             </div>
             <button
               onClick={() =>
@@ -393,6 +520,14 @@ const MeetingRoomPage: React.FC<MeetingRoomPageProps> = ({ currentUser }) => {
               <ChevronRight size={20} />
             </button>
           </div>
+
+          <button
+            onClick={() => setCurrentDate(new Date())}
+            className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 px-3 py-1.5 rounded-xl text-sm font-bold transition-all shadow-sm hidden md:block"
+            title="回到本週"
+          >
+            本週
+          </button>
 
           <button
             onClick={() => {
@@ -555,15 +690,21 @@ const MeetingRoomPage: React.FC<MeetingRoomPageProps> = ({ currentUser }) => {
                       b.userId === currentUser.id ||
                       currentUser.role === UserRole.SYSTEM_ADMIN;
 
+                    const theme = getUnitColorTheme(b.unit);
+
                     return (
                       <div
                         key={b.id}
                         className="absolute w-full px-0.5 py-0.5 z-10"
                         style={{ top: `${top}px`, height: `${height}px` }}
                       >
-                        <div className="w-full h-full bg-indigo-50 border-l-[4px] border-indigo-500 rounded-r p-1.5 shadow-sm overflow-hidden flex flex-col group hover:bg-indigo-100 hover:shadow-md transition-all cursor-default">
+                        <div
+                          className={`w-full h-full border-l-[4px] rounded-r p-1.5 shadow-sm overflow-hidden flex flex-col group hover:shadow-md transition-all cursor-default ${theme.cardBg} ${theme.cardBorder}`}
+                        >
                           <div className="flex justify-between items-start gap-1">
-                            <div className="font-bold text-indigo-900 text-[11px] truncate leading-tight">
+                            <div
+                              className={`font-bold text-[11px] truncate leading-tight ${theme.textMain}`}
+                            >
                               {b.unit}
                             </div>
                             {canDelete && (
@@ -572,16 +713,20 @@ const MeetingRoomPage: React.FC<MeetingRoomPageProps> = ({ currentUser }) => {
                                   e.stopPropagation();
                                   handleDelete(b.id);
                                 }}
-                                className="text-indigo-400 hover:text-red-500 opacity-0 group-hover:opacity-100 shrink-0 bg-white rounded p-0.5 shadow-sm"
+                                className={`opacity-0 group-hover:opacity-100 shrink-0 bg-white rounded p-0.5 shadow-sm transition-colors ${theme.icon}`}
                               >
                                 <Trash2 size={12} />
                               </button>
                             )}
                           </div>
-                          <div className="text-[10px] text-indigo-700 truncate leading-tight mt-0.5">
+                          <div
+                            className={`text-[10px] truncate leading-tight mt-0.5 ${theme.textSub}`}
+                          >
                             {b.purpose}
                           </div>
-                          <div className="text-[9px] text-indigo-500 font-medium mt-auto flex items-center gap-0.5">
+                          <div
+                            className={`text-[9px] font-medium mt-auto flex items-center gap-0.5 ${theme.textMuted}`}
+                          >
                             <Clock size={10} /> {b.startTime}-{b.endTime}
                           </div>
                         </div>
@@ -625,16 +770,20 @@ const MeetingRoomPage: React.FC<MeetingRoomPageProps> = ({ currentUser }) => {
                     b.date < todayStr ||
                     (b.date === todayStr && b.endTime <= nowTime);
 
+                  const theme = getUnitColorTheme(b.unit);
+
                   return (
                     <div
                       key={b.id}
-                      className={`p-3 border rounded-xl transition-colors ${isPast ? "bg-slate-50 border-slate-100 opacity-50 grayscale" : "border-slate-100 bg-slate-50 hover:bg-indigo-50"}`}
+                      className={`p-3 border rounded-xl transition-colors ${isPast ? "bg-slate-50 border-slate-100 opacity-50 grayscale" : `border-slate-100 ${theme.listBg}`}`}
                     >
                       <div className="flex justify-between items-start mb-1">
                         <div className="font-bold text-slate-800 text-sm">
                           {b.unit}
                         </div>
-                        <div className="text-[10px] font-bold text-indigo-600 bg-indigo-100 px-2 py-0.5 rounded border border-indigo-200">
+                        <div
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded border ${theme.badge}`}
+                        >
                           {b.date.substring(5)}
                         </div>
                       </div>
@@ -808,7 +957,7 @@ const MeetingRoomPage: React.FC<MeetingRoomPageProps> = ({ currentUser }) => {
                         >
                           <option value="day">天</option>
                           <option value="week">週</option>
-                          <option value="month">個月</option>
+                          <option value="month">月</option>
                         </select>
                       </div>
 

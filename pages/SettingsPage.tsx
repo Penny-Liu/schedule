@@ -157,18 +157,19 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
 
   const [logFilterDateStart, setLogFilterDateStart] = useState<string>("");
   const [logFilterDateEnd, setLogFilterDateEnd] = useState<string>("");
+  const [logFilterShiftDate, setLogFilterShiftDate] = useState<string>("");
   const [logFilterModule, setLogFilterModule] = useState<string>("");
   const [logFilterUser, setLogFilterUser] = useState<string>("");
+  const [logFilterTargetPerson, setLogFilterTargetPerson] =
+    useState<string>("");
 
   const filteredOperationLogs = useMemo(() => {
     return db.getOperationLogs().filter((log) => {
-      const logDate = log.details.date || log.timestamp.slice(0, 10);
-      if (logFilterDateStart) {
-        if (logDate < logFilterDateStart) return false;
-      }
-      if (logFilterDateEnd) {
-        if (logDate > logFilterDateEnd) return false;
-      }
+      const opDate = log.timestamp.slice(0, 10);
+      const shiftDate = log.details.date || "";
+      if (logFilterDateStart && opDate < logFilterDateStart) return false;
+      if (logFilterDateEnd && opDate > logFilterDateEnd) return false;
+      if (logFilterShiftDate && shiftDate !== logFilterShiftDate) return false;
       if (logFilterModule && logFilterModule !== "all") {
         if (log.module !== logFilterModule) return false;
       }
@@ -176,9 +177,21 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
         const keyword = logFilterUser.toLowerCase();
         if (!log.userName.toLowerCase().includes(keyword)) return false;
       }
+      if (logFilterTargetPerson) {
+        const keyword = logFilterTargetPerson.toLowerCase();
+        if (!log.details.personName?.toLowerCase().includes(keyword))
+          return false;
+      }
       return true;
     });
-  }, [logFilterDateStart, logFilterDateEnd, logFilterModule, logFilterUser]);
+  }, [
+    logFilterDateStart,
+    logFilterDateEnd,
+    logFilterShiftDate,
+    logFilterModule,
+    logFilterUser,
+    logFilterTargetPerson,
+  ]);
 
   // Template blocks state: [Block1, Block2, Block3]
   const [templateBlocks, setTemplateBlocks] = useState<string[]>(["", "", ""]);
@@ -1685,7 +1698,7 @@ BMD :{{bmd}}
                           }
                           className="w-16 bg-white border border-gray-300 rounded-lg px-2 py-1 text-sm outline-none focus:border-blue-500 text-center"
                         />
-                        <span>個月的 第</span>
+                        <span>月的 第</span>
                         <select
                           value={batchConfig.nth}
                           onChange={(e) =>
@@ -1982,10 +1995,10 @@ BMD :{{bmd}}
                 </div>
 
                 <div className="p-6">
-                  <div className="grid grid-cols-1 xl:grid-cols-4 gap-3 mb-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-6 gap-3 mb-4">
                     <div className="space-y-1 text-sm text-gray-600">
                       <label className="block text-xs font-semibold text-gray-500">
-                        起始日期
+                        操作起始日期
                       </label>
                       <input
                         type="date"
@@ -1996,12 +2009,23 @@ BMD :{{bmd}}
                     </div>
                     <div className="space-y-1 text-sm text-gray-600">
                       <label className="block text-xs font-semibold text-gray-500">
-                        結束日期
+                        操作結束日期
                       </label>
                       <input
                         type="date"
                         value={logFilterDateEnd}
                         onChange={(e) => setLogFilterDateEnd(e.target.value)}
+                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
+                      />
+                    </div>
+                    <div className="space-y-1 text-sm text-gray-600">
+                      <label className="block text-xs font-semibold text-gray-500">
+                        排班日期
+                      </label>
+                      <input
+                        type="date"
+                        value={logFilterShiftDate}
+                        onChange={(e) => setLogFilterShiftDate(e.target.value)}
                         className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
                       />
                     </div>
@@ -2032,6 +2056,20 @@ BMD :{{bmd}}
                         value={logFilterUser}
                         onChange={(e) => setLogFilterUser(e.target.value)}
                         placeholder="搜尋操作者"
+                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
+                      />
+                    </div>
+                    <div className="space-y-1 text-sm text-gray-600">
+                      <label className="block text-xs font-semibold text-gray-500">
+                        指定人員
+                      </label>
+                      <input
+                        type="text"
+                        value={logFilterTargetPerson}
+                        onChange={(e) =>
+                          setLogFilterTargetPerson(e.target.value)
+                        }
+                        placeholder="搜尋被異動者"
                         className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
                       />
                     </div>
