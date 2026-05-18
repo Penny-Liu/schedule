@@ -1,9 +1,9 @@
 name: 每日自動同步資料 (Salesforce to Supabase)
 
 on:
-  schedule:
-    # 每天台灣時間 14:00 執行 (UTC 時間 06:00)
-    - cron: "0 6 * * *"
+  # schedule 已停用，改為手動觸發
+  # schedule:
+  #   - cron: "0 6 * * *"  # 台灣時間 14:00
   workflow_dispatch:
     inputs:
       blocks:

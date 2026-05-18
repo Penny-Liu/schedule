@@ -49,27 +49,13 @@ app.post("/api/sync-stats", async (req, res) => {
   }
 });
 
-// 2. 每天 14:00 自動執行區塊 1 與 3
-cron.schedule(
-  "0 14 * * *",
-  async () => {
-    console.log("⏳ 觸發每日 14:00 自動排程：同步區塊 1 與 3");
-    try {
-      const defaultTasks = JSON.stringify([
-        { id: 1, selected: true },
-        { id: 3, selected: true },
-      ]);
-      await runSyncBlocks(defaultTasks);
-      console.log("✅ 每日排程同步完成");
-    } catch (err) {
-      console.error("❌ 每日排程同步失敗:", err);
-    }
-  },
-  {
-    scheduled: true,
-    timezone: "Asia/Taipei", // 設定正確時區
-  },
-);
+// 每日自動排程已停用，改為手動進行同步
+// cron.schedule(
+//   "0 14 * * *",
+//   async () => { ... },
+//   { scheduled: true, timezone: "Asia/Taipei" },
+// );
+
 
 const PORT = 3001;
 app.listen(PORT, () => {

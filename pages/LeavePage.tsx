@@ -287,7 +287,7 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
         const myShift = shifts.find((s) => s.userId === currentUser.id);
         if (myShift) {
           const hasRoles =
-            myShift.specialRoles && myShift.specialRoles.length > 0;
+            myShift.specialRoles.filter((r) => r !== "配合銷假").length > 0;
           if (hasRoles) {
             setValidationMsg(
               "您在該日期已有排定特殊任務（如開機、晚班），無法申請預假。",
@@ -310,7 +310,10 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
       } else {
         const shifts = db.getShifts(formData.startDate, formData.startDate);
         const myShift = shifts.find((s) => s.userId === currentUser.id);
-        if (myShift && myShift.specialRoles.length > 0) {
+        if (
+          myShift &&
+          myShift.specialRoles.filter((r) => r !== "配合銷假").length > 0
+        ) {
           setValidationMsg(
             "您在該日期已有排定特殊任務，無法申請一般代班 (請使用「任務換班」)。",
           );
@@ -341,7 +344,10 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
 
       const shifts = db.getShifts(formData.startDate, formData.startDate);
       const myShift = shifts.find((s) => s.userId === currentUser.id);
-      if (myShift && myShift.specialRoles.length > 0) {
+      if (
+        myShift &&
+        myShift.specialRoles.filter((r) => r !== "配合銷假").length > 0
+      ) {
         setValidationMsg("您在換假日期(1)已有特殊任務，請使用「任務換班」。");
         return;
       }
@@ -708,11 +714,15 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
 
           if (shift) {
             // 1. Check Special Roles
-            if (shift.specialRoles && shift.specialRoles.length > 0) {
+            // 「配合銷假」是純標記，不視為任務，不封鎖申請或核准
+            const blockingRoles = shift.specialRoles?.filter(
+              (r) => r !== "配合銷假",
+            );
+            if (blockingRoles && blockingRoles.length > 0) {
               // Exception: Duty Swap is meant to swap these roles, so don't block.
               if (leave.type !== LeaveType.DUTY_SWAP) {
                 window.alert(
-                  `無法核准：該員在 ${dateStr} 仍有特殊任務 (${shift.specialRoles.join(", ")})。請先要求該員完成換班/交接任務，確認無任務後再行核准。`,
+                  `無法核准：該員在 ${dateStr} 仍有特殊任務 (${blockingRoles.join(", ")})。請先要求該員完成換班/交接任務，確認無任務後再行核准。`,
                 );
                 return;
               }

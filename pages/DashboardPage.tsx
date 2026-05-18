@@ -1784,8 +1784,8 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
     let newRoles = [...currentRoles];
 
     // 0. Validation Constraints
-    // Constraint B: Field Control cannot take roles (Dazhi constraint removed by user)
-    if (currentStation.includes("場控") && !currentRoles.includes(role)) {
+    // 場控不能有任務，但「配合銷假」是純標記例外
+    if (currentStation.includes("場控") && role !== "配合銷假" && !currentRoles.includes(role)) {
       alert("此崗位(場控)不需選擇特殊任務");
       return;
     }
@@ -2056,9 +2056,9 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
       }
     }
 
-    // Clear roles if moving to Floor Control (Dazhi constraint removed by user)
+    // 移到場控時清掉任務，但保留「配合銷假」純標記
     if (station.includes("場控")) {
-      roles = [];
+      roles = roles.filter((r) => r === "配合銷假");
     }
 
     handleUpdateShift(userId, dateStr, station, roles);
@@ -2394,7 +2394,8 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
       : StationDefault.UNASSIGNED;
     const currentRoles = existingShift ? existingShift.specialRoles : [];
 
-    if (station.includes("場控")) {
+    // 場控不能有任務，但「配合銷假」是純標記例外
+    if (station.includes("場控") && role !== "配合銷假") {
       alert("此崗位(場控)不需選擇特殊任務");
       return;
     }
