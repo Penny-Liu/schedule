@@ -3808,10 +3808,15 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
                                     </span>
                                   )}
                                   {shift.task && (
-                                    <span
-                                      className={`text-[10px] leading-tight font-medium overflow-hidden text-ellipsis w-full px-1 ${shift.task.includes("晚班") ? "text-red-600 font-bold" : "text-blue-600"}`}
-                                    >
-                                      {shift.task}
+                                    <span className="flex flex-wrap gap-x-0.5 leading-tight w-full px-1 justify-center">
+                                      {shift.task.split(",").map((t) => t.trim()).filter(Boolean).map((t, i) => (
+                                        <span
+                                          key={i}
+                                          className={`text-[10px] font-bold ${t === "晚班" ? "text-red-600" : "text-blue-600"}`}
+                                        >
+                                          {t}
+                                        </span>
+                                      ))}
                                     </span>
                                   )}
                                   {shift.location && (
@@ -4795,10 +4800,15 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
                                                       </div>
                                                     )}
                                                     {shift.task && (
-                                                      <div
-                                                        className={`text-[9px] leading-tight font-bold ${shift.task.includes("晚班") ? "text-red-500" : "text-blue-500"}`}
-                                                      >
-                                                        {shift.task}
+                                                      <div className="flex flex-wrap gap-x-0.5 leading-tight justify-center">
+                                                        {shift.task.split(",").map((t) => t.trim()).filter(Boolean).map((t, i) => (
+                                                          <span
+                                                            key={i}
+                                                            className={`text-[9px] font-bold ${t === "晚班" ? "text-red-500" : "text-blue-500"}`}
+                                                          >
+                                                            {t}
+                                                          </span>
+                                                        ))}
                                                       </div>
                                                     )}
                                                     {index <
@@ -5588,10 +5598,15 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
                                                 </span>
                                               )}
                                               {s.task && (
-                                                <span
-                                                  className={`text-[9px] px-1.5 py-0.5 rounded border font-bold ${s.task.includes("晚班") ? "text-red-700 bg-red-50 border-red-100" : "text-blue-700 bg-blue-50 border-blue-100"}`}
-                                                >
-                                                  {s.task}
+                                                <span className="flex flex-wrap gap-x-1 justify-center">
+                                                  {s.task.split(",").map((t) => t.trim()).filter(Boolean).map((t, i) => (
+                                                    <span
+                                                      key={i}
+                                                      className={`text-[9px] px-1.5 py-0.5 rounded border font-bold ${t === "晚班" ? "text-red-700 bg-red-50 border-red-100" : "text-blue-700 bg-blue-50 border-blue-100"}`}
+                                                    >
+                                                      {t}
+                                                    </span>
+                                                  ))}
                                                 </span>
                                               )}
                                               {s.note && (
@@ -6268,32 +6283,65 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-gray-500 uppercase">
                   特殊任務
+                  <span className="ml-1 text-gray-400 font-normal normal-case">(可複選)</span>
                 </label>
 
-                {/* Quick Task Buttons */}
+                {/* Multi-Select Task Chips */}
                 <div className="flex gap-2 flex-wrap">
-                  {["晚班", "電台", "行政", "子抹", "董事會"].map(
-                    (taskName) => (
+                  {["晚班", "電台", "行政", "子抹", "董事會", "基因"].map((taskName) => {
+                    const currentTasks = editData.task
+                      ? editData.task.split(",").map((t) => t.trim()).filter(Boolean)
+                      : [];
+                    const isSelected = currentTasks.includes(taskName);
+                    return (
                       <button
                         key={taskName}
                         type="button"
-                        onClick={() =>
-                          setEditData({
-                            ...editData,
-                            task: editData.task === taskName ? "" : taskName,
-                          })
-                        }
+                        onClick={() => {
+                          const tasks = editData.task
+                            ? editData.task.split(",").map((t) => t.trim()).filter(Boolean)
+                            : [];
+                          const next = isSelected
+                            ? tasks.filter((t) => t !== taskName)
+                            : [...tasks, taskName];
+                          setEditData({ ...editData, task: next.join(", ") });
+                        }}
                         className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${
-                          editData.task === taskName
+                          isSelected
                             ? "bg-teal-600 text-white border-teal-700 shadow-md"
                             : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50 hover:border-gray-300"
                         }`}
                       >
                         {taskName}
                       </button>
-                    ),
-                  )}
+                    );
+                  })}
                 </div>
+
+                {/* Selected Tags Preview */}
+                {editData.task && editData.task.trim() && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {editData.task.split(",").map((t) => t.trim()).filter(Boolean).map((t) => (
+                      <span
+                        key={t}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 bg-teal-50 text-teal-700 border border-teal-200 rounded-full text-xs font-medium"
+                      >
+                        {t}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const next = editData.task
+                              .split(",").map((x) => x.trim()).filter((x) => x && x !== t);
+                            setEditData({ ...editData, task: next.join(", ") });
+                          }}
+                          className="hover:text-red-500 transition-colors"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
 
                 <div className="relative">
                   <Briefcase
@@ -6307,10 +6355,11 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
                       setEditData({ ...editData, task: e.target.value })
                     }
                     className="w-full pl-10 pr-3 py-2 bg-slate-50 border border-gray-200 rounded-lg text-sm font-medium focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none transition-all"
-                    placeholder="例如: 會議, 教學..."
+                    placeholder="多任務用逗號分隔，例如: 晚班, 電台"
                   />
                 </div>
               </div>
+
 
               {/* Note */}
               <div className="space-y-1.5">
