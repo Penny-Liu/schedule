@@ -1424,31 +1424,28 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
             const { station, time, task, location } = data.cell.raw.rawShift;
             const x = data.cell.x + data.cell.width / 2;
 
-            let contentHeight = 2.5;
-            if (time) contentHeight += 1.8;
-            if (task) contentHeight += 1.8;
-
-            const lineSpacing = 0.1; // Reduced spacing further
-            if (time) contentHeight += lineSpacing;
-            if (task) contentHeight += lineSpacing;
+            const lineSpacing = 0.1;
+            let contentHeight = 2.5; // station name
+            if (time) contentHeight += 1.8 + lineSpacing;
+            if (task) {
+              const taskTokens = task.split(",").map((t: string) => t.trim()).filter(Boolean);
+              contentHeight += taskTokens.length * 1.8 + (taskTokens.length) * lineSpacing;
+            }
 
             let y = data.cell.y + (data.cell.height - contentHeight) / 2 + 2.0;
 
             doc.setTextColor(0, 0, 0);
 
-            doc.setFontSize(8.5); // Increased station font size
+            doc.setFontSize(8.5);
             const stationWidth = doc.getTextWidth(station);
 
             if (location) {
               doc.setFontSize(5);
               const locationWidth = doc.getTextWidth(" " + location);
-              doc.setFontSize(8.5); // Restore to updated size
-
+              doc.setFontSize(8.5);
               const totalWidth = stationWidth + locationWidth;
               const startX = x - totalWidth / 2;
-
               doc.text(station, startX, y);
-
               doc.setFontSize(5);
               doc.text(" " + location, startX + stationWidth, y);
             } else {
@@ -1463,14 +1460,18 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
             }
 
             if (task) {
-              doc.setFontSize(5);
-              if (task.includes("晚班")) {
-                doc.setTextColor(220, 0, 0);
-              } else {
+              const taskTokens = task.split(",").map((t: string) => t.trim()).filter(Boolean);
+              taskTokens.forEach((t: string) => {
+                doc.setFontSize(5);
+                if (t === "晚班") {
+                  doc.setTextColor(220, 0, 0);
+                } else {
+                  doc.setTextColor(0, 80, 200);
+                }
+                doc.text(t, x, y, { align: "center" });
                 doc.setTextColor(0, 0, 0);
-              }
-              doc.text(task, x, y, { align: "center" });
-              doc.setTextColor(0, 0, 0);
+                y += 1.8 + lineSpacing;
+              });
             }
           }
 
@@ -1531,15 +1532,18 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
                 shift.task &&
                 !(shift.stationName === "晚班" && shift.task === "晚班")
               ) {
-                doc.setFontSize(7);
-                if (shift.task === "晚班") {
-                  doc.setTextColor(220, 0, 0);
-                } else {
-                  doc.setTextColor(0, 0, 200);
-                }
-                doc.text(shift.task, x, y, { align: "center" });
-                doc.setTextColor(0, 0, 0);
-                y += 2.3;
+                const taskTokens = shift.task.split(",").map((t: string) => t.trim()).filter(Boolean);
+                taskTokens.forEach((t: string) => {
+                  doc.setFontSize(7);
+                  if (t === "晚班") {
+                    doc.setTextColor(220, 0, 0);
+                  } else {
+                    doc.setTextColor(0, 80, 200);
+                  }
+                  doc.text(t, x, y, { align: "center" });
+                  doc.setTextColor(0, 0, 0);
+                  y += 2.3;
+                });
               }
 
               if (idx < shifts.length - 1) {
@@ -1566,7 +1570,8 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
       let beitouRows: any[] = [];
       let dazhiTaichungRows: any[] = [];
 
-      if (viewMode === "station") {
+      // 無論視角，皆建立崗位視角資料（人員視角匯出時會附加在後面）
+      {
         // Single Page Logic with Sections
         headRow = [["崗位", ...dateHeaders]];
 
@@ -1867,18 +1872,37 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
             if (loc === "大直" && stName === "晚班") return;
             // Minimum cell height for each station row
             const dynamicMinHeight = 5.0;
-            // Station name cell: subtle background
+            // Station name cell: location-aware subtle tint
             const stationNameBg =
-              stName === "晚班" ? [255, 240, 240] : [248, 250, 252];
+              stName === "晚班"
+                ? [255, 230, 230]
+                : loc === "北投"
+                  ? [237, 242, 255]
+                  : loc === "大直"
+                    ? [255, 245, 235]
+                    : loc === "台中"
+                      ? [255, 247, 237]
+                      : [248, 250, 252];
+            const stationNameTextColor =
+              stName === "晚班"
+                ? [185, 0, 0]
+                : loc === "北投"
+                  ? [30, 58, 138]
+                  : loc === "大直"
+                    ? [120, 60, 20]
+                    : loc === "台中"
+                      ? [154, 52, 18]
+                      : [30, 41, 59];
             const rowData: any[] = [
               {
                 content: stName,
                 styles: {
                   fontStyle: "bold",
-                  fontSize: 8,
+                  fontSize: 9,
                   minCellHeight: dynamicMinHeight,
                   fillColor: stationNameBg,
-                  textColor: stName === "晚班" ? [200, 0, 0] : [30, 41, 59],
+                  textColor: stationNameTextColor,
+                  cellPadding: { top: 1, right: 1, bottom: 1, left: 2 },
                 },
                 location: loc,
               },
@@ -1960,7 +1984,10 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
                   if (s.workTime) totalHeight += 2.3;
                   const showTask =
                     s.task && !(stName === "晚班" && s.task === "晚班");
-                  if (showTask) totalHeight += 2.3;
+                  if (showTask) {
+                    const taskTokens = s.task!.split(",").map((t) => t.trim()).filter(Boolean);
+                    totalHeight += taskTokens.length * 2.3;
+                  }
                   if (idx < assignedShifts.length - 1) totalHeight += 1.5;
                   if (stName.includes("遠") && s.location) totalHeight += 2.3;
                 });
@@ -1999,8 +2026,10 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
             targetRows.push(rowData);
           });
         });
-      } else {
-        // Personnel View logic
+      } // end station rows build
+
+      {
+        // Personnel View rows build (always)
         headRow = [["醫師", ...dateHeaders]];
         const sortedDoctors = doctors.filter((doc) => {
           if (doc.isPartTime) return false;
@@ -2135,36 +2164,178 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
         });
       }
 
-      // Unified autoTable call for both views
-      if (viewMode === "station") {
+      // ── autoTable render ──────────────────────
+      // Station-specific config (for the station pages, whether standalone or appended)
+      const stationTableConfig: any = {
+        ...tableConfig,
+        styles: {
+          ...tableConfig.styles,
+          fontSize: 8,
+          cellPadding: { top: 0.5, right: 0.3, bottom: 0.5, left: 0.3 },
+          minCellHeight: 5.0,
+        },
+        headStyles: {
+          ...tableConfig.headStyles,
+          fillColor: [30, 41, 59],
+          fontSize: 8,
+          cellPadding: { top: 1.5, right: 0.5, bottom: 1.5, left: 0.5 },
+          minCellHeight: 6.0,
+        },
+        columnStyles: (() => {
+          const pageWidth = doc.internal.pageSize.width;
+          const marginX = 2;
+          const nameWidth = 17;
+          const availableDateWidth = pageWidth - marginX * 2 - nameWidth;
+          const dateWidth = availableDateWidth / dateRange.length;
+          const styles: Record<number, any> = {
+            0: { cellWidth: nameWidth, halign: "center", fontStyle: "bold" },
+          };
+          dateRange.forEach((_, i) => {
+            styles[i + 1] = { cellWidth: dateWidth };
+          });
+          return styles;
+        })(),
+        // 強制以崗位視角邏輯 render（忽略外部 viewMode 變數）
+        didParseCell: function (data: any) {
+          if (data.section === "head" && data.column.index > 0) {
+            const dateStr = dateRange[data.column.index - 1];
+            const [y, m, day] = dateStr.split("-").map(Number);
+            const d = new Date(y, m - 1, day);
+            const isHoliday = holidays.some(
+              (h) => h.date === dateStr && (h.type === "NATIONAL" || h.type === "CLOSED"),
+            );
+            if (d.getDay() === 0 || d.getDay() === 6 || isHoliday) {
+              data.cell.styles.textColor = [255, 0, 0];
+            }
+          }
+          if (data.section === "body" && data.column.index > 0) {
+            const dateStr = dateRange[data.column.index - 1];
+            const [y, m, day] = dateStr.split("-").map(Number);
+            const d = new Date(y, m - 1, day);
+            const isHoliday = holidays.some(
+              (h) => h.date === dateStr && (h.type === "NATIONAL" || h.type === "CLOSED"),
+            );
+            if (d.getDay() === 0 || d.getDay() === 6 || isHoliday) {
+              data.cell.styles.fillColor = [245, 245, 245];
+            }
+          }
+        },
+        willDrawCell: function (data: any) {
+          if (data.section === "body" && data.column.index > 0) {
+            const raw = data.cell.raw;
+            if (raw && raw.rawStationShifts) {
+              data.cell.text = [];
+            }
+          }
+        },
+        didDrawCell: function (data: any) {
+          if (
+            data.section === "body" &&
+            data.column.index > 0 &&
+            data.cell.raw &&
+            data.cell.raw.rawStationShifts
+          ) {
+            const shifts = data.cell.raw.rawStationShifts;
+            if (shifts.length === 0) return;
+            const x = data.cell.x + data.cell.width / 2;
+            let totalHeight = 0;
+            shifts.forEach((shift: any, idx: number) => {
+              totalHeight += 2.8;
+              if (shift.locationAbbr) totalHeight += 2.3;
+              if (shift.time) totalHeight += 2.3;
+              if (shift.task && !(shift.stationName === "晚班" && shift.task === "晚班"))
+                totalHeight += 2.3;
+              if (idx < shifts.length - 1) totalHeight += 1.5;
+            });
+            let y = data.cell.y + (data.cell.height - totalHeight) / 2 + 2.2;
+            shifts.forEach((shift: any, idx: number) => {
+              doc.setFontSize(8);
+              doc.setTextColor(15, 23, 42);
+              doc.text(shift.name, x, y, { align: "center" });
+              y += 2.8;
+              if (shift.locationAbbr) {
+                doc.setFontSize(7);
+                doc.setTextColor(100, 100, 100);
+                doc.text(shift.locationAbbr, x, y, { align: "center" });
+                doc.setTextColor(0, 0, 0);
+                y += 2.3;
+              }
+              if (shift.time) {
+                doc.setFontSize(7);
+                doc.setTextColor(80, 80, 80);
+                doc.text(shift.time, x, y, { align: "center" });
+                doc.setTextColor(0, 0, 0);
+                y += 2.3;
+              }
+              if (shift.task && !(shift.stationName === "晚班" && shift.task === "晚班")) {
+                const taskTokens = shift.task.split(",").map((t: string) => t.trim()).filter(Boolean);
+                taskTokens.forEach((t: string) => {
+                  doc.setFontSize(7);
+                  if (t === "晚班") {
+                    doc.setTextColor(220, 0, 0);
+                  } else {
+                    doc.setTextColor(0, 80, 200);
+                  }
+                  doc.text(t, x, y, { align: "center" });
+                  doc.setTextColor(0, 0, 0);
+                  y += 2.3;
+                });
+              }
+              if (idx < shifts.length - 1) {
+                doc.setDrawColor(200, 200, 200);
+                doc.setLineWidth(0.2);
+                doc.line(
+                  data.cell.x + 3, y + 0.5,
+                  data.cell.x + data.cell.width - 3, y + 0.5,
+                );
+                doc.setDrawColor(0, 0, 0);
+                y += 1.5;
+              }
+            });
+          }
+        },
+      };
+
+      const stationHeadRow = [["崗位", ...dateHeaders]];
+
+      const renderStationPages = () => {
         if (beitouRows.length > 0) {
           autoTable(doc, {
-            ...tableConfig,
+            ...stationTableConfig,
             startY: 9,
-            head: headRow,
+            head: stationHeadRow,
             body: beitouRows,
             margin: { top: 11, right: 2, bottom: 2, left: 2 },
           });
         }
         if (dazhiTaichungRows.length > 0) {
           if (beitouRows.length > 0) doc.addPage();
-
           autoTable(doc, {
-            ...tableConfig,
+            ...stationTableConfig,
             startY: 9,
-            head: headRow,
+            head: stationHeadRow,
             body: dazhiTaichungRows,
             margin: { top: 11, right: 2, bottom: 2, left: 2 },
           });
         }
+      };
+
+      if (viewMode === "station") {
+        renderStationPages();
       } else if (bodyRows.length > 0) {
+        // 人員視角：先 render 人員表，再追加崗位視角
         autoTable(doc, {
           ...tableConfig,
-          startY: 9, // Moved higher from 11mm
+          startY: 9,
           head: headRow,
           body: bodyRows,
           margin: { top: 11, right: 2, bottom: 2, left: 2 },
         });
+        // 追加崗位視角
+        if (beitouRows.length > 0 || dazhiTaichungRows.length > 0) {
+          doc.addPage();
+          renderStationPages();
+        }
       }
 
       // Generate Filename: YYYY-MM with view mode suffix
@@ -2172,7 +2343,7 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
       const month = String(currentDate.getMonth() + 1).padStart(2, "0");
       const viewSuffix =
         viewMode === "personnel"
-          ? "人員"
+          ? "人員+崗位"
           : viewMode === "station"
             ? "崗位"
             : "";
@@ -6505,8 +6676,63 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
 
                 return (
                   <>
+                    {/* 0. Currently Assigned to this Station (with Clear button) */}
+                    {(() => {
+                      const assigned = activeShifts.filter(
+                        (s) =>
+                          s.date === assignModal.date &&
+                          (s.scheduled_station === assignModal.station ||
+                            s.station === assignModal.station),
+                      );
+                      if (assigned.length === 0) return null;
+                      return (
+                        <div className="mb-3 mx-1">
+                          <div className="text-[11px] font-black text-teal-600 uppercase px-3 py-1 bg-teal-50 rounded-md mb-2 tracking-wider flex items-center gap-1">
+                            <div className="w-1.5 h-1.5 rounded-full bg-teal-500" />
+                            已指派至此崗位
+                          </div>
+                          <div className="flex flex-col gap-1.5 px-1">
+                            {assigned.map((s) => {
+                              const doc = doctors.find((d) => d.id === s.doctorId);
+                              if (!doc) return null;
+                              return (
+                                <div
+                                  key={s.doctorId}
+                                  className="flex items-center gap-2 p-2 rounded-lg border border-teal-100 bg-teal-50/40"
+                                >
+                                  <div className="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-xs shrink-0 bg-teal-500">
+                                    {doc.alias}
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <div className="font-bold text-sm text-gray-800 truncate">{doc.name}</div>
+                                    {s.task && (
+                                      <div className="text-[10px] text-blue-500 font-medium">{s.task}</div>
+                                    )}
+                                  </div>
+                                  <button
+                                    onClick={async () => {
+                                      if (!confirm(`確定要清除 ${doc.name} 的崗位排班嗎？`)) return;
+                                      await db.assignDoctorSchedule(doc.id, assignModal.date, "");
+                                      setShifts(db.getDoctorShifts());
+                                      setAssignModal(null);
+                                    }}
+                                    className="shrink-0 p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                                    title={`清除 ${doc.name} 的崗位`}
+                                  >
+                                    <Trash2 size={14} />
+                                  </button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                          <div className="mt-2 border-t border-gray-100" />
+                        </div>
+                      );
+                    })()}
+
                     {/* 1. Unscheduled Skilled (Priority) */}
                     {unscheduledSkilled.length > 0 && (
+
                       <div className="mb-4">
                         <div className="text-[11px] font-black text-emerald-600 uppercase px-3 py-1 bg-emerald-50 rounded-md mb-2 mx-1 tracking-wider flex items-center gap-1">
                           <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
