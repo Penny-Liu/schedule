@@ -253,7 +253,7 @@ const AdministrativeSchedulePage: React.FC<AdministrativeSchedulePageProps> = ({
           .from("administrative_shifts")
           .select("category, staff_names")
           .order("created_at", { ascending: false })
-          .limit(200);
+          .limit(2000);
         if (categories) {
           query = query.in("category", categories);
         }
@@ -1032,14 +1032,7 @@ const AdministrativeSchedulePage: React.FC<AdministrativeSchedulePageProps> = ({
                         .filter((s) => s.category === editingCell.category)
                         .map((s) => s.name),
                     ]);
-                    shifts
-                      .filter((s) => s.category === editingCell.category)
-                      .forEach((s) => {
-                        s.staffNames.split(",").forEach((n) => {
-                          const trimmed = n.trim();
-                          if (trimmed) currentCategoryNames.add(trimmed);
-                        });
-                      });
+                    // 只用歷史名單 + 固定人員，不依賴當月 shifts（避免換月 reset）
                     const availableNames =
                       Array.from(currentCategoryNames).sort();
 
