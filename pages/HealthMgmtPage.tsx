@@ -739,7 +739,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
         const shift = shifts.find(
           (s) => s.userId === staff.id && s.date === date,
         );
-        if (shift && (shift.station || shift.task)) {
+        if (shift && (shift.station || shift.task || shift.location)) {
           totalWorkDays++;
           const d = new Date(date);
           const holiday = holidays.find(
@@ -978,7 +978,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
         const shift = shifts.find(
           (s) => s.userId === staff.id && s.date === date,
         );
-        if (shift && (shift.station || shift.task)) {
+        if (shift && (shift.station || shift.task || shift.location)) {
           total++;
           const d = new Date(date);
           const holiday = holidays.find(
@@ -3412,7 +3412,8 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                             (s) => s.userId === staff.id && s.date === date,
                           );
                           const hasContent =
-                            shift && (shift.station || shift.task);
+                            shift &&
+                            (shift.station || shift.task || shift.location);
 
                           let time = "";
                           let displayStation = "";

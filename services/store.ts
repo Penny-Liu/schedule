@@ -2244,7 +2244,10 @@ BMD :{{bmd}}
   }
 
   async upsertHealthMgmtShift(shift: HealthMgmtShift) {
-    const isClearing = !shift.station || shift.station.trim() === "";
+    const isClearing =
+      (!shift.station || shift.station.trim() === "") &&
+      !shift.task &&
+      !shift.location;
 
     // 1. Local state update: Optimistic update
     if (isClearing) {
