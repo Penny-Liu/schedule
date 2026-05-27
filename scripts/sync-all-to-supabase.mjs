@@ -459,7 +459,7 @@ async function syncRadiographerWorkload(
   // round2 MR 相關欄位（其他欄位都是整數）
   const updates = Object.values(workloadMap).map((w) => ({
     ...w,
-    mr: round2(w.mr),
+    mr: Math.round(w.mr),
     mr_large_male: round2(w.mr_large_male),
     mr_large_female: round2(w.mr_large_female),
     mr_medium: round2(w.mr_medium),
