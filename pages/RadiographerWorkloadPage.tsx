@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from "react";
-import { User, StationDefault } from "../types";
+import { User, StationDefault, SPECIAL_ROLES } from "../types";
 import { db } from "../services/store";
 import {
   BarChart3,
@@ -13,6 +13,89 @@ import {
 } from "lucide-react";
 import ExcelJS from "exceljs";
 import { isUserOnEmploymentPause } from "../services/utils";
+
+type WorkloadFieldKey =
+  | "mr"
+  | "mrLargeMale"
+  | "mrLargeFemale"
+  | "mrMedium"
+  | "mrSmall"
+  | "us"
+  | "usA"
+  | "usBreast"
+  | "usHeart"
+  | "usThy"
+  | "usCCA"
+  | "usNeck"
+  | "usPelvisFemale"
+  | "usPelvisMale"
+  | "floorControl"
+  | "assist"
+  | "scheduler"
+  | "ct"
+  | "cta"
+  | "ctaPostProcessing"
+  | "dx"
+  | "mg"
+  | "bmd"
+  | "reportTyping"
+  | "proofreader";
+
+const workloadFieldMeta: { key: WorkloadFieldKey; label: string }[] = [
+  { key: "floorControl", label: "場控" },
+  { key: "assist", label: "輔控" },
+  { key: "scheduler", label: "排班" },
+  { key: "mr", label: "MR" },
+  { key: "mrLargeMale", label: "MR大男" },
+  { key: "mrLargeFemale", label: "MR大女" },
+  { key: "mrMedium", label: "MR中" },
+  { key: "mrSmall", label: "MR小" },
+  { key: "us", label: "US" },
+  { key: "usA", label: "A" },
+  { key: "usBreast", label: "Breast" },
+  { key: "usHeart", label: "心" },
+  { key: "usThy", label: "Thy" },
+  { key: "usCCA", label: "CCA" },
+  { key: "usNeck", label: "Neck" },
+  { key: "usPelvisFemale", label: "P女" },
+  { key: "usPelvisMale", label: "P男" },
+  { key: "ct", label: "CT" },
+  { key: "cta", label: "CTA" },
+  { key: "ctaPostProcessing", label: "CTA後處理" },
+  { key: "dx", label: "DX" },
+  { key: "mg", label: "MG" },
+  { key: "bmd", label: "BMD" },
+  { key: "reportTyping", label: "報告登打" },
+  { key: "proofreader", label: "影像校對" },
+];
+
+const defaultWorkloadWeights: Record<WorkloadFieldKey, number> = {
+  floorControl: 1,
+  assist: 1,
+  scheduler: 1,
+  mr: 1,
+  mrLargeMale: 1,
+  mrLargeFemale: 1,
+  mrMedium: 1,
+  mrSmall: 1,
+  us: 1,
+  usA: 1,
+  usBreast: 1,
+  usHeart: 1,
+  usThy: 1,
+  usCCA: 1,
+  usNeck: 1,
+  usPelvisFemale: 1,
+  usPelvisMale: 1,
+  ct: 1,
+  cta: 1,
+  ctaPostProcessing: 1,
+  dx: 1,
+  mg: 1,
+  bmd: 1,
+  reportTyping: 1,
+  proofreader: 1,
+};
 
 interface RadiographerWorkloadPageProps {
   currentUser: User;
@@ -35,10 +118,118 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
 
   const [isEditing, setIsEditing] = useState(false);
   const [editingData, setEditingData] = useState<Record<string, any>>({});
-  const [importTarget, setImportTarget] = useState<
-    "reportTyping" | "cta" | "proofreader"
-  >("reportTyping");
+  const [importTarget, setImportTarget] =
+    useState<WorkloadFieldKey>("reportTyping");
+  const [weights, setWeights] = useState<Record<WorkloadFieldKey, number>>(
+    () => ({
+      ...defaultWorkloadWeights,
+      ...(db.settings.radiographerWorkloadWeights || {}),
+    }),
+  );
+  const [isSavingWeights, setIsSavingWeights] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+
+  const onsiteFieldKeys: WorkloadFieldKey[] = [
+    "mr",
+    "mrLargeMale",
+    "mrLargeFemale",
+    "mrMedium",
+    "mrSmall",
+    "us",
+    "usA",
+    "usBreast",
+    "usHeart",
+    "usThy",
+    "usCCA",
+    "usNeck",
+    "usPelvisFemale",
+    "usPelvisMale",
+    "floorControl",
+    "assist",
+    "scheduler",
+    "ct",
+    "cta",
+    "ctaPostProcessing",
+    "dx",
+    "mg",
+    "bmd",
+  ];
+
+  const scheduleDerivedFieldKeys: WorkloadFieldKey[] = [
+    "floorControl",
+    "assist",
+    "scheduler",
+  ];
+
+  const computeScheduleFields = (userId: string) => {
+    const userShifts = shifts.filter(
+      (s) =>
+        s.userId === userId &&
+        generalDates.includes(s.date) &&
+        s.station !== StationDefault.UNASSIGNED &&
+        s.station !== StationDefault.OFF &&
+        s.station !== "休假",
+    );
+
+    const floorControl = userShifts.filter((shift) =>
+      shift.station.includes("場控"),
+    ).length;
+
+    const assist = userShifts.filter(
+      (shift) =>
+        shift.specialRoles.includes(SPECIAL_ROLES.ASSIST) ||
+        shift.station.includes("輔控") ||
+        shift.station === "輔",
+    ).length;
+
+    const scheduler = userShifts.filter(
+      (shift) =>
+        shift.specialRoles.includes(SPECIAL_ROLES.SCHEDULER) ||
+        shift.station.includes("排班"),
+    ).length;
+
+    return { floorControl, assist, scheduler };
+  };
+
+  const remoteFieldKeys: WorkloadFieldKey[] = ["reportTyping", "proofreader"];
+
+  const computeUnits = (row: any, keys: WorkloadFieldKey[]) =>
+    keys.reduce(
+      (sum, field) => sum + ((row as any)[field] || 0) * weights[field],
+      0,
+    );
+
+  const computeTotalUnits = (row: any) =>
+    computeUnits(row, [...onsiteFieldKeys, ...remoteFieldKeys]);
+
+  const getHeaderStyle = (field: WorkloadFieldKey) => {
+    if (field === "ct" || field === "cta" || field === "ctaPostProcessing") {
+      return "text-teal-600 bg-teal-50/50";
+    }
+    if (
+      field === "floorControl" ||
+      field === "assist" ||
+      field === "scheduler"
+    ) {
+      return "text-slate-700 bg-slate-50/50";
+    }
+    if (field === "reportTyping") {
+      return "text-indigo-600 bg-indigo-50/50";
+    }
+    if (field === "proofreader") {
+      return "text-purple-600 bg-purple-50/50";
+    }
+    return "";
+  };
+
+  const shouldRenderCategorySeparator = (field: WorkloadFieldKey) =>
+    [
+      "scheduler",
+      "mrSmall",
+      "usPelvisMale",
+      "ctaPostProcessing",
+      "bmd",
+    ].includes(field);
 
   const buildDateRange = (startDate: string, endDate: string) => {
     const dates: string[] = [];
@@ -133,14 +324,31 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
         radiographerName: user.name,
         name: user.name,
         mr: 0,
+        mrLargeMale: 0,
+        mrLargeFemale: 0,
+        mrMedium: 0,
+        mrSmall: 0,
         us: 0,
+        usA: 0,
+        usBreast: 0,
+        usHeart: 0,
+        usThy: 0,
+        usCCA: 0,
+        usNeck: 0,
+        usPelvisFemale: 0,
+        usPelvisMale: 0,
+        floorControl: 0,
+        assist: 0,
+        scheduler: 0,
         ct: 0,
+        cta: 0,
+        ctaPostProcessing: 0,
         dx: 0,
         mg: 0,
         bmd: 0,
-        cta: 0,
         reportTyping: 0,
         proofreader: 0,
+        totalUnits: 0,
       };
 
       const userWorkloads = workloads.filter(
@@ -149,22 +357,44 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
 
       if (userWorkloads.length > 0) {
         stats.id = userWorkloads[0].id;
-        userWorkloads.forEach((w) => {
+        userWorkloads.forEach((w: any) => {
           stats.mr += w.mr || 0;
+          stats.mrLargeMale += w.mrLargeMale || w.mr_large_male || 0;
+          stats.mrLargeFemale += w.mrLargeFemale || w.mr_large_female || 0;
+          stats.mrMedium += w.mrMedium || w.mr_medium || 0;
+          stats.mrSmall += w.mrSmall || w.mr_small || 0;
           stats.us += w.us || 0;
+          stats.usA += w.usA || w.us_a || 0;
+          stats.usBreast += w.usBreast || w.us_breast || 0;
+          stats.usHeart += w.usHeart || w.us_heart || 0;
+          stats.usThy += w.usThy || w.us_thy || 0;
+          stats.usCCA += w.usCCA || w.us_cca || 0;
+          stats.usNeck += w.usNeck || w.us_neck || 0;
+          stats.usPelvisFemale += w.usPelvisFemale || w.us_pelvis_female || 0;
+          stats.usPelvisMale += w.usPelvisMale || w.us_pelvis_male || 0;
           stats.ct += w.ct || 0;
           stats.dx += w.dx || 0;
           stats.mg += w.mg || 0;
           stats.bmd += w.bmd || 0;
-          // 使用與 Supabase 資料庫對齊的正式欄位名稱
-          stats.cta += w.ctaPostProcessing || w.cta || 0;
+          stats.cta += w.cta || w.ctaPostProcessing || 0;
+          stats.ctaPostProcessing +=
+            w.ctaPostProcessing || w.cta || w.cta_post_processing || 0;
           stats.reportTyping += w.reportEntry || w.reportTyping || 0;
           stats.proofreader += w.imageProofing || w.proofreader || 0;
         });
       }
+
+      const scheduleCounts = computeScheduleFields(user.id);
+      stats.floorControl = scheduleCounts.floorControl;
+      stats.assist = scheduleCounts.assist;
+      stats.scheduler = scheduleCounts.scheduler;
+
+      stats.onsiteUnits = computeUnits(stats, onsiteFieldKeys);
+      stats.remoteUnits = computeUnits(stats, remoteFieldKeys);
+      stats.totalUnits = computeTotalUnits(stats);
       return stats;
     });
-  }, [radiographers, workloads, currentMonth]);
+  }, [radiographers, workloads, currentMonth, weights, generalDates, shifts]);
 
   const handleToggleEdit = () => {
     if (!isEditing) {
@@ -190,6 +420,42 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
       },
     }));
   };
+
+  const handleWeightChange = (field: WorkloadFieldKey, value: string) => {
+    setWeights((prev) => ({
+      ...prev,
+      [field]: parseFloat(value) || 0,
+    }));
+  };
+
+  const handleSaveWeights = async () => {
+    setIsSavingWeights(true);
+    try {
+      db.settings.radiographerWorkloadWeights = { ...weights };
+      await db.saveSettings();
+      alert("💾 權重已儲存！");
+    } catch (e) {
+      console.error("Failed to save workload weights", e);
+      alert("儲存權重失敗，請稍後再試。");
+    } finally {
+      setIsSavingWeights(false);
+    }
+  };
+
+  const totalUnitsSum = workloadData.reduce(
+    (sum, row) => sum + (row.totalUnits || 0),
+    0,
+  );
+
+  const onSiteUnitsSum = workloadData.reduce(
+    (sum, row) => sum + (row.onsiteUnits || 0),
+    0,
+  );
+
+  const remoteUnitsSum = workloadData.reduce(
+    (sum, row) => sum + (row.remoteUnits || 0),
+    0,
+  );
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -236,7 +502,8 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
         await workbook.xlsx.load(buffer);
         const worksheet = workbook.worksheets[0];
         worksheet.eachRow((row) => {
-          rows.push(row.values.slice(1)); // exceljs row.values[0] 是 undefined
+          const values = Array.isArray(row.values) ? row.values : [];
+          rows.push(values.slice(1)); // exceljs row.values[0] 是 undefined
         });
       }
 
@@ -295,16 +562,14 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
         return;
       }
 
-      const targetNames = {
-        reportTyping: "報告登打",
-        cta: "CTA後處理",
-        proofreader: "影像校對",
-      };
+      const targetName =
+        workloadFieldMeta.find((field) => field.key === importTarget)?.label ||
+        importTarget;
 
       setEditingData(newData);
       setIsEditing(true); // 自動開啟編輯模式讓使用者可以馬上儲存
       alert(
-        `✅ 成功匯入 Excel！已對齊 ${matchCount} 位放射師的「${targetNames[importTarget]}」量。請確認數據後按儲存。`,
+        `✅ 成功匯入 Excel！已對齊 ${matchCount} 位放射師的「${targetName}」量。請確認數據後按儲存。`,
       );
     };
     reader.readAsArrayBuffer(file);
@@ -327,21 +592,33 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
         "休假",
         "備註",
         "場控",
-        "輔班",
-        "BMD/DX",
-        "CT",
+        "輔控",
+        "排班",
         "MR",
+        "MR大男",
+        "MR大女",
+        "MR中",
+        "MR小",
         "US",
-        "技術支援",
+        "A",
+        "Breast",
+        "心",
+        "Thy",
+        "CCA",
+        "Neck",
+        "P女",
+        "P男",
+        "CT",
+        "CTA",
         "CTA後處理",
-        "影像校正",
+        "DX",
+        "MG",
+        "BMD",
         "報告登打",
-        "可以擔任的崗位職",
-        "工作加點",
-        "工作減點",
-        "本月特殊任務",
-        "配合度",
-        "其它",
+        "影像校對",
+        "現場加權",
+        "遠班加權",
+        "總加權",
       ];
       worksheet.addRow(headers);
 
@@ -358,49 +635,74 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
           row.remarks || "",
           row.floorControl || 0,
           row.assist || 0,
-          row.bmd || 0,
-          row.ct || 0,
+          row.scheduler || 0,
           row.mr || 0,
+          row.mrLargeMale || 0,
+          row.mrLargeFemale || 0,
+          row.mrMedium || 0,
+          row.mrSmall || 0,
           row.us || 0,
-          row.techSupport || 0,
+          row.usA || 0,
+          row.usBreast || 0,
+          row.usHeart || 0,
+          row.usThy || 0,
+          row.usCCA || 0,
+          row.usNeck || 0,
+          row.usPelvisFemale || 0,
+          row.usPelvisMale || 0,
+          row.ct || 0,
           row.cta || 0,
-          row.proofreader || 0,
+          row.ctaPostProcessing || 0,
+          row.dx || 0,
+          row.mg || 0,
+          row.bmd || 0,
           row.reportTyping || 0,
-          row.positions || "",
-          row.addPoints || 0,
-          row.minusPoints || 0,
-          row.specialTasks || "",
-          row.cooperation || 0,
-          row.other || "",
+          row.proofreader || 0,
+          Number(computeUnits(row, onsiteFieldKeys).toFixed(2)),
+          Number(computeUnits(row, remoteFieldKeys).toFixed(2)),
+          Number(computeTotalUnits(row).toFixed(2)),
         ]);
       });
 
       // 設定欄寬
       worksheet.columns = [
-        { width: 10 }, // 姓名
+        { width: 18 }, // 姓名
+        { width: 10 },
+        { width: 10 },
+        { width: 10 },
+        { width: 10 },
+        { width: 10 },
         { width: 8 },
+        { width: 20 }, // 天數與備註
+        { width: 10 },
+        { width: 10 },
+        { width: 10 },
         { width: 8 },
+        { width: 10 },
         { width: 10 },
         { width: 8 },
         { width: 8 },
-        { width: 5 },
-        { width: 15 }, // 天數與備註
-        { width: 12 },
-        { width: 12 },
+        { width: 8 },
+        { width: 8 },
+        { width: 8 },
+        { width: 8 },
+        { width: 8 },
+        { width: 8 },
+        { width: 8 },
         { width: 10 },
-        { width: 6 },
-        { width: 6 },
-        { width: 6 },
-        { width: 10 }, // 崗位
-        { width: 12 },
-        { width: 12 },
-        { width: 12 }, // 後處理等
-        { width: 25 },
+        { width: 10 },
+        { width: 10 },
+        { width: 10 },
+        { width: 10 },
         { width: 8 },
         { width: 8 },
-        { width: 15 },
         { width: 8 },
-        { width: 15 }, // 備註與其它
+        { width: 10 },
+        { width: 10 },
+        { width: 10 },
+        { width: 10 },
+        { width: 10 },
+        { width: 10 },
       ];
 
       const buffer = await workbook.xlsx.writeBuffer();
@@ -473,12 +775,16 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
                   </span>
                   <select
                     value={importTarget}
-                    onChange={(e) => setImportTarget(e.target.value as any)}
+                    onChange={(e) =>
+                      setImportTarget(e.target.value as WorkloadFieldKey)
+                    }
                     className="text-sm text-slate-700 bg-transparent py-1.5 outline-none font-bold"
                   >
-                    <option value="reportTyping">報告登打</option>
-                    <option value="cta">CTA後處理</option>
-                    <option value="proofreader">影像校對</option>
+                    {workloadFieldMeta.map((field) => (
+                      <option key={field.key} value={field.key}>
+                        {field.label}
+                      </option>
+                    ))}
                   </select>
                   <label className="flex items-center gap-1.5 bg-slate-50 hover:bg-slate-100 border-l border-slate-200 text-slate-700 px-3 py-1.5 text-sm font-bold transition-colors cursor-pointer">
                     <UploadCloud size={16} /> 匯入 xls/csv
@@ -509,6 +815,73 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
       </div>
 
       <div className="flex-1 overflow-auto p-6">
+        <div className="mb-4 space-y-4">
+          <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div>
+                <div className="text-sm font-bold text-slate-800">權重設定</div>
+                <div className="text-xs text-slate-500">
+                  這裡可設定各類別的單位權重，儲存後會套用於每位放射師的總單位計算。
+                </div>
+              </div>
+              <button
+                onClick={handleSaveWeights}
+                disabled={isSavingWeights}
+                className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-bold text-white ${isSavingWeights ? "bg-slate-400" : "bg-emerald-600 hover:bg-emerald-700"}`}
+              >
+                {isSavingWeights ? "儲存中..." : "儲存權重"}
+              </button>
+            </div>
+            <div className="grid gap-3 mt-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
+              {workloadFieldMeta.map((field) => (
+                <label key={field.key} className="block text-xs text-slate-600">
+                  <div className="mb-1 font-medium text-slate-800">
+                    {field.label}
+                  </div>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    value={weights[field.key]}
+                    onChange={(e) =>
+                      handleWeightChange(field.key, e.target.value)
+                    }
+                    className="w-full rounded border border-slate-200 bg-slate-50 px-2 py-2 text-sm text-slate-900 outline-none focus:border-emerald-500 focus:ring-emerald-500/20"
+                  />
+                </label>
+              ))}
+            </div>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+              <div className="text-sm font-bold text-slate-800">現場加權</div>
+              <div className="mt-2 text-3xl font-bold text-emerald-700">
+                {onSiteUnitsSum.toFixed(2)}
+              </div>
+              <div className="text-xs text-slate-500 mt-1">
+                其他檢查項目的加權總和。
+              </div>
+            </div>
+            <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+              <div className="text-sm font-bold text-slate-800">遠班加權</div>
+              <div className="mt-2 text-3xl font-bold text-sky-700">
+                {remoteUnitsSum.toFixed(2)}
+              </div>
+              <div className="text-xs text-slate-500 mt-1">
+                報告登打與影像校對的加權總和。
+              </div>
+            </div>
+            <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+              <div className="text-sm font-bold text-slate-800">總加權</div>
+              <div className="mt-2 text-3xl font-bold text-emerald-700">
+                {totalUnitsSum.toFixed(2)}
+              </div>
+              <div className="text-xs text-slate-500 mt-1">
+                現場與遠班加總的整體工作量。
+              </div>
+            </div>
+          </div>
+        </div>
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm text-left">
@@ -517,20 +890,22 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
                   <th className="px-4 py-3 sticky left-0 bg-slate-50 z-10 border-r border-slate-200">
                     放射師姓名
                   </th>
-                  <th className="px-4 py-3 text-center">MR</th>
-                  <th className="px-4 py-3 text-center">US</th>
-                  <th className="px-4 py-3 text-center">CT</th>
-                  <th className="px-4 py-3 text-center">DX</th>
-                  <th className="px-4 py-3 text-center">MG</th>
-                  <th className="px-4 py-3 text-center">BMD</th>
-                  <th className="px-4 py-3 text-center text-teal-600 bg-teal-50/50">
-                    CTA後處理
+                  {workloadFieldMeta.map((field) => (
+                    <th
+                      key={field.key}
+                      className={`px-4 py-3 text-center ${getHeaderStyle(field.key)} ${shouldRenderCategorySeparator(field.key) ? "border-r-2 border-slate-300" : ""}`}
+                    >
+                      {field.label}
+                    </th>
+                  ))}
+                  <th className="px-4 py-3 text-center bg-slate-100 text-slate-700">
+                    現場加權
                   </th>
-                  <th className="px-4 py-3 text-center text-indigo-600 bg-indigo-50/50">
-                    報告登打
+                  <th className="px-4 py-3 text-center bg-slate-100 text-slate-700">
+                    遠班加權
                   </th>
-                  <th className="px-4 py-3 text-center text-purple-600 bg-purple-50/50">
-                    影像校對
+                  <th className="px-4 py-3 text-center bg-slate-100 text-slate-700">
+                    總加權
                   </th>
                 </tr>
               </thead>
@@ -538,7 +913,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
                 {workloadData.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={10}
+                      colSpan={workloadFieldMeta.length + 4}
                       className="px-4 py-8 text-center text-slate-400 font-medium"
                     >
                       無資料
@@ -554,40 +929,43 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
                         <td className="px-4 py-2.5 font-bold text-slate-800 sticky left-0 bg-white border-r border-slate-100">
                           {row.name}
                         </td>
-                        {[
-                          "mr",
-                          "us",
-                          "ct",
-                          "dx",
-                          "mg",
-                          "bmd",
-                          "cta",
-                          "reportTyping",
-                          "proofreader",
-                        ].map((field) => (
-                          <td
-                            key={field}
-                            className={`px-4 py-2.5 text-center font-medium ${field === "cta" ? "bg-teal-50/10 text-teal-600 font-bold" : field === "reportTyping" ? "bg-indigo-50/10 text-indigo-600 font-bold" : field === "proofreader" ? "bg-purple-50/10 text-purple-600 font-bold" : "text-slate-700"}`}
-                          >
-                            {isEditing ? (
-                              <input
-                                type="number"
-                                min="0"
-                                value={row[field]}
-                                onChange={(e) =>
-                                  handleInputChange(
-                                    row.name,
-                                    field,
-                                    e.target.value,
-                                  )
-                                }
-                                className="w-16 text-center border border-emerald-200 rounded px-1 py-1 text-sm outline-none focus:ring-2 focus:ring-emerald-500 bg-emerald-50/50"
-                              />
-                            ) : (
-                              row[field] || "-"
-                            )}
-                          </td>
-                        ))}
+                        {workloadFieldMeta.map((field) => {
+                          const isScheduleField =
+                            scheduleDerivedFieldKeys.includes(field.key);
+                          return (
+                            <td
+                              key={field.key}
+                              className={`px-4 py-2.5 text-center font-medium ${field.key === "cta" || field.key === "ctaPostProcessing" ? "bg-teal-50/10 text-teal-600 font-bold" : field.key === "reportTyping" ? "bg-indigo-50/10 text-indigo-600 font-bold" : field.key === "proofreader" ? "bg-purple-50/10 text-purple-600 font-bold" : "text-slate-700"} ${shouldRenderCategorySeparator(field.key) ? "border-r-2 border-slate-300" : ""}`}
+                            >
+                              {isEditing && !isScheduleField ? (
+                                <input
+                                  type="number"
+                                  min="0"
+                                  value={row[field.key]}
+                                  onChange={(e) =>
+                                    handleInputChange(
+                                      row.name,
+                                      field.key,
+                                      e.target.value,
+                                    )
+                                  }
+                                  className="w-16 text-center border border-emerald-200 rounded px-1 py-1 text-sm outline-none focus:ring-2 focus:ring-emerald-500 bg-emerald-50/50"
+                                />
+                              ) : (
+                                row[field.key] || "-"
+                              )}
+                            </td>
+                          );
+                        })}
+                        <td className="px-4 py-2.5 text-center font-bold text-slate-800 bg-slate-50">
+                          {computeUnits(row, onsiteFieldKeys).toFixed(2)}
+                        </td>
+                        <td className="px-4 py-2.5 text-center font-bold text-slate-800 bg-slate-50">
+                          {computeUnits(row, remoteFieldKeys).toFixed(2)}
+                        </td>
+                        <td className="px-4 py-2.5 text-center font-bold text-slate-800 bg-slate-50">
+                          {computeTotalUnits(row).toFixed(2)}
+                        </td>
                       </tr>
                     ),
                   )

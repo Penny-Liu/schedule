@@ -359,6 +359,7 @@ export interface SystemSettings {
   healthMgmtTasksByLocation?: Record<string, string[]>; // New: Location-based tasks
   healthMgmtTimesByLocation?: Record<string, string[]>; // New: Location-based times
   healthMgmtCycles?: RosterCycle[]; // New: Independent cycles for HM
+  radiographerWorkloadWeights?: Record<string, number>; // 放射師工作量欄位權重
 }
 
 // ── 操作日誌介面 ──────────────────────────
@@ -403,14 +404,30 @@ export interface RadiographerWorkload {
   date: string; // 組合成 YYYY-MM 供前端使用
   radiographerName: string; // 實際關聯的是姓名
   mr: number;
+  mrLargeMale: number;
+  mrLargeFemale: number;
+  mrMedium: number;
+  mrSmall: number;
   us: number;
+  usA: number;
+  usBreast: number;
+  usHeart: number;
+  usThy: number;
+  usCCA: number;
+  usNeck: number;
+  usPelvisFemale: number;
+  usPelvisMale: number;
   ct: number;
   dx: number;
   mg: number;
   bmd: number;
   cta: number;
+  ctaPostProcessing: number;
   reportTyping: number;
   proofreader: number;
+  floorControl: number;
+  assist: number;
+  scheduler: number;
 }
 
 export interface MeetingRoomBooking {

@@ -202,60 +202,157 @@ async function syncRadiographerWorkload(
   const [year, month] = endDate.split("-");
   const yearNum = parseInt(year, 10);
   const monthNum = parseInt(month, 10);
-  const dateStr = `${year}-${month}`;
+
+  // MR 分類：依同一 Order 的 MR 醫令數量
+  // ≥7 → mrLargeMale / mrLargeFemale；4-6 → mrMedium；1-3 → mrSmall
+  // 回傳 snake_case key，直接對應 Supabase 欄位名
+  const classifyMrByOrderCount = (count, gender) => {
+    if (count >= 7) {
+      return gender === "女" || gender === "F" ? "mr_large_female" : "mr_large_male";
+    } else if (count >= 4) {
+      return "mr_medium";
+    } else {
+      return "mr_small";
+    }
+  };
+
+  // US 子分類，回傳 snake_case key
+  const parseUsSubtype = (name = "") => {
+    const value = String(name || "").trim().toLowerCase();
+    if (
+      value.includes("p女") ||
+      (value.includes("骨盆") && value.includes("女")) ||
+      value.includes("婦科")
+    )
+      return "us_pelvis_female";
+    if (value.includes("p男") || (value.includes("骨盆") && value.includes("男")))
+      return "us_pelvis_male";
+    if (value.includes("breast") || value.includes("乳房")) return "us_breast";
+    if (value.includes("心臟") || value.includes("心")) return "us_heart";
+    if (value.includes("thy") || value.includes("甲狀")) return "us_thy";
+    if (value.includes("cca")) return "us_cca";
+    if (value.includes("neck") || value.includes("頸")) return "us_neck";
+    if (value.includes("上腹")) return "us_a";
+    return null;
+  };
 
   const workloadMap = {};
-  usersData.forEach((u) => {
-    workloadMap[u.name] = {
-      radiographerName: u.name,
-      year: yearNum,
-      month: monthNum,
-      mr: 0,
-      us: 0,
-      ct: 0,
-      dx: 0,
-      mg: 0,
-      bmd: 0,
-      ctaPostProcessing: 0,
-      reportEntry: 0,
-      imageProofing: 0,
-    };
-  });
+  const ensureUser = (name) => {
+    if (!workloadMap[name]) {
+      workloadMap[name] = {
+        radiographerName: name,
+        year: yearNum,
+        month: monthNum,
+        mr: 0,
+        mr_large_male: 0,
+        mr_large_female: 0,
+        mr_medium: 0,
+        mr_small: 0,
+        us: 0,
+        us_a: 0,
+        us_breast: 0,
+        us_heart: 0,
+        us_thy: 0,
+        us_cca: 0,
+        us_neck: 0,
+        us_pelvis_female: 0,
+        us_pelvis_male: 0,
+        ct: 0,
+        dx: 0,
+        mg: 0,
+        bmd: 0,
+        cta_post_processing: 0,
+        report_entry: 0,
+        imageProofing: 0,
+      };
+    }
+  };
+  usersData.forEach((u) => ensureUser(u.name));
 
-  // 1. 各檢查量 (捨棄 00O2t 報表，改用 SOQL)
+  const round2 = (n) => Math.round(n * 100) / 100;
+
+  // 1a. 非 MR 儀器（CT/US/BMD/MG/DX）—可以 GROUP BY + CheckupName
   console.log(
-    `[sync-stats]   - [SOQL] 正在查詢 '各檢查量' (CheckupReservation__c)...`,
+    `[sync-stats]   - [SOQL] 正在查詢 '非 MR 各檢查量' (CT/US/BMD/MG/DX)...`,
   );
-  const checkupSoql = `SELECT Radiologist__r.Name person, ResourceCategory__c category, COUNT(Id) cnt 
-                       FROM CheckupReservation__c 
-                       WHERE (Order__r.ReserveDate__c >= ${startDate} AND Order__r.ReserveDate__c <= ${endDate}) 
-                       AND Radiologist__c != null 
-                       AND ResourceCategory__c IN ('MR','CT','US','BMD','MG','DX') 
-                       AND (NOT Name LIKE '%報到%') 
-                       AND Checkup_Status__c = '10' 
-                       GROUP BY Radiologist__r.Name, ResourceCategory__c`;
-  const checkupData = await runSoqlQuery({
+  const nonMrSoql = `SELECT Radiologist__r.Name person, ResourceCategory__c category, CheckupName__c checkupName, COUNT(Id) cnt 
+                     FROM CheckupReservation__c 
+                     WHERE (Order__r.ReserveDate__c >= ${startDate} AND Order__r.ReserveDate__c <= ${endDate}) 
+                     AND Radiologist__c != null 
+                     AND ResourceCategory__c IN ('CT','US','BMD','MG','DX') 
+                     AND (NOT Name LIKE '%報到%') 
+                     AND Checkup_Status__c = '10' 
+                     GROUP BY Radiologist__r.Name, ResourceCategory__c, CheckupName__c`;
+  const nonMrData = await runSoqlQuery({
     instanceUrl: session.instanceUrl,
     accessToken: session.accessToken,
-    soql: checkupSoql,
+    soql: nonMrSoql,
   });
-  (checkupData.records || []).forEach((rec) => {
+  (nonMrData.records || []).forEach((rec) => {
     const rawName = rec.person || rec.Radiologist__r?.Name;
-    const category = (
-      rec.category ||
-      rec.ResourceCategory__c ||
-      ""
-    ).toLowerCase();
+    const category = (rec.category || rec.ResourceCategory__c || "").toLowerCase();
     const count = parseInt(rec.cnt || rec.expr0 || 0, 10);
+    const checkupName = rec.checkupName || rec.CheckupName__c || "";
     const cleanName = findNameInPath([rawName], validNamesMap);
-    if (cleanName !== "Unknown" && workloadMap[cleanName]) {
-      if (category === "mr") workloadMap[cleanName].mr += count;
-      if (category === "us") workloadMap[cleanName].us += count;
-      if (category === "ct") workloadMap[cleanName].ct += count;
-      if (category === "dx") workloadMap[cleanName].dx += count;
-      if (category === "mg") workloadMap[cleanName].mg += count;
-      if (category === "bmd") workloadMap[cleanName].bmd += count;
+    if (cleanName === "Unknown") return;
+    ensureUser(cleanName);
+
+    if (category === "us") {
+      workloadMap[cleanName].us += count;
+      const subtype = parseUsSubtype(checkupName);
+      if (subtype) workloadMap[cleanName][subtype] += count;
     }
+    if (category === "ct") workloadMap[cleanName].ct += count;
+    if (category === "dx") workloadMap[cleanName].dx += count;
+    if (category === "mg") workloadMap[cleanName].mg += count;
+    if (category === "bmd") workloadMap[cleanName].bmd += count;
+  });
+
+  // 1b. MR：逐筆抓，依 Order 醫令數分大/中/小，按比例分配給各放射師
+  console.log(
+    `[sync-stats]   - [SOQL] 正在查詢 'MR 工作量' (按 Order 醫令數分套別)...`,
+  );
+  const mrSoql = `SELECT Radiologist__r.Name, Order__c, Order__r.Gender__c 
+                  FROM CheckupReservation__c 
+                  WHERE (Order__r.ReserveDate__c >= ${startDate} AND Order__r.ReserveDate__c <= ${endDate}) 
+                  AND Radiologist__c != null 
+                  AND ResourceCategory__c = 'MR' 
+                  AND (NOT Name LIKE '%報到%') 
+                  AND Checkup_Status__c = '10'`;
+  const mrData = await runSoqlQuery({
+    instanceUrl: session.instanceUrl,
+    accessToken: session.accessToken,
+    soql: mrSoql,
+  });
+
+  // group by Order__c → 計算每張 Order 的 MR 數量、性別、各放射師醫令數
+  const mrOrderMap = {};
+  (mrData.records || []).forEach((rec) => {
+    const orderId = rec.Order__c;
+    const gender = rec.Order__r?.Gender__c || "";
+    const radiologist = rec.Radiologist__r?.Name;
+    if (!orderId) return;
+    if (!mrOrderMap[orderId]) {
+      mrOrderMap[orderId] = { count: 0, gender, radiologistCounts: {} };
+    }
+    mrOrderMap[orderId].count++;
+    if (radiologist) {
+      mrOrderMap[orderId].radiologistCounts[radiologist] =
+        (mrOrderMap[orderId].radiologistCounts[radiologist] || 0) + 1;
+    }
+  });
+
+  // 依 Order 的醫令數分類，各放射師按「個人醫令數 / Order 總醫令數」比例分配
+  Object.values(mrOrderMap).forEach(({ count, gender, radiologistCounts }) => {
+    const subtype = classifyMrByOrderCount(count, gender);
+    Object.entries(radiologistCounts).forEach(([rawName, itemCount]) => {
+      const ratio = itemCount / count;
+      const cleanName = findNameInPath([rawName], validNamesMap);
+      if (cleanName === "Unknown") return;
+      ensureUser(cleanName);
+      workloadMap[cleanName].mr += ratio;
+      workloadMap[cleanName][subtype] += ratio;
+    });
   });
 
   // 2. CTA後處理
@@ -278,7 +375,7 @@ async function syncRadiographerWorkload(
     const rawName = rec.person || rec.Radiologist__r?.Name;
     const cleanName = findNameInPath([rawName], validNamesMap);
     if (cleanName !== "Unknown" && workloadMap[cleanName]) {
-      workloadMap[cleanName].ctaPostProcessing += parseInt(rec.cnt || 0, 10);
+      workloadMap[cleanName].cta_post_processing += parseInt(rec.cnt || 0, 10);
     }
   });
 
@@ -303,7 +400,7 @@ async function syncRadiographerWorkload(
     }
   });
 
-  // 4. 影像報告登打 (使用 JS 記憶體分組法，避開字串無法 GROUP BY 的雷)
+  // 4. 影像報告登打
   console.log(
     `[sync-stats]   - [SOQL] 正在查詢 '影像報告登打' (CheckupReservation__c)...`,
   );
@@ -324,11 +421,11 @@ async function syncRadiographerWorkload(
   Object.entries(reportStats).forEach(([rawName, value]) => {
     const cleanName = findNameInPath([rawName], validNamesMap);
     if (cleanName !== "Unknown" && workloadMap[cleanName]) {
-      workloadMap[cleanName].reportEntry += value;
+      workloadMap[cleanName].report_entry += value;
     }
   });
 
-  // 寫入 Supabase
+  // 寫入 Supabase（先刪舊資料再 insert）
   console.log(
     `[sync-stats] [SF API] 正在清理 Supabase 舊資料 (${yearNum}/${monthNum})...`,
   );
@@ -338,7 +435,16 @@ async function syncRadiographerWorkload(
     .eq("year", yearNum)
     .eq("month", monthNum);
 
-  const updates = Object.values(workloadMap);
+  // round2 MR 相關欄位（其他欄位都是整數）
+  const updates = Object.values(workloadMap).map((w) => ({
+    ...w,
+    mr: round2(w.mr),
+    mr_large_male: round2(w.mr_large_male),
+    mr_large_female: round2(w.mr_large_female),
+    mr_medium: round2(w.mr_medium),
+    mr_small: round2(w.mr_small),
+  }));
+
   console.log(`[sync-stats] [SF API] 正在寫入 ${updates.length} 筆最新資料...`);
   const { error } = await supabase
     .from("radiographer_workload")

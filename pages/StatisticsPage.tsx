@@ -475,9 +475,8 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
 
     try {
       // 判斷是否為本地端開發環境
-      const isLocalhost =
-        window.location.hostname === "localhost" ||
-        window.location.hostname === "127.0.0.1";
+      // 測試 GitHub 同步，強制設為 false
+      const isLocalhost = false;
 
       if (isLocalhost) {
         // 本地端維持原本打本機排程伺服器的邏輯

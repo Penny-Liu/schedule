@@ -120,7 +120,19 @@ async function syncAllWorkloads() {
       usersData.forEach((u) => {
         masterData[u.name] = {
           mr: 0,
+          mrLargeMale: 0,
+          mrLargeFemale: 0,
+          mrMedium: 0,
+          mrSmall: 0,
           us: 0,
+          usA: 0,
+          usBreast: 0,
+          usHeart: 0,
+          usThy: 0,
+          usCCA: 0,
+          usNeck: 0,
+          usPelvisFemale: 0,
+          usPelvisMale: 0,
           ct: 0,
           dx: 0,
           mg: 0,
@@ -134,7 +146,19 @@ async function syncAllWorkloads() {
       if (!masterData[name])
         masterData[name] = {
           mr: 0,
+          mrLargeMale: 0,
+          mrLargeFemale: 0,
+          mrMedium: 0,
+          mrSmall: 0,
           us: 0,
+          usA: 0,
+          usBreast: 0,
+          usHeart: 0,
+          usThy: 0,
+          usCCA: 0,
+          usNeck: 0,
+          usPelvisFemale: 0,
+          usPelvisMale: 0,
           ct: 0,
           dx: 0,
           mg: 0,
@@ -143,40 +167,124 @@ async function syncAllWorkloads() {
         };
     };
 
-    // 1. 抓取儀器工作量 (標準月區間: 1號 ~ 月底)
+    const normalizeCheckupName = (name = "") =>
+      String(name || "")
+        .trim()
+        .toLowerCase();
+
+    // MR 子分類：依同一 Order 的 MR 醫令數量決定大/中/小，性別從 Order__r.Gender__c
+    // 大套 (≥7 項)：mrLargeMale / mrLargeFemale
+    // 中套 (4-6 項)：mrMedium
+    // 小套 (1-3 項)：mrSmall
+    const classifyMrByOrderCount = (count, gender) => {
+      if (count >= 7) {
+        return gender === "女" || gender === "F" ? "mrLargeFemale" : "mrLargeMale";
+      } else if (count >= 4) {
+        return "mrMedium";
+      } else {
+        return "mrSmall";
+      }
+    };
+
+    const parseUsSubtype = (name = "") => {
+      const value = normalizeCheckupName(name);
+      if (
+        value.includes("p女") ||
+        (value.includes("骨盆") && value.includes("女")) ||
+        value.includes("婦科")
+      )
+        return "usPelvisFemale";
+      if (
+        value.includes("p男") ||
+        (value.includes("骨盆") && value.includes("男"))
+      )
+        return "usPelvisMale";
+      if (value.includes("breast") || value.includes("乳房")) return "usBreast";
+      if (value.includes("心臟") || value.includes("心")) return "usHeart";
+      if (value.includes("thy") || value.includes("甲狀")) return "usThy";
+      if (value.includes("cca")) return "usCCA";
+      if (value.includes("neck") || value.includes("頸")) return "usNeck";
+      if (value.includes("上腹")) return "usA";
+      return null;
+    };
+
+    // 1a. 抓取非 MR 儀器工作量 (CT/US/BMD/MG/DX，可以 GROUP BY)
     console.log(
       `📊 正在抓取儀器工作量 (${generalRange.startDate} ~ ${generalRange.endDate})...`,
     );
-    const checkupSoql = `SELECT Radiologist__r.Name person, ResourceCategory__c category, COUNT(Id) cnt 
-                         FROM CheckupReservation__c 
-                         WHERE (Order__r.ReserveDate__c >= ${generalRange.startDate} AND Order__r.ReserveDate__c <= ${generalRange.endDate}) 
-                         AND Radiologist__c != null 
-                         AND ResourceCategory__c IN ('MR','CT','US','BMD','MG','DX') 
-                         AND (NOT Name LIKE '%報到%') 
-                         AND Checkup_Status__c = '10' 
-                         GROUP BY Radiologist__r.Name, ResourceCategory__c`;
+    const nonMrSoql = `SELECT Radiologist__r.Name person, ResourceCategory__c category, CheckupName__c checkupName, COUNT(Id) cnt 
+                       FROM CheckupReservation__c 
+                       WHERE (Order__r.ReserveDate__c >= ${generalRange.startDate} AND Order__r.ReserveDate__c <= ${generalRange.endDate}) 
+                       AND Radiologist__c != null 
+                       AND ResourceCategory__c IN ('CT','US','BMD','MG','DX') 
+                       AND (NOT Name LIKE '%報到%') 
+                       AND Checkup_Status__c = '10' 
+                       GROUP BY Radiologist__r.Name, ResourceCategory__c, CheckupName__c`;
 
-    const checkupData = await runSoqlQuery({ ...session, soql: checkupSoql });
-    (checkupData.records || []).forEach((rec) => {
+    const nonMrData = await runSoqlQuery({ ...session, soql: nonMrSoql });
+    (nonMrData.records || []).forEach((rec) => {
       const rawName = rec.person || rec.Radiologist__r?.Name;
-      const category = (
-        rec.category ||
-        rec.ResourceCategory__c ||
-        ""
-      ).toLowerCase();
+      const category = (rec.category || rec.ResourceCategory__c || "").toLowerCase();
       const count = parseInt(rec.cnt || rec.expr0 || 0, 10);
+      const checkupName = rec.checkupName || rec.CheckupName__c || "";
       const cleanName = findNameInPath([rawName], validNamesMap);
-
       const nameToUse = cleanName !== "Unknown" ? cleanName : rawName;
       if (!nameToUse) return;
 
       ensureUser(nameToUse);
-      if (category === "mr") masterData[nameToUse].mr += count;
-      if (category === "us") masterData[nameToUse].us += count;
+
+      if (category === "us") {
+        masterData[nameToUse].us += count;
+        const subtype = parseUsSubtype(checkupName);
+        if (subtype) masterData[nameToUse][subtype] += count;
+      }
       if (category === "ct") masterData[nameToUse].ct += count;
       if (category === "dx") masterData[nameToUse].dx += count;
       if (category === "mg") masterData[nameToUse].mg += count;
       if (category === "bmd") masterData[nameToUse].bmd += count;
+    });
+
+    // 1b. 抓取 MR 工作量：逐筆拿，在 JS 側依 Order 的醫令數量分大/中/小
+    console.log(`📊 正在抓取 MR 工作量並分析套別...`);
+    const mrSoql = `SELECT Radiologist__r.Name, Order__c, Order__r.Gender__c 
+                    FROM CheckupReservation__c 
+                    WHERE (Order__r.ReserveDate__c >= ${generalRange.startDate} AND Order__r.ReserveDate__c <= ${generalRange.endDate}) 
+                    AND Radiologist__c != null 
+                    AND ResourceCategory__c = 'MR' 
+                    AND (NOT Name LIKE '%報到%') 
+                    AND Checkup_Status__c = '10'`;
+
+    const mrData = await runSoqlQuery({ ...session, soql: mrSoql });
+
+    // 先 group by Order__c → 計算每張 Order 的 MR 數量、性別、各放射師醫令數
+    const mrOrderMap = {};
+    (mrData.records || []).forEach((rec) => {
+      const orderId = rec.Order__c;
+      const gender = rec.Order__r?.Gender__c || "";
+      const radiologist = rec.Radiologist__r?.Name;
+      if (!orderId) return;
+      if (!mrOrderMap[orderId]) {
+        mrOrderMap[orderId] = { count: 0, gender, radiologistCounts: {} };
+      }
+      mrOrderMap[orderId].count++;
+      if (radiologist) {
+        mrOrderMap[orderId].radiologistCounts[radiologist] =
+          (mrOrderMap[orderId].radiologistCounts[radiologist] || 0) + 1;
+      }
+    });
+
+    // 依 Order 的醫令數分類，各放射師按「個人醫令數 / Order 總醫令數」比例分配
+    Object.values(mrOrderMap).forEach(({ count, gender, radiologistCounts }) => {
+      const subtype = classifyMrByOrderCount(count, gender);
+      Object.entries(radiologistCounts).forEach(([rawName, itemCount]) => {
+        const ratio = itemCount / count;
+        const cleanName = findNameInPath([rawName], validNamesMap);
+        const nameToUse = cleanName !== "Unknown" ? cleanName : rawName;
+        if (!nameToUse) return;
+        ensureUser(nameToUse);
+        masterData[nameToUse].mr += ratio;
+        masterData[nameToUse][subtype] += ratio;
+      });
     });
 
     // 2. 抓取影像校對量 (報告區間: 上月26號 ~ 本月25號)
@@ -219,12 +327,26 @@ async function syncAllWorkloads() {
         .eq("radiographerName", name)
         .single();
 
+      const round2 = (n) => Math.round(n * 100) / 100;
+
       const payload = {
         year: targetYear,
         month: targetMonth,
         radiographerName: name,
-        mr: stats.mr,
+        mr: round2(stats.mr),
+        mr_large_male: round2(stats.mrLargeMale),
+        mr_large_female: round2(stats.mrLargeFemale),
+        mr_medium: round2(stats.mrMedium),
+        mr_small: round2(stats.mrSmall),
         us: stats.us,
+        us_a: stats.usA,
+        us_breast: stats.usBreast,
+        us_heart: stats.usHeart,
+        us_thy: stats.usThy,
+        us_cca: stats.usCCA,
+        us_neck: stats.usNeck,
+        us_pelvis_female: stats.usPelvisFemale,
+        us_pelvis_male: stats.usPelvisMale,
         ct: stats.ct,
         dx: stats.dx,
         mg: stats.mg,
