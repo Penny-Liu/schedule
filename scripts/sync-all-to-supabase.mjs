@@ -271,42 +271,63 @@ async function syncRadiographerWorkload(
 
   const round2 = (n) => Math.round(n * 100) / 100;
 
-  // 1a. 非 MR 儀器（CT/US/BMD/MG/DX）—可以 GROUP BY + CheckupName
+  // 1a-i. CT/BMD/MG/DX（可以 GROUP BY，不需要 CheckupName）
   console.log(
-    `[sync-stats]   - [SOQL] 正在查詢 '非 MR 各檢查量' (CT/US/BMD/MG/DX)...`,
+    `[sync-stats]   - [SOQL] 正在查詢 'CT/BMD/MG/DX 檢查量'...`,
   );
-  const nonMrSoql = `SELECT Radiologist__r.Name person, ResourceCategory__c category, CheckupName__c checkupName, COUNT(Id) cnt 
-                     FROM CheckupReservation__c 
-                     WHERE (Order__r.ReserveDate__c >= ${startDate} AND Order__r.ReserveDate__c <= ${endDate}) 
-                     AND Radiologist__c != null 
-                     AND ResourceCategory__c IN ('CT','US','BMD','MG','DX') 
-                     AND (NOT Name LIKE '%報到%') 
-                     AND Checkup_Status__c = '10' 
-                     GROUP BY Radiologist__r.Name, ResourceCategory__c, CheckupName__c`;
-  const nonMrData = await runSoqlQuery({
+  const ctDxSoql = `SELECT Radiologist__r.Name person, ResourceCategory__c category, COUNT(Id) cnt 
+                    FROM CheckupReservation__c 
+                    WHERE (Order__r.ReserveDate__c >= ${startDate} AND Order__r.ReserveDate__c <= ${endDate}) 
+                    AND Radiologist__c != null 
+                    AND ResourceCategory__c IN ('CT','BMD','MG','DX') 
+                    AND (NOT Name LIKE '%報到%') 
+                    AND Checkup_Status__c = '10' 
+                    GROUP BY Radiologist__r.Name, ResourceCategory__c`;
+  const ctDxData = await runSoqlQuery({
     instanceUrl: session.instanceUrl,
     accessToken: session.accessToken,
-    soql: nonMrSoql,
+    soql: ctDxSoql,
   });
-  (nonMrData.records || []).forEach((rec) => {
+  (ctDxData.records || []).forEach((rec) => {
     const rawName = rec.person || rec.Radiologist__r?.Name;
     const category = (rec.category || rec.ResourceCategory__c || "").toLowerCase();
     const count = parseInt(rec.cnt || rec.expr0 || 0, 10);
-    const checkupName = rec.checkupName || rec.CheckupName__c || "";
     const cleanName = findNameInPath([rawName], validNamesMap);
     if (cleanName === "Unknown") return;
     ensureUser(cleanName);
-
-    if (category === "us") {
-      workloadMap[cleanName].us += count;
-      const subtype = parseUsSubtype(checkupName);
-      if (subtype) workloadMap[cleanName][subtype] += count;
-    }
     if (category === "ct") workloadMap[cleanName].ct += count;
     if (category === "dx") workloadMap[cleanName].dx += count;
     if (category === "mg") workloadMap[cleanName].mg += count;
     if (category === "bmd") workloadMap[cleanName].bmd += count;
   });
+
+  // 1a-ii. US：CheckupName__c 是 textarea 不能 GROUP BY，逐筆抓後 JS 側分類
+  console.log(
+    `[sync-stats]   - [SOQL] 正在查詢 'US 超音波檢查量' (逐筆分類)...`,
+  );
+  const usSoql = `SELECT Radiologist__r.Name, CheckupName__c 
+                  FROM CheckupReservation__c 
+                  WHERE (Order__r.ReserveDate__c >= ${startDate} AND Order__r.ReserveDate__c <= ${endDate}) 
+                  AND Radiologist__c != null 
+                  AND ResourceCategory__c = 'US' 
+                  AND (NOT Name LIKE '%報到%') 
+                  AND Checkup_Status__c = '10'`;
+  const usData = await runSoqlQuery({
+    instanceUrl: session.instanceUrl,
+    accessToken: session.accessToken,
+    soql: usSoql,
+  });
+  (usData.records || []).forEach((rec) => {
+    const rawName = rec.Radiologist__r?.Name;
+    const checkupName = rec.CheckupName__c || "";
+    const cleanName = findNameInPath([rawName], validNamesMap);
+    if (cleanName === "Unknown") return;
+    ensureUser(cleanName);
+    workloadMap[cleanName].us += 1;
+    const subtype = parseUsSubtype(checkupName);
+    if (subtype) workloadMap[cleanName][subtype] += 1;
+  });
+
 
   // 1b. MR：逐筆抓，依 Order 醫令數分大/中/小，按比例分配給各放射師
   console.log(
