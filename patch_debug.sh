@@ -1,0 +1,1 @@
+sed -i '' -e 's|</div>.*{/\* LINE Preview \*/}|<div className="p-4 bg-red-100 font-mono text-xs">DEBUG: {displayData.map(r => r.name).join(", ")} | sortField: {sortField} | sortDir: {sortDir}</div></div>{/\* LINE Preview \*/}|g' /Users/liuyaping/Downloads/schedule/pages/RadiographerWorkloadPage.tsx

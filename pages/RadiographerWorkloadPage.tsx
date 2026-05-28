@@ -137,10 +137,11 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
     }),
   );
   const [isSavingWeights, setIsSavingWeights] = useState(false);
+  const [showWeights, setShowWeights] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
   // Sort
-  const [sortField, setSortField] = useState<string | null>('totalUnits');
+  const [sortField, setSortField] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
 
   // Groups / classification
@@ -467,22 +468,21 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
       if (sortField === 'onsiteUnits') { va = computeUnits(a, onsiteFieldKeys); vb = computeUnits(b, onsiteFieldKeys); }
       else if (sortField === 'remoteUnits') { va = computeUnits(a, remoteFieldKeys); vb = computeUnits(b, remoteFieldKeys); }
       else if (sortField === 'totalUnits') { va = computeTotalUnits(a); vb = computeTotalUnits(b); }
-      else { va = a[sortField] ?? 0; vb = b[sortField] ?? 0; }
-      return sortDir === 'asc' ? va - vb : vb - va;
+      else { va = Number(a[sortField]) || 0; vb = Number(b[sortField]) || 0; }
+      const numA = Number(va) || 0;
+      const numB = Number(vb) || 0;
+      if (numA !== numB) return sortDir === 'asc' ? numA - numB : numB - numA; return a.name.localeCompare(b.name);
     });
   }, [workloadData, editingData, isEditing, sortField, sortDir, weights]);
 
-  const handleSort = (field: string) => {
-    if (sortField === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
-    else { setSortField(field); setSortDir('desc'); }
-  };
-
-  const SortTh = ({ field, label, className = '' }: { field: string; label: string; className?: string }) => {
+  const renderSortTh = (field: string, label: string, className = '') => {
     const active = sortField === field;
     return (
       <th
+        key={field}
         onClick={() => handleSort(field)}
-        className={`px-4 py-3 text-center cursor-pointer select-none hover:bg-slate-100 transition-colors ${className}`}
+        className={`px-4 py-3 text-center cursor-pointer select-none hover:bg-slate-200 transition-colors ${className}`}
+        title={`點擊以依「${label}」排序`}
       >
         <span className="flex items-center justify-center gap-1">
           {label}
@@ -490,6 +490,16 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
         </span>
       </th>
     );
+  };
+
+  const handleSort = (field: string) => {
+    if (sortField === field) {
+      if (sortDir === 'desc') setSortDir('asc');
+      else setSortField(null);
+    } else {
+      setSortField(field);
+      setSortDir('desc');
+    }
   };
 
   const handleToggleEdit = () => {
@@ -620,17 +630,24 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
 
     let text = header + '\n';
     groups.forEach(g => {
-      const rows = grouped[g.id];
+      let rows = grouped[g.id];
       if (!rows?.length) return;
       text += `\n${g.name}\n`;
+      if (!sortField) {
+        rows = [...rows].sort((a, b) => computeTotalUnits(b) - computeTotalUnits(a));
+      }
       rows.forEach(r => { text += fmt(r) + '\n'; });
     });
     if (unassigned.length) {
       text += `\n(未分類)\n`;
-      unassigned.forEach(r => { text += fmt(r) + '\n'; });
+      let rows = unassigned;
+      if (!sortField) {
+        rows = [...rows].sort((a, b) => computeTotalUnits(b) - computeTotalUnits(a));
+      }
+      rows.forEach(r => { text += fmt(r) + '\n'; });
     }
     return text.trim();
-  }, [displayData, groups, groupAssignments, generalDates, currentMonth, cycles, radiographers, weights]);
+  }, [displayData, groups, groupAssignments, generalDates, currentMonth, cycles, radiographers, weights, sortField]);
 
   const handleLineCopy = () => {
     navigator.clipboard.writeText(lineText);
@@ -1040,39 +1057,52 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
         <div className="mb-4 space-y-4">
           <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-              <div>
-                <div className="text-sm font-bold text-slate-800">權重設定</div>
-                <div className="text-xs text-slate-500">
-                  這裡可設定各類別的單位權重，儲存後會套用於每位放射師的總單位計算。
+              <div 
+                className="cursor-pointer group flex items-center gap-2" 
+                onClick={() => setShowWeights(!showWeights)}
+              >
+                <div className="flex items-center justify-center w-6 h-6 rounded-md bg-slate-100 group-hover:bg-slate-200 text-slate-500 transition-colors">
+                  {showWeights ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                </div>
+                <div>
+                  <div className="text-sm font-bold text-slate-800">權重設定</div>
+                  <div className="text-xs text-slate-500">
+                    設定各類別的單位權重，儲存後會套用於總單位計算。
+                  </div>
                 </div>
               </div>
-              <button
-                onClick={handleSaveWeights}
-                disabled={isSavingWeights}
-                className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-bold text-white ${isSavingWeights ? "bg-slate-400" : "bg-emerald-600 hover:bg-emerald-700"}`}
-              >
-                {isSavingWeights ? "儲存中..." : "儲存權重"}
-              </button>
+              {showWeights && (
+                <button
+                  onClick={handleSaveWeights}
+                  disabled={isSavingWeights}
+                  className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-bold text-white ${isSavingWeights ? "bg-slate-400" : "bg-emerald-600 hover:bg-emerald-700"}`}
+                >
+                  {isSavingWeights ? "儲存中..." : "儲存權重"}
+                </button>
+              )}
             </div>
-            <div className="grid gap-3 mt-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
-              {workloadFieldMeta.map((field) => (
-                <label key={field.key} className="block text-xs text-slate-600">
-                  <div className="mb-1 font-medium text-slate-800">
-                    {field.label}
-                  </div>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.1"
-                    value={weights[field.key]}
-                    onChange={(e) =>
-                      handleWeightChange(field.key, e.target.value)
-                    }
-                    className="w-full rounded border border-slate-200 bg-slate-50 px-2 py-2 text-sm text-slate-900 outline-none focus:border-emerald-500 focus:ring-emerald-500/20"
-                  />
-                </label>
-              ))}
-            </div>
+            
+            {showWeights && (
+              <div className="grid gap-3 mt-4 pt-4 border-t border-slate-100 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 animate-in fade-in slide-in-from-top-2">
+                {workloadFieldMeta.map((field) => (
+                  <label key={field.key} className="block text-xs text-slate-600">
+                    <div className="mb-1 font-medium text-slate-800">
+                      {field.label}
+                    </div>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.1"
+                      value={weights[field.key]}
+                      onChange={(e) =>
+                        handleWeightChange(field.key, e.target.value)
+                      }
+                      className="w-full rounded border border-slate-200 bg-slate-50 px-2 py-2 text-sm text-slate-900 outline-none focus:border-emerald-500 focus:ring-emerald-500/20"
+                    />
+                  </label>
+                ))}
+              </div>
+            )}
           </div>
           <div className="grid gap-3 sm:grid-cols-3">
             <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
@@ -1165,27 +1195,26 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
                   <th className="px-4 py-3 sticky left-0 bg-slate-50 z-10 border-r border-slate-200">
                     放射師姓名
                   </th>
-                  {groups.length > 0 && (
+                  {showGroupPanel && groups.length > 0 && (
                     <th className="px-3 py-3 text-center text-violet-600 bg-violet-50/50 whitespace-nowrap">分類</th>
                   )}
-                  {workloadFieldMeta.map((field) => (
-                    <SortTh
-                      key={field.key}
-                      field={field.key}
-                      label={field.label}
-                      className={`${getHeaderStyle(field.key)} ${shouldRenderCategorySeparator(field.key) ? 'border-r-2 border-slate-300' : ''}`}
-                    />
-                  ))}
-                  <SortTh field="onsiteUnits" label="現場加權" className="bg-slate-100 text-slate-700" />
-                  <SortTh field="remoteUnits" label="遠班加權" className="bg-slate-100 text-slate-700" />
-                  <SortTh field="totalUnits" label="總加權" className="bg-slate-100 text-slate-700" />
+                  {workloadFieldMeta.map((field) => 
+                    renderSortTh(
+                      field.key,
+                      field.label,
+                      `${getHeaderStyle(field.key)} ${shouldRenderCategorySeparator(field.key) ? 'border-r-2 border-slate-300' : ''}`
+                    )
+                  )}
+                  {renderSortTh("onsiteUnits", "現場加權", "bg-slate-100 text-slate-700")}
+                  {renderSortTh("remoteUnits", "遠班加權", "bg-slate-100 text-slate-700")}
+                  {renderSortTh("totalUnits", "總加權", "bg-slate-100 text-slate-700")}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {displayData.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={workloadFieldMeta.length + (groups.length > 0 ? 4 : 3)}
+                      colSpan={workloadFieldMeta.length + (showGroupPanel ? 4 : 3)}
                       className="px-4 py-8 text-center text-slate-400 font-medium"
                     >
                       無資料
@@ -1198,13 +1227,13 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
                       const assignedGroup = groups.find(g => g.id === assignedGroupId);
                       return (
                       <tr
-                        key={idx}
+                        key={row.name}
                         className="hover:bg-slate-50/50 transition-colors"
                       >
                         <td className="px-4 py-2.5 font-bold text-slate-800 sticky left-0 bg-white border-r border-slate-100">
                           {row.name}
                         </td>
-                        {groups.length > 0 && (
+                        {showGroupPanel && groups.length > 0 && (
                           <td className="px-2 py-2.5 text-center">
                             <select
                               value={assignedGroupId}
