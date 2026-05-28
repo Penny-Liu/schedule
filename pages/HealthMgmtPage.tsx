@@ -124,6 +124,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [hmTasks, setHmTasks] = useState<string[]>(db.getHealthMgmtTasks());
   const [hmTimes, setHmTimes] = useState<string[]>(db.getHealthMgmtTimes());
+  const [hmLeaveTypes, setHmLeaveTypes] = useState<string[]>(db.getHealthMgmtLeaveTypes());
   const [hmCycles, setHmCycles] = useState<RosterCycle[]>(
     db.getHealthMgmtCycles(),
   );
@@ -188,6 +189,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
   const [editingShiftSubTask, setEditingShiftSubTask] = useState<string[]>([]); // multi-select tasks
   const [editingShiftLocation, setEditingShiftLocation] = useState(""); // New state for 'location'
   const [editingShiftCustomTask, setEditingShiftCustomTask] = useState("");
+  const [editingLeaveType, setEditingLeaveType] = useState(""); // 假別
 
   // Quick Schedule State (Health Mgmt)
   const [isQuickScheduleMode, setIsQuickScheduleMode] = useState(false);
@@ -398,6 +400,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
       setHmStations(db.getHealthMgmtStations(currentUserLocation));
       setHmTasks(db.getHealthMgmtTasks(currentUserLocation));
       setHmTimes(db.getHealthMgmtTimes(currentUserLocation));
+      setHmLeaveTypes(db.getHealthMgmtLeaveTypes());
       const cycles = db.getHealthMgmtCycles();
       setHmCycles(cycles);
       setHolidays(db.getHolidays());
@@ -559,7 +562,12 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
             setEditingShiftTime("");
             setEditingShiftTask("");
           }
-          if (existing.task) {
+          // 假：task 是假別，特別處理
+          if (existing.station === "假") {
+            setEditingLeaveType(existing.task || "");
+            setEditingShiftSubTask([]);
+            setEditingShiftCustomTask("");
+          } else if (existing.task) {
             const parts = existing.task
               .split(",")
               .map((t) => t.trim())
@@ -577,11 +585,14 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
 
             setEditingShiftSubTask(presets);
             setEditingShiftCustomTask(customParts.join(","));
+            setEditingLeaveType("");
           } else {
             setEditingShiftSubTask([]);
             setEditingShiftCustomTask("");
+            setEditingLeaveType("");
           }
           setEditingShiftLocation(existing.location || ""); // Load location
+
         } else {
           setEditingShiftTime("");
           setEditingShiftTask("");
@@ -606,24 +617,30 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
         finalStation = `${editingShiftTime} ${editingShiftTask}`.trim();
       }
 
-      const taskParts = [...editingShiftSubTask];
-      if (editingShiftCustomTask.trim()) {
-        // Only add if not already in the preset list to avoid duplicates
-        if (!taskParts.includes(editingShiftCustomTask.trim())) {
-          taskParts.push(editingShiftCustomTask.trim());
+      // 假：task 存假別，跳過一般 task 邏輯
+      let finalTask: string | undefined;
+      if (editingShiftTask === "假") {
+        finalTask = editingLeaveType || undefined;
+      } else {
+        const taskParts = [...editingShiftSubTask];
+        if (editingShiftCustomTask.trim()) {
+          if (!taskParts.includes(editingShiftCustomTask.trim())) {
+            taskParts.push(editingShiftCustomTask.trim());
+          }
         }
+        finalTask = taskParts.filter(Boolean).join(",") || undefined;
       }
-      const finalTask = taskParts.filter(Boolean).join(",");
 
       await handleUpdateShift(
         selectedCell.userId,
         selectedCell.date,
         finalStation,
-        finalTask || undefined,
-        editingShiftLocation || undefined,
+        finalTask,
+        editingShiftTask === "假" ? undefined : editingShiftLocation || undefined,
       );
       setSelectedCell(null);
       setEditingShiftCustomTask("");
+      setEditingLeaveType("");
     } catch (err) {
       console.error("[HealthMgmtPage] handleSavePopup failed:", err);
       alert(
@@ -712,6 +729,8 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
       "主控",
       "輔控",
       "晚班",
+      "call班",
+      "排班",
       ...hmStations,
     ];
     const headerRow = ws.addRow(headers);
@@ -733,35 +752,42 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
       let holidayWorkDays = 0;
       const dateCounts: Record<string, number> = {};
       hmStations.forEach((st) => (dateCounts[st] = 0));
-      const roleCounts: Record<string, number> = { 主控: 0, 輔控: 0, 晚班: 0 };
+      const roleCounts: Record<string, number> = { 主控: 0, 輔控: 0, 晚班: 0, call班: 0, 排班: 0 };
 
       dateRange.forEach((date) => {
         const shift = shifts.find(
           (s) => s.userId === staff.id && s.date === date,
         );
         if (shift && (shift.station || shift.task || shift.location)) {
-          totalWorkDays++;
-          const d = new Date(date);
-          const holiday = holidays.find(
-            (h) =>
-              h.date === date && (h.type === "NATIONAL" || h.type === "CLOSED"),
-          );
-          const isWeekend = d.getDay() === 0 || d.getDay() === 6;
-          if (holiday || isWeekend) holidayWorkDays++;
-          else weekdayWorkDays++;
-
-          const parts = shift.station.split(" ");
+          // 上班天數：崗位有值且不是「假」
+          const stationVal = shift.station || "";
+          const parts = stationVal.split(" ");
           const stationLabel =
             parts.length > 1 && parts[0].includes(":")
               ? parts.slice(1).join(" ")
-              : shift.station;
-          if (dateCounts[stationLabel] !== undefined)
-            dateCounts[stationLabel]++;
+              : stationVal;
+
+          if (stationLabel && stationLabel !== "假") {
+            totalWorkDays++;
+            const d = new Date(date);
+            const holiday = holidays.find(
+              (h) =>
+                h.date === date && (h.type === "NATIONAL" || h.type === "CLOSED"),
+            );
+            const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+            if (holiday || isWeekend) holidayWorkDays++;
+            else weekdayWorkDays++;
+
+            if (dateCounts[stationLabel] !== undefined)
+              dateCounts[stationLabel]++;
+          }
 
           const combinedText = `${shift.station} ${shift.task || ""}`;
           if (combinedText.includes("主控")) roleCounts["主控"]++;
           if (combinedText.includes("輔控")) roleCounts["輔控"]++;
           if (combinedText.includes("晚班")) roleCounts["晚班"]++;
+          if (combinedText.includes("call班")) roleCounts["call班"]++;
+          if (combinedText.includes("排班")) roleCounts["排班"]++;
         }
       });
 
@@ -773,11 +799,14 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
         roleCounts["主控"],
         roleCounts["輔控"],
         roleCounts["晚班"],
+        roleCounts["call班"],
+        roleCounts["排班"],
         ...hmStations.map((st) => dateCounts[st]),
       ]);
       row.alignment = { horizontal: "center" };
       row.getCell(1).alignment = { horizontal: "left" };
     });
+
 
     // Column widths
     ws.getColumn(1).width = 14;
@@ -972,33 +1001,38 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
       let total = 0;
       let weekday = 0;
       let holidayCount = 0;
-      const roleCounts: Record<string, number> = { 主控: 0, 輔控: 0, 晚班: 0 };
+      const roleCounts: Record<string, number> = { 主控: 0, 輔控: 0, 晚班: 0, call班: 0, 排班: 0 };
 
       dateRange.forEach((date) => {
         const shift = shifts.find(
           (s) => s.userId === staff.id && s.date === date,
         );
         if (shift && (shift.station || shift.task || shift.location)) {
-          total++;
-          const d = new Date(date);
-          const holiday = holidays.find(
-            (h) =>
-              h.date === date && (h.type === "NATIONAL" || h.type === "CLOSED"),
-          );
-          const isWeekend = d.getDay() === 0 || d.getDay() === 6;
-          if (holiday || isWeekend) {
-            holidayCount++;
-          } else {
-            weekday++;
-          }
-
-          const parts = shift.station.split(" ");
+          // 上班天數：崗位有值且不是「假」
+          const stationVal = shift.station || "";
+          const parts = stationVal.split(" ");
           const stationLabel =
             parts.length > 1 && parts[0].includes(":")
               ? parts.slice(1).join(" ")
-              : shift.station;
-          if (hmStations.includes(stationLabel)) {
-            counts[stationLabel] = (counts[stationLabel] || 0) + 1;
+              : stationVal;
+
+          if (stationLabel && stationLabel !== "假") {
+            total++;
+            const d = new Date(date);
+            const holiday = holidays.find(
+              (h) =>
+                h.date === date && (h.type === "NATIONAL" || h.type === "CLOSED"),
+            );
+            const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+            if (holiday || isWeekend) {
+              holidayCount++;
+            } else {
+              weekday++;
+            }
+
+            if (hmStations.includes(stationLabel)) {
+              counts[stationLabel] = (counts[stationLabel] || 0) + 1;
+            }
           }
 
           // Count specific roles in both station and task
@@ -1006,6 +1040,8 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
           if (combinedText.includes("主控")) roleCounts["主控"]++;
           if (combinedText.includes("輔控")) roleCounts["輔控"]++;
           if (combinedText.includes("晚班")) roleCounts["晚班"]++;
+          if (combinedText.includes("call班")) roleCounts["call班"]++;
+          if (combinedText.includes("排班")) roleCounts["排班"]++;
         }
       });
 
@@ -1024,7 +1060,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
   ) => {
     if (!designation) return true;
     if (
-      ["休", "V", "E", "公出", "補", "病", "外", "特"].some((s) =>
+      ["休", "V", "E", "公出", "補", "病", "外", "特", "假"].some((s) =>
         station.startsWith(s),
       )
     )
@@ -3459,6 +3495,10 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                             )
                               cellBg = "bg-[#D7CCC8] hover:bg-[#BCAAA4]";
                             else if (
+                              displayStation === "假"
+                            )
+                              cellBg = "bg-red-200 hover:bg-red-300";
+                            else if (
                               displayTask.includes("call") ||
                               displayStation.includes("call")
                             )
@@ -3576,7 +3616,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
               {/* Inline Shift Edit Popup */}
               {selectedCell && (
                 <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-[150] p-4">
-                  <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm border border-gray-100 animate-in zoom-in-95 duration-200 overflow-hidden">
+                  <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm border border-gray-100 animate-in zoom-in-95 duration-200 overflow-hidden flex flex-col max-h-[90vh]">
                     <div className="px-5 py-4 border-b border-gray-100 flex justify-between items-center bg-teal-50/50">
                       <div>
                         <h3 className="font-bold text-gray-800 text-lg">
@@ -3604,7 +3644,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                       </button>
                     </div>
 
-                    <div className="p-5 space-y-4">
+                    <div className="p-5 space-y-4 overflow-y-auto flex-1">
                       <div className="space-y-1.5">
                         <label className="text-xs font-bold text-gray-500 uppercase flex justify-between">
                           <span>崗位分配 (H, G, 櫃台...)</span>
@@ -3628,7 +3668,10 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                           ).map((st) => (
                             <button
                               key={st}
-                              onClick={() => setEditingShiftTask(st)}
+                              onClick={() => {
+                                setEditingShiftTask(st);
+                                setEditingLeaveType("");
+                              }}
                               className={
                                 "px-3 py-1.5 rounded-lg text-xs font-bold border transition-all " +
                                 (editingShiftTask === st
@@ -3639,140 +3682,199 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                               {st}
                             </button>
                           ))}
+                          {/* 假：固定加在崗位選項尾端 */}
+                          <button
+                            onClick={() => {
+                              setEditingShiftTask(editingShiftTask === "假" ? "" : "假");
+                              if (editingShiftTask !== "假") {
+                                setEditingShiftSubTask([]);
+                                setEditingShiftCustomTask("");
+                                setEditingShiftLocation("");
+                              } else {
+                                setEditingLeaveType("");
+                              }
+                            }}
+                            className={
+                              "px-3 py-1.5 rounded-lg text-xs font-bold border transition-all " +
+                              (editingShiftTask === "假"
+                                ? "bg-red-500 text-white border-red-600 shadow-sm"
+                                : "bg-rose-50 text-red-500 border-red-200 hover:border-red-400 hover:bg-white")
+                            }
+                          >
+                            假
+                          </button>
                         </div>
                       </div>
 
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-bold text-gray-500 uppercase flex justify-between">
-                          <span>業務任務 (主控, 輔控...)</span>
-                          {editingShiftSubTask.length > 0 && (
-                            <span
-                              className="text-indigo-600 cursor-pointer hover:underline"
-                              onClick={() => setEditingShiftSubTask([])}
-                            >
-                              清除
-                            </span>
-                          )}
-                        </label>
-                        <div className="flex flex-wrap gap-1.5 p-1 max-h-[300px] overflow-y-auto custom-scrollbar">
-                          {(selectedCell
-                            ? db.getHealthMgmtTasks(
-                                healthMgmtStaff.find(
-                                  (s) => s.id === selectedCell.userId,
-                                )?.location || currentUserLocation,
-                              )
-                            : hmTasks
-                          ).map((tk) => (
-                            <button
-                              key={tk}
-                              onClick={() =>
-                                setEditingShiftSubTask((prev) =>
-                                  prev.includes(tk)
-                                    ? prev.filter((t) => t !== tk)
-                                    : [...prev, tk],
-                                )
-                              }
-                              className={
-                                "px-3 py-1.5 rounded-lg text-xs font-bold border transition-all " +
-                                (editingShiftSubTask.includes(tk)
-                                  ? "bg-indigo-500 text-white border-indigo-600 shadow-sm"
-                                  : "bg-slate-50 text-gray-600 border-gray-200 hover:border-indigo-300 hover:bg-white")
-                              }
-                            >
-                              {tk}
-                            </button>
-                          ))}
+                      {/* 假別選擇器：只有選「假」時顯示 */}
+                      {editingShiftTask === "假" && (
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-bold text-red-500 uppercase flex justify-between">
+                            <span>假別</span>
+                            {editingLeaveType && (
+                              <span
+                                className="text-gray-400 cursor-pointer hover:underline"
+                                onClick={() => setEditingLeaveType("")}
+                              >
+                                清除
+                              </span>
+                            )}
+                          </label>
+                          <div className="flex flex-wrap gap-1.5 p-1">
+                            {hmLeaveTypes.map((lt) => (
+                              <button
+                                key={lt}
+                                onClick={() => setEditingLeaveType(lt === editingLeaveType ? "" : lt)}
+                                className={
+                                  "px-3 py-1.5 rounded-lg text-xs font-bold border transition-all " +
+                                  (editingLeaveType === lt
+                                    ? "bg-red-500 text-white border-red-600 shadow-sm"
+                                    : "bg-rose-50 text-red-600 border-red-200 hover:border-red-400 hover:bg-white")
+                                }
+                              >
+                                {lt}
+                              </button>
+                            ))}
+                          </div>
                         </div>
-                      </div>
+                      )}
 
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-bold text-gray-500 uppercase flex justify-between">
-                          <span>地點標記 (Location)</span>
-                          {editingShiftLocation && (
-                            <span
-                              className="text-indigo-600 cursor-pointer hover:underline"
-                              onClick={() => setEditingShiftLocation("")}
-                            >
-                              清除
-                            </span>
-                          )}
-                        </label>
-                        <div className="flex flex-wrap gap-1.5 p-1 max-h-[300px] overflow-y-auto custom-scrollbar">
-                          {LOCATIONS.map((loc) => (
-                            <button
-                              key={loc}
-                              onClick={() => setEditingShiftLocation(loc)}
-                              className={
-                                "px-3 py-1.5 rounded-lg text-xs font-bold border transition-all " +
-                                (editingShiftLocation === loc
-                                  ? "bg-slate-800 text-white border-slate-900 shadow-sm"
-                                  : "bg-slate-50 text-gray-600 border-gray-200 hover:border-slate-400 hover:bg-white")
+                      {/* 業務任務、地點、時段（假時隱藏） */}
+                      {editingShiftTask !== "假" && (
+                        <>
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-bold text-gray-500 uppercase flex justify-between">
+                              <span>業務任務 (主控, 輔控...)</span>
+                              {editingShiftSubTask.length > 0 && (
+                                <span
+                                  className="text-indigo-600 cursor-pointer hover:underline"
+                                  onClick={() => setEditingShiftSubTask([])}
+                                >
+                                  清除
+                                </span>
+                              )}
+                            </label>
+                            <div className="flex flex-wrap gap-1.5 p-1 max-h-[300px] overflow-y-auto custom-scrollbar">
+                              {(selectedCell
+                                ? db.getHealthMgmtTasks(
+                                    healthMgmtStaff.find(
+                                      (s) => s.id === selectedCell.userId,
+                                    )?.location || currentUserLocation,
+                                  )
+                                : hmTasks
+                              ).map((tk) => (
+                                <button
+                                  key={tk}
+                                  onClick={() =>
+                                    setEditingShiftSubTask((prev) =>
+                                      prev.includes(tk)
+                                        ? prev.filter((t) => t !== tk)
+                                        : [...prev, tk],
+                                    )
+                                  }
+                                  className={
+                                    "px-3 py-1.5 rounded-lg text-xs font-bold border transition-all " +
+                                    (editingShiftSubTask.includes(tk)
+                                      ? "bg-indigo-500 text-white border-indigo-600 shadow-sm"
+                                      : "bg-slate-50 text-gray-600 border-gray-200 hover:border-indigo-300 hover:bg-white")
+                                  }
+                                >
+                                  {tk}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-bold text-gray-500 uppercase flex justify-between">
+                              <span>地點標記 (Location)</span>
+                              {editingShiftLocation && (
+                                <span
+                                  className="text-indigo-600 cursor-pointer hover:underline"
+                                  onClick={() => setEditingShiftLocation("")}
+                                >
+                                  清除
+                                </span>
+                              )}
+                            </label>
+                            <div className="flex flex-wrap gap-1.5 p-1 max-h-[300px] overflow-y-auto custom-scrollbar">
+                              {LOCATIONS.map((loc) => (
+                                <button
+                                  key={loc}
+                                  onClick={() => setEditingShiftLocation(loc)}
+                                  className={
+                                    "px-3 py-1.5 rounded-lg text-xs font-bold border transition-all " +
+                                    (editingShiftLocation === loc
+                                      ? "bg-slate-800 text-white border-slate-900 shadow-sm"
+                                      : "bg-slate-50 text-gray-600 border-gray-200 hover:border-slate-400 hover:bg-white")
+                                  }
+                                >
+                                  {loc}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-bold text-gray-500 uppercase flex justify-between">
+                              <span>工作時段 (選填)</span>
+                              {editingShiftTime && (
+                                <span
+                                  className="text-teal-600 cursor-pointer hover:underline"
+                                  onClick={() => setEditingShiftTime("")}
+                                >
+                                  清除
+                                </span>
+                              )}
+                            </label>
+                            <div className="flex flex-wrap gap-1.5 p-1 mb-2">
+                              {(selectedCell
+                                ? db.getHealthMgmtTimes(
+                                    healthMgmtStaff.find(
+                                      (s) => s.id === selectedCell.userId,
+                                    )?.location || currentUserLocation,
+                                  )
+                                : hmTimes
+                              ).map((time) => (
+                                <button
+                                  key={time}
+                                  onClick={() => setEditingShiftTime(time)}
+                                  className={
+                                    "px-3 py-1.5 rounded-lg text-[10px] font-bold border transition-all " +
+                                    (editingShiftTime === time
+                                      ? "bg-teal-500 text-white border-teal-600 shadow-sm"
+                                      : "bg-slate-50 text-gray-600 border-gray-200 hover:border-teal-300 hover:bg-white")
+                                  }
+                                >
+                                  {time}
+                                </button>
+                              ))}
+                            </div>
+                            <input
+                              type="text"
+                              value={editingShiftTime}
+                              onChange={(e) => setEditingShiftTime(e.target.value)}
+                              placeholder="自訂時段 (例: 08:00-16:00)"
+                              className="w-full px-4 py-2 bg-slate-50 border border-gray-200 rounded-lg text-sm font-medium focus:ring-2 focus:ring-teal-500 outline-none transition-all"
+                            />
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-bold text-gray-500 uppercase">
+                              自訂業務任務
+                            </label>
+                            <input
+                              type="text"
+                              value={editingShiftCustomTask}
+                              onChange={(e) =>
+                                setEditingShiftCustomTask(e.target.value)
                               }
-                            >
-                              {loc}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-bold text-gray-500 uppercase flex justify-between">
-                          <span>工作時段 (選填)</span>
-                          {editingShiftTime && (
-                            <span
-                              className="text-teal-600 cursor-pointer hover:underline"
-                              onClick={() => setEditingShiftTime("")}
-                            >
-                              清除
-                            </span>
-                          )}
-                        </label>
-                        <div className="flex flex-wrap gap-1.5 p-1 mb-2">
-                          {(selectedCell
-                            ? db.getHealthMgmtTimes(
-                                healthMgmtStaff.find(
-                                  (s) => s.id === selectedCell.userId,
-                                )?.location || currentUserLocation,
-                              )
-                            : hmTimes
-                          ).map((time) => (
-                            <button
-                              key={time}
-                              onClick={() => setEditingShiftTime(time)}
-                              className={
-                                "px-3 py-1.5 rounded-lg text-[10px] font-bold border transition-all " +
-                                (editingShiftTime === time
-                                  ? "bg-teal-500 text-white border-teal-600 shadow-sm"
-                                  : "bg-slate-50 text-gray-600 border-gray-200 hover:border-teal-300 hover:bg-white")
-                              }
-                            >
-                              {time}
-                            </button>
-                          ))}
-                        </div>
-                        <input
-                          type="text"
-                          value={editingShiftTime}
-                          onChange={(e) => setEditingShiftTime(e.target.value)}
-                          placeholder="自訂時段 (例: 08:00-16:00)"
-                          className="w-full px-4 py-2 bg-slate-50 border border-gray-200 rounded-lg text-sm font-medium focus:ring-2 focus:ring-teal-500 outline-none transition-all"
-                        />
-                      </div>
-
-                      <div className="space-y-1.5">
-                        <label className="text-xs font-bold text-gray-500 uppercase">
-                          自訂業務任務
-                        </label>
-                        <input
-                          type="text"
-                          value={editingShiftCustomTask}
-                          onChange={(e) =>
-                            setEditingShiftCustomTask(e.target.value)
-                          }
-                          placeholder="自訂任務名稱"
-                          className="w-full px-4 py-2 bg-slate-50 border border-gray-200 rounded-lg text-sm font-medium focus:ring-2 focus:ring-teal-500 outline-none transition-all"
-                        />
-                      </div>
+                              placeholder="自訂任務名稱"
+                              className="w-full px-4 py-2 bg-slate-50 border border-gray-200 rounded-lg text-sm font-medium focus:ring-2 focus:ring-teal-500 outline-none transition-all"
+                            />
+                          </div>
+                        </>
+                      )}
 
                       <div className="pt-2">
                         <button
@@ -3844,6 +3946,12 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                     <th className="p-4 text-center font-bold text-indigo-600">
                       晚班
                     </th>
+                    <th className="p-4 text-center font-bold text-violet-600">
+                      call班
+                    </th>
+                    <th className="p-4 text-center font-bold text-violet-600">
+                      排班
+                    </th>
                     {hmStations.map((st) => (
                       <th key={st} className="p-4 text-center font-bold">
                         {st}
@@ -3893,6 +4001,12 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                         <td className="p-4 text-center font-bold text-slate-700">
                           {roleCounts?.["晚班"] || "-"}
                         </td>
+                        <td className="p-4 text-center font-bold text-slate-700">
+                          {roleCounts?.["call班"] || "-"}
+                        </td>
+                        <td className="p-4 text-center font-bold text-slate-700">
+                          {roleCounts?.["排班"] || "-"}
+                        </td>
                         {hmStations.map((st) => (
                           <td
                             key={st}
@@ -3916,11 +4030,11 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
           </div>
         ) : (
           /* Staff Management Tab */
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 flex flex-col h-full overflow-hidden">
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 flex flex-col min-h-0 flex-1 overflow-hidden">
             <div className="p-4 border-b border-gray-100 bg-gray-50 flex-none flex justify-between items-center">
               <h3 className="font-bold text-gray-700">健管人員名單</h3>
             </div>
-            <div className="p-6 flex-1 overflow-y-auto custom-scrollbar pb-20">
+            <div className="p-6 flex-1 overflow-y-auto pb-24">
               <form
                 onSubmit={editingId ? updateStaff : addStaff}
                 className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7 gap-4 items-end mb-8 bg-gray-50 p-5 rounded-xl border border-gray-100"

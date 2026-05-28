@@ -5,6 +5,7 @@ import {
   SPECIAL_ROLES,
   StationDefault,
   DateEventType,
+  PERMISSIONS,
 } from "../types";
 import { db } from "../services/store";
 import {
@@ -631,6 +632,10 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
     currentUser.role === UserRole.SUPERVISOR ||
     currentUser.role === UserRole.SYSTEM_ADMIN;
 
+  const canViewWorkload =
+    isSupervisorOrAdmin ||
+    currentUser.permissions?.includes(PERMISSIONS.VIEW_WORKLOAD_STATS);
+
   return (
     <div className="h-full flex flex-col bg-slate-50">
       {/* Sync Modal */}
@@ -792,7 +797,7 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
                   個人週期
                 </button>
               )}
-              {isSupervisorOrAdmin && (
+              {canViewWorkload && (
                 <button
                   onClick={() => setActiveTab("workload")}
                   className={`px-3 py-1.5 rounded text-sm font-bold transition-all ${activeTab === "workload" ? "bg-white text-emerald-700 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
@@ -1217,7 +1222,7 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
         )}
 
         {/* ── Workload Tab ── */}
-        {activeTab === "workload" && isSupervisorOrAdmin && (
+        {activeTab === "workload" && canViewWorkload && (
           <div className="absolute inset-0 z-10">
             <RadiographerWorkloadPage currentUser={currentUser} />
           </div>

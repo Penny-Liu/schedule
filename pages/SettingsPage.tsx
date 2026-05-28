@@ -85,6 +85,10 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
     ),
   );
   const [newHmTime, setNewHmTime] = useState("");
+  const [hmLeaveTypes, setHmLeaveTypes] = useState<string[]>(
+    db.getHealthMgmtLeaveTypes(),
+  );
+  const [newHmLeaveType, setNewHmLeaveType] = useState("");
   const [hmCycles, setHmCycles] = useState<RosterCycle[]>(
     db.getHealthMgmtCycles(),
   );
@@ -231,6 +235,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
       setHmStations(db.getHealthMgmtStations(hmLocation));
       setHmTasks(db.getHealthMgmtTasks(hmLocation));
       setHmTimes(db.getHealthMgmtTimes(hmLocation));
+      setHmLeaveTypes(db.getHealthMgmtLeaveTypes());
       setHmCycles(db.getHealthMgmtCycles());
 
       const currentTemplate = db.settings.lineCopyTemplate || "";
@@ -353,6 +358,22 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
     const updated = hmTimes.filter((t) => t !== time);
     setHmTimes(updated);
     await db.updateHealthMgmtTimes(updated, hmLocation);
+  };
+
+  const handleAddHmLeaveType = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newHmLeaveType.trim()) return;
+    if (hmLeaveTypes.includes(newHmLeaveType.trim())) return;
+    const updated = [...hmLeaveTypes, newHmLeaveType.trim()];
+    setHmLeaveTypes(updated);
+    setNewHmLeaveType("");
+    await db.updateHealthMgmtLeaveTypes(updated);
+  };
+
+  const handleDeleteHmLeaveType = async (lt: string) => {
+    const updated = hmLeaveTypes.filter((t) => t !== lt);
+    setHmLeaveTypes(updated);
+    await db.updateHealthMgmtLeaveTypes(updated);
   };
 
   const handleAddHmCycle = async (e: React.FormEvent) => {
@@ -2419,6 +2440,59 @@ BMD :{{bmd}}
                   {hmTasks.length === 0 && (
                     <div className="w-full text-center py-4 text-gray-400 text-sm italic">
                       尚未設定健管任務
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Leave Types Management */}
+            {canManageHealthMgmt && (
+              <div className="bg-white rounded-xl shadow-[0_2px_12px_rgba(0,0,0,0.03)] border border-gray-100 overflow-hidden flex flex-col h-fit">
+                <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50">
+                  <h3 className="font-bold text-gray-800 flex items-center gap-2">
+                    <Tag size={16} className="text-red-400" />
+                    <span>假別管理</span>
+                  </h3>
+                </div>
+
+                <div className="px-4 py-3 border-b border-gray-100 bg-gray-50/30">
+                  <form onSubmit={handleAddHmLeaveType} className="flex gap-2">
+                    <input
+                      type="text"
+                      value={newHmLeaveType}
+                      onChange={(e) => setNewHmLeaveType(e.target.value)}
+                      placeholder="輸入假別名稱..."
+                      className="w-40 px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-red-400 outline-none shadow-sm transition-all"
+                    />
+                    <button
+                      type="submit"
+                      className="bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded-lg transition-colors flex items-center text-sm font-medium"
+                    >
+                      <Plus size={16} />
+                    </button>
+                  </form>
+                </div>
+
+                <div className="p-4 flex flex-wrap gap-2 max-h-[200px] overflow-y-auto">
+                  {hmLeaveTypes.map((lt) => (
+                    <div
+                      key={lt}
+                      className="flex items-center gap-2 bg-rose-50 border border-red-200 px-3 py-1.5 rounded-lg group hover:border-red-400 transition-colors"
+                    >
+                      <span className="text-sm font-bold text-red-700">{lt}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteHmLeaveType(lt)}
+                        className="text-red-200 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  ))}
+                  {hmLeaveTypes.length === 0 && (
+                    <div className="w-full text-center py-4 text-gray-400 text-sm italic">
+                      尚未設定假別
                     </div>
                   )}
                 </div>

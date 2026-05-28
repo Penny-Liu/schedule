@@ -682,6 +682,7 @@ class Store {
           ctaPostProcessing: w.ctaPostProcessing || w.cta_post_processing || 0,
           reportTyping: w.reportEntry || w.report_entry || 0,
           proofreader: w.imageProofing || w.image_proofing || 0,
+          tsmcReport: w.tsmcReport || w.tsmc_report || 0,
         }));
       }
 
@@ -810,6 +811,7 @@ BMD :{{bmd}}
         cta_post_processing: w.ctaPostProcessing ?? 0,
         report_entry: w.reportTyping,
         image_proofing: w.proofreader,
+        tsmc_report: w.tsmcReport,
       };
 
       if (w.id) {
@@ -871,6 +873,7 @@ BMD :{{bmd}}
         ctaPostProcessing: w.ctaPostProcessing || 0,
         reportTyping: w.reportTyping || 0,
         proofreader: w.proofreader || 0,
+        tsmcReport: w.tsmcReport || 0,
         floorControl: w.floorControl || 0,
         assist: w.assist || 0,
         scheduler: w.scheduler || 0,
@@ -2800,6 +2803,18 @@ BMD :{{bmd}}
     } else {
       this.settings.healthMgmtTimes = times;
     }
+    await this.saveSettings();
+    this.notifyListeners();
+  }
+
+  getHealthMgmtLeaveTypes(): string[] {
+    return (
+      this.settings.healthMgmtLeaveTypes || ["V", "婚", "病", "事", "產", "投", "原"]
+    );
+  }
+
+  async updateHealthMgmtLeaveTypes(types: string[]) {
+    this.settings.healthMgmtLeaveTypes = types;
     await this.saveSettings();
     this.notifyListeners();
   }

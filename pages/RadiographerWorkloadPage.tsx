@@ -3,16 +3,21 @@ import { User, StationDefault, SPECIAL_ROLES } from "../types";
 import { db } from "../services/store";
 import {
   BarChart3,
-  Download,
   FileSpreadsheet,
   Edit3,
   Save,
   X,
   UploadCloud,
-  RefreshCw,
+  Tag,
+  MessageSquare,
+  ChevronUp,
+  ChevronDown,
+  ChevronsUpDown,
+  Check,
+  Plus,
 } from "lucide-react";
 import ExcelJS from "exceljs";
-import { isUserOnEmploymentPause } from "../services/utils";
+import { isUserOnEmploymentPause, generateUUID } from "../services/utils";
 
 type WorkloadFieldKey =
   | "mr"
@@ -40,7 +45,8 @@ type WorkloadFieldKey =
   | "mg"
   | "bmd"
   | "reportTyping"
-  | "proofreader";
+  | "proofreader"
+  | "tsmcReport";
 
 const workloadFieldMeta: { key: WorkloadFieldKey; label: string }[] = [
   { key: "workDays", label: "上班天數" },
@@ -68,6 +74,7 @@ const workloadFieldMeta: { key: WorkloadFieldKey; label: string }[] = [
   { key: "bmd", label: "BMD" },
   { key: "reportTyping", label: "報告登打" },
   { key: "proofreader", label: "影像校對" },
+  { key: "tsmcReport", label: "台積電報告" },
 ];
 
 const defaultWorkloadWeights: Record<WorkloadFieldKey, number> = {
@@ -97,6 +104,7 @@ const defaultWorkloadWeights: Record<WorkloadFieldKey, number> = {
   bmd: 1,
   reportTyping: 1,
   proofreader: 1,
+  tsmcReport: 1,
 };
 
 interface RadiographerWorkloadPageProps {
@@ -130,6 +138,23 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
   );
   const [isSavingWeights, setIsSavingWeights] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+
+  // Sort
+  const [sortField, setSortField] = useState<string | null>('totalUnits');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+
+  // Groups / classification
+  const [showGroupPanel, setShowGroupPanel] = useState(false);
+  const [groups, setGroups] = useState<{id: string; name: string}[]>(
+    () => (db.settings as any).radiographerGroups || []
+  );
+  const [groupAssignments, setGroupAssignments] = useState<Record<string, string>>(
+    () => (db.settings as any).radiographerGroupAssignments || {}
+  );
+  const [newGroupName, setNewGroupName] = useState('');
+
+  // LINE copy feedback
+  const [lineCopied, setLineCopied] = useState(false);
 
   const onsiteFieldKeys: WorkloadFieldKey[] = [
     "mr",
@@ -194,7 +219,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
     return { floorControl, assist, scheduler };
   };
 
-  const remoteFieldKeys: WorkloadFieldKey[] = ["reportTyping", "proofreader"];
+  const remoteFieldKeys: WorkloadFieldKey[] = ["reportTyping", "proofreader", "tsmcReport"];
 
   const computeUnits = (row: any, keys: WorkloadFieldKey[]) =>
     keys.reduce(
@@ -204,6 +229,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
 
   const computeTotalUnits = (row: any) =>
     computeUnits(row, [...onsiteFieldKeys, ...remoteFieldKeys]);
+
 
   const getHeaderStyle = (field: WorkloadFieldKey) => {
     if (field === "ct" || field === "cta" || field === "ctaPostProcessing") {
@@ -221,6 +247,9 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
     }
     if (field === "proofreader") {
       return "text-purple-600 bg-purple-50/50";
+    }
+    if (field === "tsmcReport") {
+      return "text-orange-600 bg-orange-50/50";
     }
     return "";
   };
@@ -351,6 +380,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
         bmd: 0,
         reportTyping: 0,
         proofreader: 0,
+        tsmcReport: 0,
         totalUnits: 0,
       };
 
@@ -383,24 +413,43 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
           stats.ctaPostProcessing += w.ctaPostProcessing || w.cta_post_processing || 0;
           stats.reportTyping += w.reportEntry || w.reportTyping || 0;
           stats.proofreader += w.imageProofing || w.proofreader || 0;
+          stats.tsmcReport += w.tsmcReport || w.tsmc_report || 0;
         });
       }
+
+      // 優先使用個人週期（如有），否則 fallback 到全域 generalDates
+      const personalCycle = user.personalCycles?.[currentMonth];
+      const userDates = personalCycle
+        ? buildDateRange(personalCycle.startDate, personalCycle.endDate)
+        : generalDates;
 
       // 從排班計算上班天數與場控/輔控/排班
       const userShiftsInRange = shifts.filter(
         (s) =>
           s.userId === user.id &&
-          generalDates.includes(s.date) &&
+          userDates.includes(s.date) &&
           s.station !== StationDefault.UNASSIGNED &&
           s.station !== StationDefault.OFF &&
           s.station !== "休假",
       );
       stats.workDays = userShiftsInRange.length;
 
-      const scheduleCounts = computeScheduleFields(user.id);
-      stats.floorControl = scheduleCounts.floorControl;
-      stats.assist = scheduleCounts.assist;
-      stats.scheduler = scheduleCounts.scheduler;
+      const floorControl = userShiftsInRange.filter((s) => s.station.includes("場控")).length;
+      const assist = userShiftsInRange.filter(
+        (s) =>
+          s.specialRoles.includes(SPECIAL_ROLES.ASSIST) ||
+          s.station.includes("輔控") ||
+          s.station === "輔",
+      ).length;
+      const scheduler = userShiftsInRange.filter(
+        (s) =>
+          s.specialRoles.includes(SPECIAL_ROLES.SCHEDULER) ||
+          s.station.includes("排班"),
+      ).length;
+      stats.floorControl = floorControl;
+      stats.assist = assist;
+      stats.scheduler = scheduler;
+
 
       stats.onsiteUnits = computeUnits(stats, onsiteFieldKeys);
       stats.remoteUnits = computeUnits(stats, remoteFieldKeys);
@@ -408,6 +457,40 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
       return stats;
     });
   }, [radiographers, workloads, currentMonth, weights, generalDates, shifts]);
+
+  // Sorted display data (must be after workloadData)
+  const displayData = useMemo(() => {
+    const base: any[] = isEditing ? Object.values(editingData) : workloadData;
+    if (!sortField) return base;
+    return [...base].sort((a, b) => {
+      let va: number, vb: number;
+      if (sortField === 'onsiteUnits') { va = computeUnits(a, onsiteFieldKeys); vb = computeUnits(b, onsiteFieldKeys); }
+      else if (sortField === 'remoteUnits') { va = computeUnits(a, remoteFieldKeys); vb = computeUnits(b, remoteFieldKeys); }
+      else if (sortField === 'totalUnits') { va = computeTotalUnits(a); vb = computeTotalUnits(b); }
+      else { va = a[sortField] ?? 0; vb = b[sortField] ?? 0; }
+      return sortDir === 'asc' ? va - vb : vb - va;
+    });
+  }, [workloadData, editingData, isEditing, sortField, sortDir, weights]);
+
+  const handleSort = (field: string) => {
+    if (sortField === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    else { setSortField(field); setSortDir('desc'); }
+  };
+
+  const SortTh = ({ field, label, className = '' }: { field: string; label: string; className?: string }) => {
+    const active = sortField === field;
+    return (
+      <th
+        onClick={() => handleSort(field)}
+        className={`px-4 py-3 text-center cursor-pointer select-none hover:bg-slate-100 transition-colors ${className}`}
+      >
+        <span className="flex items-center justify-center gap-1">
+          {label}
+          {active ? (sortDir === 'asc' ? <ChevronUp size={11}/> : <ChevronDown size={11}/>) : <ChevronsUpDown size={11} className="opacity-30"/>}
+        </span>
+      </th>
+    );
+  };
 
   const handleToggleEdit = () => {
     if (!isEditing) {
@@ -439,6 +522,120 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
       ...prev,
       [field]: parseFloat(value) || 0,
     }));
+  };
+
+  // ── Group management ──────────────────────────────────────────
+  const persistGroups = async (g: typeof groups, a: typeof groupAssignments) => {
+    (db.settings as any).radiographerGroups = g;
+    (db.settings as any).radiographerGroupAssignments = a;
+    await db.saveSettings();
+  };
+
+  const handleAddGroup = async () => {
+    if (!newGroupName.trim()) return;
+    const updated = [...groups, { id: generateUUID(), name: newGroupName.trim() }];
+    setGroups(updated);
+    setNewGroupName('');
+    await persistGroups(updated, groupAssignments);
+  };
+
+  const handleDeleteGroup = async (id: string) => {
+    const updated = groups.filter(g => g.id !== id);
+    const newA = { ...groupAssignments };
+    Object.keys(newA).forEach(uid => { if (newA[uid] === id) delete newA[uid]; });
+    setGroups(updated);
+    setGroupAssignments(newA);
+    await persistGroups(updated, newA);
+  };
+
+  const handleRenameGroup = async (id: string, name: string) => {
+    const updated = groups.map(g => g.id === id ? { ...g, name } : g);
+    setGroups(updated);
+    await persistGroups(updated, groupAssignments);
+  };
+
+  const handleAssignGroup = async (userId: string, groupId: string) => {
+    const updated = { ...groupAssignments };
+    if (!groupId) delete updated[userId];
+    else updated[userId] = groupId;
+    setGroupAssignments(updated);
+    await persistGroups(groups, updated);
+  };
+
+  const handleMoveGroup = (id: string, dir: 'up' | 'down') => {
+    setGroups(prev => {
+      const idx = prev.findIndex(g => g.id === id);
+      if (idx < 0) return prev;
+      const newIdx = dir === 'up' ? idx - 1 : idx + 1;
+      if (newIdx < 0 || newIdx >= prev.length) return prev;
+      const updated = [...prev];
+      [updated[idx], updated[newIdx]] = [updated[newIdx], updated[idx]];
+      // fire-and-forget persist
+      persistGroups(updated, groupAssignments);
+      return updated;
+    });
+  };
+
+  // ── LINE text (shared by preview + copy) ─────────────────────
+  const lineText = useMemo(() => {
+    const startDate = generalDates[0] || '';
+    const endDate = generalDates[generalDates.length - 1] || '';
+    const days = generalDates.length;
+    const [y, m] = currentMonth.split('-').map(Number);
+    const cycle = cycles.find(c => c.name === `${y}/${String(m).padStart(2,'0')}` || c.name === `${y}/${m}`);
+    const mm = String(m).padStart(2, '0');
+    const header = `${y}第${mm}週期 （${startDate.slice(5).replace('-','/')}~${endDate.slice(5).replace('-','/')}）  ${days}天`;
+
+    const grouped: Record<string, any[]> = {};
+    const unassigned: any[] = [];
+    groups.forEach(g => { grouped[g.id] = []; });
+    displayData.forEach(row => {
+      const user = radiographers.find(r => r.name === row.name);
+      const gid = user ? groupAssignments[user.id] : undefined;
+      if (gid && grouped[gid] !== undefined) grouped[gid].push(row);
+      else unassigned.push(row);
+    });
+
+    // 全形數字對齊：用全形數字 ０-９ + 全形空格補位，與中文字等寬
+    const toFW = (n: number, w: number) =>
+      String(n)
+        .padStart(w)
+        .replace(/ /g, '\u3000')                           // 全形空格
+        .replace(/\d/g, d => String.fromCharCode(d.charCodeAt(0) + 0xFEE0)); // 半形→全形
+
+    // 動態計算每欄最大寬度
+    const allRows = [...Object.values(grouped).flat(), ...unassigned];
+    const wOnsite = allRows.length ? Math.max(...allRows.map(r => String(Math.round(computeUnits(r, onsiteFieldKeys))).length)) : 3;
+    const wRemote  = allRows.length ? Math.max(...allRows.map(r => String(Math.round(computeUnits(r, remoteFieldKeys))).length)) : 3;
+    const wTotal   = allRows.length ? Math.max(...allRows.map(r => String(Math.round(computeTotalUnits(r))).length)) : 3;
+    const wDays    = allRows.length ? Math.max(...allRows.map(r => String(r.workDays || 0).length)) : 2;
+
+    const fmt = (row: any) => {
+      const onsite = Math.round(computeUnits(row, onsiteFieldKeys));
+      const remote = Math.round(computeUnits(row, remoteFieldKeys));
+      const total = Math.round(computeTotalUnits(row));
+      const name2 = row.name.slice(-2);
+      return `${name2} ${toFW(row.workDays, wDays)}天    現${toFW(onsite, wOnsite)}    遠${toFW(remote, wRemote)}    總${toFW(total, wTotal)}`;
+    };
+
+    let text = header + '\n';
+    groups.forEach(g => {
+      const rows = grouped[g.id];
+      if (!rows?.length) return;
+      text += `\n${g.name}\n`;
+      rows.forEach(r => { text += fmt(r) + '\n'; });
+    });
+    if (unassigned.length) {
+      text += `\n(未分類)\n`;
+      unassigned.forEach(r => { text += fmt(r) + '\n'; });
+    }
+    return text.trim();
+  }, [displayData, groups, groupAssignments, generalDates, currentMonth, cycles, radiographers, weights]);
+
+  const handleLineCopy = () => {
+    navigator.clipboard.writeText(lineText);
+    setLineCopied(true);
+    setTimeout(() => setLineCopied(false), 2500);
   };
 
   const handleSaveWeights = async () => {
@@ -629,6 +826,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
         "BMD",
         "報告登打",
         "影像校對",
+        "台積電報告",
         "現場加權",
         "遠班加權",
         "總加權",
@@ -670,6 +868,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
           row.bmd || 0,
           row.reportTyping || 0,
           row.proofreader || 0,
+          row.tsmcReport || 0,
           Number(computeUnits(row, onsiteFieldKeys).toFixed(1)),
           Number(computeUnits(row, remoteFieldKeys).toFixed(1)),
           Number(computeTotalUnits(row).toFixed(1)),
@@ -820,6 +1019,17 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
                 >
                   <FileSpreadsheet size={16} /> 匯出 Excel
                 </button>
+                <button
+                  onClick={() => setShowGroupPanel(v => !v)}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-bold transition-colors border shadow-sm ${
+                    showGroupPanel
+                      ? 'bg-violet-600 text-white border-violet-700'
+                      : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  <Tag size={16} /> 分類
+                </button>
+
               </>
             )}
           </div>
@@ -894,6 +1104,59 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
             </div>
           </div>
         </div>
+
+        {/* Group Panel */}
+        {showGroupPanel && (
+          <div className="bg-white border border-violet-200 rounded-2xl p-4 shadow-sm mb-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="text-sm font-bold text-violet-800 flex items-center gap-2"><Tag size={14}/> 分類管理</div>
+              <button onClick={() => setShowGroupPanel(false)} className="text-slate-400 hover:text-slate-600"><X size={16}/></button>
+            </div>
+            <div className="flex gap-2 mb-3">
+              <input
+                value={newGroupName}
+                onChange={e => setNewGroupName(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleAddGroup()}
+                placeholder="輸入分類名稱（如：技術領導、儲備leader）..."
+                className="flex-1 border border-slate-200 rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-violet-400"
+              />
+              <button onClick={handleAddGroup} className="bg-violet-600 hover:bg-violet-700 text-white px-3 py-1.5 rounded-lg text-sm font-bold flex items-center gap-1">
+                <Plus size={14}/> 新增
+              </button>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {groups.length === 0 && <div className="text-xs text-slate-400 italic">尚未建立分類，新增後可在下方每人的下拉選單中指定</div>}
+              {groups.map((g, idx) => (
+                <div key={g.id} className="flex items-center gap-1 bg-violet-50 border border-violet-200 pl-2 pr-1 py-1 rounded-lg">
+                  {/* reorder */}
+                  <div className="flex flex-col">
+                    <button
+                      type="button"
+                      onClick={() => handleMoveGroup(g.id, 'up')}
+                      disabled={idx === 0}
+                      className="text-violet-400 hover:text-violet-700 disabled:opacity-20 leading-none p-0.5"
+                    ><ChevronUp size={13}/></button>
+                    <button
+                      type="button"
+                      onClick={() => handleMoveGroup(g.id, 'down')}
+                      disabled={idx === groups.length - 1}
+                      className="text-violet-400 hover:text-violet-700 disabled:opacity-20 leading-none p-0.5"
+                    ><ChevronDown size={13}/></button>
+                  </div>
+                  <input
+                    value={g.name}
+                    onChange={e => handleRenameGroup(g.id, e.target.value)}
+                    className="text-sm font-medium text-violet-800 bg-transparent border-none outline-none w-24"
+                  />
+                  <button onClick={() => handleDeleteGroup(g.id)} className="text-violet-200 hover:text-red-500 transition-colors">
+                    <X size={13}/>
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm text-left">
@@ -902,38 +1165,38 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
                   <th className="px-4 py-3 sticky left-0 bg-slate-50 z-10 border-r border-slate-200">
                     放射師姓名
                   </th>
+                  {groups.length > 0 && (
+                    <th className="px-3 py-3 text-center text-violet-600 bg-violet-50/50 whitespace-nowrap">分類</th>
+                  )}
                   {workloadFieldMeta.map((field) => (
-                    <th
+                    <SortTh
                       key={field.key}
-                      className={`px-4 py-3 text-center ${getHeaderStyle(field.key)} ${shouldRenderCategorySeparator(field.key) ? "border-r-2 border-slate-300" : ""}`}
-                    >
-                      {field.label}
-                    </th>
+                      field={field.key}
+                      label={field.label}
+                      className={`${getHeaderStyle(field.key)} ${shouldRenderCategorySeparator(field.key) ? 'border-r-2 border-slate-300' : ''}`}
+                    />
                   ))}
-                  <th className="px-4 py-3 text-center bg-slate-100 text-slate-700">
-                    現場加權
-                  </th>
-                  <th className="px-4 py-3 text-center bg-slate-100 text-slate-700">
-                    遠班加權
-                  </th>
-                  <th className="px-4 py-3 text-center bg-slate-100 text-slate-700">
-                    總加權
-                  </th>
+                  <SortTh field="onsiteUnits" label="現場加權" className="bg-slate-100 text-slate-700" />
+                  <SortTh field="remoteUnits" label="遠班加權" className="bg-slate-100 text-slate-700" />
+                  <SortTh field="totalUnits" label="總加權" className="bg-slate-100 text-slate-700" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {workloadData.length === 0 ? (
+                {displayData.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={workloadFieldMeta.length + 4}
+                      colSpan={workloadFieldMeta.length + (groups.length > 0 ? 4 : 3)}
                       className="px-4 py-8 text-center text-slate-400 font-medium"
                     >
                       無資料
                     </td>
                   </tr>
                 ) : (
-                  (isEditing ? Object.values(editingData) : workloadData).map(
-                    (row: any, idx) => (
+                  displayData.map((row: any, idx) => {
+                      const user = radiographers.find(r => r.name === row.name);
+                      const assignedGroupId = user ? (groupAssignments[user.id] || '') : '';
+                      const assignedGroup = groups.find(g => g.id === assignedGroupId);
+                      return (
                       <tr
                         key={idx}
                         className="hover:bg-slate-50/50 transition-colors"
@@ -941,6 +1204,18 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
                         <td className="px-4 py-2.5 font-bold text-slate-800 sticky left-0 bg-white border-r border-slate-100">
                           {row.name}
                         </td>
+                        {groups.length > 0 && (
+                          <td className="px-2 py-2.5 text-center">
+                            <select
+                              value={assignedGroupId}
+                              onChange={e => user && handleAssignGroup(user.id, e.target.value)}
+                              className="text-xs border border-slate-200 rounded px-1.5 py-1 bg-white text-slate-700 outline-none focus:ring-1 focus:ring-violet-400 max-w-[80px]"
+                            >
+                              <option value="">－</option>
+                              {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+                            </select>
+                          </td>
+                        )}
                         {workloadFieldMeta.map((field) => {
                           const isScheduleField =
                             scheduleDerivedFieldKeys.includes(field.key);
@@ -965,10 +1240,8 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
                                 />
                               ) : (
                                 field.key === "usThy"
-                                  // 「甲」合併顯示 usThy + usNeck
                                   ? (() => { const v = (row.usThy || 0) + (row.usNeck || 0); return v ? (+v).toFixed(1) : "-"; })()
                                   : scheduleDerivedFieldKeys.includes(field.key)
-                                  // 整數欄位（上班天數、場控、輔控、排班）
                                   ? (row[field.key] || "-")
                                   : (() => { const v = row[field.key]; return v ? (+v).toFixed(1) : "-"; })()
                               )}
@@ -985,12 +1258,31 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
                           {Math.round(computeTotalUnits(row))}
                         </td>
                       </tr>
-                    ),
-                  )
+                      );
+                    })
                 )}
               </tbody>
             </table>
           </div>
+        </div>
+
+        {/* LINE Preview */}
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mt-4">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-slate-50">
+            <div className="flex items-center gap-2 text-sm font-bold text-slate-700">
+              <MessageSquare size={15} className="text-green-600"/>
+              LINE 複製預覽
+            </div>
+            <button
+              onClick={handleLineCopy}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-bold transition-colors ${
+                lineCopied ? 'bg-green-600 text-white' : 'bg-green-50 hover:bg-green-100 text-green-700 border border-green-200'
+              }`}
+            >
+              {lineCopied ? <><Check size={14}/> 已複製！</> : <><MessageSquare size={14}/> 複製到剪貼簿</>}
+            </button>
+          </div>
+          <pre className="p-4 text-sm font-mono text-slate-700 whitespace-pre-wrap leading-relaxed bg-white">{lineText}</pre>
         </div>
       </div>
     </div>

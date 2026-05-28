@@ -396,7 +396,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
   ).length;
 
   return (
-    <div className="p-6 max-w-7xl mx-auto h-screen overflow-y-auto">
+    <div className="p-4 md:p-6 max-w-7xl mx-auto h-screen overflow-y-auto overflow-x-hidden">
       <ConfirmModal
         isOpen={!!deleteTargetId}
         onClose={() => setDeleteTargetId(null)}
@@ -447,7 +447,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
         {currentUser.permissions?.includes(PERMISSIONS.EDIT_STAFF) && (
           <div className="xl:col-span-1">
             <div
-              className={`bg-white p-5 rounded-xl shadow-[0_2px_12px_rgba(0,0,0,0.03)] border sticky top-4 transition-all duration-300 max-h-[calc(100vh-2rem)] overflow-y-auto custom-scrollbar ${editingId ? "border-teal-400 ring-1 ring-teal-100" : "border-gray-100"}`}
+              className={`bg-white p-5 rounded-xl shadow-[0_2px_12px_rgba(0,0,0,0.03)] border transition-all duration-300 overflow-x-hidden ${editingId ? "border-teal-400 ring-1 ring-teal-100" : "border-gray-100"}`}
             >
               <div className="flex justify-between items-center mb-4">
                 <h3
@@ -459,13 +459,25 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                   {editingId ? "編輯人員資料" : "新增人員"}
                 </h3>
                 {editingId && (
-                  <button
-                    onClick={handleCancelEdit}
-                    className="text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-100 transition-colors"
-                    title="取消編輯"
-                  >
-                    <X size={16} />
-                  </button>
+                  <div className="flex items-center gap-1">
+                    {currentUser.role === UserRole.SYSTEM_ADMIN && (
+                      <button
+                        type="button"
+                        onClick={handleResetPasswordClick}
+                        className="text-gray-400 hover:text-amber-600 p-1 rounded-full hover:bg-amber-50 transition-colors"
+                        title="重置密碼為預設值 (1234)"
+                      >
+                        <Key size={15} />
+                      </button>
+                    )}
+                    <button
+                      onClick={handleCancelEdit}
+                      className="text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-100 transition-colors"
+                      title="取消編輯"
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
                 )}
               </div>
 
@@ -878,7 +890,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                         點擊切換：無 → 獨立 → 學習 → 不排
                       </span>
                     </div>
-                    <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto p-1 custom-scrollbar">
+                    <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto overflow-x-hidden p-1">
                       {allCapabilities.map((cap) => {
                         const isCertified = formData.capabilities.includes(cap);
                         const isLearning =
@@ -939,11 +951,11 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                       功能權限控管
                     </label>
                   </div>
-                  <div className="bg-gray-50 rounded-lg p-3 border border-gray-100 space-y-4 max-h-[500px] overflow-y-auto custom-scrollbar">
+                  <div className="bg-gray-50 rounded-lg p-3 border border-gray-100 space-y-4 max-h-[500px] overflow-y-auto overflow-x-hidden">
                     {[
                       {
                         title: "放射師業務",
-                        perms: [PERMISSIONS.VIEW_STATS],
+                        perms: [PERMISSIONS.VIEW_STATS, PERMISSIONS.VIEW_WORKLOAD_STATS],
                       },
                       {
                         title: "醫師業務",
@@ -1109,15 +1121,17 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                     </button>
                   </div>
 
+                  {/* Reset Password - only for System Admin in edit mode */}
                   {editingId && currentUser.role === UserRole.SYSTEM_ADMIN && (
                     <button
                       type="button"
                       onClick={handleResetPasswordClick}
-                      className="w-full border border-gray-300 hover:bg-gray-50 text-gray-600 font-medium py-2 rounded-lg transition-colors text-xs flex items-center justify-center gap-1"
+                      className="w-full mt-2 border border-amber-200 hover:bg-amber-50 text-amber-700 font-medium py-2 rounded-lg transition-colors text-xs flex items-center justify-center gap-1.5"
                     >
-                      <Key size={12} /> 重置密碼 (預設1234)
+                      <Key size={13} /> 重置密碼為預設值 (1234)
                     </button>
                   )}
+
                 </div>
               </form>
             </div>

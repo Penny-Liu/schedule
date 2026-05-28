@@ -428,7 +428,7 @@ async function syncRadiographerWorkload(
   console.log(`[sync-stats] [SF API] 備份手動欄位 (cta_post_processing, report_entry)...`);
   const { data: existingRows } = await supabase
     .from("radiographer_workload")
-    .select("radiographerName, cta_post_processing, report_entry")
+    .select("radiographerName, cta_post_processing, report_entry, tsmc_report")
     .eq("year", yearNum)
     .eq("month", monthNum);
   const manualFieldsMap = {};
@@ -436,6 +436,7 @@ async function syncRadiographerWorkload(
     manualFieldsMap[r.radiographerName] = {
       cta_post_processing: r.cta_post_processing ?? null,
       report_entry: r.report_entry ?? null,
+      tsmc_report: r.tsmc_report ?? null,
     };
   });
 
@@ -459,6 +460,7 @@ async function syncRadiographerWorkload(
     // 恢復手動填寫的值，不讓同步覆蓋
     cta_post_processing: manualFieldsMap[w.radiographerName]?.cta_post_processing ?? null,
     report_entry: manualFieldsMap[w.radiographerName]?.report_entry ?? null,
+    tsmc_report: manualFieldsMap[w.radiographerName]?.tsmc_report ?? null,
   }));
 
   console.log(`[sync-stats] [SF API] 正在寫入 ${updates.length} 筆最新資料...`);
