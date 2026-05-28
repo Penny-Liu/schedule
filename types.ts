@@ -427,6 +427,7 @@ export interface RadiographerWorkload {
   ctaPostProcessing: number;
   reportTyping: number;
   proofreader: number;
+  tsmcReport?: number;
   floorControl: number;
   assist: number;
   scheduler: number;
