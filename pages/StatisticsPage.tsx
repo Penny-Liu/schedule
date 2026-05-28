@@ -637,7 +637,7 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
     currentUser.role === UserRole.SYSTEM_ADMIN;
 
   const canViewWorkload =
-    isSupervisorOrAdmin ||
+    currentUser.role === UserRole.SYSTEM_ADMIN ||
     currentUser.permissions?.includes(PERMISSIONS.VIEW_WORKLOAD_STATS);
 
   return (

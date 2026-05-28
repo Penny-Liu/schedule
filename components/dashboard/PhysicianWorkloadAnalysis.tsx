@@ -127,7 +127,7 @@ const PhysicianWorkloadAnalysis: React.FC<PhysicianWorkloadAnalysisProps> = ({
         doctor.total_xiao_tao_3 * 3 +
         doctor.total_wu_2 * 2 +
         doctor.total_wu_1 * 1 +
-        doctor.total_dazhi_1 * 0.8;
+        doctor.total_dazhi_1 * 0.6;
     });
 
     // 按「單位/天」從高到低排序
@@ -164,7 +164,7 @@ const PhysicianWorkloadAnalysis: React.FC<PhysicianWorkloadAnalysisProps> = ({
         "小套3",
         "無2",
         "無1",
-        "直0.8",
+        "直0.6",
         "總判讀醫令",
         "總單位數",
         "判讀天數",
@@ -373,9 +373,7 @@ const PhysicianWorkloadAnalysis: React.FC<PhysicianWorkloadAnalysisProps> = ({
                   <th className="px-4 py-3 text-center text-sm font-bold text-slate-600">
                     無1
                   </th>
-                  <th className="px-4 py-3 text-center text-sm font-bold text-slate-600">
-                    直0.8
-                  </th>
+                  <th className="px-4 py-3 text-center text-sm font-bold text-slate-600">直0.6</th>
                   <th className="px-4 py-3 text-center text-sm font-bold text-slate-600">
                     判讀醫令
                   </th>
