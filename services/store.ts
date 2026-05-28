@@ -316,7 +316,9 @@ class Store {
   }
 
   private async fetchWorkloadsByRange(startMonth: string, endMonth: string) {
-    return this.fetchPaginated("radiographer_workload", (q) => q.gte("date", startMonth).lte("date", endMonth));
+    const startY = parseInt(startMonth.split("-")[0]);
+    const endY = parseInt(endMonth.split("-")[0]);
+    return this.fetchPaginated("radiographer_workload", (q) => q.gte("year", startY).lte("year", endY));
   }
   
   private async fetchLeavesByRange(startDate: string, endDate: string) {
