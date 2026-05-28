@@ -258,18 +258,18 @@ async function syncRadiographerWorkload(
         us_pelvis_female: 0,
         us_pelvis_male: 0,
         ct: 0,
+        cta: 0,          // CTA 檢查量（由 CTAUseTime__c 查詢寫入）
         dx: 0,
         mg: 0,
         bmd: 0,
-        cta_post_processing: 0,
-        report_entry: 0,
         imageProofing: 0,
+        // 不候入同步：cta_post_processing、report_entry 由手動填寫，保留原有値
       };
     }
   };
   usersData.forEach((u) => ensureUser(u.name));
 
-  const round2 = (n) => Math.round(n * 100) / 100;
+  const round2 = (n) => Math.round(n * 10) / 10;
 
   // 1a-i. CT/BMD/MG/DX（可以 GROUP BY，不需要 CheckupName）
   console.log(
@@ -396,7 +396,8 @@ async function syncRadiographerWorkload(
     const rawName = rec.person || rec.Radiologist__r?.Name;
     const cleanName = findNameInPath([rawName], validNamesMap);
     if (cleanName !== "Unknown" && workloadMap[cleanName]) {
-      workloadMap[cleanName].cta_post_processing += parseInt(rec.cnt || 0, 10);
+      // CTAUseTime__c 查詢結果實際是 CTA 檢查量，寫入 cta 欄
+      workloadMap[cleanName].cta += parseInt(rec.cnt || 0, 10);
     }
   });
 
@@ -421,32 +422,23 @@ async function syncRadiographerWorkload(
     }
   });
 
-  // 4. 影像報告登打
-  console.log(
-    `[sync-stats]   - [SOQL] 正在查詢 '影像報告登打' (CheckupReservation__c)...`,
-  );
-  const reportSoql = `SELECT Image_Report__c 
-                      FROM CheckupReservation__c 
-                      WHERE (Order__r.ReserveDate__c >= ${reportStartDate} AND Order__r.ReserveDate__c <= ${reportEndDate}) 
-                      AND Image_Report__c != null`;
-  const reportData = await runSoqlQuery({
-    instanceUrl: session.instanceUrl,
-    accessToken: session.accessToken,
-    soql: reportSoql,
-  });
-  const reportStats = {};
-  (reportData.records || []).forEach((rec) => {
-    const rawText = (rec.Image_Report__c || "").trim();
-    if (rawText) reportStats[rawText] = (reportStats[rawText] || 0) + 1;
-  });
-  Object.entries(reportStats).forEach(([rawName, value]) => {
-    const cleanName = findNameInPath([rawName], validNamesMap);
-    if (cleanName !== "Unknown" && workloadMap[cleanName]) {
-      workloadMap[cleanName].report_entry += value;
-    }
+  // 4. 影像報告登打「不候入同步，保留手動填寫的値」
+
+  // 備份手動填寫的欄位（cta_post_processing、report_entry），同步後恢復
+  console.log(`[sync-stats] [SF API] 備份手動欄位 (cta_post_processing, report_entry)...`);
+  const { data: existingRows } = await supabase
+    .from("radiographer_workload")
+    .select("radiographerName, cta_post_processing, report_entry")
+    .eq("year", yearNum)
+    .eq("month", monthNum);
+  const manualFieldsMap = {};
+  (existingRows || []).forEach((r) => {
+    manualFieldsMap[r.radiographerName] = {
+      cta_post_processing: r.cta_post_processing ?? null,
+      report_entry: r.report_entry ?? null,
+    };
   });
 
-  // 寫入 Supabase（先刪舊資料再 insert）
   console.log(
     `[sync-stats] [SF API] 正在清理 Supabase 舊資料 (${yearNum}/${monthNum})...`,
   );
@@ -456,7 +448,7 @@ async function syncRadiographerWorkload(
     .eq("year", yearNum)
     .eq("month", monthNum);
 
-  // round2 MR 相關欄位（其他欄位都是整數）
+  // round2 MR 相關欄位，並恢復手動欄位
   const updates = Object.values(workloadMap).map((w) => ({
     ...w,
     mr: Math.round(w.mr),
@@ -464,6 +456,9 @@ async function syncRadiographerWorkload(
     mr_large_female: round2(w.mr_large_female),
     mr_medium: round2(w.mr_medium),
     mr_small: round2(w.mr_small),
+    // 恢復手動填寫的值，不讓同步覆蓋
+    cta_post_processing: manualFieldsMap[w.radiographerName]?.cta_post_processing ?? null,
+    report_entry: manualFieldsMap[w.radiographerName]?.report_entry ?? null,
   }));
 
   console.log(`[sync-stats] [SF API] 正在寫入 ${updates.length} 筆最新資料...`);

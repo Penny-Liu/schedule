@@ -667,8 +667,8 @@ class Store {
           usBreast: w.usBreast || w.us_breast || 0,
           usHeart: w.usHeart || w.us_heart || 0,
           usThy: w.usThy || w.us_thy || 0,
-          usCCA: w.usCCA || w.us_cca || 0,
-          usNeck: w.usNeck || w.us_neck || 0,
+          usCCA: w.usCCA || w.us_neck || 0,
+          usNeck: w.usNeck || w.us_cca || 0,
           usPelvisFemale: w.usPelvisFemale || w.us_pelvis_female || 0,
           usPelvisMale: w.usPelvisMale || w.us_pelvis_male || 0,
           floorControl: w.floorControl || w.floor_control || 0,
@@ -678,9 +678,8 @@ class Store {
           dx: w.dx || 0,
           mg: w.mg || 0,
           bmd: w.bmd || 0,
-          cta: w.cta || w.ctaPostProcessing || w.cta_post_processing || 0,
-          ctaPostProcessing:
-            w.ctaPostProcessing || w.cta || w.cta_post_processing || 0,
+          cta: w.cta || 0,
+          ctaPostProcessing: w.ctaPostProcessing || w.cta_post_processing || 0,
           reportTyping: w.reportEntry || w.report_entry || 0,
           proofreader: w.imageProofing || w.image_proofing || 0,
         }));
@@ -785,65 +784,32 @@ BMD :{{bmd}}
   async updateWorkload(w: Partial<RadiographerWorkload>) {
     if (!this.currentUser) return;
     try {
-      // 確保欄位對應資料庫 snake_case 或原駝峰，這裡依照 user 提供兩者都給或是用對應的
+      // 只送 snake_case key，對應 Supabase 實際欄位名稱
       const payload = {
         year: w.year,
         month: w.month,
         radiographerName: w.radiographerName,
         mr: w.mr,
-        mrLargeMale: w.mrLargeMale,
         mr_large_male: w.mrLargeMale,
-        mrLargeFemale: w.mrLargeFemale,
         mr_large_female: w.mrLargeFemale,
-        mrMedium: w.mrMedium,
         mr_medium: w.mrMedium,
-        mrSmall: w.mrSmall,
         mr_small: w.mrSmall,
         us: w.us,
-        usA: w.usA,
         us_a: w.usA,
-        usBreast: w.usBreast,
         us_breast: w.usBreast,
-        usHeart: w.usHeart,
         us_heart: w.usHeart,
-        usThy: w.usThy,
         us_thy: w.usThy,
-        usCCA: w.usCCA,
-        us_cca: w.usCCA,
-        usNeck: w.usNeck,
-        us_neck: w.usNeck,
-        usPelvisFemale: w.usPelvisFemale,
+        us_neck: w.usCCA,        // usCCA 寫入 us_neck（對應頸動脈）
+        us_cca: w.usNeck,        // usNeck 寫入 us_cca
         us_pelvis_female: w.usPelvisFemale,
-        usPelvisMale: w.usPelvisMale,
         us_pelvis_male: w.usPelvisMale,
-        floorControl: w.floorControl,
-        floor_control: w.floorControl,
-        assist: w.assist,
-        scheduler: w.scheduler,
         ct: w.ct,
         dx: w.dx,
         mg: w.mg,
         bmd: w.bmd,
-        cta: w.cta,
-        ctaPostProcessing: w.ctaPostProcessing ?? w.cta,
-        cta_post_processing: w.ctaPostProcessing ?? w.cta,
-        reportEntry: w.reportTyping,
+        cta_post_processing: w.ctaPostProcessing ?? 0,
         report_entry: w.reportTyping,
-        imageProofing: w.proofreader,
         image_proofing: w.proofreader,
-        total:
-          (w.mr || 0) +
-          (w.us || 0) +
-          (w.ct || 0) +
-          (w.dx || 0) +
-          (w.mg || 0) +
-          (w.bmd || 0) +
-          (w.cta || 0) +
-          (w.floorControl || 0) +
-          (w.assist || 0) +
-          (w.scheduler || 0) +
-          (w.reportTyping || 0) +
-          (w.proofreader || 0),
       };
 
       if (w.id) {
@@ -902,7 +868,7 @@ BMD :{{bmd}}
         mg: w.mg || 0,
         bmd: w.bmd || 0,
         cta: w.cta || 0,
-        ctaPostProcessing: w.ctaPostProcessing || w.cta || 0,
+        ctaPostProcessing: w.ctaPostProcessing || 0,
         reportTyping: w.reportTyping || 0,
         proofreader: w.proofreader || 0,
         floorControl: w.floorControl || 0,

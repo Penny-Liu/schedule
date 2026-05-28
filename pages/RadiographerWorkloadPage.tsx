@@ -29,6 +29,7 @@ type WorkloadFieldKey =
   | "usNeck"
   | "usPelvisFemale"
   | "usPelvisMale"
+  | "workDays"
   | "floorControl"
   | "assist"
   | "scheduler"
@@ -42,6 +43,7 @@ type WorkloadFieldKey =
   | "proofreader";
 
 const workloadFieldMeta: { key: WorkloadFieldKey; label: string }[] = [
+  { key: "workDays", label: "上班天數" },
   { key: "floorControl", label: "場控" },
   { key: "assist", label: "輔控" },
   { key: "scheduler", label: "排班" },
@@ -51,12 +53,11 @@ const workloadFieldMeta: { key: WorkloadFieldKey; label: string }[] = [
   { key: "mrMedium", label: "MR中" },
   { key: "mrSmall", label: "MR小" },
   { key: "us", label: "US" },
-  { key: "usA", label: "A" },
-  { key: "usBreast", label: "Breast" },
+  { key: "usA", label: "腹" },
+  { key: "usBreast", label: "乳" },
   { key: "usHeart", label: "心" },
-  { key: "usThy", label: "Thy" },
-  { key: "usCCA", label: "CCA" },
-  { key: "usNeck", label: "Neck" },
+  { key: "usThy", label: "甲" },
+  { key: "usCCA", label: "頸" },
   { key: "usPelvisFemale", label: "P女" },
   { key: "usPelvisMale", label: "P男" },
   { key: "ct", label: "CT" },
@@ -70,6 +71,7 @@ const workloadFieldMeta: { key: WorkloadFieldKey; label: string }[] = [
 ];
 
 const defaultWorkloadWeights: Record<WorkloadFieldKey, number> = {
+  workDays: 0,
   floorControl: 1,
   assist: 1,
   scheduler: 1,
@@ -156,6 +158,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
   ];
 
   const scheduleDerivedFieldKeys: WorkloadFieldKey[] = [
+    "workDays",
     "floorControl",
     "assist",
     "scheduler",
@@ -376,13 +379,23 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
           stats.dx += w.dx || 0;
           stats.mg += w.mg || 0;
           stats.bmd += w.bmd || 0;
-          stats.cta += w.cta || w.ctaPostProcessing || 0;
-          stats.ctaPostProcessing +=
-            w.ctaPostProcessing || w.cta || w.cta_post_processing || 0;
+          stats.cta += w.cta || 0;
+          stats.ctaPostProcessing += w.ctaPostProcessing || w.cta_post_processing || 0;
           stats.reportTyping += w.reportEntry || w.reportTyping || 0;
           stats.proofreader += w.imageProofing || w.proofreader || 0;
         });
       }
+
+      // 從排班計算上班天數與場控/輔控/排班
+      const userShiftsInRange = shifts.filter(
+        (s) =>
+          s.userId === user.id &&
+          generalDates.includes(s.date) &&
+          s.station !== StationDefault.UNASSIGNED &&
+          s.station !== StationDefault.OFF &&
+          s.station !== "休假",
+      );
+      stats.workDays = userShiftsInRange.length;
 
       const scheduleCounts = computeScheduleFields(user.id);
       stats.floorControl = scheduleCounts.floorControl;
@@ -466,9 +479,10 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
       await Promise.all(promises);
       setIsEditing(false);
       alert("儲存成功！");
-    } catch (e) {
+    } catch (e: any) {
       console.error("Save failed", e);
-      alert("儲存失敗，請稍後再試。");
+      const msg = e?.message || e?.error_description || JSON.stringify(e);
+      alert(`儲存失敗：${msg}`);
     } finally {
       setIsSaving(false);
     }
@@ -600,12 +614,11 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
         "MR中",
         "MR小",
         "US",
-        "A",
-        "Breast",
+        "腹",
+        "乳",
         "心",
-        "Thy",
-        "CCA",
-        "Neck",
+        "甲",
+        "頸",
         "P女",
         "P男",
         "CT",
@@ -645,9 +658,8 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
           row.usA || 0,
           row.usBreast || 0,
           row.usHeart || 0,
-          row.usThy || 0,
-          row.usCCA || 0,
-          row.usNeck || 0,
+          (row.usThy || 0) + (row.usNeck || 0),  // 甲 = Thy + Neck
+          row.usCCA || 0,  // 頸 = CCA
           row.usPelvisFemale || 0,
           row.usPelvisMale || 0,
           row.ct || 0,
@@ -658,9 +670,9 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
           row.bmd || 0,
           row.reportTyping || 0,
           row.proofreader || 0,
-          Number(computeUnits(row, onsiteFieldKeys).toFixed(2)),
-          Number(computeUnits(row, remoteFieldKeys).toFixed(2)),
-          Number(computeTotalUnits(row).toFixed(2)),
+          Number(computeUnits(row, onsiteFieldKeys).toFixed(1)),
+          Number(computeUnits(row, remoteFieldKeys).toFixed(1)),
+          Number(computeTotalUnits(row).toFixed(1)),
         ]);
       });
 
@@ -856,7 +868,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
             <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
               <div className="text-sm font-bold text-slate-800">現場加權</div>
               <div className="mt-2 text-3xl font-bold text-emerald-700">
-                {onSiteUnitsSum.toFixed(2)}
+                {Math.round(onSiteUnitsSum)}
               </div>
               <div className="text-xs text-slate-500 mt-1">
                 其他檢查項目的加權總和。
@@ -865,7 +877,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
             <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
               <div className="text-sm font-bold text-slate-800">遠班加權</div>
               <div className="mt-2 text-3xl font-bold text-sky-700">
-                {remoteUnitsSum.toFixed(2)}
+                {Math.round(remoteUnitsSum)}
               </div>
               <div className="text-xs text-slate-500 mt-1">
                 報告登打與影像校對的加權總和。
@@ -874,7 +886,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
             <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
               <div className="text-sm font-bold text-slate-800">總加權</div>
               <div className="mt-2 text-3xl font-bold text-emerald-700">
-                {totalUnitsSum.toFixed(2)}
+                {Math.round(totalUnitsSum)}
               </div>
               <div className="text-xs text-slate-500 mt-1">
                 現場與遠班加總的整體工作量。
@@ -952,19 +964,25 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
                                   className="w-16 text-center border border-emerald-200 rounded px-1 py-1 text-sm outline-none focus:ring-2 focus:ring-emerald-500 bg-emerald-50/50"
                                 />
                               ) : (
-                                row[field.key] || "-"
+                                field.key === "usThy"
+                                  // 「甲」合併顯示 usThy + usNeck
+                                  ? (() => { const v = (row.usThy || 0) + (row.usNeck || 0); return v ? (+v).toFixed(1) : "-"; })()
+                                  : scheduleDerivedFieldKeys.includes(field.key)
+                                  // 整數欄位（上班天數、場控、輔控、排班）
+                                  ? (row[field.key] || "-")
+                                  : (() => { const v = row[field.key]; return v ? (+v).toFixed(1) : "-"; })()
                               )}
                             </td>
                           );
                         })}
                         <td className="px-4 py-2.5 text-center font-bold text-slate-800 bg-slate-50">
-                          {computeUnits(row, onsiteFieldKeys).toFixed(2)}
+                          {Math.round(computeUnits(row, onsiteFieldKeys))}
                         </td>
                         <td className="px-4 py-2.5 text-center font-bold text-slate-800 bg-slate-50">
-                          {computeUnits(row, remoteFieldKeys).toFixed(2)}
+                          {Math.round(computeUnits(row, remoteFieldKeys))}
                         </td>
                         <td className="px-4 py-2.5 text-center font-bold text-slate-800 bg-slate-50">
-                          {computeTotalUnits(row).toFixed(2)}
+                          {Math.round(computeTotalUnits(row))}
                         </td>
                       </tr>
                     ),
