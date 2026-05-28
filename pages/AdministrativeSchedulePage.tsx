@@ -110,6 +110,10 @@ const AdministrativeSchedulePage: React.FC<AdministrativeSchedulePageProps> = ({
 }) => {
   const displayCategories = categories || Object.values(AdministrativeCategory);
   const [currentDate, setCurrentDate] = useState(new Date());
+
+  useEffect(() => {
+    db.loadDataForMonth(currentDate.getFullYear(), currentDate.getMonth() + 1);
+  }, [currentDate]);
   const [shifts, setShifts] = useState<AdministrativeShift[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
@@ -188,7 +192,7 @@ const AdministrativeSchedulePage: React.FC<AdministrativeSchedulePageProps> = ({
     const unsubscribe = db.subscribe(() => {
       setHolidays([...db.getHolidays()]);
     });
-    db.initializeData().then(() => {
+    Promise.all([db.initializeAuthData(), db.currentUser ? db.initializeDataForUser(db.currentUser) : Promise.resolve()]).then(() => {
       setHolidays([...db.getHolidays()]);
     });
     return () => unsubscribe();

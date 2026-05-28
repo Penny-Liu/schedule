@@ -119,6 +119,11 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
     return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
   });
 
+  useEffect(() => {
+    const [y, m] = currentMonth.split('-').map(Number);
+    db.loadDataForMonth(y, m);
+  }, [currentMonth]);
+
   const [radiographers, setRadiographers] = useState<User[]>([]);
   const cycles = db.getCycles();
   const shifts = db.getShifts("", "");

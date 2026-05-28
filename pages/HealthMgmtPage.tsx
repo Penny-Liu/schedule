@@ -109,6 +109,10 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
   >("schedule");
   const [todayDate, setTodayDate] = useState(new Date());
   const [currentDate, setCurrentDate] = useState(new Date());
+
+  useEffect(() => {
+    db.loadDataForMonth(currentDate.getFullYear(), currentDate.getMonth() + 1);
+  }, [currentDate]);
   const [shifts, setShifts] = useState<HealthMgmtShift[]>([]);
   const [hmStations, setHmStations] = useState<string[]>(
     db.getHealthMgmtStations(),

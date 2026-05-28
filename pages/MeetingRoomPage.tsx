@@ -134,6 +134,10 @@ const getUnitColorTheme = (unit: string) => {
 
 const MeetingRoomPage: React.FC<MeetingRoomPageProps> = ({ currentUser }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
+
+  useEffect(() => {
+    db.loadDataForMonth(currentDate.getFullYear(), currentDate.getMonth() + 1);
+  }, [currentDate]);
   const dateInputRef = useRef<HTMLInputElement>(null);
 
   // 與 Supabase 串接的真實資料庫狀態
@@ -145,7 +149,7 @@ const MeetingRoomPage: React.FC<MeetingRoomPageProps> = ({ currentUser }) => {
     const unsubscribe = db.subscribe(() => {
       setBookings([...db.getMeetingRoomBookings()]);
     });
-    db.initializeData(); // 確保重新整理時會抓取資料
+    db.initializeAuthData(true); if (db.currentUser) db.initializeDataForUser(db.currentUser, true); // 確保重新整理時會抓取資料
     return () => unsubscribe();
   }, []);
 

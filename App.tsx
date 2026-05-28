@@ -70,7 +70,7 @@ const App: React.FC = () => {
   // Init Data from Supabase & Auto-Refresh Setup
   useEffect(() => {
     const init = async () => {
-      await db.initializeData();
+      await db.initializeAuthData();
       setIsLoading(false);
     };
     init();
@@ -80,15 +80,24 @@ const App: React.FC = () => {
       CapApp.addListener("appStateChange", ({ isActive }) => {
         if (isActive) {
           console.log("App resumed, refreshing data...");
-          db.initializeData(true);
+          db.initializeAuthData(true);
         }
       });
     });
   }, []);
 
-  const handleLogin = (user: User) => {
+  const handleLogin = async (user: User) => {
+    setIsLoading(true);
     setCurrentUser(user);
     db.currentUser = user;
+    
+    try {
+      await db.initializeDataForUser(user);
+    } catch (e) {
+      console.error("Error loading user data", e);
+    }
+    
+    setIsLoading(false);
 
     // Redirect logic by role/department
     if (

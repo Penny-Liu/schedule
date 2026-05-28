@@ -82,6 +82,10 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
 
   const [currentDate, setCurrentDate] = useState(new Date());
 
+  useEffect(() => {
+    db.loadDataForMonth(currentDate.getFullYear(), currentDate.getMonth() + 1);
+  }, [currentDate]);
+
   // --- Cycle Selection Logic ---
   const cycles = db.getCycles();
   // Determine default cycle: If today falls within a cycle, select it. Otherwise 'rolling'.
@@ -238,7 +242,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
     if (window.innerWidth < 768) {
       const refresh = async () => {
         console.log("Mobile detected: Forcing data refresh...");
-        await db.initializeData(true);
+        await db.initializeAuthData(true); if (db.currentUser) await db.initializeDataForUser(db.currentUser, true);
       };
       refresh();
     }
@@ -2749,7 +2753,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                   onClick={() => {
                     setViewMode("daily");
                     setDailyDate(new Date());
-                    if (isMobile) db.initializeData(true);
+                    if (isMobile) db.initializeAuthData(true); if (db.currentUser) db.initializeDataForUser(db.currentUser, true);
                   }}
                   className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold transition-all ${viewMode === "daily" ? "bg-white text-teal-700 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
                 >

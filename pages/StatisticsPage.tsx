@@ -112,6 +112,10 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
   });
   const [currentDate, setCurrentDate] = useState(new Date());
 
+  useEffect(() => {
+    db.loadDataForMonth(currentDate.getFullYear(), currentDate.getMonth() + 1);
+  }, [currentDate]);
+
   // Personal Cycle Tab state
   const [selectedMonth, setSelectedMonth] = useState<string>(() => {
     const today = new Date();

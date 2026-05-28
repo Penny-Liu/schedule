@@ -86,6 +86,7 @@ export const getPermissionsByRole = (role: UserRole): string[] => {
 import { toLocalISOString, countNonSundayDays } from "./utils";
 
 class Store {
+  loadedMonths: Set<string> = new Set();
   users: User[] = [];
   healthMgmtStaff: HealthMgmtStaff[] = [];
   anesthesiaStaff: AnesthesiaStaff[] = [];
@@ -296,28 +297,113 @@ class Store {
     return { data: allData, error: lastError };
   }
 
-  // Helper: Fetch all shifts with pagination to bypass 1000-row limit
-  private async fetchAllShifts() {
-    return this.fetchPaginated("shifts");
+  
+  // Helper: Fetch data by date range
+  private async fetchShiftsByRange(startDate: string, endDate: string) {
+    return this.fetchPaginated("shifts", (q) => q.gte("date", startDate).lte("date", endDate));
   }
 
-  private async fetchAllHealthMgmtShifts() {
-    return this.fetchPaginated("health_mgmt_shifts");
+  private async fetchHealthMgmtShiftsByRange(startDate: string, endDate: string) {
+    return this.fetchPaginated("health_mgmt_shifts", (q) => q.gte("date", startDate).lte("date", endDate));
   }
 
-  private async fetchAllDoctorShifts() {
-    return this.fetchPaginated("doctor_shifts");
+  private async fetchDoctorShiftsByRange(startDate: string, endDate: string) {
+    return this.fetchPaginated("doctor_shifts", (q) => q.gte("date", startDate).lte("date", endDate));
+  }
+  
+  private async fetchAnesthesiaShiftsByRange(startDate: string, endDate: string) {
+    return this.fetchPaginated("anesthesia_shifts", (q) => q.gte("date", startDate).lte("date", endDate));
   }
 
-  private async fetchAllWorkloads() {
-    return this.fetchPaginated("radiographer_workload");
+  private async fetchWorkloadsByRange(startMonth: string, endMonth: string) {
+    return this.fetchPaginated("radiographer_workload", (q) => q.gte("date", startMonth).lte("date", endMonth));
   }
+  
+  private async fetchLeavesByRange(startDate: string, endDate: string) {
+    return this.fetchPaginated("leaves", (q) => q.gte("startDate", startDate).lte("endDate", endDate).or(`endDate.gte.${startDate},startDate.lte.${endDate}`));
+  }
+  
+  private async fetchMeetingRoomsByRange(startDate: string, endDate: string) {
+    return this.fetchPaginated("meeting_room_bookings", (q) => q.gte("date", startDate).lte("date", endDate));
+  }
+
+  // Generate date window
+  private getWindowDates(baseDate: Date) {
+    const start = new Date(baseDate.getFullYear(), baseDate.getMonth() - 1, 1);
+    const end = new Date(baseDate.getFullYear(), baseDate.getMonth() + 3, 0); 
+    return {
+      startDate: `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-01`,
+      endDate: `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, '0')}-${String(end.getDate()).padStart(2, '0')}`,
+      startMonth: `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}`,
+      endMonth: `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, '0')}`
+    };
+  }
+
+  async loadDataForMonth(year: number, month: number) {
+    const monthStr = `${year}-${String(month).padStart(2, '0')}`;
+    if (this.loadedMonths.has(monthStr)) return;
+    
+    console.log(`[Store] Lazy loading data for ${monthStr}...`);
+    const date = new Date(year, month - 1, 1);
+    const { startDate, endDate, startMonth, endMonth } = this.getWindowDates(date);
+    
+    
+    const user = this.currentUser;
+    const perms = user?.permissions || [];
+    const role = user?.role;
+    const isAdmin = role === "SYSTEM_ADMIN" || role === "SUPERVISOR";
+    
+    let shiftsReq = Promise.resolve({ data: null }), leavesReq = Promise.resolve({ data: null }), workloadsReq = Promise.resolve({ data: null }),
+        docShiftsReq = Promise.resolve({ data: null }), hmShiftsReq = Promise.resolve({ data: null }), aneShiftsReq = Promise.resolve({ data: null }),
+        meetingRoomsReq = Promise.resolve({ data: null });
+        
+    if (perms.includes("view_cloud_schedule") || user?.isRadiographer || isAdmin) {
+      shiftsReq = this.fetchShiftsByRange(startDate, endDate);
+      leavesReq = this.fetchLeavesByRange(startDate, endDate);
+      workloadsReq = this.fetchWorkloadsByRange(startMonth, endMonth);
+    }
+    if (perms.includes("physician_view") || isAdmin || role === "FINANCE") {
+      docShiftsReq = this.fetchDoctorShiftsByRange(startDate, endDate);
+    }
+    if (perms.includes("health_mgmt_view") || isAdmin) {
+      hmShiftsReq = this.fetchHealthMgmtShiftsByRange(startDate, endDate);
+    }
+    if (perms.includes("anesthesia_view") || isAdmin) {
+      aneShiftsReq = this.fetchAnesthesiaShiftsByRange(startDate, endDate);
+    }
+    if (perms.includes("administrative_view") || isAdmin || role === "HM_SUPERVISOR") {
+      meetingRoomsReq = this.fetchMeetingRoomsByRange(startDate, endDate);
+    }
+
+    const [shifts, hmShifts, docShifts, aneShifts, workloads, leaves, meetingRooms] = await Promise.all([
+      shiftsReq, hmShiftsReq, docShiftsReq, aneShiftsReq, workloadsReq, leavesReq, meetingRoomsReq
+    ]);
+
+    
+    // Merge data avoiding duplicates
+    const merge = (existing: any[], incoming: any[]) => {
+      const incomingIds = new Set(incoming.map(i => i.id));
+      return [...existing.filter(e => !incomingIds.has(e.id)), ...incoming];
+    };
+    
+    if (shifts.data) this.shifts = merge(this.shifts, shifts.data);
+    if (hmShifts.data) this.healthMgmtShifts = merge(this.healthMgmtShifts, hmShifts.data);
+    if (docShifts.data) this.doctorShifts = merge(this.doctorShifts, docShifts.data);
+    if (aneShifts.data) this.anesthesiaShifts = merge(this.anesthesiaShifts, aneShifts.data);
+    if (workloads.data) this.workloads = merge(this.workloads, workloads.data);
+    if (leaves.data) this.leaves = merge(this.leaves, leaves.data);
+    if (meetingRooms.data) this.meetingRoomBookings = merge(this.meetingRoomBookings, meetingRooms.data);
+    
+    this.loadedMonths.add(monthStr);
+    this.notifyListeners();
+  }
+
 
   // New method to fetch all data from Supabase
-  async initializeData(force: boolean = false) {
+  
+  async initializeAuthData(force: boolean = false) {
     if (this.isLoaded && !force) return;
 
-    // 載入操作日誌
     try {
       const logsData = localStorage.getItem("operation_logs");
       if (logsData) {
@@ -326,460 +412,170 @@ class Store {
     } catch (e) {
       console.warn("Failed to load operation logs from localStorage:", e);
     }
-
     await this.loadOperationLogsFromServer();
-
-    // Setup Realtime Subscription
     this.setupRealtimeSubscription();
 
     try {
-      console.log("Fetching data from Supabase...");
-
-      // Load Cloud Schedule Data early
-      console.log("[Store] Loading data from Supabase...");
-      const [
-        usersRes,
-        shiftsRes,
-        leavesRes,
-        settingsRes,
-        doctorsRes,
-        dShiftsRes,
-        hmStaffRes,
-        hmShiftsRes,
-        anesthesiaStaffRes,
-        anesthesiaShiftsRes,
-        workloadsRes,
-        meetingRoomsRes,
-      ] = await Promise.all([
+      console.log("[Store] Loading Auth Data from Supabase...");
+      const [usersRes, settingsRes] = await Promise.all([
         this.fetchPaginated("users"),
-        this.fetchAllShifts(),
-        this.fetchPaginated("leaves"),
-        supabase.from("settings").select("*"), // Settings is usually 1 row
-        this.fetchPaginated("doctors"),
-        this.fetchAllDoctorShifts(),
-        this.fetchPaginated("health_mgmt_staff"),
-        this.fetchAllHealthMgmtShifts(),
-        this.fetchPaginated("anesthesia_staff"),
-        this.fetchPaginated("anesthesia_shifts"),
-        this.fetchAllWorkloads(),
-        this.fetchPaginated("meeting_room_bookings"),
+        supabase.from("settings").select("*"),
       ]);
-      console.log("[Store] Data loaded. Errors:", {
-        users: usersRes.error,
-        shifts: shiftsRes.error,
-        leaves: leavesRes.error,
-        settings: settingsRes.error,
-        doctors: doctorsRes.error,
-        doctorShifts: dShiftsRes.error,
-        hmStaff: hmStaffRes.error,
-        hmShifts: hmShiftsRes.error,
-      });
 
       if (usersRes.data && usersRes.data.length > 0) {
-        console.log(
-          `[Store] Successfully loaded ${usersRes.data.length} users from Supabase.`,
-        );
         this.users = usersRes.data.map((u: any) => {
           const mappedUser = { ...u };
           this.mapFromDbFields(mappedUser);
 
-          let permissions =
-            mappedUser.permissions !== null &&
-            mappedUser.permissions !== undefined
-              ? [...mappedUser.permissions]
-              : getPermissionsByRole(mappedUser.role);
+          let permissions = mappedUser.permissions !== null && mappedUser.permissions !== undefined
+              ? [...mappedUser.permissions] : getPermissionsByRole(mappedUser.role);
 
-          // Auto-Reconcile: Link System Management to specific Business management if missing
-          if (
-            permissions.includes(PERMISSIONS.EDIT_STAFF) ||
-            permissions.includes(PERMISSIONS.EDIT_SETTINGS)
-          ) {
-            if (
-              mappedUser.isHealthMgmt &&
-              !permissions.includes(PERMISSIONS.EDIT_HEALTH_MGMT)
-            ) {
-              permissions.push(PERMISSIONS.EDIT_HEALTH_MGMT);
-            }
-            if (
-              mappedUser.isRadiographer &&
-              !permissions.includes(PERMISSIONS.EDIT_CLOUD_SCHEDULE)
-            ) {
-              permissions.push(PERMISSIONS.EDIT_CLOUD_SCHEDULE);
-            }
+          if (permissions.includes("staff_edit") || permissions.includes("settings_edit")) {
+            if (mappedUser.isHealthMgmt && !permissions.includes("health_mgmt_edit")) permissions.push("health_mgmt_edit");
+            if (mappedUser.isRadiographer && !permissions.includes("edit_cloud_schedule")) permissions.push("edit_cloud_schedule");
           }
+          if (mappedUser.isHealthMgmt && !permissions.includes("health_mgmt_view")) permissions.push("health_mgmt_view");
+          if (mappedUser.isRadiographer && !permissions.includes("physician_view")) permissions.push("physician_view");
 
-          // Ensure basic view rights if attributes are true
-          if (
-            mappedUser.isHealthMgmt &&
-            !permissions.includes(PERMISSIONS.VIEW_HEALTH_MGMT)
-          ) {
-            permissions.push(PERMISSIONS.VIEW_HEALTH_MGMT);
-          }
-          if (
-            mappedUser.isRadiographer &&
-            !permissions.includes(PERMISSIONS.VIEW_PHYSICIAN)
-          ) {
-            permissions.push(PERMISSIONS.VIEW_PHYSICIAN);
-          }
-
-          // Debug: Log permissions for critical roles
-          if (
-            mappedUser.role === UserRole.SCHEDULER ||
-            mappedUser.role === UserRole.SYSTEM_ADMIN
-          ) {
-            console.log(
-              `[Store] User ${mappedUser.name} (${mappedUser.role}) permissions:`,
-              permissions,
-            );
-          }
-
-          return {
-            ...mappedUser,
-            permissions: Array.from(new Set(permissions)),
-          };
+          return { ...mappedUser, permissions: Array.from(new Set(permissions)) };
         });
-        this.connectionStatus = {
-          type: "Supabase",
-          details: `Loaded ${this.users.length} users`,
-        };
+        this.connectionStatus = { type: "Supabase", details: `Loaded ${this.users.length} users` };
       } else {
-        console.warn(
-          "[Store] Users table appears empty or fetch failed. Falling back to MOCK data.",
-        );
-        const errorMsg = usersRes.error
-          ? `Error: ${usersRes.error.message}`
-          : "Table empty";
-        console.log("Database empty, seeding init data...");
         this.users = MOCK_USERS;
-        this.connectionStatus = {
-          type: "Mock",
-          details: `Fallback triggered. ${errorMsg}`,
-        };
-        // Auto-seed Users
-        const { error } = await supabase.from("users").insert(MOCK_USERS);
-        if (error) console.error("Failed to seed users:", error);
+        this.connectionStatus = { type: "Mock", details: `Fallback triggered.` };
       }
 
+      let finalSettingsData = null;
+      if (settingsRes.data && settingsRes.data.length > 0) {
+        finalSettingsData = settingsRes.data[0].data;
+        this.settingsRowId = settingsRes.data[0].id;
+      } else if (settingsRes.error && settingsRes.error.code === "PGRST116") {
+        const fallbackRes = await supabase.from("settings").select("id, data").limit(1).single();
+        if (fallbackRes.data && fallbackRes.data.data) {
+          finalSettingsData = fallbackRes.data.data;
+          this.settingsRowId = fallbackRes.data.id;
+        }
+      }
+      if (finalSettingsData) {
+        this.settings = { ...this.settings, ...finalSettingsData };
+      }
+      this.ensureSettingsIntegrity();
+
+      // Mark as loaded so App can proceed to Login Screen
+      this.isLoaded = true;
+    } catch (e: any) {
+      console.error("Failed to fetch auth data", e);
+      this.users = MOCK_USERS;
+      this.isLoaded = true;
+    }
+  }
+
+  async initializeDataForUser(user: User, force: boolean = false) {
+    console.log(`[Store] Loading module data for user ${user.name}...`);
+    const now = new Date();
+    const { startDate, endDate, startMonth, endMonth } = this.getWindowDates(now);
+    this.loadedMonths.add(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`);
+
+    const perms = user.permissions || [];
+    const role = user.role;
+    const isAdmin = role === "SYSTEM_ADMIN" || role === "SUPERVISOR";
+    
+    let shiftsReq = Promise.resolve({ data: null }), leavesReq = Promise.resolve({ data: null }), workloadsReq = Promise.resolve({ data: null }),
+        docReq = Promise.resolve({ data: null }), docShiftsReq = Promise.resolve({ data: null }), hmStaffReq = Promise.resolve({ data: null }),
+        hmShiftsReq = Promise.resolve({ data: null }), aneStaffReq = Promise.resolve({ data: null }), aneShiftsReq = Promise.resolve({ data: null }),
+        meetingRoomsReq = Promise.resolve({ data: null });
+
+    if (perms.includes("view_cloud_schedule") || user.isRadiographer || isAdmin) {
+      shiftsReq = this.fetchShiftsByRange(startDate, endDate);
+      leavesReq = this.fetchLeavesByRange(startDate, endDate);
+      workloadsReq = this.fetchWorkloadsByRange(startMonth, endMonth);
+    }
+    if (perms.includes("physician_view") || isAdmin || role === "FINANCE") {
+      docReq = this.fetchPaginated("doctors");
+      docShiftsReq = this.fetchDoctorShiftsByRange(startDate, endDate);
+    }
+    if (perms.includes("health_mgmt_view") || isAdmin) {
+      hmStaffReq = this.fetchPaginated("health_mgmt_staff");
+      hmShiftsReq = this.fetchHealthMgmtShiftsByRange(startDate, endDate);
+    }
+    if (perms.includes("anesthesia_view") || isAdmin) {
+      aneStaffReq = this.fetchPaginated("anesthesia_staff");
+      aneShiftsReq = this.fetchAnesthesiaShiftsByRange(startDate, endDate);
+    }
+    if (perms.includes("administrative_view") || isAdmin || role === "HM_SUPERVISOR") {
+      meetingRoomsReq = this.fetchMeetingRoomsByRange(startDate, endDate);
+    }
+
+    try {
+      const [shiftsRes, leavesRes, workloadsRes, doctorsRes, dShiftsRes, hmStaffRes, hmShiftsRes, anesthesiaStaffRes, anesthesiaShiftsRes, meetingRoomsRes] = await Promise.all([
+        shiftsReq, leavesReq, workloadsReq, docReq, docShiftsReq, hmStaffReq, hmShiftsReq, aneStaffReq, aneShiftsReq, meetingRoomsReq
+      ]);
+
       if (shiftsRes.data) {
-        // Deduplicate shifts: Prioritize valid IDs and content
         const uniqueShiftsMap = new Map();
-        shiftsRes.data.forEach((s) => {
+        shiftsRes.data.forEach((s: any) => {
           const mappedShift = { ...s };
           this.mapFromDbFields(mappedShift);
-
           const key = `${mappedShift.userId}-${mappedShift.date}`;
           const existing = uniqueShiftsMap.get(key);
-
-          if (!existing) {
-            uniqueShiftsMap.set(key, mappedShift);
-          } else {
-            // ... existing logic ...
-            const isExistingIdBad = existing.id.includes(" ");
-            const isNewIdBad = mappedShift.id.includes(" ");
-            if (isExistingIdBad && !isNewIdBad) {
-              uniqueShiftsMap.set(key, mappedShift);
-              return;
-            }
-            if (
-              existing.station === "Unassigned" ||
-              existing.station === "未分配" ||
-              !existing.station
-            ) {
-              if (
-                mappedShift.station &&
-                mappedShift.station !== "Unassigned" &&
-                mappedShift.station !== "未分配"
-              ) {
-                uniqueShiftsMap.set(key, mappedShift);
-              }
-            }
-          }
+          if (!existing) uniqueShiftsMap.set(key, mappedShift);
+          else if (!existing.id.includes(" ") && mappedShift.id.includes(" ")) {}
+          else uniqueShiftsMap.set(key, mappedShift);
         });
         this.shifts = Array.from(uniqueShiftsMap.values());
       }
-      if (hmShiftsRes.data) {
-        this.healthMgmtShifts = hmShiftsRes.data.map((s: any) => {
-          const mapped = { ...s };
-          this.mapFromDbFields(mapped);
-          // Unpack location from task if present
-          let task = mapped.task || "";
-          let location = undefined;
-          if (task.includes("@@")) {
-            const parts = task.split("@@");
-            task = parts[0];
-            location = parts[1];
-          }
-          if (task === "") task = undefined;
-          mapped.task = task;
-          mapped.location = location;
-          return mapped;
-        });
-      }
-      if (leavesRes.data && leavesRes.data.length > 0) {
-        this.leaves = leavesRes.data.map((l) => {
-          const mapped = { ...l };
-          this.mapFromDbFields(mapped);
-          return mapped;
-        });
-      } else {
-        console.log("Database empty (leaves), seeding init data...");
-        this.leaves = MOCK_LEAVES;
-        // Auto-seed Leaves
-        const { error } = await supabase.from("leaves").insert(MOCK_LEAVES);
-        if (error) console.error("Failed to seed leaves:", error);
+
+      if (leavesRes.data) {
+        this.leaves = leavesRes.data.map((l: any) => { const m = {...l}; this.mapFromDbFields(m); return m; });
       }
 
-      // Enhanced Settings Fetch: Try ID=1 first, then fallback to ANY row
-      let finalSettingsData = null;
-
-      if (settingsRes.data && settingsRes.data.length > 0) {
-        finalSettingsData = settingsRes.data[0].data;
-        this.settingsRowId = settingsRes.data[0].id; // Capture ID
-      } else if (settingsRes.error && settingsRes.error.code === "PGRST116") {
-        // ID=1 not found. Try fetching ANY settings row (fallback)
-        const fallbackRes = await supabase
-          .from("settings")
-          .select("id, data")
-          .limit(1)
-          .single();
-        if (fallbackRes.data && fallbackRes.data.data) {
-          console.log("[DEBUG] Found settings with non-standard ID. Using it.");
-          finalSettingsData = fallbackRes.data.data;
-          this.settingsRowId = fallbackRes.data.id; // Capture ID
-        }
-      } else if (settingsRes.data && settingsRes.data.length > 0) {
-        // Handle case where select('*') returns an array
-        finalSettingsData = settingsRes.data[0].data;
-        this.settingsRowId = settingsRes.data[0].id;
-      }
-
-      if (finalSettingsData) {
-        console.log("[DEBUG] Applied Settings:", finalSettingsData);
-        this.settings = { ...this.settings, ...finalSettingsData };
-      } else {
-        console.warn(
-          "[DEBUG] No settings found in DB. Creating default (ID=1)...",
-        );
-        if (!settingsRes.error || settingsRes.error.code === "PGRST116") {
-          await this.saveSettings();
-        }
-      }
-
-      // Migration checks (Same as before)
-      this.ensureSettingsIntegrity();
-
-      // Load Doctors and Doctor Shifts
-      if (doctorsRes.data && doctorsRes.data.length > 0) {
-        const loadedDoctors = doctorsRes.data.map((d: any) => ({
-          ...d,
-          capabilities: d.capabilities || [],
-          locations: d.locations || [],
-          excludedDays: d.excluded_days || [],
-          excludedAutoScheduleLocations:
-            d.excluded_auto_schedule_locations || [],
-          isPartTime: d.is_part_time || false, // Map snake_case to camelCase
-          monthlyTargetShifts: d.monthly_target_shifts, // Map snake_case to camelCase
-          displayOrder: d.display_order, // Map snake_case to camelCase
-          fixedShifts: d.fixed_shifts || [], // Map snake_case to camelCase
-          personalCycles: d.personal_cycles,
-          isActive: d.is_active !== false, // Default to true if missing
-          weekdaySettings: (d.weekday_settings || []).map((s: any) => ({
-            dayOfWeek: s.dayOfWeek,
-            workTime: s.workTime,
-            task: s.task || s.memo, // Migrate old memo to task on read
-          })),
+      if (workloadsRes.data) {
+        this.workloads = workloadsRes.data.map((w: any) => ({
+          ...w, date: w.year && w.month ? `${w.year}-${String(w.month).padStart(2, "0")}` : "",
+          radiographerName: w.radiographerName || w.radiographer_name || ""
         }));
-        console.log(
-          "[Store] Doctors loaded with settings:",
-          loadedDoctors.map((d: any) => ({
-            name: d.name,
-            weekdaySettings: d.weekdaySettings,
-          })),
-        );
-        this.doctors = loadedDoctors;
+      }
+
+      if (doctorsRes.data) {
+        this.doctors = doctorsRes.data.map((d: any) => ({ ...d, capabilities: d.capabilities || [], locations: d.locations || [], isPartTime: d.is_part_time || false }));
       }
 
       if (dShiftsRes.data) {
-        this.doctorShifts = dShiftsRes.data.map((s: any) => ({
-          ...s,
-          doctorId: s.doctor_id || s.doctorId, // Map snake_case to camelCase
-          explanationTaskType: s.explanation_task_type || s.explanationTaskType, // Map snake to camel
-          workTime: s.work_time || s.workTime,
-          note: s.note,
-          location: s.location,
-          task: s.task,
-          scheduled_station: s.scheduled_station, // Explicit map
-        }));
+        this.doctorShifts = dShiftsRes.data.map((s: any) => ({ ...s, doctorId: s.doctor_id, workTime: s.work_time, scheduled_station: s.scheduled_station }));
       }
 
       if (hmStaffRes.data) {
-        this.healthMgmtStaff = hmStaffRes.data.map((hm: any) => ({
-          id: hm.id,
-          name: hm.name,
-          alias: hm.alias,
-          isActive: hm.is_active,
-          role: hm.role || "VIEWER",
-          location: hm.location,
-          designation: hm.designation,
-          displayOrder: hm.display_order,
-          hireDate: hm.hire_date,
-          terminationDate: hm.termination_date,
-        }));
+        this.healthMgmtStaff = hmStaffRes.data.map((s: any) => ({ ...s, isActive: s.is_active }));
+      }
+
+      if (hmShiftsRes.data) {
+        this.healthMgmtShifts = hmShiftsRes.data.map((s: any) => {
+          const m = {...s}; this.mapFromDbFields(m);
+          let task = m.task || ""; let location = undefined;
+          if (task.includes("@@")) { const p = task.split("@@"); task = p[0]; location = p[1]; }
+          m.task = task || undefined; m.location = location;
+          return m;
+        });
       }
 
       if (anesthesiaStaffRes.data) {
-        this.anesthesiaStaff = anesthesiaStaffRes.data.map((as: any) => ({
-          id: as.id,
-          name: as.name,
-          alias: as.alias,
-          isActive: as.is_active,
-          locations: as.locations || [],
-          role: as.role || "VIEWER",
-        }));
+        this.anesthesiaStaff = anesthesiaStaffRes.data.map((as: any) => ({ ...as, isActive: as.is_active, role: as.role || "VIEWER" }));
       }
 
       if (anesthesiaShiftsRes.data) {
-        this.anesthesiaShifts = anesthesiaShiftsRes.data.map((s: any) => ({
-          ...s,
-          userId: s.user_id,
-          workTime: s.work_time,
-          scheduled_station: s.scheduled_station,
-        }));
+        this.anesthesiaShifts = anesthesiaShiftsRes.data.map((s: any) => ({ ...s, userId: s.user_id, workTime: s.work_time, scheduled_station: s.scheduled_station }));
       }
 
-      if (workloadsRes && workloadsRes.data) {
-        this.workloads = workloadsRes.data.map((w: any) => ({
-          id: w.id,
-          year: w.year,
-          month: w.month,
-          date:
-            w.year && w.month
-              ? `${w.year}-${String(w.month).padStart(2, "0")}`
-              : "",
-          radiographerName: w.radiographerName || w.radiographer_name || "",
-          mr: w.mr || 0,
-          mrLargeMale: w.mrLargeMale || w.mr_large_male || 0,
-          mrLargeFemale: w.mrLargeFemale || w.mr_large_female || 0,
-          mrMedium: w.mrMedium || w.mr_medium || 0,
-          mrSmall: w.mrSmall || w.mr_small || 0,
-          us: w.us || 0,
-          usA: w.usA || w.us_a || 0,
-          usBreast: w.usBreast || w.us_breast || 0,
-          usHeart: w.usHeart || w.us_heart || 0,
-          usThy: w.usThy || w.us_thy || 0,
-          usCCA: w.usCCA || w.us_neck || 0,
-          usNeck: w.usNeck || w.us_cca || 0,
-          usPelvisFemale: w.usPelvisFemale || w.us_pelvis_female || 0,
-          usPelvisMale: w.usPelvisMale || w.us_pelvis_male || 0,
-          floorControl: w.floorControl || w.floor_control || 0,
-          assist: w.assist || 0,
-          scheduler: w.scheduler || 0,
-          ct: w.ct || 0,
-          dx: w.dx || 0,
-          mg: w.mg || 0,
-          bmd: w.bmd || 0,
-          cta: w.cta || 0,
-          ctaPostProcessing: w.ctaPostProcessing || w.cta_post_processing || 0,
-          reportTyping: w.reportEntry || w.report_entry || 0,
-          proofreader: w.imageProofing || w.image_proofing || 0,
-          tsmcReport: w.tsmcReport || w.tsmc_report || 0,
-        }));
+      if (meetingRoomsRes.data) {
+        this.meetingRoomBookings = meetingRoomsRes.data.map((m: any) => ({ ...m, userId: m.user_id, startTime: m.start_time, endTime: m.end_time }));
       }
 
-      if (meetingRoomsRes && meetingRoomsRes.data) {
-        this.meetingRoomBookings = meetingRoomsRes.data.map((b: any) => ({
-          id: b.id,
-          date: b.date,
-          startTime: b.start_time,
-          endTime: b.end_time,
-          unit: b.unit,
-          purpose: b.purpose,
-          userId: b.user_id,
-        }));
-      }
-
-      // Initialize default doctorStations if missing
-      // Initialize default doctorStations if missing
-      if (!this.settings.doctorStations) {
-        this.settings.doctorStations = [
-          { name: "影像", location: "北投" },
-          { name: "遠", location: "北投" },
-          { name: "支援", location: "大直" },
-          { name: "眼科", location: "台中" },
-          { name: "耳鼻喉科", location: "台中" },
-          { name: "婦科", location: "台中" },
-        ];
-      }
-
-      // Ensure '晚班' exists for Beitou/Dazhi (User Request) and is at the top
-      const requiredLateStations = [
-        { name: "晚班", location: "大直" }, // Order: Dazhi Late
-        { name: "晚班", location: "北投" }, // Order: Beitou Late (First, if array unshifted reversed? No, unshift puts at index 0. So last unshifted is top.)
-        // Actually, let's just use array logic.
-      ];
-
-      // We want '晚班' to be the first station in each location group.
-      // Since we render by Location -> Filter Stations, the order within doctorStations matters.
-      requiredLateStations.forEach((req) => {
-        if (
-          !this.settings.doctorStations.some(
-            (s) => s.name === req.name && s.location === req.location,
-          )
-        ) {
-          this.settings.doctorStations.unshift(req);
-        }
-      });
-
-      // Initialize default doctorSpecialties if missing
-      if (!this.settings.doctorSpecialties) {
-        this.settings.doctorSpecialties = [
-          "家醫科",
-          "腸胃科",
-          "影像醫學部",
-          "一般名醫",
-          "其他",
-        ];
-      }
-
-      // Initialize default lineCopyTemplate if missing
-      if (!this.settings.lineCopyTemplate) {
-        this.settings.lineCopyTemplate = `{{date}}
-{{imaging_doctors}}
-
-放射師人力
-北投：{{beitou_count}} (客戶：{{beitou_clients}}  CTA  {{beitou_cta}})
-BU領頭 場控：{{floor_control}}
-MR : {{mr}}
-US：{{us}}
-CT: {{ct}}
-BMD :{{bmd}}
-{{support_section}}{{learning_section}}
-
-遠群（{{remote_group_header}}）
-{{remote_doctors_detail}}
-遠：{{remote_radiographers}}
-
-大直：{{dazhi_count}} （客戶 {{dazhi_clients}} ）
-{{dazhi_radiographers}}
-
-三線支援：{{third_line_support}}`;
-      }
-
-      // Load cloud schedule data (影像雲班表)
-      await this.loadCloudScheduleData();
-
-      this.isLoaded = true;
-      console.log("Data initialized successfully");
-    } catch (e: any) {
-      console.error("Failed to fetch data from Supabase", e);
-      this.connectionStatus = {
-        type: "Mock",
-        details: `Critical Failure: ${e.message || JSON.stringify(e)}`,
-      };
-      // Fallback to local storage or mock if critical failure
-      this.loadFromLocalStorage();
+      console.log("[Store] User specific data loaded successfully.");
+    } catch(e) {
+      console.error("[Store] Error loading user data", e);
     }
   }
+
 
   // [New] Update Radiographer Workload
   async updateWorkload(w: Partial<RadiographerWorkload>) {
@@ -930,7 +726,8 @@ BMD :{{bmd}}
       }
 
       // 4. Refresh Data
-      await this.initializeData(true);
+      await this.initializeAuthData(true);
+      if (this.currentUser) await this.initializeDataForUser(this.currentUser, true);
       return idsToDelete.length;
     } catch (e) {
       console.error("Cleanup failed:", e);
@@ -1010,7 +807,8 @@ BMD :{{bmd}}
       }
 
       // Refresh Data
-      await this.initializeData(true);
+      await this.initializeAuthData(true);
+      if (this.currentUser) await this.initializeDataForUser(this.currentUser, true);
       return true;
     } catch (e) {
       console.error("Force clear exception:", e);
@@ -3464,7 +3262,7 @@ BMD :{{bmd}}
 
   async refreshDoctorShifts() {
     console.log("[Store] Refreshing Doctor Shifts...");
-    const { data } = await this.fetchAllDoctorShifts();
+    const { data } = await this.fetchDoctorShiftsByRange(this.getWindowDates(new Date()).startDate, this.getWindowDates(new Date()).endDate);
     if (data) {
       this.doctorShifts = data.map((s: any) => ({
         ...s,
@@ -4815,7 +4613,8 @@ BMD :{{bmd}}
     );
 
     // Refresh local state to ensure consistency
-    await this.initializeData(true);
+    await this.initializeAuthData(true);
+      if (this.currentUser) await this.initializeDataForUser(this.currentUser, true);
     this.notifyListeners();
 
     return { shifts: c1 || 0, doctorShifts: c2 || 0, leaves: c3 || 0 };
@@ -4854,7 +4653,8 @@ BMD :{{bmd}}
       importedCount.leaves = data.leaves.length;
     }
 
-    await this.initializeData(true);
+    await this.initializeAuthData(true);
+      if (this.currentUser) await this.initializeDataForUser(this.currentUser, true);
     this.notifyListeners();
     return importedCount;
   }

@@ -19,6 +19,10 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
     const isEditor = currentUser.permissions?.includes(PERMISSIONS.EDIT_CLOUD_SCHEDULE) || currentUser.role === UserRole.SYSTEM_ADMIN;
 
     const [currentDate, setCurrentDate] = useState(new Date());
+
+  useEffect(() => {
+    db.loadDataForMonth(currentDate.getFullYear(), currentDate.getMonth() + 1);
+  }, [currentDate]);
     const [viewMode, setViewMode] = useState<'month' | 'week'>(window.innerWidth < 768 ? 'week' : 'month');
     const [assistants, setAssistants] = useState<ReportAssistant[]>(() => db.getReportAssistants());
     const [entries, setEntries] = useState<CloudScheduleEntry[]>(() => db.getCloudScheduleEntries());

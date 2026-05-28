@@ -432,6 +432,10 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
   };
 
   const [currentDate, setCurrentDate] = useState(new Date());
+
+  useEffect(() => {
+    db.loadDataForMonth(currentDate.getFullYear(), currentDate.getMonth() + 1);
+  }, [currentDate]);
   const dateInputRef = useRef<HTMLInputElement>(null);
 
   const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -836,7 +840,7 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
     const unsubscribe = db.subscribe(handleDataChange);
 
     // Ensure data is loaded
-    db.initializeData().then(() => {
+    Promise.all([db.initializeAuthData(), db.currentUser ? db.initializeDataForUser(db.currentUser) : Promise.resolve()]).then(() => {
       setDoctors(db.getDoctors().filter((d) => d.isActive !== false));
       setShifts(db.getDoctorShifts());
       setStaffShifts(db.shifts);
