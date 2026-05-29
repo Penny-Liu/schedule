@@ -321,8 +321,8 @@ class Store {
     return this.fetchPaginated("radiographer_workload", (q) => q.gte("year", startY).lte("year", endY));
   }
   
-  private async fetchLeavesByRange(startDate: string, endDate: string) {
-    return this.fetchPaginated("leaves", (q) => q.gte("startDate", startDate).lte("endDate", endDate).or(`endDate.gte.${startDate},startDate.lte.${endDate}`));
+  private async fetchLeavesByRange(startDate: string, _endDate: string) {
+    return this.fetchPaginated("leaves", (q) => q.gte("endDate", startDate));
   }
   
   private async fetchMeetingRoomsByRange(startDate: string, endDate: string) {
