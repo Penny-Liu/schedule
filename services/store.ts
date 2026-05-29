@@ -401,11 +401,11 @@ class Store {
       this.healthMgmtShifts = merge(this.healthMgmtShifts, parsed);
     }
     if (dShiftsRes.data) {
-      const parsed = dShiftsRes.data.map((s: any) => ({ ...s, doctorId: s.doctor_id, workTime: s.work_time, scheduled_station: s.scheduled_station }));
+      const parsed = dShiftsRes.data.map((s: any) => { const m = {...s}; this.mapFromDbFields(m); return m; });
       this.doctorShifts = merge(this.doctorShifts, parsed);
     }
     if (aneShiftsRes.data) {
-      const parsed = aneShiftsRes.data.map((s: any) => ({ ...s, userId: s.user_id, workTime: s.work_time, scheduled_station: s.scheduled_station }));
+      const parsed = aneShiftsRes.data.map((s: any) => { const m = {...s}; this.mapFromDbFields(m); return m; });
       this.anesthesiaShifts = merge(this.anesthesiaShifts, parsed);
     }
     if (workloadsRes.data) {
@@ -437,6 +437,7 @@ class Store {
           ctaPostProcessing: w.ctaPostProcessing || w.cta_post_processing || 0,
           reportTyping: w.reportTyping || w.report_typing || w.reportEntry || w.report_entry || 0,
           proofreader: w.proofreader || w.imageProofing || w.image_proofing || 0,
+          tsmcReport: w.tsmcReport || w.tsmc_report || 0,
           floorControl: w.floorControl || w.floor_control || 0,
           assist: w.assist || 0,
           scheduler: w.scheduler || 0,
@@ -448,7 +449,7 @@ class Store {
       this.leaves = merge(this.leaves, parsed);
     }
     if (meetingRoomsRes.data) {
-      const parsed = meetingRoomsRes.data.map((m: any) => ({ ...m, userId: m.user_id, startTime: m.start_time, endTime: m.end_time }));
+      const parsed = meetingRoomsRes.data.map((b: any) => { const m = {...b}; this.mapFromDbFields(m); return m; });
       this.meetingRoomBookings = merge(this.meetingRoomBookings, parsed);
     }
     
@@ -616,6 +617,7 @@ class Store {
           ctaPostProcessing: w.ctaPostProcessing || w.cta_post_processing || 0,
           reportTyping: w.reportTyping || w.report_typing || w.reportEntry || w.report_entry || 0,
           proofreader: w.proofreader || w.imageProofing || w.image_proofing || 0,
+          tsmcReport: w.tsmcReport || w.tsmc_report || 0,
           floorControl: w.floorControl || w.floor_control || 0,
           assist: w.assist || 0,
           scheduler: w.scheduler || 0,
@@ -623,15 +625,15 @@ class Store {
       }
 
       if (doctorsRes.data) {
-        this.doctors = doctorsRes.data.map((d: any) => ({ ...d, capabilities: d.capabilities || [], locations: d.locations || [], isPartTime: d.is_part_time || false }));
+        this.doctors = doctorsRes.data.map((d: any) => { const m = {...d}; this.mapFromDbFields(m); m.capabilities = m.capabilities || []; m.locations = m.locations || []; return m; });
       }
 
       if (dShiftsRes.data) {
-        this.doctorShifts = dShiftsRes.data.map((s: any) => ({ ...s, doctorId: s.doctor_id, workTime: s.work_time, scheduled_station: s.scheduled_station }));
+        this.doctorShifts = dShiftsRes.data.map((s: any) => { const m = {...s}; this.mapFromDbFields(m); return m; });
       }
 
       if (hmStaffRes.data) {
-        this.healthMgmtStaff = hmStaffRes.data.map((s: any) => ({ ...s, isActive: s.is_active }));
+        this.healthMgmtStaff = hmStaffRes.data.map((s: any) => { const m = {...s}; this.mapFromDbFields(m); return m; });
       }
 
       if (hmShiftsRes.data) {
@@ -649,12 +651,14 @@ class Store {
       }
 
       if (anesthesiaShiftsRes.data) {
-        this.anesthesiaShifts = anesthesiaShiftsRes.data.map((s: any) => ({ ...s, userId: s.user_id, workTime: s.work_time, scheduled_station: s.scheduled_station }));
+        this.anesthesiaShifts = anesthesiaShiftsRes.data.map((s: any) => { const m = {...s}; this.mapFromDbFields(m); return m; });
       }
 
       if (meetingRoomsRes.data) {
-        this.meetingRoomBookings = meetingRoomsRes.data.map((m: any) => ({ ...m, userId: m.user_id, startTime: m.start_time, endTime: m.end_time }));
+        this.meetingRoomBookings = meetingRoomsRes.data.map((b: any) => { const m = {...b}; this.mapFromDbFields(m); return m; });
       }
+
+      await this.loadCloudScheduleData();
 
       console.log("[Store] User specific data loaded successfully.");
     } catch(e) {
@@ -1635,7 +1639,7 @@ class Store {
       learningCapabilities: "learning_capabilities",
       excludedCapabilities: "excluded_capabilities",
       specialRoles: "special_roles",
-      userId: "userId", // Already mixed in DB, but let's be safe
+      userId: "user_id",
       targetUserId: "target_user_id",
       returnDate: "return_date",
       approverId: "approver_id",
@@ -1643,7 +1647,40 @@ class Store {
       roleToSwap: "role_to_swap",
       targetApproval: "target_approval",
       permissions: "permissions",
-    };
+      workTime: "work_time",
+      displayOrder: "display_order",
+      monthlyTargetShifts: "monthly_target_shifts",
+      excludedDays: "excluded_days",
+      excludedAutoScheduleLocations: "excluded_auto_schedule_locations",
+      fixedShifts: "fixed_shifts",
+      weekdaySettings: "weekday_settings",
+      explanationTaskType: "explanation_task_type",
+      isAutoGenerated: "is_auto_generated",
+      doctorId: "doctor_id",
+      startDate: "start_date",
+      endDate: "end_date",
+      startTime: "start_time",
+      endTime: "end_time",
+      hireDate: "hire_date",
+      terminationDate: "termination_date",
+      radiographerName: "radiographer_name",
+      mrLargeMale: "mr_large_male",
+      mrLargeFemale: "mr_large_female",
+      mrMedium: "mr_medium",
+      mrSmall: "mr_small",
+      usA: "us_a",
+      usBreast: "us_breast",
+      usHeart: "us_heart",
+      usThy: "us_thy",
+      usCCA: "us_neck",
+      usNeck: "us_cca",
+      usPelvisFemale: "us_pelvis_female",
+      usPelvisMale: "us_pelvis_male",
+      ctaPostProcessing: "cta_post_processing",
+      reportTyping: "report_entry",
+      proofreader: "image_proofing",
+      tsmcReport: "tsmc_report"
+};
     Object.keys(mapping).forEach((key) => {
       if (key in obj && key !== mapping[key]) {
         obj[mapping[key]] = obj[key];
@@ -1677,12 +1714,44 @@ class Store {
       target_approval: "targetApproval",
       permissions: "permissions",
       user_id: "userId",
-    };
+      work_time: "workTime",
+      display_order: "displayOrder",
+      monthly_target_shifts: "monthlyTargetShifts",
+      excluded_days: "excludedDays",
+      excluded_auto_schedule_locations: "excludedAutoScheduleLocations",
+      fixed_shifts: "fixedShifts",
+      weekday_settings: "weekdaySettings",
+      explanation_task_type: "explanationTaskType",
+      is_auto_generated: "isAutoGenerated",
+      doctor_id: "doctorId",
+      start_date: "startDate",
+      end_date: "endDate",
+      start_time: "startTime",
+      end_time: "endTime",
+      hire_date: "hireDate",
+      termination_date: "terminationDate",
+      radiographer_name: "radiographerName",
+      mr_large_male: "mrLargeMale",
+      mr_large_female: "mrLargeFemale",
+      mr_medium: "mrMedium",
+      mr_small: "mrSmall",
+      us_a: "usA",
+      us_breast: "usBreast",
+      us_heart: "usHeart",
+      us_thy: "usThy",
+      us_neck: "usCCA",
+      us_cca: "usNeck",
+      us_pelvis_female: "usPelvisFemale",
+      us_pelvis_male: "usPelvisMale",
+      cta_post_processing: "ctaPostProcessing",
+      report_entry: "reportTyping",
+      image_proofing: "proofreader",
+      tsmc_report: "tsmcReport"
+};
     Object.keys(mapping).forEach((key) => {
-      if (key in obj) {
+      if (key in obj && key !== mapping[key]) {
         obj[mapping[key]] = obj[key];
-        // Keep the old key too for backward compatibility if needed?
-        // No, better to be clean
+        delete obj[key];
       }
     });
   }
