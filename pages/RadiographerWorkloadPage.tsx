@@ -891,9 +891,9 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
           row.reportTyping || 0,
           row.proofreader || 0,
           row.tsmcReport || 0,
-          Number(computeUnits(row, onsiteFieldKeys).toFixed(1)),
-          Number(computeUnits(row, remoteFieldKeys).toFixed(1)),
-          Number(computeTotalUnits(row).toFixed(1)),
+          Math.round(computeUnits(row, onsiteFieldKeys)),
+          Math.round(computeUnits(row, remoteFieldKeys)),
+          Math.round(computeTotalUnits(row)),
         ]);
       });
 
@@ -1274,10 +1274,10 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
                                 />
                               ) : (
                                 field.key === "usThy"
-                                  ? (() => { const v = (row.usThy || 0) + (row.usNeck || 0); return v ? (+v).toFixed(1) : "-"; })()
+                                  ? (() => { const v = (row.usThy || 0) + (row.usNeck || 0); return v ? Math.round(+v * 10) / 10 : "-"; })()
                                   : scheduleDerivedFieldKeys.includes(field.key)
                                   ? (row[field.key] || "-")
-                                  : (() => { const v = row[field.key]; return v ? (+v).toFixed(1) : "-"; })()
+                                  : (() => { const v = row[field.key]; return v ? Math.round(+v * 10) / 10 : "-"; })()
                               )}
                             </td>
                           );
