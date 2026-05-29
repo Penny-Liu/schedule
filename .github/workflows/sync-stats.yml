@@ -10,18 +10,15 @@ on:
         description: "JSON payload for custom sync"
         required: false
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 jobs:
   sync:
     runs-on: ubuntu-latest
     steps:
       - name: 取得程式碼
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: 安裝 Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: "20"
 
