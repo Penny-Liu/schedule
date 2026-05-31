@@ -556,22 +556,26 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
 
   const handleMoveUser = (index: number, direction: "up" | "down") => {
     if (direction === "up" && index === 0) return;
-    if (direction === "down" && index === users.length - 1) return;
+    if (direction === "down" && index === displayUsers.length - 1) return;
 
-    const newUsers = [...users];
-    const targetIndex = direction === "up" ? index - 1 : index + 1;
+    const userA = displayUsers[index];
+    const userB = displayUsers[direction === "up" ? index - 1 : index + 1];
 
-    // Swap
-    [newUsers[index], newUsers[targetIndex]] = [
-      newUsers[targetIndex],
-      newUsers[index],
-    ];
+    if (!userA || !userB) return;
 
-    // Setup new Order Ids
-    const newOrderIds = newUsers.map((u) => u.id);
+    // Swap in the full user list to preserve non-radiographers' display order
+    const allUsers = [...db.getUsers()];
+    const idxA = allUsers.findIndex((u) => u.id === userA.id);
+    const idxB = allUsers.findIndex((u) => u.id === userB.id);
+
+    if (idxA !== -1 && idxB !== -1) {
+      [allUsers[idxA], allUsers[idxB]] = [allUsers[idxB], allUsers[idxA]];
+    }
+
+    const newOrderIds = allUsers.map((u) => u.id);
 
     // Optimistic UI Update
-    setAllRadiographers(newUsers);
+    setAllRadiographers(allUsers.filter((u) => u.isRadiographer));
 
     db.updateUserDisplayOrder(newOrderIds).then(() => {
       setAllRadiographers(db.getUsers().filter((u) => u.isRadiographer));
