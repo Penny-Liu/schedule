@@ -440,6 +440,47 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
       );
       stats.workDays = userShiftsInRange.length;
 
+      let remoteDays = 0;
+      let dazhiDays = 0;
+      let beitouDays = 0;
+      userShiftsInRange.forEach((s) => {
+        if (s.station.includes("遠")) remoteDays++;
+        else if (s.station.includes("大直") || (s.location && s.location.includes("大直"))) dazhiDays++;
+        else beitouDays++;
+      });
+      stats.remoteDays = remoteDays;
+      stats.dazhiDays = dazhiDays;
+      stats.beitouDays = beitouDays;
+      stats.onSiteDays = stats.workDays - remoteDays;
+
+      let offDays = 0;
+      userDates.forEach((date) => {
+        if (db.getUserStatusOnDate(user.id, date) === "OFF") {
+          offDays++;
+        }
+      });
+      stats.offDays = offDays;
+
+      let memo = personalCycle?.memo || "";
+      let coopLeave = "";
+      if (generalDates.length > 0) {
+        const coopDates: string[] = [];
+        userShiftsInRange.forEach((s) => {
+          if (s.specialRoles.includes("配合銷假")) {
+            const d = new Date(s.date);
+            coopDates.push(`${d.getMonth() + 1}/${d.getDate()}`);
+          }
+        });
+        if (coopDates.length > 0) {
+          coopLeave = coopDates.join(", ");
+        }
+        if (personalCycle && !memo) {
+          memo = `${personalCycle.startDate.substring(5)} ~ ${personalCycle.endDate.substring(5)}`;
+        }
+      }
+      stats.remarks = memo;
+      stats.coopLeave = coopLeave;
+
       const floorControl = userShiftsInRange.filter((s) => s.station.includes("場控")).length;
       const assist = userShiftsInRange.filter(
         (s) =>
@@ -814,50 +855,91 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet("工作量統計");
 
-      // 欄位標題
-      const headers = [
-        "姓名",
-        "上班天數",
-        "現場天數",
-        "遠班",
-        "北投天數",
-        "大直天數",
-        "休假",
-        "備註",
-        "場控",
-        "輔控",
-        "排班",
-        "MR",
-        "MR大男",
-        "MR大女",
-        "MR中",
-        "MR小",
-        "US",
-        "腹",
-        "乳",
-        "心",
-        "甲",
-        "頸",
-        "P女",
-        "P男",
-        "CT",
-        "CTA",
-        "CTA後處理",
-        "DX",
-        "MG",
-        "BMD",
-        "報告登打",
-        "影像校對",
-        "台積電報告",
-        "現場加權",
-        "遠班加權",
-        "總加權",
+      // 取得標題資訊
+      const startDate = generalDates[0] || '';
+      const endDate = generalDates[generalDates.length - 1] || '';
+      const [y, m] = currentMonth.split('-').map(Number);
+      const mm = String(m).padStart(2, '0');
+      const cycleText = `第${m}週期`;
+      const dateRangeText = startDate && endDate ? `${startDate.substring(5).replace('-','/')}-${endDate.substring(5).replace('-','/')}` : '';
+      const titleText = `${y}年 ${mm}月放射師工作量統計（排班週期：${cycleText} (${dateRangeText})）`;
+
+      // 1. 新增第一列 Title (合併 A 到 AI) 35 欄
+      worksheet.mergeCells('A1:AI1');
+      const titleCell = worksheet.getCell('A1');
+      titleCell.value = titleText;
+      titleCell.font = { size: 16, bold: true, name: '微軟正黑體' };
+      titleCell.alignment = { vertical: 'middle', horizontal: 'center' };
+      worksheet.getRow(1).height = 35;
+
+      // 2. 準備第二與第三列 (合併欄位與子標題)
+      worksheet.mergeCells('A2:A3');
+      worksheet.getCell('A2').value = '姓名';
+
+      worksheet.mergeCells('B2:I2');
+      worksheet.getCell('B2').value = '上班天數';
+
+      worksheet.mergeCells('J2:AC2');
+      worksheet.getCell('J2').value = '現場工作量';
+
+      worksheet.mergeCells('AD2:AF2');
+      worksheet.getCell('AD2').value = '遠班工作量';
+
+      worksheet.mergeCells('AG2:AG3');
+      worksheet.getCell('AG2').value = '現場加權';
+      
+      worksheet.mergeCells('AH2:AH3');
+      worksheet.getCell('AH2').value = '遠班加權';
+      
+      worksheet.mergeCells('AI2:AI3');
+      worksheet.getCell('AI2').value = '總加權';
+
+      // 欄位標題 (Row 3)
+      const headersRow3 = [
+        "", // A3 (merged)
+        "上班天數", "現場天數", "遠班", "北投天數", "大直天數", "休假", "備註", "配合銷假",
+        "場控", "輔控", "排班", "MR大男", "MR大女", "MR中", "MR小", "腹", "乳", "心", "甲", "頸", "P女", "P男", "CT", "CTA", "CTA後處理", "DX", "MG", "BMD",
+        "報告登打", "影像校對", "台積電報告",
+        "", "", "" // AG3, AH3, AI3 (merged)
       ];
-      worksheet.addRow(headers);
+      worksheet.getRow(3).values = headersRow3;
+
+      // 設定標題列樣式 (Row 2 & 3)
+      [2, 3].forEach(r => {
+        const row = worksheet.getRow(r);
+        row.height = r === 3 ? 35 : 25;
+        for (let i = 1; i <= 35; i++) {
+          const cell = row.getCell(i);
+          cell.font = { bold: true, size: 12, name: '微軟正黑體', color: { argb: 'FF333333' } };
+          cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+          
+          // 區塊最後一欄使用粗線劃分
+          const isBlockEnd = [1, 9, 12, 16, 23, 26, 29, 32, 35].includes(i);
+          cell.border = {
+            top: { style: 'thin', color: { argb: 'FFCCCCCC' } },
+            left: { style: 'thin', color: { argb: 'FFCCCCCC' } },
+            bottom: { style: 'thin', color: { argb: 'FFCCCCCC' } },
+            right: { style: isBlockEnd ? 'medium' : 'thin', color: { argb: isBlockEnd ? 'FF888888' : 'FFCCCCCC' } }
+          };
+          
+          // 預設底色
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF2F2F2' } };
+        }
+      });
+
+      // 覆寫第二列主標題與最後三欄加權顏色的底色
+      worksheet.getCell('B2').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2EFDA' } }; // 淡綠色 - 上班天數
+      worksheet.getCell('J2').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF2CC' } }; // 淡黃色 - 現場工作量
+      worksheet.getCell('AD2').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDDEBF7' } }; // 淡藍色 - 遠班工作量
+
+      // 覆寫最後三欄 (Row 2, AG, AH, AI)
+      worksheet.getCell('AG2').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF2CC' } }; // 現場加權 (黃色系)
+      worksheet.getCell('AH2').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDDEBF7' } }; // 遠班加權 (藍色系)
+      worksheet.getCell('AI2').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFCE4D6' } }; // 總加權 (橘色系)
 
       // 資料列
       workloadData.forEach((row) => {
-        worksheet.addRow([
+        const excelRow = worksheet.addRow([
           row.name,
           row.workDays || 0,
           row.onSiteDays || 0,
@@ -866,15 +948,14 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
           row.dazhiDays || 0,
           row.offDays || 0,
           row.remarks || "",
+          row.coopLeave || "",
           row.floorControl || 0,
           row.assist || 0,
           row.scheduler || 0,
-          row.mr || 0,
           row.mrLargeMale || 0,
           row.mrLargeFemale || 0,
           row.mrMedium || 0,
           row.mrSmall || 0,
-          row.us || 0,
           row.usA || 0,
           row.usBreast || 0,
           row.usHeart || 0,
@@ -895,47 +976,38 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
           Math.round(computeUnits(row, remoteFieldKeys)),
           Math.round(computeTotalUnits(row)),
         ]);
+        
+        excelRow.height = 35; // 讓資料列也能換行
+        excelRow.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+          cell.font = { size: 11, name: '微軟正黑體' };
+          cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+          
+          const isBlockEnd = [1, 9, 12, 16, 23, 26, 29, 32, 35].includes(colNumber);
+          cell.border = {
+            top: { style: 'thin', color: { argb: 'FFEEEEEE' } },
+            left: { style: 'thin', color: { argb: 'FFEEEEEE' } },
+            bottom: { style: 'thin', color: { argb: 'FFEEEEEE' } },
+            right: { style: isBlockEnd ? 'medium' : 'thin', color: { argb: isBlockEnd ? 'FF888888' : 'FFEEEEEE' } }
+          };
+          
+          // 資料列最後三欄顏色
+          if (colNumber === 33) {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF9E6' } }; // 極淡黃
+          } else if (colNumber === 34) {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF0F6FA' } }; // 極淡藍
+          } else if (colNumber === 35) {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFDF3EB' } }; // 極淡橘
+          }
+        });
       });
 
       // 設定欄寬
       worksheet.columns = [
-        { width: 18 }, // 姓名
-        { width: 10 },
-        { width: 10 },
-        { width: 10 },
-        { width: 10 },
-        { width: 10 },
-        { width: 8 },
-        { width: 20 }, // 天數與備註
-        { width: 10 },
-        { width: 10 },
-        { width: 10 },
-        { width: 8 },
-        { width: 10 },
-        { width: 10 },
-        { width: 8 },
-        { width: 8 },
-        { width: 8 },
-        { width: 8 },
-        { width: 8 },
-        { width: 8 },
-        { width: 8 },
-        { width: 8 },
-        { width: 8 },
-        { width: 10 },
-        { width: 10 },
-        { width: 10 },
-        { width: 10 },
-        { width: 10 },
-        { width: 8 },
-        { width: 8 },
-        { width: 8 },
-        { width: 10 },
-        { width: 10 },
-        { width: 10 },
-        { width: 10 },
-        { width: 10 },
-        { width: 10 },
+        { width: 12 }, // A: 姓名
+        { width: 10 }, { width: 10 }, { width: 10 }, { width: 10 }, { width: 10 }, { width: 10 }, { width: 25 }, { width: 18 }, // B-I: 上班天數~配合銷假
+        { width: 8 }, { width: 8 }, { width: 8 }, { width: 9 }, { width: 9 }, { width: 8 }, { width: 8 }, { width: 8 }, { width: 8 }, { width: 8 }, { width: 8 }, { width: 8 }, { width: 8 }, { width: 8 }, { width: 8 }, { width: 8 }, { width: 12 }, { width: 8 }, { width: 8 }, { width: 8 }, // J-AC: 現場工作量
+        { width: 10 }, { width: 10 }, { width: 12 }, // AD-AF: 遠班工作量
+        { width: 12 }, { width: 12 }, { width: 12 }, // AG-AI: 加權
       ];
 
       const buffer = await workbook.xlsx.writeBuffer();

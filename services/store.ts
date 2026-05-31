@@ -705,7 +705,9 @@ class Store {
         const { error } = await supabase
           .from("radiographer_workload")
           .update(payload)
-          .eq("id", w.id);
+          .eq("id", w.id)
+          .select()
+          .single();
         if (error) throw error;
       } else {
         // 新增資料
