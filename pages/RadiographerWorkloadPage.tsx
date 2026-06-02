@@ -48,9 +48,24 @@ type WorkloadFieldKey =
   | "proofreader"
   | "tsmcReport"
   | "mrTeaching"
+  | "mrLargeMaleTeaching"
+  | "mrLargeFemaleTeaching"
+  | "mrMediumTeaching"
+  | "mrSmallTeaching"
   | "usTeaching"
+  | "usATeaching"
+  | "usBreastTeaching"
+  | "usHeartTeaching"
+  | "usThyTeaching"
+  | "usCCATeaching"
+  | "usNeckTeaching"
+  | "usPelvisFemaleTeaching"
+  | "usPelvisMaleTeaching"
   | "ctTeaching"
-  | "bmdTeaching";
+  | "dxTeaching"
+  | "mgTeaching"
+  | "bmdTeaching"
+  | "ctaTeaching";
 
 const workloadFieldMeta: { key: WorkloadFieldKey; label: string }[] = [
   { key: "workDays", label: "上班天數" },
@@ -80,9 +95,24 @@ const workloadFieldMeta: { key: WorkloadFieldKey; label: string }[] = [
   { key: "proofreader", label: "影像校對" },
   { key: "tsmcReport", label: "台積電報告" },
   { key: "mrTeaching", label: "MR教學" },
+  { key: "mrLargeMaleTeaching", label: "MR大男教學" },
+  { key: "mrLargeFemaleTeaching", label: "MR大女教學" },
+  { key: "mrMediumTeaching", label: "MR中教學" },
+  { key: "mrSmallTeaching", label: "MR小教學" },
   { key: "usTeaching", label: "US教學" },
+  { key: "usATeaching", label: "腹教學" },
+  { key: "usBreastTeaching", label: "乳教學" },
+  { key: "usHeartTeaching", label: "心教學" },
+  { key: "usThyTeaching", label: "甲教學" },
+  { key: "usCCATeaching", label: "頸教學" },
+  { key: "usNeckTeaching", label: "頸部教學" },
+  { key: "usPelvisFemaleTeaching", label: "P女教學" },
+  { key: "usPelvisMaleTeaching", label: "P男教學" },
   { key: "ctTeaching", label: "CT教學" },
+  { key: "dxTeaching", label: "DX教學" },
+  { key: "mgTeaching", label: "MG教學" },
   { key: "bmdTeaching", label: "BMD教學" },
+  { key: "ctaTeaching", label: "CTA教學" },
 ];
 
 const defaultWorkloadWeights: Record<WorkloadFieldKey, number> = {
@@ -114,9 +144,24 @@ const defaultWorkloadWeights: Record<WorkloadFieldKey, number> = {
   proofreader: 1,
   tsmcReport: 1,
   mrTeaching: 1,
+  mrLargeMaleTeaching: 1,
+  mrLargeFemaleTeaching: 1,
+  mrMediumTeaching: 1,
+  mrSmallTeaching: 1,
   usTeaching: 1,
+  usATeaching: 1,
+  usBreastTeaching: 1,
+  usHeartTeaching: 1,
+  usThyTeaching: 1,
+  usCCATeaching: 1,
+  usNeckTeaching: 1,
+  usPelvisFemaleTeaching: 1,
+  usPelvisMaleTeaching: 1,
   ctTeaching: 1,
+  dxTeaching: 1,
+  mgTeaching: 1,
   bmdTeaching: 1,
+  ctaTeaching: 1,
 };
 
 interface RadiographerWorkloadPageProps {
@@ -199,10 +244,6 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
     "dx",
     "mg",
     "bmd",
-    "mrTeaching",
-    "usTeaching",
-    "ctTeaching",
-    "bmdTeaching",
   ];
 
   const scheduleDerivedFieldKeys: WorkloadFieldKey[] = [
@@ -447,9 +488,24 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
           stats.proofreader += w.imageProofing || w.proofreader || 0;
           stats.tsmcReport += w.tsmcReport || w.tsmc_report || 0;
           stats.mrTeaching += w.mrTeaching || w.mr_teaching || 0;
+          stats.mrLargeMaleTeaching += w.mrLargeMaleTeaching || w.mr_large_male_teaching || 0;
+          stats.mrLargeFemaleTeaching += w.mrLargeFemaleTeaching || w.mr_large_female_teaching || 0;
+          stats.mrMediumTeaching += w.mrMediumTeaching || w.mr_medium_teaching || 0;
+          stats.mrSmallTeaching += w.mrSmallTeaching || w.mr_small_teaching || 0;
           stats.usTeaching += w.usTeaching || w.us_teaching || 0;
+          stats.usATeaching += w.usATeaching || w.us_a_teaching || 0;
+          stats.usBreastTeaching += w.usBreastTeaching || w.us_breast_teaching || 0;
+          stats.usHeartTeaching += w.usHeartTeaching || w.us_heart_teaching || 0;
+          stats.usThyTeaching += w.usThyTeaching || w.us_thy_teaching || 0;
+          stats.usCCATeaching += w.usCCATeaching || w.us_cca_teaching || 0;
+          stats.usNeckTeaching += w.usNeckTeaching || w.us_neck_teaching || 0;
+          stats.usPelvisFemaleTeaching += w.usPelvisFemaleTeaching || w.us_pelvis_female_teaching || 0;
+          stats.usPelvisMaleTeaching += w.usPelvisMaleTeaching || w.us_pelvis_male_teaching || 0;
           stats.ctTeaching += w.ctTeaching || w.ct_teaching || 0;
+          stats.dxTeaching += w.dxTeaching || w.dx_teaching || 0;
+          stats.mgTeaching += w.mgTeaching || w.mg_teaching || 0;
           stats.bmdTeaching += w.bmdTeaching || w.bmd_teaching || 0;
+          stats.ctaTeaching += w.ctaTeaching || w.cta_teaching || 0;
         });
       }
 
@@ -937,29 +993,29 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
       worksheet.mergeCells('B2:I2');
       worksheet.getCell('B2').value = '上班天數';
 
-      worksheet.mergeCells('J2:AG2');
+      worksheet.mergeCells('J2:AC2');
       worksheet.getCell('J2').value = '現場工作量';
 
-      worksheet.mergeCells('AH2:AJ2');
-      worksheet.getCell('AH2').value = '遠班工作量';
+      worksheet.mergeCells('AD2:AF2');
+      worksheet.getCell('AD2').value = '遠班工作量';
 
-      worksheet.mergeCells('AK2:AK3');
-      worksheet.getCell('AK2').value = '現場加權';
+      worksheet.mergeCells('AG2:AG3');
+      worksheet.getCell('AG2').value = '現場加權';
       
-      worksheet.mergeCells('AL2:AL3');
-      worksheet.getCell('AL2').value = '遠班加權';
+      worksheet.mergeCells('AH2:AH3');
+      worksheet.getCell('AH2').value = '遠班加權';
       
-      worksheet.mergeCells('AM2:AM3');
-      worksheet.getCell('AM2').value = '總加權';
+      worksheet.mergeCells('AI2:AI3');
+      worksheet.getCell('AI2').value = '總加權';
 
-      worksheet.mergeCells('AN2:AN3');
-      worksheet.getCell('AN2').value = '預估日期';
+      worksheet.mergeCells('AJ2:AJ3');
+      worksheet.getCell('AJ2').value = '預估日期';
 
       // 欄位標題 (Row 3)
       const headersRow3 = [
         "", // A3 (merged)
         "上班天數", "現場天數", "遠班", "北投天數", "大直天數", "休假", "備註", "配合銷假",
-        "場控", "輔控", "排班", "MR大男", "MR大女", "MR中", "MR小", "MR教學", "腹", "乳", "心", "甲", "頸", "P女", "P男", "US教學", "CT", "CT教學", "CTA", "CTA後處理", "DX", "MG", "BMD", "BMD教學",
+        "場控", "輔控", "排班", "MR大男", "MR大女", "MR中", "MR小", "腹", "乳", "心", "甲", "頸", "P女", "P男", "CT", "CTA", "CTA後處理", "DX", "MG", "BMD",
         "報告登打", "影像校對", "台積電報告",
         "", "", "", "" // AG3, AH3, AI3, AJ3 (merged)
       ];
@@ -969,13 +1025,13 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
       [2, 3].forEach(r => {
         const row = worksheet.getRow(r);
         row.height = r === 3 ? 35 : 25;
-        for (let i = 1; i <= 40; i++) {
+        for (let i = 1; i <= 36; i++) {
           const cell = row.getCell(i);
           cell.font = { bold: true, size: 12, name: '微軟正黑體', color: { argb: 'FF333333' } };
           cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
           
           // 區塊最後一欄使用粗線劃分
-          const isBlockEnd = [1, 9, 12, 17, 25, 32, 35, 36, 39, 40].includes(i);
+          const isBlockEnd = [1, 9, 12, 16, 23, 29, 32, 33, 35, 36].includes(i);
           cell.border = {
             top: { style: 'thin', color: { argb: 'FFCCCCCC' } },
             left: { style: 'thin', color: { argb: 'FFCCCCCC' } },
@@ -1013,27 +1069,23 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
           row.floorControl || 0,
           row.assist || 0,
           row.scheduler || 0,
-          row.mrLargeMale || 0,
-          row.mrLargeFemale || 0,
-          row.mrMedium || 0,
-          row.mrSmall || 0,
-          row.mrTeaching || 0,
-          row.usA || 0,
-          row.usBreast || 0,
-          row.usHeart || 0,
-          (row.usThy || 0) + (row.usNeck || 0),  // 甲 = Thy + Neck
-          row.usCCA || 0,  // 頸 = CCA
-          row.usPelvisFemale || 0,
-          row.usPelvisMale || 0,
-          row.usTeaching || 0,
-          row.ct || 0,
-          row.ctTeaching || 0,
-          row.cta || 0,
+          (row.mrLargeMale || 0) + ((row as any).mrLargeMaleTeaching || 0),
+          (row.mrLargeFemale || 0) + ((row as any).mrLargeFemaleTeaching || 0),
+          (row.mrMedium || 0) + ((row as any).mrMediumTeaching || 0),
+          (row.mrSmall || 0) + ((row as any).mrSmallTeaching || 0),
+          (row.usA || 0) + ((row as any).usATeaching || 0),
+          (row.usBreast || 0) + ((row as any).usBreastTeaching || 0),
+          (row.usHeart || 0) + ((row as any).usHeartTeaching || 0),
+          (row.usThy || 0) + (row.usNeck || 0) + ((row as any).usThyTeaching || 0) + ((row as any).usNeckTeaching || 0),  // 甲 = Thy + Neck
+          (row.usCCA || 0) + ((row as any).usCCATeaching || 0),  // 頸 = CCA
+          (row.usPelvisFemale || 0) + ((row as any).usPelvisFemaleTeaching || 0),
+          (row.usPelvisMale || 0) + ((row as any).usPelvisMaleTeaching || 0),
+          (row.ct || 0) + ((row as any).ctTeaching || 0),
+          (row.cta || 0) + ((row as any).ctaTeaching || 0),
           row.ctaPostProcessing || 0,
-          row.dx || 0,
-          row.mg || 0,
-          row.bmd || 0,
-          row.bmdTeaching || 0,
+          (row.dx || 0) + ((row as any).dxTeaching || 0),
+          (row.mg || 0) + ((row as any).mgTeaching || 0),
+          (row.bmd || 0) + ((row as any).bmdTeaching || 0),
           row.reportTyping || 0,
           row.proofreader || 0,
           row.tsmcReport || 0,
@@ -1048,7 +1100,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
           cell.font = { size: 11, name: '微軟正黑體' };
           cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
           
-          const isBlockEnd = [1, 9, 12, 16, 23, 26, 29, 32, 35, 36].includes(colNumber);
+          const isBlockEnd = [1, 9, 12, 16, 23, 29, 32, 33, 35, 36].includes(colNumber);
           cell.border = {
             top: { style: 'thin', color: { argb: 'FFEEEEEE' } },
             left: { style: 'thin', color: { argb: 'FFEEEEEE' } },
@@ -1071,7 +1123,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
       worksheet.columns = [
         { width: 12 }, // A: 姓名
         { width: 10 }, { width: 10 }, { width: 10 }, { width: 10 }, { width: 10 }, { width: 10 }, { width: 25 }, { width: 18 }, // B-I: 上班天數~配合銷假
-        { width: 8 }, { width: 8 }, { width: 8 }, { width: 9 }, { width: 9 }, { width: 8 }, { width: 8 }, { width: 8 }, { width: 8 }, { width: 8 }, { width: 8 }, { width: 8 }, { width: 8 }, { width: 8 }, { width: 8 }, { width: 8 }, { width: 12 }, { width: 8 }, { width: 8 }, { width: 8 }, // J-AC: 現場工作量
+        { width: 8 }, { width: 8 }, { width: 8 }, { width: 9 }, { width: 9 }, { width: 8 }, { width: 8 }, { width: 8 }, { width: 8 }, { width: 8 }, { width: 8 }, { width: 8 }, { width: 8 }, { width: 8 }, { width: 8 }, { width: 8 }, { width: 8 }, { width: 8 }, { width: 8 }, { width: 8 }, // J-AC: 現場工作量
         { width: 10 }, { width: 10 }, { width: 12 }, // AD-AF: 遠班工作量
         { width: 12 }, { width: 12 }, { width: 12 }, { width: 20 }, // AG-AJ: 加權, 預估日期
       ];
@@ -1512,11 +1564,8 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
                           const isScheduleField =
                             scheduleDerivedFieldKeys.includes(field.key);
                           const getTeachingCount = (baseKey: string) => {
-                            if (baseKey === 'mr') return row.mrTeaching || 0;
-                            if (baseKey === 'us') return row.usTeaching || 0;
-                            if (baseKey === 'ct') return row.ctTeaching || 0;
-                            if (baseKey === 'bmd') return row.bmdTeaching || 0;
-                            return 0;
+                            const teachingKey = `${baseKey}Teaching`;
+                            return (row as any)[teachingKey] || 0;
                           };
                           const teachingCount = getTeachingCount(field.key);
                           const hasTeaching = teachingCount > 0;

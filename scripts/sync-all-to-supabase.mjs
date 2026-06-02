@@ -281,8 +281,23 @@ async function syncRadiographerWorkload(
         mg: 0,
         bmd: 0,
         mr_teaching: 0,
+        mr_large_male_teaching: 0,
+        mr_large_female_teaching: 0,
+        mr_medium_teaching: 0,
+        mr_small_teaching: 0,
         us_teaching: 0,
+        us_a_teaching: 0,
+        us_breast_teaching: 0,
+        us_heart_teaching: 0,
+        us_thy_teaching: 0,
+        us_cca_teaching: 0,
+        us_neck_teaching: 0,
+        us_pelvis_female_teaching: 0,
+        us_pelvis_male_teaching: 0,
         ct_teaching: 0,
+        cta_teaching: 0,
+        dx_teaching: 0,
+        mg_teaching: 0,
         bmd_teaching: 0,
         imageProofing: 0,
         // 不候入同步：cta_post_processing、report_entry 由手動填寫，保留原有値
@@ -335,12 +350,12 @@ async function syncRadiographerWorkload(
                 const lUser = usersData.find(u => u.id === l.userId);
                 if (lUser) {
                   const lName = validNamesMap[lUser.name] || lUser.name;
-                  if (!dailyTeachers[date][modality][lName]) dailyTeachers[date][modality][lName] = [];
+                  if (!dailyTeachers[date][modality][lName]) dailyTeachers[date][modality][lName] = new Set();
                   teachers.forEach(t => {
                     const tUser = usersData.find(u => u.id === t.userId);
                     if (tUser) {
                       const tName = validNamesMap[tUser.name] || tUser.name;
-                      dailyTeachers[date][modality][lName].push(tName);
+                      dailyTeachers[date][modality][lName].add(tName);
                     }
                   });
                 }
@@ -383,8 +398,18 @@ async function syncRadiographerWorkload(
         dailyTeachers[date].ct[cleanName].forEach(tName => { ensureUser(tName); workloadMap[tName].ct_teaching += 1; });
       }
     }
-    if (category === "dx") workloadMap[cleanName].dx += 1;
-    if (category === "mg") workloadMap[cleanName].mg += 1;
+    if (category === "dx") {
+      workloadMap[cleanName].dx += 1;
+      if (date && dailyTeachers[date]?.bmd?.[cleanName]) { // DX 和 BMD 同一崗位 (modality = bmd)
+        dailyTeachers[date].bmd[cleanName].forEach(tName => { ensureUser(tName); workloadMap[tName].dx_teaching += 1; });
+      }
+    }
+    if (category === "mg") {
+      workloadMap[cleanName].mg += 1;
+      if (date && dailyTeachers[date]?.bmd?.[cleanName]) {
+        dailyTeachers[date].bmd[cleanName].forEach(tName => { ensureUser(tName); workloadMap[tName].mg_teaching += 1; });
+      }
+    }
     if (category === "bmd") {
       workloadMap[cleanName].bmd += 1;
       if (date && dailyTeachers[date]?.bmd?.[cleanName]) {
@@ -420,7 +445,11 @@ async function syncRadiographerWorkload(
     const subtype = parseUsSubtype(checkupName);
     if (subtype) workloadMap[cleanName][subtype] += 1;
     if (date && dailyTeachers[date]?.us?.[cleanName]) {
-      dailyTeachers[date].us[cleanName].forEach(tName => { ensureUser(tName); workloadMap[tName].us_teaching += 1; });
+      dailyTeachers[date].us[cleanName].forEach(tName => { 
+        ensureUser(tName); 
+        workloadMap[tName].us_teaching += 1; 
+        if (subtype) workloadMap[tName][`${subtype}_teaching`] += 1;
+      });
     }
   });
 
@@ -470,7 +499,11 @@ async function syncRadiographerWorkload(
       workloadMap[cleanName].mr += itemCount;
       workloadMap[cleanName][subtype] += ratio;
       if (date && dailyTeachers[date]?.mr?.[cleanName]) {
-        dailyTeachers[date].mr[cleanName].forEach(tName => { ensureUser(tName); workloadMap[tName].mr_teaching += itemCount; });
+        dailyTeachers[date].mr[cleanName].forEach(tName => { 
+          ensureUser(tName); 
+          workloadMap[tName].mr_teaching += itemCount; 
+          workloadMap[tName][`${subtype}_teaching`] += ratio;
+        });
       }
     });
   });
@@ -479,24 +512,41 @@ async function syncRadiographerWorkload(
   console.log(
     `[sync-stats]   - [SOQL] 正在查詢 'CTA後處理' (CheckupReservation__c)...`,
   );
-  const ctaSoql = `SELECT Radiologist__r.Name person, COUNT_DISTINCT(Order__c) cnt 
+  const ctaSoql = `SELECT Radiologist__r.Name, Order__c, Order__r.ReserveDate__c 
                    FROM CheckupReservation__c 
                    WHERE (Order__r.ReserveDate__c >= ${startDate} AND Order__r.ReserveDate__c <= ${endDate}) 
                    AND Radiologist__c != null 
                    AND Checkup_Status__c = '10'
-                   AND CTAUseTime__c != null 
-                   GROUP BY Radiologist__r.Name`;
+                   AND CTAUseTime__c != null`;
   const ctaData = await runSoqlQuery({
     instanceUrl: session.instanceUrl,
     accessToken: session.accessToken,
     soql: ctaSoql,
   });
+  
+  const ctaOrders = new Set();
   (ctaData.records || []).forEach((rec) => {
-    const rawName = rec.person || rec.Radiologist__r?.Name;
+    const rawName = rec.Radiologist__r?.Name;
+    const orderId = rec.Order__c;
+    const date = rec.Order__r?.ReserveDate__c;
     const cleanName = findNameInPath([rawName], validNamesMap);
-    if (cleanName !== "Unknown" && workloadMap[cleanName]) {
-      // CTAUseTime__c 查詢結果實際是 CTA 檢查量，寫入 cta 欄
-      workloadMap[cleanName].cta += parseInt(rec.cnt || 0, 10);
+    
+    if (cleanName === "Unknown" || !workloadMap[cleanName] || !orderId) return;
+    
+    // We want COUNT_DISTINCT(Order__c) per person
+    const key = `${cleanName}_${orderId}`;
+    if (!ctaOrders.has(key)) {
+      ctaOrders.add(key);
+      workloadMap[cleanName].cta += 1;
+      
+      // CTA teaching uses the CT modality station
+      if (date && dailyTeachers[date] && dailyTeachers[date]["ct"] && dailyTeachers[date]["ct"][cleanName]) {
+         dailyTeachers[date]["ct"][cleanName].forEach(tName => {
+           if (workloadMap[tName]) {
+             workloadMap[tName].cta_teaching += 1;
+           }
+         });
+      }
     }
   });
 
@@ -556,6 +606,11 @@ async function syncRadiographerWorkload(
     mr_large_female: round2(w.mr_large_female),
     mr_medium: round2(w.mr_medium),
     mr_small: round2(w.mr_small),
+    mr_teaching: Math.round(w.mr_teaching),
+    mr_large_male_teaching: round2(w.mr_large_male_teaching),
+    mr_large_female_teaching: round2(w.mr_large_female_teaching),
+    mr_medium_teaching: round2(w.mr_medium_teaching),
+    mr_small_teaching: round2(w.mr_small_teaching),
     // 恢復手動填寫的值，不讓同步覆蓋
     cta_post_processing: manualFieldsMap[w.radiographerName]?.cta_post_processing ?? null,
     report_entry: manualFieldsMap[w.radiographerName]?.report_entry ?? null,
