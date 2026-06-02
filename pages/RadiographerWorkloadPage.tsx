@@ -244,6 +244,25 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
     "dx",
     "mg",
     "bmd",
+    "mrTeaching",
+    "mrLargeMaleTeaching",
+    "mrLargeFemaleTeaching",
+    "mrMediumTeaching",
+    "mrSmallTeaching",
+    "usTeaching",
+    "usATeaching",
+    "usBreastTeaching",
+    "usHeartTeaching",
+    "usThyTeaching",
+    "usCCATeaching",
+    "usNeckTeaching",
+    "usPelvisFemaleTeaching",
+    "usPelvisMaleTeaching",
+    "ctTeaching",
+    "dxTeaching",
+    "mgTeaching",
+    "bmdTeaching",
+    "ctaTeaching",
   ];
 
   const scheduleDerivedFieldKeys: WorkloadFieldKey[] = [
@@ -287,7 +306,13 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
 
   const computeUnits = (row: any, keys: WorkloadFieldKey[]) =>
     keys.reduce(
-      (sum, field) => sum + ((row as any)[field] || 0) * weights[field],
+      (sum, field) => {
+        let weightKey = field;
+        if (field.endsWith("Teaching")) {
+          weightKey = field.replace("Teaching", "") as WorkloadFieldKey;
+        }
+        return sum + ((row as any)[field] || 0) * (weights[weightKey] || 0);
+      },
       0,
     );
 
@@ -455,6 +480,25 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
         proofreader: 0,
         tsmcReport: 0,
         totalUnits: 0,
+        mrTeaching: 0,
+        mrLargeMaleTeaching: 0,
+        mrLargeFemaleTeaching: 0,
+        mrMediumTeaching: 0,
+        mrSmallTeaching: 0,
+        usTeaching: 0,
+        usATeaching: 0,
+        usBreastTeaching: 0,
+        usHeartTeaching: 0,
+        usThyTeaching: 0,
+        usCCATeaching: 0,
+        usNeckTeaching: 0,
+        usPelvisFemaleTeaching: 0,
+        usPelvisMaleTeaching: 0,
+        ctTeaching: 0,
+        dxTeaching: 0,
+        mgTeaching: 0,
+        bmdTeaching: 0,
+        ctaTeaching: 0,
       };
 
       const userWorkloads = workloads.filter(
@@ -1399,7 +1443,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
             
             {showWeights && (
               <div className="grid gap-3 mt-4 pt-4 border-t border-slate-100 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 animate-in fade-in slide-in-from-top-2">
-                {workloadFieldMeta.map((field) => (
+                {workloadFieldMeta.filter(f => !f.key.endsWith("Teaching")).map((field) => (
                   <label key={field.key} className="block text-xs text-slate-600">
                     <div className="mb-1 font-medium text-slate-800">
                       {field.label}
