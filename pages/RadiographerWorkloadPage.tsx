@@ -1592,7 +1592,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
                                   />
                                 </div>
                               ) : (
-                                <div className="flex flex-col items-center justify-center">
+                                <div className="flex flex-row items-center justify-center gap-1">
                                   <span>
                                     {field.key === "usThy"
                                       ? (() => { const v = (row.usThy || 0) + (row.usNeck || 0); return v ? Math.round(+v * 10) / 10 : "-"; })()
@@ -1601,7 +1601,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
                                       : (() => { const v = row[field.key]; return v ? Math.round(+v * 10) / 10 : "-"; })()}
                                   </span>
                                   {hasTeaching && (
-                                    <span className="text-xs text-orange-600 font-bold" title="教學數量">(+{teachingCount})</span>
+                                    <span className="text-xs text-orange-600 font-bold whitespace-nowrap" title="教學數量">(+{teachingCount})</span>
                                   )}
                                 </div>
                               )}
