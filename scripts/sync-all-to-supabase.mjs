@@ -79,7 +79,7 @@ async function syncDailyStats(session, startDate, endDate) {
         }
       }
       
-      if (name.includes("腸鏡") || name.includes("胃鏡")) {
+      if (name.includes("腸鏡") || name.includes("胃鏡") || name.includes("消化道內視鏡")) {
         const clientKey = `${date}_${clientId}`;
         if (!seenBeitouGI.has(clientKey)) {
           stats.beitou_gi++;
@@ -113,7 +113,7 @@ async function syncDailyStats(session, startDate, endDate) {
         }
       }
 
-      if (name.includes("腸鏡") || name.includes("胃鏡")) {
+      if (name.includes("腸鏡") || name.includes("胃鏡") || name.includes("消化道內視鏡")) {
         const clientKey = `${date}_${clientId}`;
         if (!seenDazhiGI.has(clientKey)) {
           stats.dazhi_gi++;
