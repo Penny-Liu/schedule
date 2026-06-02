@@ -358,7 +358,7 @@ async function syncRadiographerWorkload(
   console.log(
     `[sync-stats]   - [SOQL] 正在查詢 'CT/BMD/MG/DX 檢查量'...`,
   );
-  const ctDxSoql = `SELECT Radiologist__r.Name person, ResourceCategory__c category, Order__r.ReserveDate__c date 
+  const ctDxSoql = `SELECT Radiologist__r.Name, ResourceCategory__c, Order__r.ReserveDate__c 
                     FROM CheckupReservation__c 
                     WHERE (Order__r.ReserveDate__c >= ${startDate} AND Order__r.ReserveDate__c <= ${endDate}) 
                     AND Radiologist__c != null 
