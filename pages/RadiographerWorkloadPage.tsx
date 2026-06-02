@@ -46,7 +46,11 @@ type WorkloadFieldKey =
   | "bmd"
   | "reportTyping"
   | "proofreader"
-  | "tsmcReport";
+  | "tsmcReport"
+  | "mrTeaching"
+  | "usTeaching"
+  | "ctTeaching"
+  | "bmdTeaching";
 
 const workloadFieldMeta: { key: WorkloadFieldKey; label: string }[] = [
   { key: "workDays", label: "上班天數" },
@@ -75,6 +79,10 @@ const workloadFieldMeta: { key: WorkloadFieldKey; label: string }[] = [
   { key: "reportTyping", label: "報告登打" },
   { key: "proofreader", label: "影像校對" },
   { key: "tsmcReport", label: "台積電報告" },
+  { key: "mrTeaching", label: "MR教學" },
+  { key: "usTeaching", label: "US教學" },
+  { key: "ctTeaching", label: "CT教學" },
+  { key: "bmdTeaching", label: "BMD教學" },
 ];
 
 const defaultWorkloadWeights: Record<WorkloadFieldKey, number> = {
@@ -105,6 +113,10 @@ const defaultWorkloadWeights: Record<WorkloadFieldKey, number> = {
   reportTyping: 1,
   proofreader: 1,
   tsmcReport: 1,
+  mrTeaching: 1,
+  usTeaching: 1,
+  ctTeaching: 1,
+  bmdTeaching: 1,
 };
 
 interface RadiographerWorkloadPageProps {
@@ -187,6 +199,10 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
     "dx",
     "mg",
     "bmd",
+    "mrTeaching",
+    "usTeaching",
+    "ctTeaching",
+    "bmdTeaching",
   ];
 
   const scheduleDerivedFieldKeys: WorkloadFieldKey[] = [
@@ -430,6 +446,10 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
           stats.reportTyping += w.reportEntry || w.reportTyping || 0;
           stats.proofreader += w.imageProofing || w.proofreader || 0;
           stats.tsmcReport += w.tsmcReport || w.tsmc_report || 0;
+          stats.mrTeaching += w.mrTeaching || w.mr_teaching || 0;
+          stats.usTeaching += w.usTeaching || w.us_teaching || 0;
+          stats.ctTeaching += w.ctTeaching || w.ct_teaching || 0;
+          stats.bmdTeaching += w.bmdTeaching || w.bmd_teaching || 0;
         });
       }
 
@@ -917,29 +937,29 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
       worksheet.mergeCells('B2:I2');
       worksheet.getCell('B2').value = '上班天數';
 
-      worksheet.mergeCells('J2:AC2');
+      worksheet.mergeCells('J2:AG2');
       worksheet.getCell('J2').value = '現場工作量';
 
-      worksheet.mergeCells('AD2:AF2');
-      worksheet.getCell('AD2').value = '遠班工作量';
+      worksheet.mergeCells('AH2:AJ2');
+      worksheet.getCell('AH2').value = '遠班工作量';
 
-      worksheet.mergeCells('AG2:AG3');
-      worksheet.getCell('AG2').value = '現場加權';
+      worksheet.mergeCells('AK2:AK3');
+      worksheet.getCell('AK2').value = '現場加權';
       
-      worksheet.mergeCells('AH2:AH3');
-      worksheet.getCell('AH2').value = '遠班加權';
+      worksheet.mergeCells('AL2:AL3');
+      worksheet.getCell('AL2').value = '遠班加權';
       
-      worksheet.mergeCells('AI2:AI3');
-      worksheet.getCell('AI2').value = '總加權';
+      worksheet.mergeCells('AM2:AM3');
+      worksheet.getCell('AM2').value = '總加權';
 
-      worksheet.mergeCells('AJ2:AJ3');
-      worksheet.getCell('AJ2').value = '預估日期';
+      worksheet.mergeCells('AN2:AN3');
+      worksheet.getCell('AN2').value = '預估日期';
 
       // 欄位標題 (Row 3)
       const headersRow3 = [
         "", // A3 (merged)
         "上班天數", "現場天數", "遠班", "北投天數", "大直天數", "休假", "備註", "配合銷假",
-        "場控", "輔控", "排班", "MR大男", "MR大女", "MR中", "MR小", "腹", "乳", "心", "甲", "頸", "P女", "P男", "CT", "CTA", "CTA後處理", "DX", "MG", "BMD",
+        "場控", "輔控", "排班", "MR大男", "MR大女", "MR中", "MR小", "MR教學", "腹", "乳", "心", "甲", "頸", "P女", "P男", "US教學", "CT", "CT教學", "CTA", "CTA後處理", "DX", "MG", "BMD", "BMD教學",
         "報告登打", "影像校對", "台積電報告",
         "", "", "", "" // AG3, AH3, AI3, AJ3 (merged)
       ];
@@ -949,13 +969,13 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
       [2, 3].forEach(r => {
         const row = worksheet.getRow(r);
         row.height = r === 3 ? 35 : 25;
-        for (let i = 1; i <= 36; i++) {
+        for (let i = 1; i <= 40; i++) {
           const cell = row.getCell(i);
           cell.font = { bold: true, size: 12, name: '微軟正黑體', color: { argb: 'FF333333' } };
           cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
           
           // 區塊最後一欄使用粗線劃分
-          const isBlockEnd = [1, 9, 12, 16, 23, 26, 29, 32, 35, 36].includes(i);
+          const isBlockEnd = [1, 9, 12, 17, 25, 32, 35, 36, 39, 40].includes(i);
           cell.border = {
             top: { style: 'thin', color: { argb: 'FFCCCCCC' } },
             left: { style: 'thin', color: { argb: 'FFCCCCCC' } },
@@ -973,10 +993,10 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
       worksheet.getCell('J2').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF2CC' } }; // 淡黃色 - 現場工作量
       worksheet.getCell('AD2').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDDEBF7' } }; // 淡藍色 - 遠班工作量
 
-      // 覆寫最後三欄 (Row 2, AG, AH, AI)
-      worksheet.getCell('AG2').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF2CC' } }; // 現場加權 (黃色系)
-      worksheet.getCell('AH2').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDDEBF7' } }; // 遠班加權 (藍色系)
-      worksheet.getCell('AI2').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFCE4D6' } }; // 總加權 (橘色系)
+      // 覆寫最後三欄 (Row 2, AK, AL, AM)
+      worksheet.getCell('AK2').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF2CC' } }; // 現場加權 (黃色系)
+      worksheet.getCell('AL2').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDDEBF7' } }; // 遠班加權 (藍色系)
+      worksheet.getCell('AM2').fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFCE4D6' } }; // 總加權 (橘色系)
 
       // 資料列
       workloadData.forEach((row) => {
@@ -997,6 +1017,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
           row.mrLargeFemale || 0,
           row.mrMedium || 0,
           row.mrSmall || 0,
+          row.mrTeaching || 0,
           row.usA || 0,
           row.usBreast || 0,
           row.usHeart || 0,
@@ -1004,12 +1025,15 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
           row.usCCA || 0,  // 頸 = CCA
           row.usPelvisFemale || 0,
           row.usPelvisMale || 0,
+          row.usTeaching || 0,
           row.ct || 0,
+          row.ctTeaching || 0,
           row.cta || 0,
           row.ctaPostProcessing || 0,
           row.dx || 0,
           row.mg || 0,
           row.bmd || 0,
+          row.bmdTeaching || 0,
           row.reportTyping || 0,
           row.proofreader || 0,
           row.tsmcReport || 0,
@@ -1437,7 +1461,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
                   {showGroupPanel && groups.length > 0 && (
                     <th className="px-3 py-3 text-center text-violet-600 bg-violet-50/50 whitespace-nowrap">分類</th>
                   )}
-                  {workloadFieldMeta.map((field) => 
+                  {workloadFieldMeta.filter(f => !f.key.endsWith("Teaching")).map((field) => 
                     renderSortTh(
                       field.key,
                       field.label,
@@ -1453,7 +1477,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
                 {displayData.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={workloadFieldMeta.length + (showGroupPanel ? 4 : 3)}
+                      colSpan={workloadFieldMeta.filter(f => !f.key.endsWith("Teaching")).length + (showGroupPanel ? 4 : 3)}
                       className="px-4 py-8 text-center text-slate-400 font-medium"
                     >
                       無資料
@@ -1484,34 +1508,53 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
                             </select>
                           </td>
                         )}
-                        {workloadFieldMeta.map((field) => {
+                        {workloadFieldMeta.filter(f => !f.key.endsWith("Teaching")).map((field) => {
                           const isScheduleField =
                             scheduleDerivedFieldKeys.includes(field.key);
+                          const getTeachingCount = (baseKey: string) => {
+                            if (baseKey === 'mr') return row.mrTeaching || 0;
+                            if (baseKey === 'us') return row.usTeaching || 0;
+                            if (baseKey === 'ct') return row.ctTeaching || 0;
+                            if (baseKey === 'bmd') return row.bmdTeaching || 0;
+                            return 0;
+                          };
+                          const teachingCount = getTeachingCount(field.key);
+                          const hasTeaching = teachingCount > 0;
+                          
                           return (
                             <td
                               key={field.key}
                               className={`px-4 py-2.5 text-center font-medium ${field.key === "cta" || field.key === "ctaPostProcessing" ? "bg-teal-50/10 text-teal-600 font-bold" : field.key === "reportTyping" ? "bg-indigo-50/10 text-indigo-600 font-bold" : field.key === "proofreader" ? "bg-purple-50/10 text-purple-600 font-bold" : "text-slate-700"} ${shouldRenderCategorySeparator(field.key) ? "border-r-2 border-slate-300" : ""}`}
                             >
                               {isEditing && !isScheduleField ? (
-                                <input
-                                  type="number"
-                                  min="0"
-                                  value={row[field.key]}
-                                  onChange={(e) =>
-                                    handleInputChange(
-                                      row.name,
-                                      field.key,
-                                      e.target.value,
-                                    )
-                                  }
-                                  className="w-16 text-center border border-emerald-200 rounded px-1 py-1 text-sm outline-none focus:ring-2 focus:ring-emerald-500 bg-emerald-50/50"
-                                />
+                                <div className="flex flex-col items-center gap-1">
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    value={row[field.key]}
+                                    onChange={(e) =>
+                                      handleInputChange(
+                                        row.name,
+                                        field.key,
+                                        e.target.value,
+                                      )
+                                    }
+                                    className="w-16 text-center border border-emerald-200 rounded px-1 py-1 text-sm outline-none focus:ring-2 focus:ring-emerald-500 bg-emerald-50/50"
+                                  />
+                                </div>
                               ) : (
-                                field.key === "usThy"
-                                  ? (() => { const v = (row.usThy || 0) + (row.usNeck || 0); return v ? Math.round(+v * 10) / 10 : "-"; })()
-                                  : scheduleDerivedFieldKeys.includes(field.key)
-                                  ? (row[field.key] || "-")
-                                  : (() => { const v = row[field.key]; return v ? Math.round(+v * 10) / 10 : "-"; })()
+                                <div className="flex flex-col items-center justify-center">
+                                  <span>
+                                    {field.key === "usThy"
+                                      ? (() => { const v = (row.usThy || 0) + (row.usNeck || 0); return v ? Math.round(+v * 10) / 10 : "-"; })()
+                                      : scheduleDerivedFieldKeys.includes(field.key)
+                                      ? (row[field.key] || "-")
+                                      : (() => { const v = row[field.key]; return v ? Math.round(+v * 10) / 10 : "-"; })()}
+                                  </span>
+                                  {hasTeaching && (
+                                    <span className="text-xs text-orange-600 font-bold" title="教學數量">(+{teachingCount})</span>
+                                  )}
+                                </div>
                               )}
                             </td>
                           );

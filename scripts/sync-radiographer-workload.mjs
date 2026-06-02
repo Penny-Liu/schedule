@@ -85,7 +85,7 @@ async function syncAllWorkloads() {
     // 建立 Supabase 人員名單對應 (因為 SOQL 返回的可能是別名或全名)
     const { data: usersData } = await supabase
       .from("users")
-      .select("name, alias")
+      .select("id, name, alias, learning_capabilities")
       .eq("is_radiographer", true)
       .eq("is_part_time", false);
 
@@ -137,6 +137,10 @@ async function syncAllWorkloads() {
           dx: 0,
           mg: 0,
           bmd: 0,
+        mr_teaching: 0,
+        us_teaching: 0,
+        ct_teaching: 0,
+        bmd_teaching: 0,
           proofreading: 0,
         };
       });
@@ -163,6 +167,10 @@ async function syncAllWorkloads() {
           dx: 0,
           mg: 0,
           bmd: 0,
+        mr_teaching: 0,
+        us_teaching: 0,
+        ct_teaching: 0,
+        bmd_teaching: 0,
           proofreading: 0,
         };
     };
@@ -246,7 +254,7 @@ async function syncAllWorkloads() {
 
     // 1b. 抓取 MR 工作量：逐筆拿，在 JS 側依 Order 的醫令數量分大/中/小
     console.log(`📊 正在抓取 MR 工作量並分析套別...`);
-    const mrSoql = `SELECT Radiologist__r.Name, Order__c, Order__r.Gender__c 
+    const mrSoql = `SELECT Radiologist__r.Name, Order__c, Order__r.ReserveDate__c, Order__r.Gender__c 
                     FROM CheckupReservation__c 
                     WHERE (Order__r.ReserveDate__c >= ${generalRange.startDate} AND Order__r.ReserveDate__c <= ${generalRange.endDate}) 
                     AND Radiologist__c != null 

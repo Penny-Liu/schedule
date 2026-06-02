@@ -428,6 +428,10 @@ export interface RadiographerWorkload {
   reportTyping: number;
   proofreader: number;
   tsmcReport?: number;
+  mrTeaching?: number;
+  usTeaching?: number;
+  ctTeaching?: number;
+  bmdTeaching?: number;
   floorControl: number;
   assist: number;
   scheduler: number;

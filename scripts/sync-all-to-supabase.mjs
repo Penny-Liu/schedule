@@ -190,7 +190,7 @@ async function syncRadiographerWorkload(
 
   const { data: usersData } = await supabase
     .from("users")
-    .select("name, alias")
+    .select("id, name, alias, learning_capabilities")
     .eq("is_radiographer", true)
     .eq("is_part_time", false);
   const validNamesMap = {};
@@ -280,6 +280,10 @@ async function syncRadiographerWorkload(
         dx: 0,
         mg: 0,
         bmd: 0,
+        mr_teaching: 0,
+        us_teaching: 0,
+        ct_teaching: 0,
+        bmd_teaching: 0,
         imageProofing: 0,
         // 不候入同步：cta_post_processing、report_entry 由手動填寫，保留原有値
       };
@@ -287,20 +291,80 @@ async function syncRadiographerWorkload(
   };
   usersData.forEach((u) => ensureUser(u.name));
 
+  const getModalityFromStation = (station) => {
+    const s = String(station || "").toUpperCase();
+    if (s.includes("MR")) return "mr";
+    if (s.includes("US")) return "us";
+    if (s.includes("CT")) return "ct";
+    if (s.includes("BMD") || s.includes("DX")) return "bmd";
+    return null;
+  };
+
+  const { data: shiftsData } = await supabase
+    .from("shifts")
+    .select("date, station, specialRoles, userId")
+    .gte("date", startDate)
+    .lte("date", endDate);
+  
+  const dailyTeachers = {}; 
+  if (shiftsData) {
+    const shiftsByDateStation = {};
+    shiftsData.forEach(s => {
+      if (!s.station) return;
+      if (!shiftsByDateStation[s.date]) shiftsByDateStation[s.date] = {};
+      if (!shiftsByDateStation[s.date][s.station]) shiftsByDateStation[s.date][s.station] = [];
+      shiftsByDateStation[s.date][s.station].push(s);
+    });
+    for (const [date, stations] of Object.entries(shiftsByDateStation)) {
+      dailyTeachers[date] = {};
+      for (const [station, stShifts] of Object.entries(stations)) {
+        if (stShifts.length >= 2) {
+          const learners = stShifts.filter(s => {
+            const u = usersData.find(usr => usr.id === s.userId);
+            return u && u.learning_capabilities && u.learning_capabilities.some(cap => station.includes(cap));
+          });
+          const teachers = stShifts.filter(s => {
+            const u = usersData.find(usr => usr.id === s.userId);
+            return !u || !u.learning_capabilities || !u.learning_capabilities.some(cap => station.includes(cap));
+          });
+          if (learners.length > 0 && teachers.length > 0) {
+            const modality = getModalityFromStation(station);
+            if (modality) {
+              if (!dailyTeachers[date][modality]) dailyTeachers[date][modality] = {};
+              learners.forEach(l => {
+                const lUser = usersData.find(u => u.id === l.userId);
+                if (lUser) {
+                  const lName = validNamesMap[lUser.name] || lUser.name;
+                  if (!dailyTeachers[date][modality][lName]) dailyTeachers[date][modality][lName] = [];
+                  teachers.forEach(t => {
+                    const tUser = usersData.find(u => u.id === t.userId);
+                    if (tUser) {
+                      const tName = validNamesMap[tUser.name] || tUser.name;
+                      dailyTeachers[date][modality][lName].push(tName);
+                    }
+                  });
+                }
+              });
+            }
+          }
+        }
+      }
+    }
+  }
+
   const round2 = (n) => Math.round(n * 10) / 10;
 
   // 1a-i. CT/BMD/MG/DX（可以 GROUP BY，不需要 CheckupName）
   console.log(
     `[sync-stats]   - [SOQL] 正在查詢 'CT/BMD/MG/DX 檢查量'...`,
   );
-  const ctDxSoql = `SELECT Radiologist__r.Name person, ResourceCategory__c category, COUNT(Id) cnt 
+  const ctDxSoql = `SELECT Radiologist__r.Name person, ResourceCategory__c category, Order__r.ReserveDate__c date 
                     FROM CheckupReservation__c 
                     WHERE (Order__r.ReserveDate__c >= ${startDate} AND Order__r.ReserveDate__c <= ${endDate}) 
                     AND Radiologist__c != null 
                     AND ResourceCategory__c IN ('CT','BMD','MG','DX') 
                     AND (NOT Name LIKE '%報到%') 
-                    AND Checkup_Status__c = '10' 
-                    GROUP BY Radiologist__r.Name, ResourceCategory__c`;
+                    AND Checkup_Status__c = '10'`;
   const ctDxData = await runSoqlQuery({
     instanceUrl: session.instanceUrl,
     accessToken: session.accessToken,
@@ -309,21 +373,31 @@ async function syncRadiographerWorkload(
   (ctDxData.records || []).forEach((rec) => {
     const rawName = rec.person || rec.Radiologist__r?.Name;
     const category = (rec.category || rec.ResourceCategory__c || "").toLowerCase();
-    const count = parseInt(rec.cnt || rec.expr0 || 0, 10);
+    const date = rec.date || rec.Order__r?.ReserveDate__c;
     const cleanName = findNameInPath([rawName], validNamesMap);
     if (cleanName === "Unknown") return;
     ensureUser(cleanName);
-    if (category === "ct") workloadMap[cleanName].ct += count;
-    if (category === "dx") workloadMap[cleanName].dx += count;
-    if (category === "mg") workloadMap[cleanName].mg += count;
-    if (category === "bmd") workloadMap[cleanName].bmd += count;
+    if (category === "ct") {
+      workloadMap[cleanName].ct += 1;
+      if (date && dailyTeachers[date]?.ct?.[cleanName]) {
+        dailyTeachers[date].ct[cleanName].forEach(tName => { ensureUser(tName); workloadMap[tName].ct_teaching += 1; });
+      }
+    }
+    if (category === "dx") workloadMap[cleanName].dx += 1;
+    if (category === "mg") workloadMap[cleanName].mg += 1;
+    if (category === "bmd") {
+      workloadMap[cleanName].bmd += 1;
+      if (date && dailyTeachers[date]?.bmd?.[cleanName]) {
+        dailyTeachers[date].bmd[cleanName].forEach(tName => { ensureUser(tName); workloadMap[tName].bmd_teaching += 1; });
+      }
+    }
   });
 
   // 1a-ii. US：CheckupName__c 是 textarea 不能 GROUP BY，逐筆抓後 JS 側分類
   console.log(
     `[sync-stats]   - [SOQL] 正在查詢 'US 超音波檢查量' (逐筆分類)...`,
   );
-  const usSoql = `SELECT Radiologist__r.Name, CheckupName__c 
+  const usSoql = `SELECT Radiologist__r.Name, CheckupName__c, Order__r.ReserveDate__c 
                   FROM CheckupReservation__c 
                   WHERE (Order__r.ReserveDate__c >= ${startDate} AND Order__r.ReserveDate__c <= ${endDate}) 
                   AND Radiologist__c != null 
@@ -338,12 +412,16 @@ async function syncRadiographerWorkload(
   (usData.records || []).forEach((rec) => {
     const rawName = rec.Radiologist__r?.Name;
     const checkupName = rec.CheckupName__c || "";
+    const date = rec.Order__r?.ReserveDate__c;
     const cleanName = findNameInPath([rawName], validNamesMap);
     if (cleanName === "Unknown") return;
     ensureUser(cleanName);
     workloadMap[cleanName].us += 1;
     const subtype = parseUsSubtype(checkupName);
     if (subtype) workloadMap[cleanName][subtype] += 1;
+    if (date && dailyTeachers[date]?.us?.[cleanName]) {
+      dailyTeachers[date].us[cleanName].forEach(tName => { ensureUser(tName); workloadMap[tName].us_teaching += 1; });
+    }
   });
 
 
@@ -351,7 +429,7 @@ async function syncRadiographerWorkload(
   console.log(
     `[sync-stats]   - [SOQL] 正在查詢 'MR 工作量' (按 Order 醫令數分套別)...`,
   );
-  const mrSoql = `SELECT Radiologist__r.Name, Order__c, Order__r.Gender__c 
+  const mrSoql = `SELECT Radiologist__r.Name, Order__c, Order__r.Gender__c, Order__r.ReserveDate__c 
                   FROM CheckupReservation__c 
                   WHERE (Order__r.ReserveDate__c >= ${startDate} AND Order__r.ReserveDate__c <= ${endDate}) 
                   AND Radiologist__c != null 
@@ -372,7 +450,7 @@ async function syncRadiographerWorkload(
     const radiologist = rec.Radiologist__r?.Name;
     if (!orderId) return;
     if (!mrOrderMap[orderId]) {
-      mrOrderMap[orderId] = { count: 0, gender, radiologistCounts: {} };
+      mrOrderMap[orderId] = { count: 0, gender, date: rec.Order__r?.ReserveDate__c, radiologistCounts: {} };
     }
     mrOrderMap[orderId].count++;
     if (radiologist) {
@@ -382,7 +460,7 @@ async function syncRadiographerWorkload(
   });
 
   // 依 Order 的醫令數分類，各放射師按「個人醫令數 / Order 總醫令數」比例分配
-  Object.values(mrOrderMap).forEach(({ count, gender, radiologistCounts }) => {
+  Object.values(mrOrderMap).forEach(({ count, gender, date, radiologistCounts }) => {
     const subtype = classifyMrByOrderCount(count, gender);
     Object.entries(radiologistCounts).forEach(([rawName, itemCount]) => {
       const ratio = itemCount / count;
@@ -391,6 +469,9 @@ async function syncRadiographerWorkload(
       ensureUser(cleanName);
       workloadMap[cleanName].mr += itemCount;
       workloadMap[cleanName][subtype] += ratio;
+      if (date && dailyTeachers[date]?.mr?.[cleanName]) {
+        dailyTeachers[date].mr[cleanName].forEach(tName => { ensureUser(tName); workloadMap[tName].mr_teaching += itemCount; });
+      }
     });
   });
 
