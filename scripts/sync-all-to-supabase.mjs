@@ -33,6 +33,8 @@ async function syncDailyStats(session, startDate, endDate) {
   const seenMR = new Set();
   const seenDazhiClient = new Set(); // 追蹤大直已計數客戶 (日期+Order)
   const seenBeitouClient = new Set(); // 追蹤北投已計數客戶 (日期+Order)
+  const seenBeitouGI = new Set();
+  const seenDazhiGI = new Set();
 
   const beitouOrders = new Set(); // 追蹤北投所有客戶 (日期+Order)
   const dazhiTargetOrders = new Set(); // 追蹤大直符合條件的客戶 (日期+Order)
@@ -76,7 +78,15 @@ async function syncDailyStats(session, startDate, endDate) {
           seenBeitouClient.add(clientKey);
         }
       }
-      if (name === "大腸鏡檢查") stats.beitou_gi++;
+      
+      if (name.includes("腸鏡") || name.includes("胃鏡")) {
+        const clientKey = `${date}_${clientId}`;
+        if (!seenBeitouGI.has(clientKey)) {
+          stats.beitou_gi++;
+          seenBeitouGI.add(clientKey);
+        }
+      }
+
       if (name.includes("電腦斷層(顯影)")) stats.beitou_cta++;
       if (name.includes("磁振造影") || name.includes("MR")) {
         stats.beitou_mr_orders++;
@@ -93,15 +103,8 @@ async function syncDailyStats(session, startDate, endDate) {
         if (name.includes("肝纖維")) stats.beitou_ultrasound_fibrosis++;
       }
     } else if (loc === "大直") {
-      // 大直客戶數：有超音波、X光或骨密檢查的客人才計算 (依據 Order 去重)
-      const cat = (r.ResourceCategory__c || "").toUpperCase();
-      const isClientTarget =
-        name.includes("超音波") ||
-        name.includes("X光") ||
-        name.includes("骨密") ||
-        ["US", "DX", "BMD"].includes(cat);
-
-      if (isClientTarget) {
+      // 大直客戶數：和北投一樣抓有體檢總評/解說的客人
+      if (name.includes("解說") || name.includes("總評")) {
         const clientKey = `${date}_${clientId}`;
         if (!seenDazhiClient.has(clientKey)) {
           stats.dazhi_clients++;
@@ -110,7 +113,14 @@ async function syncDailyStats(session, startDate, endDate) {
         }
       }
 
-      if (name === "大腸鏡檢查") stats.dazhi_gi++;
+      if (name.includes("腸鏡") || name.includes("胃鏡")) {
+        const clientKey = `${date}_${clientId}`;
+        if (!seenDazhiGI.has(clientKey)) {
+          stats.dazhi_gi++;
+          seenDazhiGI.add(clientKey);
+        }
+      }
+
       if (name === "營養門診(30)") stats.dazhi_metabolism_clients++;
       if (name.includes("超音波")) {
         stats.dazhi_ultrasound++;
