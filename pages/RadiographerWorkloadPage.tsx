@@ -611,17 +611,17 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
       stats.remarks = memo;
       stats.coopLeave = coopLeave;
 
-      const floorControl = userShiftsInRange.filter((s) => s.station.includes("場控")).length;
+      const floorControl = userShiftsInRange.filter((s) => s.station.includes("場控") && (!estimationStartDate || s.date <= estimationStartDate)).length;
       const assist = userShiftsInRange.filter(
         (s) =>
-          s.specialRoles.includes(SPECIAL_ROLES.ASSIST) ||
+          (s.specialRoles.includes(SPECIAL_ROLES.ASSIST) ||
           s.station.includes("輔控") ||
-          s.station === "輔",
+          s.station === "輔") && (!estimationStartDate || s.date <= estimationStartDate)
       ).length;
       const scheduler = userShiftsInRange.filter(
         (s) =>
-          s.specialRoles.includes(SPECIAL_ROLES.SCHEDULER) ||
-          s.station.includes("排班"),
+          (s.specialRoles.includes(SPECIAL_ROLES.SCHEDULER) ||
+          s.station.includes("排班")) && (!estimationStartDate || s.date <= estimationStartDate)
       ).length;
       stats.floorControl = floorControl;
       stats.assist = assist;
@@ -640,13 +640,23 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
             s.station !== StationDefault.OFF &&
             s.station !== "休假"
         );
+
+        const shiftsByDate: Record<string, any[]> = {};
         futureShifts.forEach(s => {
-          if (s.station.includes("遠")) estRemoteUnits += 30;
+          if (!shiftsByDate[s.date]) shiftsByDate[s.date] = [];
+          shiftsByDate[s.date].push(s);
+        });
+
+        const estDatesAdded: string[] = [];
+        Object.entries(shiftsByDate).forEach(([date, dayShifts]) => {
+          const isRemote = dayShifts.some(s => s.station.includes("遠"));
+          if (isRemote) estRemoteUnits += 30;
           else estOnsiteUnits += 30;
+          estDatesAdded.push(date);
         });
         
-        if (futureShifts.length > 0) {
-          const dates = futureShifts.map(s => s.date).sort();
+        if (estDatesAdded.length > 0) {
+          const dates = estDatesAdded.sort();
           const datesStr = dates.map(d => parseInt(d.substring(5,7)) + '/' + parseInt(d.substring(8,10))).join('、');
           const estStr = `${datesStr}預估`;
           stats.estRemark = estStr;
