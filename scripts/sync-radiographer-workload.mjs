@@ -282,7 +282,7 @@ async function syncAllWorkloads() {
         const nameToUse = cleanName !== "Unknown" ? cleanName : rawName;
         if (!nameToUse) return;
         ensureUser(nameToUse);
-        masterData[nameToUse].mr += ratio;
+        masterData[nameToUse].mr += itemCount;
         masterData[nameToUse][subtype] += ratio;
       });
     });

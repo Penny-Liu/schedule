@@ -180,6 +180,7 @@ async function syncRadiographerWorkload(
   endDate,
   reportStartDate,
   reportEndDate,
+  targetMonthOverride,
 ) {
   console.log(
     `\n[sync-stats] [2/2] 同步放射師工作量：檢查量 ${startDate} ~ ${endDate}；報告/校對 ${reportStartDate} ~ ${reportEndDate}`,
@@ -216,7 +217,7 @@ async function syncRadiographerWorkload(
     return "Unknown";
   }
 
-  const [year, month] = endDate.split("-");
+  const [year, month] = (targetMonthOverride || startDate).split("-");
   const yearNum = parseInt(year, 10);
   const monthNum = parseInt(month, 10);
 
@@ -388,7 +389,7 @@ async function syncRadiographerWorkload(
       const cleanName = findNameInPath([rawName], validNamesMap);
       if (cleanName === "Unknown") return;
       ensureUser(cleanName);
-      workloadMap[cleanName].mr += ratio;
+      workloadMap[cleanName].mr += itemCount;
       workloadMap[cleanName][subtype] += ratio;
     });
   });
@@ -826,6 +827,7 @@ if (process.argv[1] === __filename) {
               task.end || lastDay,
               task.reportStart || rs,
               task.reportEnd || re,
+              task.targetMonth || null
             );
           }
           if (task.id === 3) {
@@ -900,7 +902,7 @@ if (process.argv[1] === __filename) {
       const re2 = await askDate("影像報告校對結束日期", defaultReportEnd);
 
       try {
-        await syncRadiographerWorkload(session, s2, e2, rs2, re2);
+        await syncRadiographerWorkload(session, s2, e2, rs2, re2, s2);
       } catch (err) {
         console.error("\n❌ [2/3] 執行失敗:", err);
       }

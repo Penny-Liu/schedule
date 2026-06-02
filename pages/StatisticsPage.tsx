@@ -164,6 +164,7 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
         end: lastDay2,
         reportStart: rs2,
         reportEnd: re2,
+        targetMonth: "", // 預設留空，後端會自動抓開始月份
       },
       {
         id: 3,
@@ -765,6 +766,28 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
                             }
                             className="text-sm border border-slate-300 rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-indigo-500"
                           />
+                        </div>
+                      )}
+                      {task.id === 2 && (
+                        <div className="flex items-center gap-3">
+                          <span className="text-sm font-medium text-slate-600 w-20">
+                            寫入月份
+                          </span>
+                          <input
+                            type="month"
+                            value={task.targetMonth || ""}
+                            onChange={(e) =>
+                              updateSyncTask(
+                                task.id,
+                                "targetMonth",
+                                e.target.value,
+                              )
+                            }
+                            className="text-sm border border-slate-300 rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-indigo-500"
+                          />
+                          <span className="text-xs text-slate-400 ml-2">
+                            (若未填寫，系統會自動寫入上方「檢查量」的開始月份)
+                          </span>
                         </div>
                       )}
                     </div>
