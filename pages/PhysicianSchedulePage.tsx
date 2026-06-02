@@ -1873,7 +1873,7 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
           });
 
           processedStationNames.forEach((stName) => {
-            if (loc === "大直" && stName === "晚班") return;
+            if (stName === "晚班" && loc !== "北投" && loc !== "大直") return;
             // Minimum cell height for each station row
             const dynamicMinHeight = 5.0;
             // Station name cell: location-aware subtle tint
@@ -2582,56 +2582,6 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
             cell.font = { ...fontBase, size: 9 };
           });
           currentRowIndex++;
-
-          // 3. Late Shift (晚班)
-          const rowLate = sheet1.getRow(currentRowIndex);
-          rowLate.getCell(1).value = "晚班";
-          rowLate.getCell(1).border = borderStyle;
-          rowLate.getCell(1).alignment = alignCenter;
-
-          dateRange.forEach((dateStr, colIdx) => {
-            const lateShifts = locShifts.filter(
-              (s) => s.date === dateStr && s.task?.includes("晚班"),
-            );
-            const date = new Date(dateStr);
-            const isWeekend = date.getDay() === 0 || date.getDay() === 6;
-            const cell = rowLate.getCell(colIdx + 2);
-            cell.border = borderStyle;
-            if (isWeekend)
-              cell.fill = {
-                type: "pattern",
-                pattern: "solid",
-                fgColor: { argb: "FFF5F5F5" },
-              };
-
-            if (lateShifts.length > 0) {
-              const richText: any[] = [];
-              lateShifts.forEach((lateShift, idx) => {
-                const doc = doctors.find((d) => d.id === lateShift.doctorId);
-                const name = doc?.name || "?";
-                const time = formatTimeForExcel(
-                  lateShift.workTime || (lateShift as any).work_time || "",
-                );
-
-                richText.push({ text: name });
-                if (time) richText.push({ text: "\n" + time });
-
-                // Task is always "晚班" here, color it red
-                richText.push({
-                  text: "\n晚班",
-                  font: { color: { argb: "FFFF0000" } },
-                });
-
-                if (idx < lateShifts.length - 1) {
-                  richText.push({ text: "\n\n" }); // Double newline between doctors
-                }
-              });
-
-              cell.value = { richText };
-              cell.alignment = alignCenter;
-            }
-          });
-          currentRowIndex++;
         } else if (locationName === "大直") {
           // 1. Main Shift (主控 - 大直)
           const rowMain = sheet1.getRow(currentRowIndex);
@@ -2785,8 +2735,8 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
             processedStations.push(station);
           }
 
-          // Skip if station is explicitly '晚班' to avoid duplication
-          if (station === "晚班") return;
+          // Skip if station is explicitly '晚班' unless it's Beitou or Dazhi
+          if (station === "晚班" && locationName !== "北投" && locationName !== "大直") return;
 
           const row = sheet1.getRow(currentRowIndex);
           row.getCell(1).value = station;
@@ -2808,6 +2758,7 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
             // Find shifts for this station (support multiple doctors)
             const stationShifts = locShifts.filter((s) => {
               if (s.date !== dateStr) return false;
+              if (station === "晚班") return s.task?.includes("晚班");
               if (station === "GI")
                 return isGIStation(s.scheduled_station || "");
               return s.scheduled_station === station;
@@ -4698,6 +4649,7 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
                                 "行政",
                               ],
                               大直: [
+                                "晚班",
                                 "解說",
                                 "遠班",
                                 "GI",

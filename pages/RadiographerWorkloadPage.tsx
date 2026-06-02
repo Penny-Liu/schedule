@@ -132,6 +132,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
   const workloads = db.workloads;
 
   const [isEditing, setIsEditing] = useState(false);
+  const [estimationStartDate, setEstimationStartDate] = useState<string>("");
   const [editingData, setEditingData] = useState<Record<string, any>>({});
   const [importTarget, setImportTarget] =
     useState<WorkloadFieldKey>("reportTyping");
@@ -301,19 +302,28 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
     let firstDay = `${currentMonth}-01`;
     let lastDay = `${currentMonth}-${String(new Date(year, month, 0).getDate()).padStart(2, "0")}`;
 
-    if (targetCycle) {
-      firstDay = targetCycle.startDate;
-      lastDay = targetCycle.endDate;
-    }
-
     let prevMonth = month - 1;
     let prevYear = year;
     if (prevMonth === 0) {
       prevMonth = 12;
       prevYear--;
     }
-    const reportStart = `${prevYear}-${String(prevMonth).padStart(2, "0")}-26`;
-    const reportEnd = `${year}-${String(month).padStart(2, "0")}-25`;
+
+    let reportStart = `${prevYear}-${String(prevMonth).padStart(2, "0")}-26`;
+    let reportEnd = `${year}-${String(month).padStart(2, "0")}-25`;
+
+    if (targetCycle) {
+      firstDay = targetCycle.startDate;
+      lastDay = targetCycle.endDate;
+
+      const rs = new Date(firstDay);
+      rs.setDate(rs.getDate() - 5);
+      const re = new Date(lastDay);
+      re.setDate(re.getDate() - 5);
+
+      reportStart = `${rs.getFullYear()}-${String(rs.getMonth() + 1).padStart(2, "0")}-${String(rs.getDate()).padStart(2, "0")}`;
+      reportEnd = `${re.getFullYear()}-${String(re.getMonth() + 1).padStart(2, "0")}-${String(re.getDate()).padStart(2, "0")}`;
+    }
 
     return {
       generalDates: buildDateRange(firstDay, lastDay),
@@ -498,12 +508,39 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
       stats.scheduler = scheduler;
 
 
-      stats.onsiteUnits = computeUnits(stats, onsiteFieldKeys);
-      stats.remoteUnits = computeUnits(stats, remoteFieldKeys);
-      stats.totalUnits = computeTotalUnits(stats);
+      let estOnsiteUnits = 0;
+      let estRemoteUnits = 0;
+      if (estimationStartDate) {
+        const futureShifts = shifts.filter(
+          (s) =>
+            s.userId === user.id &&
+            generalDates.includes(s.date) &&
+            s.date > estimationStartDate &&
+            s.station !== StationDefault.UNASSIGNED &&
+            s.station !== StationDefault.OFF &&
+            s.station !== "休假"
+        );
+        futureShifts.forEach(s => {
+          if (s.station.includes("遠")) estRemoteUnits += 30;
+          else estOnsiteUnits += 30;
+        });
+        
+        if (futureShifts.length > 0) {
+          const dates = futureShifts.map(s => s.date).sort();
+          const datesStr = dates.map(d => parseInt(d.substring(5,7)) + '/' + parseInt(d.substring(8,10))).join('、');
+          const estStr = `${datesStr}預估`;
+          stats.estRemark = estStr;
+        }
+      }
+      stats.estOnsiteUnits = estOnsiteUnits;
+      stats.estRemoteUnits = estRemoteUnits;
+
+      stats.onsiteUnits = computeUnits(stats, onsiteFieldKeys) + estOnsiteUnits;
+      stats.remoteUnits = computeUnits(stats, remoteFieldKeys) + estRemoteUnits;
+      stats.totalUnits = computeTotalUnits(stats) + estOnsiteUnits + estRemoteUnits;
       return stats;
     });
-  }, [radiographers, workloads, currentMonth, weights, generalDates, shifts]);
+  }, [radiographers, workloads, currentMonth, weights, generalDates, shifts, estimationStartDate]);
 
   // Sorted display data (must be after workloadData)
   const displayData = useMemo(() => {
@@ -511,9 +548,9 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
     if (!sortField) return base;
     return [...base].sort((a, b) => {
       let va: number, vb: number;
-      if (sortField === 'onsiteUnits') { va = computeUnits(a, onsiteFieldKeys); vb = computeUnits(b, onsiteFieldKeys); }
-      else if (sortField === 'remoteUnits') { va = computeUnits(a, remoteFieldKeys); vb = computeUnits(b, remoteFieldKeys); }
-      else if (sortField === 'totalUnits') { va = computeTotalUnits(a); vb = computeTotalUnits(b); }
+      if (sortField === 'onsiteUnits') { va = computeUnits(a, onsiteFieldKeys) + (a.estOnsiteUnits || 0); vb = computeUnits(b, onsiteFieldKeys) + (b.estOnsiteUnits || 0); }
+      else if (sortField === 'remoteUnits') { va = computeUnits(a, remoteFieldKeys) + (a.estRemoteUnits || 0); vb = computeUnits(b, remoteFieldKeys) + (b.estRemoteUnits || 0); }
+      else if (sortField === 'totalUnits') { va = computeTotalUnits(a) + (a.estOnsiteUnits || 0) + (a.estRemoteUnits || 0); vb = computeTotalUnits(b) + (b.estOnsiteUnits || 0) + (b.estRemoteUnits || 0); }
       else { va = Number(a[sortField]) || 0; vb = Number(b[sortField]) || 0; }
       const numA = Number(va) || 0;
       const numB = Number(vb) || 0;
@@ -661,17 +698,18 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
 
     // 動態計算每欄最大寬度
     const allRows = [...Object.values(grouped).flat(), ...unassigned];
-    const wOnsite = allRows.length ? Math.max(...allRows.map(r => String(Math.round(computeUnits(r, onsiteFieldKeys))).length)) : 3;
-    const wRemote  = allRows.length ? Math.max(...allRows.map(r => String(Math.round(computeUnits(r, remoteFieldKeys))).length)) : 3;
-    const wTotal   = allRows.length ? Math.max(...allRows.map(r => String(Math.round(computeTotalUnits(r))).length)) : 3;
+    const wOnsite = allRows.length ? Math.max(...allRows.map(r => String(Math.round(computeUnits(r, onsiteFieldKeys) + (r.estOnsiteUnits || 0))).length)) : 3;
+    const wRemote  = allRows.length ? Math.max(...allRows.map(r => String(Math.round(computeUnits(r, remoteFieldKeys) + (r.estRemoteUnits || 0))).length)) : 3;
+    const wTotal   = allRows.length ? Math.max(...allRows.map(r => String(Math.round(computeTotalUnits(r) + (r.estOnsiteUnits || 0) + (r.estRemoteUnits || 0))).length)) : 3;
     const wDays    = allRows.length ? Math.max(...allRows.map(r => String(r.workDays || 0).length)) : 2;
 
     const fmt = (row: any) => {
-      const onsite = Math.round(computeUnits(row, onsiteFieldKeys));
-      const remote = Math.round(computeUnits(row, remoteFieldKeys));
-      const total = Math.round(computeTotalUnits(row));
+      const onsite = Math.round(computeUnits(row, onsiteFieldKeys) + (row.estOnsiteUnits || 0));
+      const remote = Math.round(computeUnits(row, remoteFieldKeys) + (row.estRemoteUnits || 0));
+      const total = Math.round(computeTotalUnits(row) + (row.estOnsiteUnits || 0) + (row.estRemoteUnits || 0));
       const name2 = row.name.slice(-2);
-      return `${name2} ${toFW(row.workDays, wDays)}天    現${toFW(onsite, wOnsite)}    遠${toFW(remote, wRemote)}    總${toFW(total, wTotal)}`;
+      const rmk = row.estRemark ? `  (${row.estRemark})` : '';
+      return `${name2} ${toFW(row.workDays, wDays)}天    現${toFW(onsite, wOnsite)}    遠${toFW(remote, wRemote)}    總${toFW(total, wTotal)}${rmk}`;
     };
 
     let text = header + '\n';
@@ -864,8 +902,8 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
       const dateRangeText = startDate && endDate ? `${startDate.substring(5).replace('-','/')}-${endDate.substring(5).replace('-','/')}` : '';
       const titleText = `${y}年 ${mm}月放射師工作量統計（排班週期：${cycleText} (${dateRangeText})）`;
 
-      // 1. 新增第一列 Title (合併 A 到 AI) 35 欄
-      worksheet.mergeCells('A1:AI1');
+      // 1. 新增第一列 Title (合併 A 到 AJ) 36 欄
+      worksheet.mergeCells('A1:AJ1');
       const titleCell = worksheet.getCell('A1');
       titleCell.value = titleText;
       titleCell.font = { size: 16, bold: true, name: '微軟正黑體' };
@@ -894,13 +932,16 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
       worksheet.mergeCells('AI2:AI3');
       worksheet.getCell('AI2').value = '總加權';
 
+      worksheet.mergeCells('AJ2:AJ3');
+      worksheet.getCell('AJ2').value = '預估日期';
+
       // 欄位標題 (Row 3)
       const headersRow3 = [
         "", // A3 (merged)
         "上班天數", "現場天數", "遠班", "北投天數", "大直天數", "休假", "備註", "配合銷假",
         "場控", "輔控", "排班", "MR大男", "MR大女", "MR中", "MR小", "腹", "乳", "心", "甲", "頸", "P女", "P男", "CT", "CTA", "CTA後處理", "DX", "MG", "BMD",
         "報告登打", "影像校對", "台積電報告",
-        "", "", "" // AG3, AH3, AI3 (merged)
+        "", "", "", "" // AG3, AH3, AI3, AJ3 (merged)
       ];
       worksheet.getRow(3).values = headersRow3;
 
@@ -908,13 +949,13 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
       [2, 3].forEach(r => {
         const row = worksheet.getRow(r);
         row.height = r === 3 ? 35 : 25;
-        for (let i = 1; i <= 35; i++) {
+        for (let i = 1; i <= 36; i++) {
           const cell = row.getCell(i);
           cell.font = { bold: true, size: 12, name: '微軟正黑體', color: { argb: 'FF333333' } };
           cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
           
           // 區塊最後一欄使用粗線劃分
-          const isBlockEnd = [1, 9, 12, 16, 23, 26, 29, 32, 35].includes(i);
+          const isBlockEnd = [1, 9, 12, 16, 23, 26, 29, 32, 35, 36].includes(i);
           cell.border = {
             top: { style: 'thin', color: { argb: 'FFCCCCCC' } },
             left: { style: 'thin', color: { argb: 'FFCCCCCC' } },
@@ -972,9 +1013,10 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
           row.reportTyping || 0,
           row.proofreader || 0,
           row.tsmcReport || 0,
-          Math.round(computeUnits(row, onsiteFieldKeys)),
-          Math.round(computeUnits(row, remoteFieldKeys)),
-          Math.round(computeTotalUnits(row)),
+          Math.round(computeUnits(row, onsiteFieldKeys) + (row.estOnsiteUnits || 0)),
+          Math.round(computeUnits(row, remoteFieldKeys) + (row.estRemoteUnits || 0)),
+          Math.round(computeTotalUnits(row) + (row.estOnsiteUnits || 0) + (row.estRemoteUnits || 0)),
+          row.estRemark || "",
         ]);
         
         excelRow.height = 35; // 讓資料列也能換行
@@ -982,7 +1024,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
           cell.font = { size: 11, name: '微軟正黑體' };
           cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
           
-          const isBlockEnd = [1, 9, 12, 16, 23, 26, 29, 32, 35].includes(colNumber);
+          const isBlockEnd = [1, 9, 12, 16, 23, 26, 29, 32, 35, 36].includes(colNumber);
           cell.border = {
             top: { style: 'thin', color: { argb: 'FFEEEEEE' } },
             left: { style: 'thin', color: { argb: 'FFEEEEEE' } },
@@ -1007,7 +1049,93 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
         { width: 10 }, { width: 10 }, { width: 10 }, { width: 10 }, { width: 10 }, { width: 10 }, { width: 25 }, { width: 18 }, // B-I: 上班天數~配合銷假
         { width: 8 }, { width: 8 }, { width: 8 }, { width: 9 }, { width: 9 }, { width: 8 }, { width: 8 }, { width: 8 }, { width: 8 }, { width: 8 }, { width: 8 }, { width: 8 }, { width: 8 }, { width: 8 }, { width: 8 }, { width: 8 }, { width: 12 }, { width: 8 }, { width: 8 }, { width: 8 }, // J-AC: 現場工作量
         { width: 10 }, { width: 10 }, { width: 12 }, // AD-AF: 遠班工作量
-        { width: 12 }, { width: 12 }, { width: 12 }, // AG-AI: 加權
+        { width: 12 }, { width: 12 }, { width: 12 }, { width: 20 }, // AG-AJ: 加權, 預估日期
+      ];
+
+      // --- 第二個工作表：排序 ---
+      const worksheet2 = workbook.addWorksheet("排序");
+
+      const groupedData: Record<string, any[]> = {};
+      const unassignedData: any[] = [];
+      groups.forEach(g => { groupedData[g.id] = []; });
+      displayData.forEach(row => {
+        const user = radiographers.find(r => r.name === row.name);
+        const gid = user ? groupAssignments[user.id] : undefined;
+        if (gid && groupedData[gid] !== undefined) groupedData[gid].push(row);
+        else unassignedData.push(row);
+      });
+
+      const sortDesc = (a: any, b: any) => {
+        const ta = Math.round(computeTotalUnits(a) + (a.estOnsiteUnits || 0) + (a.estRemoteUnits || 0));
+        const tb = Math.round(computeTotalUnits(b) + (b.estOnsiteUnits || 0) + (b.estRemoteUnits || 0));
+        return tb - ta;
+      };
+
+      const applyHeaderStyle = (rowObj: any, bgArgb: string) => {
+        rowObj.height = 25;
+        rowObj.eachCell({ includeEmpty: true }, (cell: any) => {
+          cell.font = { bold: true, size: 12, name: '微軟正黑體', color: { argb: 'FF333333' } };
+          cell.alignment = { vertical: 'middle', horizontal: 'center' };
+          cell.border = {
+            top: { style: 'thin', color: { argb: 'FFCCCCCC' } },
+            left: { style: 'thin', color: { argb: 'FFCCCCCC' } },
+            bottom: { style: 'thin', color: { argb: 'FFCCCCCC' } },
+            right: { style: 'thin', color: { argb: 'FFCCCCCC' } }
+          };
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgArgb } };
+        });
+      };
+
+      const renderGroupSheet2 = (title: string, rows: any[]) => {
+        if (rows.length === 0) return;
+        rows.sort(sortDesc);
+
+        const titleRow = worksheet2.addRow([title, "", "", "", ""]);
+        worksheet2.mergeCells(titleRow.number, 1, titleRow.number, 5);
+        applyHeaderStyle(titleRow, 'FFDDEBF7');
+        titleRow.getCell(1).alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
+
+        const colHeaderRow = worksheet2.addRow(['姓名', '上班天數', '現場單位', '遠班單位', '總單位']);
+        applyHeaderStyle(colHeaderRow, 'FFF2F2F2');
+
+        rows.forEach(row => {
+          const onsite = Math.round(computeUnits(row, onsiteFieldKeys) + (row.estOnsiteUnits || 0));
+          const remote = Math.round(computeUnits(row, remoteFieldKeys) + (row.estRemoteUnits || 0));
+          const total = Math.round(computeTotalUnits(row) + (row.estOnsiteUnits || 0) + (row.estRemoteUnits || 0));
+          
+          const dataRow = worksheet2.addRow([
+            row.name,
+            row.workDays || 0,
+            onsite,
+            remote,
+            total
+          ]);
+          
+          dataRow.height = 22;
+          dataRow.eachCell({ includeEmpty: true }, (cell: any) => {
+            cell.font = { size: 11, name: '微軟正黑體' };
+            cell.alignment = { vertical: 'middle', horizontal: 'center' };
+            cell.border = {
+              top: { style: 'thin', color: { argb: 'FFEEEEEE' } },
+              left: { style: 'thin', color: { argb: 'FFEEEEEE' } },
+              bottom: { style: 'thin', color: { argb: 'FFEEEEEE' } },
+              right: { style: 'thin', color: { argb: 'FFEEEEEE' } }
+            };
+          });
+        });
+        
+        worksheet2.addRow([]);
+      };
+
+      groups.forEach(g => renderGroupSheet2(g.name, groupedData[g.id]));
+      renderGroupSheet2("未分組", unassignedData);
+
+      worksheet2.columns = [
+        { width: 15 },
+        { width: 12 },
+        { width: 12 },
+        { width: 12 },
+        { width: 12 },
       ];
 
       const buffer = await workbook.xlsx.writeBuffer();
@@ -1037,24 +1165,58 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
               <BarChart3 size={20} />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-slate-800">
+              <h2 className="text-xl font-bold text-slate-800 flex items-center gap-3">
                 放射師工作量統計
+                <span className="text-sm font-bold bg-slate-100 text-slate-600 px-2.5 py-0.5 rounded-full border border-slate-200 shadow-sm">
+                  第{Number(currentMonth.split('-')[1])}週期
+                </span>
               </h2>
-              <p className="text-xs text-slate-500 font-medium">
-                一般區間：{generalDates[0]} ~{" "}
-                {generalDates[generalDates.length - 1]} | 報告區間：
-                {reportDates[0]} ~ {reportDates[reportDates.length - 1]}
+              <p className="text-xs text-slate-500 font-bold mt-1.5 flex items-center gap-2">
+                <span className="px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded">一般統計</span> 
+                {generalDates[0]?.replace(/-/g, '/')} ~ {generalDates[generalDates.length - 1]?.replace(/-/g, '/')}
+                <span className="text-slate-300">|</span>
+                <span className="px-1.5 py-0.5 bg-purple-50 text-purple-600 rounded">報告統計</span> 
+                {reportDates[0]?.replace(/-/g, '/')} ~ {reportDates[reportDates.length - 1]?.replace(/-/g, '/')}
               </p>
             </div>
           </div>
 
           <div className="flex items-center gap-3">
-            <input
-              type="month"
-              value={currentMonth}
-              onChange={(e) => setCurrentMonth(e.target.value)}
-              className="text-sm border border-slate-200 rounded-lg px-2 py-1.5 outline-none focus:ring-2 focus:ring-emerald-500 font-bold text-slate-700"
-            />
+            {cycles && cycles.length > 0 ? (
+              <select
+                value={currentMonth}
+                onChange={(e) => setCurrentMonth(e.target.value)}
+                className="text-sm border border-slate-200 rounded-lg px-2 py-1.5 outline-none focus:ring-2 focus:ring-emerald-500 font-bold text-slate-700 bg-white"
+              >
+                {cycles.map((c) => {
+                  const [y, m] = c.name.split("/");
+                  if (!y || !m) return <option key={c.id} value={c.name}>{c.name}</option>;
+                  const val = `${y}-${String(m).padStart(2, "0")}`;
+                  return (
+                    <option key={c.id} value={val}>
+                      第 {m} 週期 ({c.name})
+                    </option>
+                  );
+                })}
+              </select>
+            ) : (
+              <input
+                type="month"
+                value={currentMonth}
+                onChange={(e) => setCurrentMonth(e.target.value)}
+                className="text-sm border border-slate-200 rounded-lg px-2 py-1.5 outline-none focus:ring-2 focus:ring-emerald-500 font-bold text-slate-700 bg-white"
+              />
+            )}
+            
+            <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1">
+              <span className="text-xs font-bold text-slate-500 whitespace-nowrap">預估起始日</span>
+              <input
+                type="date"
+                value={estimationStartDate}
+                onChange={(e) => setEstimationStartDate(e.target.value)}
+                className="text-sm bg-transparent outline-none focus:ring-0 font-bold text-slate-700"
+              />
+            </div>
 
             {isEditing ? (
               <>
@@ -1356,12 +1518,15 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
                         })}
                         <td className="px-4 py-2.5 text-center font-bold text-slate-800 bg-slate-50">
                           {Math.round(computeUnits(row, onsiteFieldKeys))}
+                          {row.estOnsiteUnits > 0 && <span className="text-xs text-emerald-600 block leading-tight">+{row.estOnsiteUnits}(預估)</span>}
                         </td>
                         <td className="px-4 py-2.5 text-center font-bold text-slate-800 bg-slate-50">
                           {Math.round(computeUnits(row, remoteFieldKeys))}
+                          {row.estRemoteUnits > 0 && <span className="text-xs text-emerald-600 block leading-tight">+{row.estRemoteUnits}(預估)</span>}
                         </td>
                         <td className="px-4 py-2.5 text-center font-bold text-slate-800 bg-slate-50">
                           {Math.round(computeTotalUnits(row))}
+                          {(row.estOnsiteUnits > 0 || row.estRemoteUnits > 0) && <span className="text-xs text-emerald-600 block leading-tight">+{(row.estOnsiteUnits || 0) + (row.estRemoteUnits || 0)}(預估)</span>}
                         </td>
                       </tr>
                       );

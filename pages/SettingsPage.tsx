@@ -128,6 +128,18 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
     "personal" | "radiographer" | "health_mgmt" | "system"
   >("personal");
 
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncStart, setSyncStart] = useState(() => {
+    const today = new Date();
+    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+  });
+  const [syncEnd, setSyncEnd] = useState(() => {
+    const today = new Date();
+    const end = new Date(today);
+    end.setDate(today.getDate() + 30);
+    return `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, "0")}-${String(end.getDate()).padStart(2, "0")}`;
+  });
+
   const isSupervisorOrAdmin =
     currentUser.role === UserRole.SUPERVISOR ||
     currentUser.role === UserRole.SYSTEM_ADMIN;
@@ -863,6 +875,81 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
       </div>
     );
   }
+
+  const handleSync = async () => {
+    if (!syncStart || !syncEnd) {
+      alert("請輸入完整的同步區間！");
+      return;
+    }
+    
+    setIsSyncing(true);
+    // 只有功能一
+    const selectedTasks = [{
+      id: 1,
+      name: "每日統計 (醫令數與客戶量)",
+      selected: true,
+      start: syncStart,
+      end: syncEnd,
+    }];
+    const payloadStr = JSON.stringify(selectedTasks);
+
+    try {
+      const isLocalhost = false;
+      if (isLocalhost) {
+        const response = await fetch("/api/sync-stats", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ syncPayload: payloadStr }),
+        });
+        if (!response.ok) throw new Error("同步請求失敗，請確認後端服務狀態。");
+        alert(`[本地端] 已成功觸發後台同步！`);
+      } else {
+        let ghToken = localStorage.getItem("GITHUB_PAT");
+        if (!ghToken) {
+          ghToken = window.prompt(
+            "請輸入您的 GitHub Personal Access Token (PAT) 來觸發雲端同步：\n(只需輸入一次，會儲存在您的瀏覽器中)",
+          );
+          if (!ghToken) {
+            setIsSyncing(false);
+            return;
+          }
+          localStorage.setItem("GITHUB_PAT", ghToken.trim());
+        }
+
+        const owner = "Penny-Liu";
+        const repo = "schedule";
+        const workflowId = "sync-stats.yml";
+
+        const response = await fetch(
+          `https://api.github.com/repos/${owner}/${repo}/actions/workflows/${workflowId}/dispatches`,
+          {
+            method: "POST",
+            headers: {
+              Accept: "application/vnd.github.v3+json",
+              Authorization: `Bearer ${ghToken}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              ref: "main",
+              inputs: { sync_payload: payloadStr },
+            }),
+          },
+        );
+
+        if (response.status === 401 || response.status === 403 || response.status === 404) {
+          localStorage.removeItem("GITHUB_PAT");
+          throw new Error("GitHub Token 無效、沒有 repo 權限，或找不到該儲存庫。請重新整理頁面後再試一次！");
+        }
+        if (!response.ok) throw new Error(`GitHub API 請求失敗 (狀態碼: ${response.status})`);
+
+        alert(`[雲端] 已成功觸發 GitHub Actions 同步！\n由於雲端背景執行需要時間，請稍後幾分鐘再重新整理頁面查看最新資料。`);
+      }
+    } catch (err: any) {
+      alert(`同步發生錯誤: ${err.message}`);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   return (
     <div className="p-6 max-w-7xl mx-auto h-screen overflow-y-auto">
@@ -2442,6 +2529,49 @@ BMD :{{bmd}}
                       尚未設定健管任務
                     </div>
                   )}
+                </div>
+              </div>
+            )}
+
+            {/* Health Management Sync Task 1 */}
+            {canManageHealthMgmt && (
+              <div className="bg-white rounded-xl shadow-[0_2px_12px_rgba(0,0,0,0.03)] border border-gray-100 overflow-hidden flex flex-col h-fit">
+                <div className="px-6 py-4 border-b border-gray-100 bg-teal-50/50">
+                  <h3 className="font-bold text-teal-800 flex items-center gap-2">
+                    <RefreshCw size={18} className="text-teal-600" />
+                    後台資料同步 (功能一)
+                  </h3>
+                </div>
+                <div className="p-6">
+                  <p className="text-sm text-gray-500 mb-4">
+                    此功能將從 Salesforce 同步每日的醫令數與客戶量統計資料。
+                  </p>
+                  <div className="flex flex-col gap-4">
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm font-medium text-slate-600 w-20">同步區間</span>
+                      <input
+                        type="date"
+                        value={syncStart}
+                        onChange={(e) => setSyncStart(e.target.value)}
+                        className="text-sm border border-slate-300 rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-teal-500"
+                      />
+                      <span className="text-slate-400">~</span>
+                      <input
+                        type="date"
+                        value={syncEnd}
+                        onChange={(e) => setSyncEnd(e.target.value)}
+                        className="text-sm border border-slate-300 rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-teal-500"
+                      />
+                    </div>
+                    <button
+                      onClick={handleSync}
+                      disabled={isSyncing}
+                      className="mt-2 w-full bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white font-bold py-2.5 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
+                    >
+                      {isSyncing ? <RefreshCw size={18} className="animate-spin" /> : <RefreshCw size={18} />}
+                      {isSyncing ? "同步中..." : "開始後台同步"}
+                    </button>
+                  </div>
                 </div>
               </div>
             )}

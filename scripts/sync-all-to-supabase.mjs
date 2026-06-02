@@ -32,6 +32,7 @@ async function syncDailyStats(session, startDate, endDate) {
   const dailyResults = {};
   const seenMR = new Set();
   const seenDazhiClient = new Set(); // 追蹤大直已計數客戶 (日期+Order)
+  const seenBeitouClient = new Set(); // 追蹤北投已計數客戶 (日期+Order)
 
   const beitouOrders = new Set(); // 追蹤北投所有客戶 (日期+Order)
   const dazhiTargetOrders = new Set(); // 追蹤大直符合條件的客戶 (日期+Order)
@@ -68,7 +69,13 @@ async function syncDailyStats(session, startDate, endDate) {
       // 記錄北投的 Client
       beitouOrders.add(`${date}_${clientId}`);
 
-      if (name === "體檢總評") stats.beitou_clients++;
+      if (name.includes("解說") || name.includes("總評")) {
+        const clientKey = `${date}_${clientId}`;
+        if (!seenBeitouClient.has(clientKey)) {
+          stats.beitou_clients++;
+          seenBeitouClient.add(clientKey);
+        }
+      }
       if (name === "大腸鏡檢查") stats.beitou_gi++;
       if (name.includes("電腦斷層(顯影)")) stats.beitou_cta++;
       if (name.includes("磁振造影") || name.includes("MR")) {

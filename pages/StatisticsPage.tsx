@@ -681,6 +681,38 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
                   </label>
                   {task.selected && (
                     <div className="mt-4 pl-8 flex flex-col gap-3">
+                      {task.id === 2 && (
+                        <div className="flex items-center gap-3">
+                          <span className="text-sm font-medium text-slate-600 w-20">
+                            快速選週期
+                          </span>
+                          <select
+                            className="text-sm border border-slate-300 rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-indigo-500 bg-slate-50"
+                            defaultValue=""
+                            onChange={(e) => {
+                              const c = cycles.find(cy => cy.id === e.target.value);
+                              if (c) {
+                                updateSyncTask(task.id, "start", c.startDate);
+                                updateSyncTask(task.id, "end", c.endDate);
+                                
+                                const rs = new Date(c.startDate);
+                                rs.setDate(rs.getDate() - 5);
+                                const rsStr = `${rs.getFullYear()}-${String(rs.getMonth() + 1).padStart(2, "0")}-${String(rs.getDate()).padStart(2, "0")}`;
+                                
+                                const re = new Date(c.endDate);
+                                re.setDate(re.getDate() - 5);
+                                const reStr = `${re.getFullYear()}-${String(re.getMonth() + 1).padStart(2, "0")}-${String(re.getDate()).padStart(2, "0")}`;
+                                
+                                updateSyncTask(task.id, "reportStart", rsStr);
+                                updateSyncTask(task.id, "reportEnd", reStr);
+                              }
+                            }}
+                          >
+                            <option value="" disabled>請選擇週期自動帶入日期</option>
+                            {cycles.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                          </select>
+                        </div>
+                      )}
                       <div className="flex items-center gap-3">
                         <span className="text-sm font-medium text-slate-600 w-20">
                           同步區間
