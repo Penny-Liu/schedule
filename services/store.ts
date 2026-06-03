@@ -386,7 +386,7 @@ class Store {
     if (canViewHM) {
       hmShiftsReq = this.fetchHealthMgmtShiftsByRange(startDate, endDate);
     } else if (canViewPhysician) {
-      hmShiftsReq = this.fetchHealthMgmtShiftsByRange(startDate, endDate, (q) => q.or('task.ilike.%主控%,station.ilike.%主控%'));
+      hmShiftsReq = this.fetchHealthMgmtShiftsByRange(startDate, endDate, (q) => q.or('task.ilike.%主控%,station.ilike.%主控%,task.ilike.%輔控%,station.ilike.%輔控%'));
     }
     if (perms.includes(PERMISSIONS.VIEW_ANESTHESIA) || isAdmin) {
       aneShiftsReq = this.fetchAnesthesiaShiftsByRange(startDate, endDate);
@@ -652,7 +652,7 @@ class Store {
       hmShiftsReq = this.fetchHealthMgmtShiftsByRange(startDate, endDate);
     } else if (canViewPhysician) {
       hmStaffReq = this.fetchPaginated("health_mgmt_staff"); // Required for names in PhysicianSchedule
-      hmShiftsReq = this.fetchHealthMgmtShiftsByRange(startDate, endDate, (q) => q.or('task.ilike.%主控%,station.ilike.%主控%'));
+      hmShiftsReq = this.fetchHealthMgmtShiftsByRange(startDate, endDate, (q) => q.or('task.ilike.%主控%,station.ilike.%主控%,task.ilike.%輔控%,station.ilike.%輔控%'));
     }
     if (perms.includes(PERMISSIONS.VIEW_ANESTHESIA) || isAdmin) {
       aneStaffReq = this.fetchPaginated("anesthesia_staff");
