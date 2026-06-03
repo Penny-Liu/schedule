@@ -27,6 +27,7 @@ import {
   Star,
   BookOpen,
   Key,
+  GraduationCap,
 } from "lucide-react";
 import ConfirmModal from "../components/ConfirmModal";
 import {
@@ -93,6 +94,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
     color: string;
     capabilities: string[];
     learningCapabilities: string[];
+    learningSchedules: Record<string, string>; // New
     excludedCapabilities: string[]; // New
     isRadiographer: boolean; // New
     isPartTime: boolean; // New
@@ -114,6 +116,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
     color: COLOR_PALETTE[5], // Default Blue
     capabilities: [],
     learningCapabilities: [],
+    learningSchedules: {},
     excludedCapabilities: [], // New
     isRadiographer: false, // New
     isPartTime: false, // New
@@ -138,6 +141,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
       color: COLOR_PALETTE[5],
       capabilities: [],
       learningCapabilities: [],
+      learningSchedules: {},
       excludedCapabilities: [],
       isRadiographer: false,
       isActive: true,
@@ -193,6 +197,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
           color: formData.color,
           capabilities: formData.capabilities,
           learningCapabilities: formData.learningCapabilities,
+          learningSchedules: formData.learningSchedules,
           excludedCapabilities: formData.excludedCapabilities,
           isRadiographer: formData.isRadiographer,
           isPartTime: formData.isPartTime,
@@ -218,6 +223,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
           color: formData.color,
           capabilities: formData.capabilities,
           learningCapabilities: formData.learningCapabilities,
+          learningSchedules: formData.learningSchedules,
           excludedCapabilities: formData.excludedCapabilities,
           isRadiographer: formData.isRadiographer,
           isPartTime: formData.isPartTime,
@@ -264,6 +270,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
       color: user.color || COLOR_PALETTE[5],
       capabilities: user.capabilities || [],
       learningCapabilities: user.learningCapabilities || [],
+      learningSchedules: user.learningSchedules || {},
       excludedCapabilities: user.excludedCapabilities || [],
       isRadiographer: user.isRadiographer || false,
       isPartTime: user.isPartTime || false,
@@ -321,11 +328,14 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
         };
       } else if (isLearning) {
         // Learning -> Excluded (Independent but No Auto-Schedule)
+        const updatedSchedules = { ...prev.learningSchedules };
+        delete updatedSchedules[cap];
         return {
           ...prev,
           learningCapabilities: prev.learningCapabilities.filter(
             (c) => c !== cap,
           ),
+          learningSchedules: updatedSchedules,
           excludedCapabilities: [...prev.excludedCapabilities, cap],
         };
       } else if (isExcluded) {
@@ -942,6 +952,37 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                         );
                       })}
                     </div>
+                    {/* Learning Schedules Editor */}
+                    {formData.learningCapabilities.length > 0 && (
+                      <div className="mt-4 p-3 bg-yellow-50 rounded-lg border border-yellow-100">
+                        <label className="text-xs font-semibold text-yellow-700 block mb-2 flex items-center gap-1">
+                          <GraduationCap size={14} />
+                          學習到期日設定 (自動轉正)
+                        </label>
+                        <div className="space-y-2">
+                          {formData.learningCapabilities.map((cap) => (
+                            <div key={cap} className="flex items-center justify-between bg-white px-2 py-1.5 rounded border border-yellow-200 text-xs">
+                              <span className="font-medium text-slate-700">{cap}</span>
+                              <div className="flex items-center gap-2">
+                                <span className="text-gray-400">到期日:</span>
+                                <input
+                                  type="date"
+                                  value={formData.learningSchedules[cap] || ""}
+                                  onChange={(e) => setFormData(prev => ({
+                                    ...prev,
+                                    learningSchedules: {
+                                      ...prev.learningSchedules,
+                                      [cap]: e.target.value
+                                    }
+                                  }))}
+                                  className="border-gray-200 rounded px-2 py-1 outline-none focus:ring-1 focus:ring-yellow-400"
+                                />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 

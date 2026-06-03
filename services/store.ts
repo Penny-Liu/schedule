@@ -505,6 +505,55 @@ class Store {
           const mappedUser = { ...u };
           this.mapFromDbFields(mappedUser);
 
+          // Auto-graduation logic
+          if (mappedUser.learningSchedules) {
+            const today = new Date().toISOString().split("T")[0];
+            let needsUpdate = false;
+            
+            const updatedSchedules = { ...mappedUser.learningSchedules };
+            const updatedLearning = [...(mappedUser.learningCapabilities || [])];
+            const updatedCapabilities = [...(mappedUser.capabilities || [])];
+
+            for (const [station, endDate] of Object.entries(mappedUser.learningSchedules)) {
+              if (endDate && today >= (endDate as string)) {
+                needsUpdate = true;
+                delete updatedSchedules[station];
+                
+                // Remove from learning
+                const index = updatedLearning.indexOf(station);
+                if (index !== -1) updatedLearning.splice(index, 1);
+                
+                // Add to independent capabilities
+                if (!updatedCapabilities.includes(station)) {
+                  updatedCapabilities.push(station);
+                }
+              }
+            }
+
+            if (needsUpdate) {
+              mappedUser.learningSchedules = Object.keys(updatedSchedules).length > 0 ? updatedSchedules : undefined;
+              mappedUser.learningCapabilities = updatedLearning;
+              mappedUser.capabilities = updatedCapabilities;
+              
+              // Asynchronously update DB
+              const dbUpdate = {
+                capabilities: mappedUser.capabilities,
+                learningCapabilities: mappedUser.learningCapabilities,
+                learningSchedules: mappedUser.learningSchedules
+              };
+              this.mapToDbFields(dbUpdate);
+              
+              supabase.from("users").update({
+                capabilities: dbUpdate.capabilities,
+                learning_capabilities: dbUpdate.learning_capabilities,
+                learning_schedules: dbUpdate.learning_schedules
+              }).eq("id", mappedUser.id).then(({ error }) => {
+                if (error) console.error(`Failed to auto-graduate ${mappedUser.name}`, error);
+                else console.log(`Auto-graduated ${mappedUser.name} learning schedules`);
+              });
+            }
+          }
+
           let permissions = mappedUser.permissions !== null && mappedUser.permissions !== undefined
               ? [...mappedUser.permissions] : getPermissionsByRole(mappedUser.role);
 
@@ -1677,6 +1726,7 @@ class Store {
       personalCycles: "personal_cycles",
       primaryStation: "primary_station",
       learningCapabilities: "learning_capabilities",
+      learningSchedules: "learning_schedules",
       excludedCapabilities: "excluded_capabilities",
       specialRoles: "special_roles",
       userId: "user_id",
@@ -1744,6 +1794,7 @@ class Store {
       personal_cycles: "personalCycles",
       primary_station: "primaryStation",
       learning_capabilities: "learningCapabilities",
+      learning_schedules: "learningSchedules",
       excluded_capabilities: "excludedCapabilities",
       special_roles: "specialRoles",
       target_user_id: "targetUserId",

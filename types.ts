@@ -101,6 +101,7 @@ export interface User {
   avatarUrl?: string; // Kept for backward compatibility
   capabilities?: string[]; // List of station names user is CERTIFIED in
   learningCapabilities?: string[]; // New: List of station names user is LEARNING
+  learningSchedules?: Record<string, string>; // New: Expiration dates for learning capabilities (Station -> YYYY-MM-DD)
   excludedCapabilities?: string[]; // New: List of station names user is CERTIFIED but EXCLUDED from auto-schedule
   password?: string; // User defined password
   mustChangePassword?: boolean; // New: Force password change on next login
