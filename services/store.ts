@@ -299,12 +299,20 @@ class Store {
 
   
   // Helper: Fetch data by date range
-  private async fetchShiftsByRange(startDate: string, endDate: string) {
-    return this.fetchPaginated("shifts", (q) => q.gte("date", startDate).lte("date", endDate));
+  private async fetchShiftsByRange(startDate: string, endDate: string, filter?: (q: any) => any) {
+    return this.fetchPaginated("shifts", (q) => {
+      let query = q.gte("date", startDate).lte("date", endDate);
+      if (filter) query = filter(query);
+      return query;
+    });
   }
 
-  private async fetchHealthMgmtShiftsByRange(startDate: string, endDate: string) {
-    return this.fetchPaginated("health_mgmt_shifts", (q) => q.gte("date", startDate).lte("date", endDate));
+  private async fetchHealthMgmtShiftsByRange(startDate: string, endDate: string, filter?: (q: any) => any) {
+    return this.fetchPaginated("health_mgmt_shifts", (q) => {
+      let query = q.gte("date", startDate).lte("date", endDate);
+      if (filter) query = filter(query);
+      return query;
+    });
   }
 
   private async fetchDoctorShiftsByRange(startDate: string, endDate: string) {
@@ -359,16 +367,26 @@ class Store {
         docShiftsReq = Promise.resolve({ data: null }), hmShiftsReq = Promise.resolve({ data: null }), aneShiftsReq = Promise.resolve({ data: null }),
         meetingRoomsReq = Promise.resolve({ data: null });
         
-    if (perms.includes(PERMISSIONS.VIEW_CLOUD_SCHEDULE) || user?.isRadiographer || isAdmin) {
+    const canViewCloud = perms.includes(PERMISSIONS.VIEW_CLOUD_SCHEDULE) || user?.isRadiographer || isAdmin;
+    const canViewPhysician = perms.includes(PERMISSIONS.VIEW_PHYSICIAN);
+    const canViewHM = perms.includes(PERMISSIONS.VIEW_HEALTH_MGMT) || isAdmin;
+
+    if (canViewCloud) {
       shiftsReq = this.fetchShiftsByRange(startDate, endDate);
       leavesReq = this.fetchLeavesByRange(startDate, endDate);
       workloadsReq = this.fetchWorkloadsByRange(startMonth, endMonth);
+    } else if (canViewPhysician) {
+      shiftsReq = this.fetchShiftsByRange(startDate, endDate, (q) => q.or('station.ilike.%主%,station.ilike.%輔%,station.ilike.%場控%'));
     }
-    if (perms.includes(PERMISSIONS.VIEW_PHYSICIAN) || isAdmin || role === "FINANCE") {
+
+    if (canViewPhysician || isAdmin || role === "FINANCE") {
       docShiftsReq = this.fetchDoctorShiftsByRange(startDate, endDate);
     }
-    if (perms.includes(PERMISSIONS.VIEW_HEALTH_MGMT) || isAdmin) {
+
+    if (canViewHM) {
       hmShiftsReq = this.fetchHealthMgmtShiftsByRange(startDate, endDate);
+    } else if (canViewPhysician) {
+      hmShiftsReq = this.fetchHealthMgmtShiftsByRange(startDate, endDate, (q) => q.or('task.ilike.%主控%,station.ilike.%主控%'));
     }
     if (perms.includes(PERMISSIONS.VIEW_ANESTHESIA) || isAdmin) {
       aneShiftsReq = this.fetchAnesthesiaShiftsByRange(startDate, endDate);
@@ -612,18 +630,29 @@ class Store {
         hmShiftsReq = Promise.resolve({ data: null }), aneStaffReq = Promise.resolve({ data: null }), aneShiftsReq = Promise.resolve({ data: null }),
         meetingRoomsReq = Promise.resolve({ data: null });
 
-    if (perms.includes(PERMISSIONS.VIEW_CLOUD_SCHEDULE) || user.isRadiographer || isAdmin) {
+    const canViewCloud = perms.includes(PERMISSIONS.VIEW_CLOUD_SCHEDULE) || user.isRadiographer || isAdmin;
+    const canViewPhysician = perms.includes(PERMISSIONS.VIEW_PHYSICIAN);
+    const canViewHM = perms.includes(PERMISSIONS.VIEW_HEALTH_MGMT) || isAdmin;
+
+    if (canViewCloud) {
       shiftsReq = this.fetchShiftsByRange(startDate, endDate);
       leavesReq = this.fetchLeavesByRange(startDate, endDate);
       workloadsReq = this.fetchWorkloadsByRange(startMonth, endMonth);
+    } else if (canViewPhysician) {
+      shiftsReq = this.fetchShiftsByRange(startDate, endDate, (q) => q.or('station.ilike.%主%,station.ilike.%輔%,station.ilike.%場控%'));
     }
-    if (perms.includes(PERMISSIONS.VIEW_PHYSICIAN) || isAdmin || role === "FINANCE") {
+
+    if (canViewPhysician || isAdmin || role === "FINANCE") {
       docReq = this.fetchPaginated("doctors");
       docShiftsReq = this.fetchDoctorShiftsByRange(startDate, endDate);
     }
-    if (perms.includes(PERMISSIONS.VIEW_HEALTH_MGMT) || isAdmin) {
+
+    if (canViewHM) {
       hmStaffReq = this.fetchPaginated("health_mgmt_staff");
       hmShiftsReq = this.fetchHealthMgmtShiftsByRange(startDate, endDate);
+    } else if (canViewPhysician) {
+      hmStaffReq = this.fetchPaginated("health_mgmt_staff"); // Required for names in PhysicianSchedule
+      hmShiftsReq = this.fetchHealthMgmtShiftsByRange(startDate, endDate, (q) => q.or('task.ilike.%主控%,station.ilike.%主控%'));
     }
     if (perms.includes(PERMISSIONS.VIEW_ANESTHESIA) || isAdmin) {
       aneStaffReq = this.fetchPaginated("anesthesia_staff");

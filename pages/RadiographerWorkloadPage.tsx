@@ -191,6 +191,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
   const [isEditing, setIsEditing] = useState(false);
   const [estimationStartDate, setEstimationStartDate] = useState<string>("");
   const [editingData, setEditingData] = useState<Record<string, any>>({});
+  const [lineExportMode, setLineExportMode] = useState<"ALL" | "ONSITE" | "REMOTE" | "TOTAL">("ALL");
   const [importTarget, setImportTarget] =
     useState<WorkloadFieldKey>("reportTyping");
   const [weights, setWeights] = useState<Record<WorkloadFieldKey, number>>(
@@ -819,19 +820,13 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
       else unassigned.push(row);
     });
 
-    // 全形數字對齊：用全形數字 ０-９ + 全形空格補位，與中文字等寬
-    const toFW = (n: number, w: number) =>
-      String(n)
-        .padStart(w)
-        .replace(/ /g, '\u3000')                           // 全形空格
-        .replace(/\d/g, d => String.fromCharCode(d.charCodeAt(0) + 0xFEE0)); // 半形→全形
-
-    // 動態計算每欄最大寬度
     const allRows = [...Object.values(grouped).flat(), ...unassigned];
     const wOnsite = allRows.length ? Math.max(...allRows.map(r => String(Math.round(computeUnits(r, onsiteFieldKeys) + (r.estOnsiteUnits || 0))).length)) : 3;
     const wRemote  = allRows.length ? Math.max(...allRows.map(r => String(Math.round(computeUnits(r, remoteFieldKeys) + (r.estRemoteUnits || 0))).length)) : 3;
     const wTotal   = allRows.length ? Math.max(...allRows.map(r => String(Math.round(computeTotalUnits(r) + (r.estOnsiteUnits || 0) + (r.estRemoteUnits || 0))).length)) : 3;
     const wDays    = allRows.length ? Math.max(...allRows.map(r => String(r.workDays || 0).length)) : 2;
+
+    const pad = (n, w) => String(n).padStart(w, ' ');
 
     const fmt = (row: any) => {
       const onsite = Math.round(computeUnits(row, onsiteFieldKeys) + (row.estOnsiteUnits || 0));
@@ -839,7 +834,13 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
       const total = Math.round(computeTotalUnits(row) + (row.estOnsiteUnits || 0) + (row.estRemoteUnits || 0));
       const name2 = row.name.slice(-2);
       const rmk = row.estRemark ? `  (${row.estRemark})` : '';
-      return `${name2} ${toFW(row.workDays, wDays)}天    現${toFW(onsite, wOnsite)}    遠${toFW(remote, wRemote)}    總${toFW(total, wTotal)}${rmk}`;
+      
+      let result = `${name2} ${pad(row.workDays, wDays)}天`;
+      if (lineExportMode === 'ALL' || lineExportMode === 'ONSITE') result += `   現${pad(onsite, wOnsite)}`;
+      if (lineExportMode === 'ALL' || lineExportMode === 'REMOTE') result += `   遠${pad(remote, wRemote)}`;
+      if (lineExportMode === 'ALL' || lineExportMode === 'TOTAL') result += `   總${pad(total, wTotal)}`;
+      result += rmk;
+      return result;
     };
 
     let text = header + '\n';
@@ -861,7 +862,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
       rows.forEach(r => { text += fmt(r) + '\n'; });
     }
     return text.trim();
-  }, [displayData, groups, groupAssignments, generalDates, currentMonth, cycles, radiographers, weights, sortField]);
+  }, [displayData, groups, groupAssignments, generalDates, currentMonth, cycles, radiographers, weights, sortField, lineExportMode]);
 
   const handleLineCopy = () => {
     navigator.clipboard.writeText(lineText);
@@ -1689,6 +1690,19 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
             <div className="flex items-center gap-2 text-sm font-bold text-slate-700">
               <MessageSquare size={15} className="text-green-600"/>
               LINE 複製預覽
+            </div>
+            <div className="flex items-center gap-2 text-xs text-slate-500 font-normal">
+              顯示內容：
+              <select 
+                value={lineExportMode}
+                onChange={(e) => setLineExportMode(e.target.value as any)}
+                className="border border-slate-200 rounded px-2 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-green-400"
+              >
+                <option value="ALL">綜合 (全部)</option>
+                <option value="ONSITE">現場單位</option>
+                <option value="REMOTE">遠端單班</option>
+                <option value="TOTAL">總單位</option>
+              </select>
             </div>
             <button
               onClick={handleLineCopy}
