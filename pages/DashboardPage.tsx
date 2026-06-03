@@ -69,6 +69,21 @@ import { DailyStatsRows } from "../components/dashboard/DailyStatsRows";
 import { isUserOnEmploymentPause, toLocalISOString } from "../services/utils";
 import { loadChineseFontToDoc } from "../services/pdfUtils";
 
+const isUserLearningOnDate = (user: User | undefined | null, cap: string, date: string): boolean => {
+  if (!user || !user.learningCapabilities?.includes(cap)) return false;
+  if (user.learningSchedules && user.learningSchedules[cap] && date > user.learningSchedules[cap]) return false;
+  return true;
+};
+
+const isUserLearningStationOnDate = (user: User | undefined | null, station: string, date: string): boolean => {
+  if (!user || !user.learningCapabilities) return false;
+  return user.learningCapabilities.some(cap => {
+    if (!station.includes(cap)) return false;
+    if (user.learningSchedules && user.learningSchedules[cap] && date > user.learningSchedules[cap]) return false;
+    return true;
+  });
+};
+
 interface DashboardPageProps {
   currentUser: User;
 }
@@ -920,9 +935,9 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
           // Sort (Learners last)
           staff.sort((a, b) => {
             const isALearner =
-              a.user?.learningCapabilities?.includes(rowConfig.label) || false;
+              isUserLearningOnDate(a.user, rowConfig.label, date);
             const isBLearner =
-              b.user?.learningCapabilities?.includes(rowConfig.label) || false;
+              isUserLearningOnDate(b.user, rowConfig.label, date);
             if (isALearner === isBLearner) return 0;
             return isALearner ? 1 : -1;
           });
@@ -1153,9 +1168,9 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
               // Sort: Learners (user.learningCapabilities includes row.label) go to bottom
               staff.sort((a, b) => {
                 const isALearner =
-                  a.user?.learningCapabilities?.includes(row.label) || false;
+                  isUserLearningOnDate(a.user, row.label, date);
                 const isBLearner =
-                  b.user?.learningCapabilities?.includes(row.label) || false;
+                  isUserLearningOnDate(b.user, row.label, date);
 
                 if (isALearner === isBLearner) return 0; // Keep existing order if both same status
                 return isALearner ? 1 : -1; // Learner (true) > Non-learner (false) -> Learner goes last
@@ -1187,8 +1202,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                     name: formatName(s.user?.name || ""),
                     roles: s.shift.specialRoles,
                     isLearner:
-                      s.user?.learningCapabilities?.includes(row.label) ||
-                      false,
+                      isUserLearningOnDate(s.user, row.label, date),
                   })),
                 });
               }
@@ -1996,7 +2010,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
   const getAssignableCandidates = (station: string, dateStr: string) => {
     return users.filter((user) => {
       const isCertified = user.capabilities?.includes(station);
-      const isLearning = user.learningCapabilities?.includes(station);
+      const isLearning = isUserLearningOnDate(user, station, date);
       const isExcluded = user.excludedCapabilities?.includes(station);
       if (station !== SYSTEM_OFF && !isCertified && !isLearning && !isExcluded)
         return false;
@@ -3817,9 +3831,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                             ></div>
                             {station}
                             {station &&
-                              currentUser.learningCapabilities?.includes(
-                                station,
-                              ) && (
+                              isUserLearningOnDate(currentUser, station, date) && (
                                 <span className="text-[10px] bg-sky-100 text-sky-700 font-bold px-1 rounded">
                                   學
                                 </span>
@@ -4159,7 +4171,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                               event?.type === DateEventType.CLOSED;
                             const isLearning =
                               station &&
-                              user.learningCapabilities?.includes(station);
+                              isUserLearningOnDate(user, station, date);
                             const isCoopCancel =
                               specialRoles.includes("配合銷假");
 
@@ -4393,13 +4405,9 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                               const sortedStaff = [...staff].sort((a, b) => {
                                 if (!a.user || !b.user) return 0;
                                 const isALearner =
-                                  a.user.learningCapabilities?.includes(
-                                    row.label,
-                                  );
+                                  isUserLearningOnDate(a.user, row.label, date);
                                 const isBLearner =
-                                  b.user.learningCapabilities?.includes(
-                                    row.label,
-                                  );
+                                  isUserLearningOnDate(b.user, row.label, date);
 
                                 // Primary Sort: Learners go to bottom
                                 if (isALearner && !isBLearner) return 1;
@@ -4642,9 +4650,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
 
                                         // Check if this user is a Learner for this specific station
                                         const isLearner =
-                                          item.user?.learningCapabilities?.includes(
-                                            row.label,
-                                          );
+                                          isUserLearningOnDate(item.user, row.label, date);
                                         // Revert: White override logic for learners in Station View
                                         if (isLearner) {
                                           chipClass =
@@ -5450,7 +5456,7 @@ const DailyManpowerSummary: React.FC<{
       // Check for Learning status (Station Match or Capability Match)
       const isLearning =
         s.station.includes("學習") ||
-        u?.learningCapabilities?.some((cap) => s.station.includes(cap));
+        isUserLearningStationOnDate(u, s.station, s.date);
 
       // Modality Detection (regardless of Learning status, useful for tagging)
       let modality = "";
@@ -5992,7 +5998,7 @@ BMD :{{bmd}}
         const isLearning =
           !!u &&
           (s.station.includes("學習") ||
-            !!u.learningCapabilities?.some((cap) => s.station.includes(cap)));
+            isUserLearningStationOnDate(u, s.station, s.date));
         if (isLearning) return false;
         if (s.station === "行政") return false;
         if (s.station.includes("大直")) return false;
@@ -6020,7 +6026,7 @@ BMD :{{bmd}}
           !!u &&
           !u.isPartTime &&
           (s.station.includes("學習") ||
-            !!u.learningCapabilities?.some((cap) => s.station.includes(cap)))
+            isUserLearningStationOnDate(u, s.station, s.date))
         );
       })
       .map(
