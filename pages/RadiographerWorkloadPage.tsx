@@ -66,11 +66,13 @@ type WorkloadFieldKey =
   | "mgTeaching"
   | "bmdTeaching"
   | "ctaTeaching"
+  | "floorControlOrders"
   | "floorControlPercentage";
 
 const workloadFieldMeta: { key: WorkloadFieldKey; label: string }[] = [
   { key: "workDays", label: "上班天數" },
-  { key: "floorControl", label: "場控" },
+  { key: "floorControl", label: "場控(天)" },
+  { key: "floorControlOrders", label: "場控醫令" },
   { key: "assist", label: "輔控" },
   { key: "scheduler", label: "排班" },
   { key: "mr", label: "MR" },
@@ -120,6 +122,7 @@ const workloadFieldMeta: { key: WorkloadFieldKey; label: string }[] = [
 const defaultWorkloadWeights: Record<WorkloadFieldKey, number> = {
   workDays: 0,
   floorControl: 1,
+  floorControlOrders: 0,
   assist: 1,
   scheduler: 1,
   mr: 1,
@@ -194,7 +197,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
   const [isEditing, setIsEditing] = useState(false);
   const [estimationStartDate, setEstimationStartDate] = useState<string>("");
   const [editingData, setEditingData] = useState<Record<string, any>>({});
-  const [lineExportMode, setLineExportMode] = useState<"ALL" | "ONSITE" | "REMOTE" | "TOTAL">("ALL");
+  const [lineExportMode, setLineExportMode] = useState<"ALL" | "ONSITE" | "REMOTE" | "TOTAL" | "TOTAL_AVG">("ALL");
   const [importTarget, setImportTarget] =
     useState<WorkloadFieldKey>("reportTyping");
   const [weights, setWeights] = useState<Record<WorkloadFieldKey, number>>(
@@ -311,6 +314,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
   const computeUnits = (row: any, keys: WorkloadFieldKey[]) =>
     keys.reduce(
       (sum, field) => {
+        if (field === "floorControlOrders" || field === "floorControlPercentage") return sum;
         if (field === "floorControl") {
           return sum + (row.floorControlScore || 0);
         }
@@ -619,6 +623,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
       stats.coopLeave = coopLeave;
 
       let floorControlScore = 0;
+      let floorControlOrders = 0;
       const floorControlShifts = userShiftsInRange.filter((s) => s.station.includes("場控") && (!estimationStartDate || s.date <= estimationStartDate));
       const floorControl = floorControlShifts.length;
       
@@ -627,9 +632,11 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
         const dStats = (db.settings as any).dailyStats?.[s.date];
         if (dStats && typeof dStats.total_weighted_orders === "number") {
           floorControlScore += Math.round(dStats.total_weighted_orders * pct);
+          floorControlOrders += dStats.total_weighted_orders;
         } else {
           // Fallback to fixed 30 if no daily stats exist for that day
           floorControlScore += 30;
+          floorControlOrders += Math.round(30 / pct); // 逆推顯示的總醫令
         }
       });
 
@@ -646,6 +653,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
       ).length;
       stats.floorControl = floorControl;
       stats.floorControlScore = floorControlScore;
+      stats.floorControlOrders = floorControlOrders;
       stats.assist = assist;
       stats.scheduler = scheduler;
 
@@ -703,6 +711,12 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
       if (sortField === 'onsiteUnits') { va = computeUnits(a, onsiteFieldKeys) + (a.estOnsiteUnits || 0); vb = computeUnits(b, onsiteFieldKeys) + (b.estOnsiteUnits || 0); }
       else if (sortField === 'remoteUnits') { va = computeUnits(a, remoteFieldKeys) + (a.estRemoteUnits || 0); vb = computeUnits(b, remoteFieldKeys) + (b.estRemoteUnits || 0); }
       else if (sortField === 'totalUnits') { va = computeTotalUnits(a) + (a.estOnsiteUnits || 0) + (a.estRemoteUnits || 0); vb = computeTotalUnits(b) + (b.estOnsiteUnits || 0) + (b.estRemoteUnits || 0); }
+      else if (sortField === 'dailyAvg') {
+        const ta = computeTotalUnits(a) + (a.estOnsiteUnits || 0) + (a.estRemoteUnits || 0);
+        const tb = computeTotalUnits(b) + (b.estOnsiteUnits || 0) + (b.estRemoteUnits || 0);
+        va = a.workDays > 0 ? ta / a.workDays : 0;
+        vb = b.workDays > 0 ? tb / b.workDays : 0;
+      }
       else { va = Number(a[sortField]) || 0; vb = Number(b[sortField]) || 0; }
       const numA = Number(va) || 0;
       const numB = Number(vb) || 0;
@@ -860,6 +874,11 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
       if (lineExportMode === 'ALL' || lineExportMode === 'ONSITE') result += `   現${pad(onsite, wOnsite)}`;
       if (lineExportMode === 'ALL' || lineExportMode === 'REMOTE') result += `   遠${pad(remote, wRemote)}`;
       if (lineExportMode === 'ALL' || lineExportMode === 'TOTAL') result += `   總${pad(total, wTotal)}`;
+      if (lineExportMode === 'TOTAL_AVG') {
+        result += `   總${pad(total, wTotal)}`;
+        const avg = row.workDays > 0 ? (total / row.workDays).toFixed(1) : '0.0';
+        result += `   均${pad(avg, 4)}`;
+      }
       result += rmk;
       return result;
     };
@@ -1475,7 +1494,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
             
             {showWeights && (
               <div className="grid gap-3 mt-4 pt-4 border-t border-slate-100 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 animate-in fade-in slide-in-from-top-2">
-                {workloadFieldMeta.filter(f => !f.key.endsWith("Teaching")).map((field) => (
+                {workloadFieldMeta.filter(f => !f.key.endsWith("Teaching") && f.key !== "floorControlOrders").map((field) => (
                   <label key={field.key} className="block text-xs text-slate-600">
                     <div className="mb-1 font-medium text-slate-800">
                       {field.label}
@@ -1589,7 +1608,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
                   {showGroupPanel && groups.length > 0 && (
                     <th className="px-3 py-3 text-center text-violet-600 bg-violet-50/50 whitespace-nowrap">分類</th>
                   )}
-                  {workloadFieldMeta.filter(f => !f.key.endsWith("Teaching")).map((field) => 
+                  {workloadFieldMeta.filter(f => !f.key.endsWith("Teaching") && f.key !== "floorControlPercentage").map((field) => 
                     renderSortTh(
                       field.key,
                       field.label,
@@ -1599,13 +1618,14 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
                   {renderSortTh("onsiteUnits", "現場加權", "bg-slate-100 text-slate-700")}
                   {renderSortTh("remoteUnits", "遠班加權", "bg-slate-100 text-slate-700")}
                   {renderSortTh("totalUnits", "總加權", "bg-slate-100 text-slate-700")}
+                  {renderSortTh("dailyAvg", "日平均", "bg-emerald-50 text-emerald-700")}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {displayData.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={workloadFieldMeta.filter(f => !f.key.endsWith("Teaching")).length + (showGroupPanel ? 4 : 3)}
+                      colSpan={workloadFieldMeta.filter(f => !f.key.endsWith("Teaching") && f.key !== "floorControlPercentage").length + (showGroupPanel ? 5 : 4)}
                       className="px-4 py-8 text-center text-slate-400 font-medium"
                     >
                       無資料
@@ -1636,7 +1656,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
                             </select>
                           </td>
                         )}
-                        {workloadFieldMeta.filter(f => !f.key.endsWith("Teaching")).map((field) => {
+                        {workloadFieldMeta.filter(f => !f.key.endsWith("Teaching") && f.key !== "floorControlPercentage").map((field) => {
                           const isScheduleField =
                             scheduleDerivedFieldKeys.includes(field.key);
                           const getTeachingCount = (baseKey: string) => {
@@ -1696,6 +1716,9 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
                           {Math.round(computeTotalUnits(row))}
                           {(row.estOnsiteUnits > 0 || row.estRemoteUnits > 0) && <span className="text-xs text-emerald-600 block leading-tight">+{(row.estOnsiteUnits || 0) + (row.estRemoteUnits || 0)}(預估)</span>}
                         </td>
+                        <td className="px-4 py-2.5 text-center font-bold text-emerald-700 bg-emerald-50/50">
+                          {row.workDays > 0 ? (Math.round(((computeTotalUnits(row) + (row.estOnsiteUnits || 0) + (row.estRemoteUnits || 0)) / row.workDays) * 10) / 10).toFixed(1) : '-'}
+                        </td>
                       </tr>
                       );
                     })
@@ -1721,8 +1744,9 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
               >
                 <option value="ALL">綜合 (全部)</option>
                 <option value="ONSITE">現場單位</option>
-                <option value="REMOTE">遠端單班</option>
+                <option value="REMOTE">遠距單班</option>
                 <option value="TOTAL">總單位</option>
+                <option value="TOTAL_AVG">總單位 + 日平均</option>
               </select>
             </div>
             <button
