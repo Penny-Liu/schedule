@@ -376,7 +376,7 @@ class Store {
       leavesReq = this.fetchLeavesByRange(startDate, endDate);
       workloadsReq = this.fetchWorkloadsByRange(startMonth, endMonth);
     } else if (canViewPhysician) {
-      shiftsReq = this.fetchShiftsByRange(startDate, endDate, (q) => q.or('station.ilike.%主%,station.ilike.%輔%,station.ilike.%場控%'));
+      shiftsReq = this.fetchShiftsByRange(startDate, endDate, (q) => q.or('station.ilike.%主%,station.ilike.%輔%,station.ilike.%場控%,specialRoles.cs.["輔班"]'));
     }
 
     if (canViewPhysician || isAdmin || role === "FINANCE") {
@@ -639,7 +639,7 @@ class Store {
       leavesReq = this.fetchLeavesByRange(startDate, endDate);
       workloadsReq = this.fetchWorkloadsByRange(startMonth, endMonth);
     } else if (canViewPhysician) {
-      shiftsReq = this.fetchShiftsByRange(startDate, endDate, (q) => q.or('station.ilike.%主%,station.ilike.%輔%,station.ilike.%場控%'));
+      shiftsReq = this.fetchShiftsByRange(startDate, endDate, (q) => q.or('station.ilike.%主%,station.ilike.%輔%,station.ilike.%場控%,specialRoles.cs.["輔班"]'));
     }
 
     if (canViewPhysician || isAdmin || role === "FINANCE") {
