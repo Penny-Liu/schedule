@@ -55,6 +55,7 @@ async function syncDailyStats(session, startDate, endDate) {
     dazhi_ultrasound_heart: 0,
     dazhi_ultrasound_fibrosis: 0,
     dazhi_beitou_overlap: 0, // 新增：同時有大直與北投檢查的重疊人數
+    total_weighted_orders: 0, // 新增：供場控動態加權使用的總醫令量 (CTA 算 3 份)
   });
 
   result.records.forEach((r) => {
@@ -128,6 +129,26 @@ async function syncDailyStats(session, startDate, endDate) {
         if (name.includes("肝纖維")) stats.dazhi_ultrasound_fibrosis++;
       }
     }
+
+    // 計算 total_weighted_orders (包含北投與大直所有影像檢查，CTA算3份)
+    if (name.includes("磁振造影") || name.includes("MR")) {
+      stats.total_weighted_orders += 1;
+    } else if (name.includes("電腦斷層")) {
+      if (name.includes("顯影") || name.includes("CTA") || r.CTAUseTime__c) {
+        stats.total_weighted_orders += 3; // CTA 算 3 份
+      } else {
+        stats.total_weighted_orders += 1;
+      }
+    } else if (name.includes("X光") || name.includes("DX") || name.includes("數位攝影")) {
+      stats.total_weighted_orders += 1;
+    } else if (name.includes("乳房攝影") || name.includes("MG")) {
+      stats.total_weighted_orders += 1;
+    } else if (name.includes("骨質密度") || name.includes("BMD")) {
+      stats.total_weighted_orders += 1;
+    } else if (name.includes("超音波") || name.includes("US")) {
+      stats.total_weighted_orders += 1;
+    }
+
   });
 
   // 計算大直與北投的重疊人數

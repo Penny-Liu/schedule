@@ -65,7 +65,8 @@ type WorkloadFieldKey =
   | "dxTeaching"
   | "mgTeaching"
   | "bmdTeaching"
-  | "ctaTeaching";
+  | "ctaTeaching"
+  | "floorControlPercentage";
 
 const workloadFieldMeta: { key: WorkloadFieldKey; label: string }[] = [
   { key: "workDays", label: "上班天數" },
@@ -113,6 +114,7 @@ const workloadFieldMeta: { key: WorkloadFieldKey; label: string }[] = [
   { key: "mgTeaching", label: "MG教學" },
   { key: "bmdTeaching", label: "BMD教學" },
   { key: "ctaTeaching", label: "CTA教學" },
+  { key: "floorControlPercentage", label: "場控加權比例 (%)" },
 ];
 
 const defaultWorkloadWeights: Record<WorkloadFieldKey, number> = {
@@ -162,6 +164,7 @@ const defaultWorkloadWeights: Record<WorkloadFieldKey, number> = {
   mgTeaching: 1,
   bmdTeaching: 1,
   ctaTeaching: 1,
+  floorControlPercentage: 12,
 };
 
 interface RadiographerWorkloadPageProps {
@@ -308,6 +311,9 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
   const computeUnits = (row: any, keys: WorkloadFieldKey[]) =>
     keys.reduce(
       (sum, field) => {
+        if (field === "floorControl") {
+          return sum + (row.floorControlScore || 0);
+        }
         let weightKey = field;
         if (field.endsWith("Teaching")) {
           weightKey = field.replace("Teaching", "") as WorkloadFieldKey;
@@ -612,7 +618,21 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
       stats.remarks = memo;
       stats.coopLeave = coopLeave;
 
-      const floorControl = userShiftsInRange.filter((s) => s.station.includes("場控") && (!estimationStartDate || s.date <= estimationStartDate)).length;
+      let floorControlScore = 0;
+      const floorControlShifts = userShiftsInRange.filter((s) => s.station.includes("場控") && (!estimationStartDate || s.date <= estimationStartDate));
+      const floorControl = floorControlShifts.length;
+      
+      const pct = (weights.floorControlPercentage ?? 12) / 100;
+      floorControlShifts.forEach(s => {
+        const dStats = (db.settings as any).dailyStats?.[s.date];
+        if (dStats && typeof dStats.total_weighted_orders === "number") {
+          floorControlScore += Math.round(dStats.total_weighted_orders * pct);
+        } else {
+          // Fallback to fixed 30 if no daily stats exist for that day
+          floorControlScore += 30;
+        }
+      });
+
       const assist = userShiftsInRange.filter(
         (s) =>
           (s.specialRoles.includes(SPECIAL_ROLES.ASSIST) ||
@@ -625,6 +645,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
           s.station.includes("排班")) && (!estimationStartDate || s.date <= estimationStartDate)
       ).length;
       stats.floorControl = floorControl;
+      stats.floorControlScore = floorControlScore;
       stats.assist = assist;
       stats.scheduler = scheduler;
 
