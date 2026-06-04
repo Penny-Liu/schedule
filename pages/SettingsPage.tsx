@@ -2242,7 +2242,7 @@ BMD :{{bmd}}
                                         ? "醫師"
                                         : log.module === "anesthesia"
                                           ? "麻護"
-                                          : log.module.replace("_", " ")}
+                                          : (log.module as string).replace("_", " ")}
                             </span>
                           </div>
                           <div className="mt-1 text-sm text-gray-700">

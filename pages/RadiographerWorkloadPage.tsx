@@ -318,11 +318,11 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
         if (field === "floorControl") {
           return sum + (row.floorControlScore || 0);
         }
-        let weightKey = field;
+        let weightKey: string = field;
         if (field.endsWith("Teaching")) {
-          weightKey = field.replace("Teaching", "") as WorkloadFieldKey;
+          weightKey = field.replace("Teaching", "");
         }
-        return sum + ((row as any)[field] || 0) * (weights[weightKey] || 0);
+        return sum + ((row as any)[field] || 0) * ((weights as any)[weightKey] || 0);
       },
       0,
     );

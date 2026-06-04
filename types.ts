@@ -362,6 +362,7 @@ export interface SystemSettings {
   healthMgmtTasksByLocation?: Record<string, string[]>; // New: Location-based tasks
   healthMgmtTimesByLocation?: Record<string, string[]>; // New: Location-based times
   healthMgmtCycles?: RosterCycle[]; // New: Independent cycles for HM
+  healthMgmtLeaveTypes?: string[]; // New: Health management leave types
   radiographerWorkloadWeights?: Record<string, number>; // 放射師工作量欄位權重
 }
 
@@ -377,7 +378,8 @@ export interface OperationLog {
     | "auto_schedule"
     | "save_simulation"
     | "update"
-    | "delete";
+    | "delete"
+    | "任務調整";
   module:
     | "radiographer"
     | "physician"
@@ -397,6 +399,20 @@ export interface OperationLog {
     newValue?: any;
     affectedCount?: number;
     note?: string;
+    operation?: string;
+    currentTasks?: string;
+    addedTasks?: string;
+    removedTasks?: string;
+    roles?: string;
+    leaveId?: string;
+    leaveType?: string;
+    requestorId?: string;
+    requestorName?: string;
+    targetId?: string;
+    targetName?: string;
+    startDate?: string;
+    endDate?: string;
+    returnDate?: string;
   };
 }
 

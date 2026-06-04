@@ -13,6 +13,7 @@ import {
   HMDesignation,
 } from "../types";
 import { db } from "../services/store";
+import { supabase } from "../services/supabaseClient";
 import {
   Users,
   LayoutDashboard,

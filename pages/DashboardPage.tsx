@@ -3380,9 +3380,10 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                             const assignments = getAllAssignments(st);
                             const _dailyStats = db.getDailyStats(dateStr);
                             let _statBadge: {
-                              value: number | string;
+                              value: React.ReactNode;
                               color: string;
                               title: string;
+                              isCustomLayout?: boolean;
                             } | null = null;
                             if (
                               st.includes("場控") &&
@@ -4178,8 +4179,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                             return (
                               <td
                                 key={date}
-                                className={`p-0.5 border-r border-slate-100 align-top h-16 ${isToday ? "bg-teal-50/10" : ""} ${isOff ? "bg-slate-100/60" : isClosed ? "bg-slate-100/30" : ""} relative`}
-                                className={`p-0.5 border-r border-slate-100 align-top h-16 ${isToday ? "bg-teal-50/10" : ""} ${isOff ? "bg-slate-100/60" : isClosed ? "bg-slate-100/30" : isCoopCancel ? "bg-pink-500" : ""} relative`}
+                                className={`p-0.5 border-r border-slate-100 align-top h-16 ${isToday ? "bg-teal-50/10" : ""} ${isOff ? "bg-slate-100/60" : isClosed ? "bg-slate-100/30" : isCoopCancel ? "bg-pink-50" : ""} relative`}
                               >
                                 {pendingReq && getLeaveBadge(pendingReq.type)}
                                 {isOff ? (
@@ -4425,7 +4425,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                               // Salesforce Stats Badge logic (Daily per cell)
                               const dStats = db.getDailyStats(date);
                               let cellBadge: {
-                                val: number | string | JSX.Element;
+                                val: React.ReactNode;
                                 bg: string;
                                 text: string;
                                 labelStyle: string;

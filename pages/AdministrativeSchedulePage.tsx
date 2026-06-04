@@ -332,7 +332,7 @@ const AdministrativeSchedulePage: React.FC<AdministrativeSchedulePageProps> = ({
             const categoryShifts = shifts.filter(
               (s) => s.category === category,
             );
-            const row = [category];
+            const row: any[] = [category];
 
             // 為每一天添加值班人員
             for (let day = 1; day <= daysInMonth; day++) {
@@ -366,7 +366,7 @@ const AdministrativeSchedulePage: React.FC<AdministrativeSchedulePageProps> = ({
         : staffList
             .filter((s) => displayCategories.includes(s.category))
             .map((staff) => {
-              const row = [staff.name];
+              const row: any[] = [staff.name];
               for (let day = 1; day <= daysInMonth; day++) {
                 const dateObj = new Date(
                   currentDate.getFullYear(),
@@ -1243,7 +1243,7 @@ const AdministrativeSchedulePage: React.FC<AdministrativeSchedulePageProps> = ({
             title="確認刪除"
             message="確定要刪除這個人員嗎？此操作會將人員標記為非活躍狀態。"
             onConfirm={confirmAction}
-            onCancel={() => setShowConfirmModal(false)}
+            onClose={() => setShowConfirmModal(false)}
           />
 
           {/* 人員管理模態框 */}

@@ -154,7 +154,7 @@ const PhysicianWorkloadAnalysis: React.FC<PhysicianWorkloadAnalysisProps> = ({
       const titleCell = worksheet.getCell("A1");
       titleCell.value = `醫師工作量統計 (${startDate} ~ ${endDate})`;
       titleCell.font = { bold: true, size: 14 };
-      titleCell.alignment = { horizontal: "center", vertical: "center" };
+      titleCell.alignment = { horizontal: "center", vertical: "middle" };
 
       // 設定列頭
       const headers = [
@@ -179,7 +179,7 @@ const PhysicianWorkloadAnalysis: React.FC<PhysicianWorkloadAnalysisProps> = ({
           fgColor: { argb: "FFE6E6E6" },
         };
         cell.font = { bold: true };
-        cell.alignment = { horizontal: "center", vertical: "center" };
+        cell.alignment = { horizontal: "center", vertical: "middle" };
         cell.border = {
           top: { style: "thin" },
           left: { style: "thin" },
@@ -215,7 +215,7 @@ const PhysicianWorkloadAnalysis: React.FC<PhysicianWorkloadAnalysisProps> = ({
             bottom: { style: "thin" },
             right: { style: "thin" },
           };
-          cell.alignment = { horizontal: "center", vertical: "center" };
+          cell.alignment = { horizontal: "center", vertical: "middle" };
 
           // 數字格式
           if (colNumber > 1) {

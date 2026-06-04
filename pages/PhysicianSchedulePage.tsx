@@ -5542,20 +5542,19 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
                               if (stationName.includes("解說"))
                                 return {
                                   card: "bg-gradient-to-br from-white to-indigo-50/70 border-indigo-200/80 hover:border-indigo-300 hover:shadow-indigo-100/50",
+                                  cardBorder: "border-indigo-200/80",
+                                  headerBg: "bg-gradient-to-r from-indigo-500 to-indigo-600",
                                   title: "text-indigo-900",
                                   border: "border-indigo-100",
-                                  badgeNormal:
-                                    "bg-indigo-50 text-indigo-700 border-indigo-200",
+                                  badge: "bg-indigo-100 text-indigo-700 border border-indigo-200",
+                                  badgeNormal: "bg-indigo-50 text-indigo-700 border-indigo-200",
                                   avatarRing: "ring-indigo-100",
-                                  avatarBg:
-                                    "bg-gradient-to-br from-indigo-50 to-indigo-100/50 text-indigo-700",
+                                  avatarBg: "bg-gradient-to-br from-indigo-50 to-indigo-100/50 text-indigo-700",
                                   avatarEdge: "bg-indigo-400/80",
-                                  emptyBorder:
-                                    "border-indigo-200/80 bg-indigo-50/30 hover:bg-indigo-50/50 hover:border-indigo-300 hover:text-indigo-700",
-                                  emptyIconBg:
-                                    "group-hover/empty:bg-indigo-50 group-hover/empty:border-indigo-200 group-hover/empty:shadow-indigo-100/50",
-                                  emptyIconText:
-                                    "group-hover/empty:text-indigo-500 text-indigo-300",
+                                  itemHover: "hover:bg-indigo-50/50",
+                                  emptyBorder: "border-indigo-200/80 bg-indigo-50/30 hover:bg-indigo-50/50 hover:border-indigo-300 hover:text-indigo-700",
+                                  emptyIconBg: "group-hover/empty:bg-indigo-50 group-hover/empty:border-indigo-200 group-hover/empty:shadow-indigo-100/50",
+                                  emptyIconText: "group-hover/empty:text-indigo-500 text-indigo-300",
                                 };
                               if (
                                 stationName.includes("影像") ||
@@ -5563,38 +5562,36 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
                               )
                                 return {
                                   card: "bg-gradient-to-br from-white to-blue-50/70 border-blue-200/80 hover:border-blue-300 hover:shadow-blue-100/50",
+                                  cardBorder: "border-blue-200/80",
+                                  headerBg: "bg-gradient-to-r from-blue-500 to-blue-600",
                                   title: "text-blue-900",
                                   border: "border-blue-100",
-                                  badgeNormal:
-                                    "bg-blue-50 text-blue-700 border-blue-200",
+                                  badge: "bg-blue-100 text-blue-700 border border-blue-200",
+                                  badgeNormal: "bg-blue-50 text-blue-700 border-blue-200",
                                   avatarRing: "ring-blue-100",
-                                  avatarBg:
-                                    "bg-gradient-to-br from-blue-50 to-blue-100/50 text-blue-700",
+                                  avatarBg: "bg-gradient-to-br from-blue-50 to-blue-100/50 text-blue-700",
                                   avatarEdge: "bg-blue-400/80",
-                                  emptyBorder:
-                                    "border-blue-200/80 bg-blue-50/30 hover:bg-blue-50/50 hover:border-blue-300 hover:text-blue-700",
-                                  emptyIconBg:
-                                    "group-hover/empty:bg-blue-50 group-hover/empty:border-blue-200 group-hover/empty:shadow-blue-100/50",
-                                  emptyIconText:
-                                    "group-hover/empty:text-blue-500 text-blue-300",
+                                  itemHover: "hover:bg-blue-50/50",
+                                  emptyBorder: "border-blue-200/80 bg-blue-50/30 hover:bg-blue-50/50 hover:border-blue-300 hover:text-blue-700",
+                                  emptyIconBg: "group-hover/empty:bg-blue-50 group-hover/empty:border-blue-200 group-hover/empty:shadow-blue-100/50",
+                                  emptyIconText: "group-hover/empty:text-blue-500 text-blue-300",
                                 };
                               if (stationName.includes("遠"))
                                 return {
                                   card: "bg-gradient-to-br from-white to-rose-50/70 border-rose-200/80 hover:border-rose-300 hover:shadow-rose-100/50",
+                                  cardBorder: "border-rose-200/80",
+                                  headerBg: "bg-gradient-to-r from-rose-500 to-rose-600",
                                   title: "text-rose-900",
                                   border: "border-rose-100",
-                                  badgeNormal:
-                                    "bg-rose-50 text-rose-700 border-rose-200",
+                                  badge: "bg-rose-100 text-rose-700 border border-rose-200",
+                                  badgeNormal: "bg-rose-50 text-rose-700 border-rose-200",
                                   avatarRing: "ring-rose-100",
-                                  avatarBg:
-                                    "bg-gradient-to-br from-rose-50 to-rose-100/50 text-rose-700",
+                                  avatarBg: "bg-gradient-to-br from-rose-50 to-rose-100/50 text-rose-700",
                                   avatarEdge: "bg-rose-400/80",
-                                  emptyBorder:
-                                    "border-rose-200/80 bg-rose-50/30 hover:bg-rose-50/50 hover:border-rose-300 hover:text-rose-700",
-                                  emptyIconBg:
-                                    "group-hover/empty:bg-rose-50 group-hover/empty:border-rose-200 group-hover/empty:shadow-rose-100/50",
-                                  emptyIconText:
-                                    "group-hover/empty:text-rose-500 text-rose-300",
+                                  itemHover: "hover:bg-rose-50/50",
+                                  emptyBorder: "border-rose-200/80 bg-rose-50/30 hover:bg-rose-50/50 hover:border-rose-300 hover:text-rose-700",
+                                  emptyIconBg: "group-hover/empty:bg-rose-50 group-hover/empty:border-rose-200 group-hover/empty:shadow-rose-100/50",
+                                  emptyIconText: "group-hover/empty:text-rose-500 text-rose-300",
                                 };
                               if (
                                 stationName.includes("GI") ||
@@ -5602,55 +5599,52 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
                               )
                                 return {
                                   card: "bg-gradient-to-br from-white to-emerald-50/70 border-emerald-200/80 hover:border-emerald-300 hover:shadow-emerald-100/50",
+                                  cardBorder: "border-emerald-200/80",
+                                  headerBg: "bg-gradient-to-r from-emerald-500 to-emerald-600",
                                   title: "text-emerald-900",
                                   border: "border-emerald-100",
-                                  badgeNormal:
-                                    "bg-emerald-50 text-emerald-700 border-emerald-200",
+                                  badge: "bg-emerald-100 text-emerald-700 border border-emerald-200",
+                                  badgeNormal: "bg-emerald-50 text-emerald-700 border-emerald-200",
                                   avatarRing: "ring-emerald-100",
-                                  avatarBg:
-                                    "bg-gradient-to-br from-emerald-50 to-emerald-100/50 text-emerald-700",
+                                  avatarBg: "bg-gradient-to-br from-emerald-50 to-emerald-100/50 text-emerald-700",
                                   avatarEdge: "bg-emerald-400/80",
-                                  emptyBorder:
-                                    "border-emerald-200/80 bg-emerald-50/30 hover:bg-emerald-50/50 hover:border-emerald-300 hover:text-emerald-700",
-                                  emptyIconBg:
-                                    "group-hover/empty:bg-emerald-50 group-hover/empty:border-emerald-200 group-hover/empty:shadow-emerald-100/50",
-                                  emptyIconText:
-                                    "group-hover/empty:text-emerald-500 text-emerald-300",
+                                  itemHover: "hover:bg-emerald-50/50",
+                                  emptyBorder: "border-emerald-200/80 bg-emerald-50/30 hover:bg-emerald-50/50 hover:border-emerald-300 hover:text-emerald-700",
+                                  emptyIconBg: "group-hover/empty:bg-emerald-50 group-hover/empty:border-emerald-200 group-hover/empty:shadow-emerald-100/50",
+                                  emptyIconText: "group-hover/empty:text-emerald-500 text-emerald-300",
                                 };
                               if (stationName.includes("婦科"))
                                 return {
                                   card: "bg-gradient-to-br from-white to-pink-50/70 border-pink-200/80 hover:border-pink-300 hover:shadow-pink-100/50",
+                                  cardBorder: "border-pink-200/80",
+                                  headerBg: "bg-gradient-to-r from-pink-500 to-pink-600",
                                   title: "text-pink-900",
                                   border: "border-pink-100",
-                                  badgeNormal:
-                                    "bg-pink-50 text-pink-700 border-pink-200",
+                                  badge: "bg-pink-100 text-pink-700 border border-pink-200",
+                                  badgeNormal: "bg-pink-50 text-pink-700 border-pink-200",
                                   avatarRing: "ring-pink-100",
-                                  avatarBg:
-                                    "bg-gradient-to-br from-pink-50 to-pink-100/50 text-pink-700",
+                                  avatarBg: "bg-gradient-to-br from-pink-50 to-pink-100/50 text-pink-700",
                                   avatarEdge: "bg-pink-400/80",
-                                  emptyBorder:
-                                    "border-pink-200/80 bg-pink-50/30 hover:bg-pink-50/50 hover:border-pink-300 hover:text-pink-700",
-                                  emptyIconBg:
-                                    "group-hover/empty:bg-pink-50 group-hover/empty:border-pink-200 group-hover/empty:shadow-pink-100/50",
-                                  emptyIconText:
-                                    "group-hover/empty:text-pink-500 text-pink-300",
+                                  itemHover: "hover:bg-pink-50/50",
+                                  emptyBorder: "border-pink-200/80 bg-pink-50/30 hover:bg-pink-50/50 hover:border-pink-300 hover:text-pink-700",
+                                  emptyIconBg: "group-hover/empty:bg-pink-50 group-hover/empty:border-pink-200 group-hover/empty:shadow-pink-100/50",
+                                  emptyIconText: "group-hover/empty:text-pink-500 text-pink-300",
                                 };
                               return {
                                 card: "bg-gradient-to-br from-white to-slate-50/30 border-slate-200/60 hover:border-slate-300 hover:shadow-slate-100/50",
+                                cardBorder: "border-slate-200/60",
+                                headerBg: "bg-gradient-to-r from-teal-500 to-teal-600",
                                 title: "text-slate-800",
                                 border: "border-slate-100/80",
-                                badgeNormal:
-                                  "bg-slate-50 text-slate-500 border-slate-200",
+                                badge: "bg-teal-100 text-teal-700 border border-teal-200",
+                                badgeNormal: "bg-slate-50 text-slate-500 border-slate-200",
                                 avatarRing: "ring-teal-50",
-                                avatarBg:
-                                  "bg-gradient-to-br from-teal-50 to-teal-100/50 text-teal-700",
+                                avatarBg: "bg-gradient-to-br from-teal-50 to-teal-100/50 text-teal-700",
                                 avatarEdge: "bg-teal-400/80",
-                                emptyBorder:
-                                  "border-slate-200/80 bg-slate-50/30 hover:bg-teal-50/20 hover:border-teal-300/60 hover:text-teal-600",
-                                emptyIconBg:
-                                  "group-hover/empty:bg-teal-50 group-hover/empty:border-teal-200 group-hover/empty:shadow-teal-100/50",
-                                emptyIconText:
-                                  "group-hover/empty:text-teal-500 text-slate-300",
+                                itemHover: "hover:bg-teal-50/40",
+                                emptyBorder: "border-slate-200/80 bg-slate-50/30 hover:bg-teal-50/20 hover:border-teal-300/60 hover:text-teal-600",
+                                emptyIconBg: "group-hover/empty:bg-teal-50 group-hover/empty:border-teal-200 group-hover/empty:shadow-teal-100/50",
+                                emptyIconText: "group-hover/empty:text-teal-500 text-slate-300",
                               };
                             };
                             const theme = getStationTheme(st);

@@ -554,18 +554,11 @@ class Store {
               mappedUser.capabilities = updatedCapabilities;
               
               // Asynchronously update DB
-              const dbUpdate = {
-                capabilities: mappedUser.capabilities,
-                learningCapabilities: mappedUser.learningCapabilities,
-                learningSchedules: mappedUser.learningSchedules
-              };
-              this.mapToDbFields(dbUpdate);
-              
               supabase.from("users").update({
-                capabilities: dbUpdate.capabilities,
-                learning_capabilities: dbUpdate.learning_capabilities,
-                learning_schedules: dbUpdate.learning_schedules
-              }).eq("id", mappedUser.id).then(({ error }) => {
+                capabilities: mappedUser.capabilities,
+                learning_capabilities: mappedUser.learningCapabilities,
+                learning_schedules: mappedUser.learningSchedules
+              } as any).eq("id", mappedUser.id).then(({ error }) => {
                 if (error) console.error(`Failed to auto-graduate ${mappedUser.name}`, error);
                 else console.log(`Auto-graduated ${mappedUser.name} learning schedules`);
               });
