@@ -15,6 +15,7 @@ import {
   ChevronsUpDown,
   Check,
   Plus,
+  Info,
 } from "lucide-react";
 import ExcelJS from "exceljs";
 import { isUserOnEmploymentPause, generateUUID } from "../services/utils";
@@ -216,6 +217,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
 
   // Groups / classification
   const [showGroupPanel, setShowGroupPanel] = useState(false);
+  const [breakdownUser, setBreakdownUser] = useState<any>(null);
   const [groups, setGroups] = useState<{id: string; name: string}[]>(
     () => (db.settings as any).radiographerGroups || []
   );
@@ -1329,30 +1331,34 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
 
   return (
     <div className="h-full flex flex-col bg-slate-50 relative z-20">
-      <div className="flex-none px-6 py-4 bg-white border-b border-slate-200 shadow-sm">
-        <div className="flex justify-between items-center">
-          <div className="flex items-center gap-4">
-            <div className="p-2 bg-emerald-50 text-emerald-600 rounded-lg">
-              <BarChart3 size={20} />
+      <div className="flex-none px-4 py-3 md:px-6 md:py-4 bg-white border-b border-slate-200 shadow-sm">
+        <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-3">
+          <div className="flex items-center gap-3 md:gap-4">
+            <div className="p-1.5 md:p-2 bg-emerald-50 text-emerald-600 rounded-lg shrink-0">
+              <BarChart3 className="w-5 h-5 md:w-6 md:h-6" />
             </div>
-            <div>
-              <h2 className="text-xl font-bold text-slate-800 flex items-center gap-3">
-                放射師工作量統計
-                <span className="text-sm font-bold bg-slate-100 text-slate-600 px-2.5 py-0.5 rounded-full border border-slate-200 shadow-sm">
+            <div className="min-w-0">
+              <h2 className="text-lg md:text-xl font-bold text-slate-800 flex items-center gap-2 flex-wrap">
+                <span>放射師工作量</span>
+                <span className="text-xs md:text-sm font-bold bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full border border-slate-200 shadow-sm">
                   第{Number(currentMonth.split('-')[1])}週期
                 </span>
               </h2>
-              <p className="text-xs text-slate-500 font-bold mt-1.5 flex items-center gap-2">
-                <span className="px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded">一般統計</span> 
-                {generalDates[0]?.replace(/-/g, '/')} ~ {generalDates[generalDates.length - 1]?.replace(/-/g, '/')}
-                <span className="text-slate-300">|</span>
-                <span className="px-1.5 py-0.5 bg-purple-50 text-purple-600 rounded">報告統計</span> 
-                {reportDates[0]?.replace(/-/g, '/')} ~ {reportDates[reportDates.length - 1]?.replace(/-/g, '/')}
-              </p>
+              <div className="text-[10px] md:text-xs text-slate-500 font-bold mt-1.5 flex flex-col md:flex-row md:items-center gap-1 md:gap-2">
+                <div className="flex items-center gap-1">
+                  <span className="px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded shrink-0">一般</span> 
+                  <span className="truncate">{generalDates[0]?.replace(/-/g, '/')} ~ {generalDates[generalDates.length - 1]?.replace(/-/g, '/')}</span>
+                </div>
+                <span className="hidden md:inline text-slate-300">|</span>
+                <div className="flex items-center gap-1">
+                  <span className="px-1.5 py-0.5 bg-purple-50 text-purple-600 rounded shrink-0">報告</span> 
+                  <span className="truncate">{reportDates[0]?.replace(/-/g, '/')} ~ {reportDates[reportDates.length - 1]?.replace(/-/g, '/')}</span>
+                </div>
+              </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 md:gap-3 flex-wrap md:flex-nowrap w-full md:w-auto">
             {cycles && cycles.length > 0 ? (
               <select
                 value={currentMonth}
@@ -1713,8 +1719,15 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
                           {row.estRemoteUnits > 0 && <span className="text-xs text-emerald-600 block leading-tight">+{row.estRemoteUnits}(預估)</span>}
                         </td>
                         <td className="px-4 py-2.5 text-center font-bold text-slate-800 bg-slate-50">
-                          {Math.round(computeTotalUnits(row))}
-                          {(row.estOnsiteUnits > 0 || row.estRemoteUnits > 0) && <span className="text-xs text-emerald-600 block leading-tight">+{(row.estOnsiteUnits || 0) + (row.estRemoteUnits || 0)}(預估)</span>}
+                          <div className="flex flex-col items-center justify-center gap-0.5">
+                            <div className="flex items-center gap-1">
+                              <span>{Math.round(computeTotalUnits(row))}</span>
+                              <button onClick={() => setBreakdownUser(row)} className="text-indigo-400 hover:text-indigo-600 p-0.5 rounded-full hover:bg-indigo-50" title="查看計算明細">
+                                <Info size={14} />
+                              </button>
+                            </div>
+                            {(row.estOnsiteUnits > 0 || row.estRemoteUnits > 0) && <span className="text-xs text-emerald-600 block leading-tight">+{(row.estOnsiteUnits || 0) + (row.estRemoteUnits || 0)}(預估)</span>}
+                          </div>
                         </td>
                         <td className="px-4 py-2.5 text-center font-bold text-emerald-700 bg-emerald-50/50">
                           {row.workDays > 0 ? (Math.round(((computeTotalUnits(row) + (row.estOnsiteUnits || 0) + (row.estRemoteUnits || 0)) / row.workDays) * 10) / 10).toFixed(1) : '-'}
@@ -1758,9 +1771,103 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
               {lineCopied ? <><Check size={14}/> 已複製！</> : <><MessageSquare size={14}/> 複製到剪貼簿</>}
             </button>
           </div>
-          <pre className="p-4 text-sm font-mono text-slate-700 whitespace-pre-wrap leading-relaxed bg-white">{lineText}</pre>
+          <pre className="p-4 text-sm font-mono text-slate-700 whitespace-pre overflow-x-auto leading-relaxed bg-white">{lineText}</pre>
         </div>
       </div>
+
+      {/* Breakdown Modal */}
+      {breakdownUser && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col animate-in fade-in zoom-in duration-200">
+            <div className="px-5 py-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center shrink-0">
+              <h3 className="font-bold text-lg text-slate-800">
+                {breakdownUser.name} 的計算明細
+              </h3>
+              <button onClick={() => setBreakdownUser(null)} className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-200">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="p-5 overflow-y-auto flex flex-col gap-4 text-sm text-slate-700">
+              <div className="border border-slate-200 rounded-lg overflow-hidden">
+                <table className="w-full text-left">
+                  <thead className="bg-slate-50 border-b border-slate-200">
+                    <tr>
+                      <th className="py-2 px-3 font-semibold">項目</th>
+                      <th className="py-2 px-3 font-semibold text-right">數量</th>
+                      <th className="py-2 px-3 font-semibold text-right">加權</th>
+                      <th className="py-2 px-3 font-semibold text-right">小計</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {workloadFieldMeta.filter(f => f.key !== "floorControlOrders" && f.key !== "floorControlPercentage" && !f.key.endsWith("Teaching") && f.key !== "workDays").map(field => {
+                      const baseQty = field.key === "floorControl" ? (breakdownUser.floorControlScore || 0) : (breakdownUser[field.key] || 0);
+                      const teachingQty = (breakdownUser as any)[`${field.key}Teaching`] || 0;
+                      let weight = weights[field.key] ?? 0;
+                      if (field.key === "floorControl") weight = 1;
+
+                      let rowBaseUnits = baseQty * weight;
+                      let teachingUnits = 0;
+
+                      if (teachingQty > 0) {
+                        const tWeight = weights[`${field.key}Teaching` as WorkloadFieldKey] ?? weight;
+                        teachingUnits = teachingQty * tWeight;
+                      }
+
+                      const rowTotal = rowBaseUnits + teachingUnits;
+                      if (rowTotal === 0 && baseQty === 0 && teachingQty === 0) return null;
+
+                      return (
+                        <tr key={field.key} className="hover:bg-slate-50/50 transition-colors">
+                          <td className="py-2 px-3">
+                            {field.label}
+                            {teachingQty > 0 && <span className="text-xs text-orange-600 ml-1">(含教學)</span>}
+                          </td>
+                          <td className="py-2 px-3 text-right">
+                            {field.key === "floorControl" ? "-" : (
+                              teachingQty > 0 ? `${baseQty} + ${teachingQty}` : baseQty
+                            )}
+                          </td>
+                          <td className="py-2 px-3 text-right">
+                            {field.key === "floorControl" ? "-" : weight}
+                          </td>
+                          <td className="py-2 px-3 text-right font-medium text-indigo-700">
+                            {Math.round(rowTotal)}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="bg-emerald-50/50 p-4 rounded-xl border border-emerald-100 space-y-2">
+                <div className="flex justify-between font-medium">
+                  <span>現場預估:</span>
+                  <span className="text-emerald-700">+{breakdownUser.estOnsiteUnits || 0}</span>
+                </div>
+                <div className="flex justify-between font-medium">
+                  <span>遠距預估:</span>
+                  <span className="text-emerald-700">+{breakdownUser.estRemoteUnits || 0}</span>
+                </div>
+                <div className="flex justify-between font-bold text-lg border-t border-emerald-200 pt-2 mt-2">
+                  <span>總計單位:</span>
+                  <span className="text-emerald-700">
+                    {Math.round(computeTotalUnits(breakdownUser)) + (breakdownUser.estOnsiteUnits || 0) + (breakdownUser.estRemoteUnits || 0)}
+                  </span>
+                </div>
+              </div>
+            </div>
+            <div className="px-5 py-4 bg-slate-50 border-t border-slate-100 flex justify-end">
+              <button
+                onClick={() => setBreakdownUser(null)}
+                className="px-4 py-2 bg-white border border-slate-300 rounded-lg font-bold text-slate-700 hover:bg-slate-50"
+              >
+                關閉
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

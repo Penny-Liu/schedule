@@ -24,6 +24,25 @@ import {
   RefreshCw,
   X,
   TrendingUp,
+  CalendarDays,
+  Building2,
+  Monitor,
+  MapPin,
+  Diamond,
+  Coffee,
+  MessageSquare,
+  ShieldCheck,
+  LifeBuoy,
+  CircleDashed,
+  Magnet,
+  Waves,
+  Wrench,
+  Sunrise,
+  Moon,
+  CalendarClock,
+  CheckCircle2,
+  User as UserIcon,
+  Clock,
 } from "lucide-react";
 import ExcelJS from "exceljs";
 import { getEmploymentPause, isUserOnEmploymentPause } from "../services/utils";
@@ -36,6 +55,13 @@ interface StatisticsPageProps {
 
 const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
   const cycles = db.getCycles();
+  const [activeTooltip, setActiveTooltip] = useState<string | null>(null);
+
+  const showTooltip = (text: string) => {
+    setActiveTooltip(text);
+    setTimeout(() => setActiveTooltip(null), 2000);
+  };
+
   const [activeTab, setActiveTab] = useState<
     "stats" | "cycles" | "workload" | "physician"
   >("stats");
@@ -818,68 +844,80 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
         </div>
       )}
 
+      
+      {activeTooltip && (
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 bg-slate-800 text-white px-4 py-2 rounded-lg shadow-lg z-[200] animate-in fade-in slide-in-from-bottom-4">
+          {activeTooltip}
+        </div>
+      )}
+
       {/* Header */}
-      <div className="flex-none px-6 py-4 bg-white border-b border-slate-200 shadow-sm z-10">
-        <div className="flex justify-between items-center">
-          <div className="flex items-center gap-4">
-            <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
-              <BarChart3 size={20} />
+      <div className="flex-none px-4 py-3 md:px-6 md:py-4 bg-white border-b border-slate-200 shadow-sm z-10">
+        <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-3">
+          <div className="flex items-center gap-3 md:gap-4">
+            <div className="p-1.5 md:p-2 bg-indigo-50 text-indigo-600 rounded-lg shrink-0">
+              <BarChart3 size={20} className="w-5 h-5 md:w-6 md:h-6" />
             </div>
-            <div>
-              <h2 className="text-xl font-bold text-slate-800">工作狀況統計</h2>
-              <p className="text-xs text-slate-500 font-medium">
+            <div className="min-w-0">
+              <h2 className="text-lg md:text-xl font-bold text-slate-800">工作狀況統計</h2>
+              <div className="text-[10px] md:text-xs text-slate-500 font-medium leading-tight mt-0.5">
                 {activeTab === "stats"
-                  ? `統計範圍: ${cycleName}${dateRange.length > 0 ? ` (${dateRange[0]} ~ ${dateRange[dateRange.length - 1]})` : ""}`
+                  ? (
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:gap-1">
+                      <span>統計範圍: {cycleName}</span>
+                      {dateRange.length > 0 && <span className="text-slate-400">({dateRange[0]} ~ {dateRange[dateRange.length - 1]})</span>}
+                    </div>
+                  )
                   : activeTab === "cycles"
                     ? `個人週期微調 — ${displayMonthStr}`
                     : "從 Salesforce 同步各項檢查量與後處理統計"}
-              </p>
+              </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 md:gap-3 overflow-x-auto pb-1 md:pb-0 scrollbar-hide w-full md:w-auto">
             {/* Tab Switcher */}
             <div className="flex bg-slate-100 rounded-lg p-1 gap-1">
               <button
-                onClick={() => setActiveTab("stats")}
+                onClick={() => { showTooltip("統計表"); setActiveTab("stats"); }}
                 className={`px-3 py-1.5 rounded text-sm font-bold transition-all ${activeTab === "stats" ? "bg-white text-indigo-700 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
               >
-                <BarChart3 size={14} className="inline mr-1" />
-                統計表
+                <BarChart3 size={14} className="inline md:mr-1" />
+                <span className="hidden md:inline">統計表</span>
               </button>
               {isSupervisorOrAdmin && (
                 <button
-                  onClick={() => setActiveTab("cycles")}
-                  className={`px-3 py-1.5 rounded text-sm font-bold transition-all ${activeTab === "cycles" ? "bg-white text-teal-700 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
-                >
-                  <Settings2 size={14} className="inline mr-1" />
-                  個人週期
-                </button>
+                onClick={() => { showTooltip("個人週期"); setActiveTab("cycles"); }}
+                className={`px-3 py-1.5 rounded text-sm font-bold transition-all ${activeTab === "cycles" ? "bg-white text-teal-700 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+              >
+                <Settings2 size={14} className="inline md:mr-1" />
+                <span className="hidden md:inline">個人週期</span>
+              </button>
               )}
               {canViewWorkload && (
                 <button
-                  onClick={() => setActiveTab("workload")}
-                  className={`px-3 py-1.5 rounded text-sm font-bold transition-all ${activeTab === "workload" ? "bg-white text-emerald-700 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
-                >
-                  <Activity size={14} className="inline mr-1" />
-                  工作量統計
-                </button>
+                onClick={() => { showTooltip("工作量統計"); setActiveTab("workload"); }}
+                className={`px-3 py-1.5 rounded text-sm font-bold transition-all ${activeTab === "workload" ? "bg-white text-emerald-700 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+              >
+                <Activity size={14} className="inline md:mr-1" />
+                <span className="hidden md:inline">工作量統計</span>
+              </button>
               )}
               {isSupervisorOrAdmin && (
                 <button
-                  onClick={() => setActiveTab("physician")}
-                  className={`px-3 py-1.5 rounded text-sm font-bold transition-all ${activeTab === "physician" ? "bg-white text-purple-700 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
-                >
-                  <TrendingUp size={14} className="inline mr-1" />
-                  醫師工作量
-                </button>
+                onClick={() => { showTooltip("醫師工作量"); setActiveTab("physician"); }}
+                className={`px-3 py-1.5 rounded text-sm font-bold transition-all ${activeTab === "physician" ? "bg-white text-purple-700 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+              >
+                <TrendingUp size={14} className="inline md:mr-1" />
+                <span className="hidden md:inline">醫師工作量</span>
+              </button>
               )}
             </div>
 
             {/* Sync Button */}
             {isSupervisorOrAdmin && (
               <button
-                onClick={() => setSyncModalOpen(true)}
+                onClick={() => { showTooltip("後台同步"); setSyncModalOpen(true); }}
                 disabled={isSyncing}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-bold transition-all shadow-sm ${
                   isSyncing
@@ -891,7 +929,7 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
                   size={14}
                   className={isSyncing ? "animate-spin" : ""}
                 />
-                {isSyncing ? "同步中..." : "後台同步"}
+                <span className="hidden md:inline">{isSyncing ? "同步中..." : "後台同步"}</span>
               </button>
             )}
 
@@ -928,10 +966,10 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
                 )}
 
                 <button
-                  onClick={handleExport}
-                  className="flex items-center gap-2 bg-teal-600 hover:bg-teal-700 text-white px-3 py-1.5 rounded-lg text-sm font-bold transition-colors shadow-sm shadow-teal-200"
+                  onClick={() => { showTooltip("匯出 Excel"); handleExport(); }}
+                  className="flex items-center gap-1.5 bg-teal-600 hover:bg-teal-700 text-white px-3 py-1.5 rounded-lg text-sm font-bold transition-colors shadow-sm shadow-teal-200"
                 >
-                  <FileSpreadsheet size={16} /> 匯出 Excel
+                  <FileSpreadsheet size={16} /> <span className="hidden md:inline">匯出 Excel</span>
                 </button>
               </>
             )}
@@ -974,45 +1012,95 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
                     <th className="px-4 py-3 sticky left-0 bg-slate-50 z-10 border-r border-slate-200">
                       姓名
                     </th>
-                    <th className="px-2 py-3 text-center bg-indigo-50/50 text-indigo-700">
-                      上班天數
+                    <th className="px-2 py-3 text-center bg-indigo-50/50 text-indigo-700 cursor-pointer" onClick={() => showTooltip("上班天數")}>
+                      <div className="md:hidden inline-flex items-center justify-center w-[18px] h-[18px] rounded-full bg-indigo-100 text-indigo-700 text-[10px] font-bold leading-none align-middle shadow-sm">
+                        上
+                      </div><span className="hidden md:inline">上班天數</span>
                     </th>
-                    <th className="px-2 py-3 text-center">現場天數</th>
-                    <th className="px-2 py-3 text-center text-fuchsia-600">
-                      遠班
+                    <th className="px-2 py-3 text-center cursor-pointer" onClick={() => showTooltip("現場天數")}>
+                      <div className="md:hidden inline-flex items-center justify-center w-[18px] h-[18px] rounded-full bg-slate-200 text-slate-700 text-[10px] font-bold leading-none align-middle shadow-sm">
+                        現
+                      </div><span className="hidden md:inline">現場天數</span>
                     </th>
-                    <th className="px-2 py-3 text-center">北投天數</th>
-                    <th className="px-2 py-3 text-center text-blue-600">
-                      大直天數
+                    <th className="px-2 py-3 text-center text-fuchsia-600 cursor-pointer" onClick={() => showTooltip("遠班")}>
+                      <div className="md:hidden inline-flex items-center justify-center w-[18px] h-[18px] rounded-full bg-fuchsia-100 text-fuchsia-700 text-[10px] font-bold leading-none align-middle shadow-sm">
+                        遠
+                      </div><span className="hidden md:inline">遠班</span>
                     </th>
-                    <th className="px-2 py-3 text-center text-red-500">休假</th>
-                    <th className="px-2 py-3 text-center text-amber-600 border-r border-slate-100">
-                      備註
+                    <th className="px-2 py-3 text-center cursor-pointer" onClick={() => showTooltip("北投天數")}>
+                      <div className="md:hidden inline-flex items-center justify-center w-[18px] h-[18px] rounded-full bg-slate-200 text-slate-700 text-[10px] font-bold leading-none align-middle shadow-sm">
+                        北
+                      </div><span className="hidden md:inline">北投天數</span>
                     </th>
-                    <th className="px-2 py-3 text-center bg-red-50/30 text-red-800">
-                      場控
+                    <th className="px-2 py-3 text-center text-blue-600 cursor-pointer" onClick={() => showTooltip("大直天數")}>
+                      <div className="md:hidden inline-flex items-center justify-center w-[18px] h-[18px] rounded-full bg-blue-100 text-blue-700 text-[10px] font-bold leading-none align-middle shadow-sm">
+                        直
+                      </div><span className="hidden md:inline">大直天數</span>
                     </th>
-                    <th className="px-2 py-3 text-center bg-emerald-50/30 text-emerald-700">
-                      輔班
+                    <th className="px-2 py-3 text-center text-red-500 cursor-pointer" onClick={() => showTooltip("休假")}>
+                      <div className="md:hidden inline-flex items-center justify-center w-[18px] h-[18px] rounded-full bg-red-100 text-red-600 text-[10px] font-bold leading-none align-middle shadow-sm">
+                        休
+                      </div><span className="hidden md:inline">休假</span>
                     </th>
-                    <th className="px-2 py-3 text-center">BMD/DX</th>
-                    <th className="px-2 py-3 text-center">CT</th>
-                    <th className="px-2 py-3 text-center">MR</th>
-                    <th className="px-2 py-3 text-center">US</th>
-                    <th className="px-2 py-3 text-center text-lime-700 border-r border-slate-100">
-                      技術支援
+                    <th className="px-2 py-3 text-center text-amber-600 border-r border-slate-100 cursor-pointer" onClick={() => showTooltip("備註")}>
+                      <div className="md:hidden inline-flex items-center justify-center w-[18px] h-[18px] rounded-full bg-amber-100 text-amber-700 text-[10px] font-bold leading-none align-middle shadow-sm">
+                        備
+                      </div><span className="hidden md:inline">備註</span>
                     </th>
-                    <th className="px-2 py-3 text-center bg-blue-50/30 text-blue-700">
-                      開機
+                    <th className="px-2 py-3 text-center bg-red-50/30 text-red-800 cursor-pointer" onClick={() => showTooltip("場控")}>
+                      <div className="md:hidden inline-flex items-center justify-center w-[18px] h-[18px] rounded-full bg-red-100 text-red-800 text-[10px] font-bold leading-none align-middle shadow-sm">
+                        場
+                      </div><span className="hidden md:inline">場控</span>
                     </th>
-                    <th className="px-2 py-3 text-center bg-amber-50/30 text-amber-700">
-                      晚班
+                    <th className="px-2 py-3 text-center bg-emerald-50/30 text-emerald-700 cursor-pointer" onClick={() => showTooltip("輔班")}>
+                      <div className="md:hidden inline-flex items-center justify-center w-[18px] h-[18px] rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold leading-none align-middle shadow-sm">
+                        輔
+                      </div><span className="hidden md:inline">輔班</span>
                     </th>
-                    <th className="px-2 py-3 text-center bg-red-50/30 text-red-700">
-                      排班
+                    <th className="px-2 py-3 text-center cursor-pointer" onClick={() => showTooltip("BMD/DX")}>
+                      <div className="md:hidden inline-flex items-center justify-center w-[18px] h-[18px] rounded-full bg-slate-200 text-slate-700 text-[10px] font-bold leading-none align-middle shadow-sm">
+                        B
+                      </div><span className="hidden md:inline">BMD/DX</span>
                     </th>
-                    <th className="px-2 py-3 text-center bg-purple-50/30 text-purple-700">
-                      校對
+                    <th className="px-2 py-3 text-center cursor-pointer" onClick={() => showTooltip("CT")}>
+                      <div className="md:hidden inline-flex items-center justify-center w-[18px] h-[18px] rounded-full bg-slate-200 text-slate-700 text-[10px] font-bold leading-none align-middle shadow-sm">
+                        C
+                      </div><span className="hidden md:inline">CT</span>
+                    </th>
+                    <th className="px-2 py-3 text-center cursor-pointer" onClick={() => showTooltip("MR")}>
+                      <div className="md:hidden inline-flex items-center justify-center w-[18px] h-[18px] rounded-full bg-slate-200 text-slate-700 text-[10px] font-bold leading-none align-middle shadow-sm">
+                        M
+                      </div><span className="hidden md:inline">MR</span>
+                    </th>
+                    <th className="px-2 py-3 text-center cursor-pointer" onClick={() => showTooltip("US")}>
+                      <div className="md:hidden inline-flex items-center justify-center w-[18px] h-[18px] rounded-full bg-slate-200 text-slate-700 text-[10px] font-bold leading-none align-middle shadow-sm">
+                        U
+                      </div><span className="hidden md:inline">US</span>
+                    </th>
+                    <th className="px-2 py-3 text-center text-lime-700 border-r border-slate-100 cursor-pointer" onClick={() => showTooltip("技術支援")}>
+                      <div className="md:hidden inline-flex items-center justify-center w-[18px] h-[18px] rounded-full bg-lime-100 text-lime-800 text-[10px] font-bold leading-none align-middle shadow-sm">
+                        技
+                      </div><span className="hidden md:inline">技術支援</span>
+                    </th>
+                    <th className="px-2 py-3 text-center bg-blue-50/30 text-blue-700 cursor-pointer" onClick={() => showTooltip("開機")}>
+                      <div className="md:hidden inline-flex items-center justify-center w-[18px] h-[18px] rounded-full bg-blue-100 text-blue-800 text-[10px] font-bold leading-none align-middle shadow-sm">
+                        開
+                      </div><span className="hidden md:inline">開機</span>
+                    </th>
+                    <th className="px-2 py-3 text-center bg-amber-50/30 text-amber-700 cursor-pointer" onClick={() => showTooltip("晚班")}>
+                      <div className="md:hidden inline-flex items-center justify-center w-[18px] h-[18px] rounded-full bg-amber-100 text-amber-800 text-[10px] font-bold leading-none align-middle shadow-sm">
+                        晚
+                      </div><span className="hidden md:inline">晚班</span>
+                    </th>
+                    <th className="px-2 py-3 text-center bg-red-50/30 text-red-700 cursor-pointer" onClick={() => showTooltip("排班")}>
+                      <div className="md:hidden inline-flex items-center justify-center w-[18px] h-[18px] rounded-full bg-red-100 text-red-800 text-[10px] font-bold leading-none align-middle shadow-sm">
+                        排
+                      </div><span className="hidden md:inline">排班</span>
+                    </th>
+                    <th className="px-2 py-3 text-center bg-purple-50/30 text-purple-700 cursor-pointer" onClick={() => showTooltip("校對")}>
+                      <div className="md:hidden inline-flex items-center justify-center w-[18px] h-[18px] rounded-full bg-purple-100 text-purple-800 text-[10px] font-bold leading-none align-middle shadow-sm">
+                        校
+                      </div><span className="hidden md:inline">校對</span>
                     </th>
                   </tr>
                 </thead>
@@ -1106,18 +1194,30 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
                 <table className="w-full text-left border-collapse min-w-[800px]">
                   <thead>
                     <tr className="bg-slate-50 border-b border-gray-200 text-xs text-gray-500 uppercase tracking-wider">
-                      <th className="px-6 py-4 font-bold w-[18%]">
-                        放射師姓名
+                      <th className="px-6 py-4 font-bold md:w-[18%] cursor-pointer" onClick={() => showTooltip("放射師姓名")}>
+                        <div className="md:hidden inline-flex items-center justify-center w-[18px] h-[18px] rounded-full bg-slate-200 text-slate-700 text-[10px] font-bold leading-none align-middle shadow-sm">
+                        名
+                      </div><span className="hidden md:inline">放射師姓名</span>
                       </th>
-                      <th className="px-6 py-4 font-bold w-[35%]">
-                        本月週期範圍
+                      <th className="px-6 py-4 font-bold md:w-[35%] cursor-pointer" onClick={() => showTooltip("本月週期範圍")}>
+                        <div className="md:hidden inline-flex items-center justify-center w-[18px] h-[18px] rounded-full bg-slate-200 text-slate-700 text-[10px] font-bold leading-none align-middle shadow-sm">
+                        期
+                      </div><span className="hidden md:inline">本月週期範圍</span>
                       </th>
-                      <th className="px-6 py-4 font-bold w-[22%]">備忘</th>
-                      <th className="px-6 py-4 font-bold text-center w-[12%]">
-                        當期天數
+                      <th className="px-6 py-4 font-bold md:w-[22%] cursor-pointer" onClick={() => showTooltip("備忘")}>
+                        <div className="md:hidden inline-flex items-center justify-center w-[18px] h-[18px] rounded-full bg-slate-200 text-slate-700 text-[10px] font-bold leading-none align-middle shadow-sm">
+                        備
+                      </div><span className="hidden md:inline">備忘</span>
                       </th>
-                      <th className="px-6 py-4 font-bold text-center w-[13%]">
-                        操作
+                      <th className="px-6 py-4 font-bold text-center md:w-[12%] cursor-pointer" onClick={() => showTooltip("當期天數")}>
+                        <div className="md:hidden inline-flex items-center justify-center w-[18px] h-[18px] rounded-full bg-slate-200 text-slate-700 text-[10px] font-bold leading-none align-middle shadow-sm">
+                        天
+                      </div><span className="hidden md:inline">當期天數</span>
+                      </th>
+                      <th className="px-6 py-4 font-bold text-center md:w-[13%] cursor-pointer" onClick={() => showTooltip("操作")}>
+                        <div className="md:hidden inline-flex items-center justify-center w-[18px] h-[18px] rounded-full bg-slate-200 text-slate-700 text-[10px] font-bold leading-none align-middle shadow-sm">
+                        操
+                      </div><span className="hidden md:inline">操作</span>
                       </th>
                     </tr>
                   </thead>
