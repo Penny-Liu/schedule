@@ -2010,7 +2010,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
   const getAssignableCandidates = (station: string, dateStr: string) => {
     return users.filter((user) => {
       const isCertified = user.capabilities?.includes(station);
-      const isLearning = isUserLearningOnDate(user, station, date);
+      const isLearning = isUserLearningOnDate(user, station, dateStr);
       const isExcluded = user.excludedCapabilities?.includes(station);
       if (station !== SYSTEM_OFF && !isCertified && !isLearning && !isExcluded)
         return false;
