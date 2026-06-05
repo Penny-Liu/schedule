@@ -86,7 +86,8 @@ const workloadFieldMeta: { key: WorkloadFieldKey; label: string }[] = [
   { key: "usBreast", label: "乳" },
   { key: "usHeart", label: "心" },
   { key: "usThy", label: "甲" },
-  { key: "usCCA", label: "頸" },
+  { key: "usCCA", label: "頸動脈" },
+  { key: "usNeck", label: "頸部" },
   { key: "usPelvisFemale", label: "P女" },
   { key: "usPelvisMale", label: "P男" },
   { key: "ct", label: "CT" },
@@ -217,7 +218,6 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
 
   // Groups / classification
   const [showGroupPanel, setShowGroupPanel] = useState(false);
-  const [breakdownUser, setBreakdownUser] = useState<any>(null);
   const [groups, setGroups] = useState<{id: string; name: string}[]>(
     () => (db.settings as any).radiographerGroups || []
   );
@@ -228,6 +228,19 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
 
   // LINE copy feedback
   const [lineCopied, setLineCopied] = useState(false);
+  const [lineExcludedNames, setLineExcludedNames] = useState<string[]>([]);
+  const [hasInitializedLineExcluded, setHasInitializedLineExcluded] = useState(false);
+
+  useEffect(() => {
+    if (!hasInitializedLineExcluded && radiographers.length > 0) {
+      // 預設將主管排除
+      const supervisors = radiographers
+        .filter(r => r.role === 'SUPERVISOR' || r.role === 'HM_SUPERVISOR' || (r as any).isSupervisor)
+        .map(r => r.name);
+      setLineExcludedNames(supervisors);
+      setHasInitializedLineExcluded(true);
+    }
+  }, [radiographers, hasInitializedLineExcluded]);
 
   const onsiteFieldKeys: WorkloadFieldKey[] = [
     "mr",
@@ -320,11 +333,14 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
         if (field === "floorControl") {
           return sum + (row.floorControlScore || 0);
         }
-        let weightKey: string = field;
-        if (field.endsWith("Teaching")) {
-          weightKey = field.replace("Teaching", "");
+        
+        let weight = (weights as any)[field];
+        if (field.endsWith("Teaching") && weight === undefined) {
+          // 如果沒有獨立設定教學權重，則 fallback 到一般權重
+          weight = (weights as any)[field.replace("Teaching", "")] || 0;
         }
-        return sum + ((row as any)[field] || 0) * ((weights as any)[weightKey] || 0);
+
+        return sum + ((row as any)[field] || 0) * (weight || 0);
       },
       0,
     );
@@ -887,8 +903,8 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
 
     let text = header + '\n';
     groups.forEach(g => {
-      let rows = grouped[g.id];
-      if (!rows?.length) return;
+      let rows = grouped[g.id]?.filter(r => !lineExcludedNames.includes(r.name)) || [];
+      if (!rows.length) return;
       text += `\n${g.name}\n`;
       if (!sortField) {
         rows = [...rows].sort((a, b) => computeTotalUnits(b) - computeTotalUnits(a));
@@ -896,15 +912,17 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
       rows.forEach(r => { text += fmt(r) + '\n'; });
     });
     if (unassigned.length) {
-      text += `\n(未分類)\n`;
-      let rows = unassigned;
-      if (!sortField) {
-        rows = [...rows].sort((a, b) => computeTotalUnits(b) - computeTotalUnits(a));
+      let rows = unassigned.filter(r => !lineExcludedNames.includes(r.name));
+      if (rows.length > 0) {
+        text += `\n(未分類)\n`;
+        if (!sortField) {
+          rows = [...rows].sort((a, b) => computeTotalUnits(b) - computeTotalUnits(a));
+        }
+        rows.forEach(r => { text += fmt(r) + '\n'; });
       }
-      rows.forEach(r => { text += fmt(r) + '\n'; });
     }
     return text.trim();
-  }, [displayData, groups, groupAssignments, generalDates, currentMonth, cycles, radiographers, weights, sortField, lineExportMode]);
+  }, [displayData, groups, groupAssignments, generalDates, currentMonth, cycles, radiographers, weights, sortField, lineExportMode, lineExcludedNames]);
 
   const handleLineCopy = () => {
     navigator.clipboard.writeText(lineText);
@@ -1499,24 +1517,48 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
             </div>
             
             {showWeights && (
-              <div className="grid gap-3 mt-4 pt-4 border-t border-slate-100 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 animate-in fade-in slide-in-from-top-2">
-                {workloadFieldMeta.filter(f => !f.key.endsWith("Teaching") && f.key !== "floorControlOrders").map((field) => (
-                  <label key={field.key} className="block text-xs text-slate-600">
-                    <div className="mb-1 font-medium text-slate-800">
-                      {field.label}
-                    </div>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.1"
-                      value={weights[field.key]}
-                      onChange={(e) =>
-                        handleWeightChange(field.key, e.target.value)
-                      }
-                      className="w-full rounded border border-slate-200 bg-slate-50 px-2 py-2 text-sm text-slate-900 outline-none focus:border-emerald-500 focus:ring-emerald-500/20"
-                    />
-                  </label>
-                ))}
+              <div className="mt-4 pt-4 border-t border-slate-100 animate-in fade-in slide-in-from-top-2">
+                <div className="text-sm font-bold text-slate-700 mb-3">一般項目權重</div>
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
+                  {workloadFieldMeta.filter(f => !f.key.endsWith("Teaching") && f.key !== "floorControlOrders").map((field) => (
+                    <label key={field.key} className="block text-xs text-slate-600">
+                      <div className="mb-1 font-medium text-slate-800">
+                        {field.label}
+                      </div>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.1"
+                        value={weights[field.key]}
+                        onChange={(e) =>
+                          handleWeightChange(field.key, e.target.value)
+                        }
+                        className="w-full rounded border border-slate-200 bg-slate-50 px-2 py-2 text-sm text-slate-900 outline-none focus:border-emerald-500 focus:ring-emerald-500/20"
+                      />
+                    </label>
+                  ))}
+                </div>
+                
+                <div className="text-sm font-bold text-slate-700 mb-3 mt-6 pt-4 border-t border-slate-100">教學項目權重</div>
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
+                  {workloadFieldMeta.filter(f => f.key.endsWith("Teaching")).map((field) => (
+                    <label key={field.key} className="block text-xs text-slate-600">
+                      <div className="mb-1 font-medium text-slate-800">
+                        {field.label}
+                      </div>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.1"
+                        value={weights[field.key]}
+                        onChange={(e) =>
+                          handleWeightChange(field.key, e.target.value)
+                        }
+                        className="w-full rounded border border-slate-200 bg-orange-50/50 px-2 py-2 text-sm text-slate-900 outline-none focus:border-orange-500 focus:ring-orange-500/20"
+                      />
+                    </label>
+                  ))}
+                </div>
               </div>
             )}
           </div>
@@ -1722,9 +1764,6 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
                           <div className="flex flex-col items-center justify-center gap-0.5">
                             <div className="flex items-center gap-1">
                               <span>{Math.round(computeTotalUnits(row))}</span>
-                              <button onClick={() => setBreakdownUser(row)} className="text-indigo-400 hover:text-indigo-600 p-0.5 rounded-full hover:bg-indigo-50" title="查看計算明細">
-                                <Info size={14} />
-                              </button>
                             </div>
                             {(row.estOnsiteUnits > 0 || row.estRemoteUnits > 0) && <span className="text-xs text-emerald-600 block leading-tight">+{(row.estOnsiteUnits || 0) + (row.estRemoteUnits || 0)}(預估)</span>}
                           </div>
@@ -1743,131 +1782,59 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
 
         {/* LINE Preview */}
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mt-4">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-slate-50">
-            <div className="flex items-center gap-2 text-sm font-bold text-slate-700">
-              <MessageSquare size={15} className="text-green-600"/>
-              LINE 複製預覽
+          <div className="flex flex-col md:flex-row md:items-center justify-between px-4 py-3 border-b border-slate-100 bg-slate-50 gap-3">
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-2 text-sm font-bold text-slate-700">
+                <MessageSquare size={15} className="text-green-600"/>
+                LINE 複製預覽
+              </div>
+              <div className="flex items-center gap-2 text-xs text-slate-500 font-normal">
+                顯示內容：
+                <select 
+                  value={lineExportMode}
+                  onChange={(e) => setLineExportMode(e.target.value as any)}
+                  className="border border-slate-200 rounded px-2 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-green-400"
+                >
+                  <option value="ALL">綜合 (全部)</option>
+                  <option value="ONSITE">現場單位</option>
+                  <option value="REMOTE">遠距單班</option>
+                  <option value="TOTAL">總單位</option>
+                  <option value="TOTAL_AVG">總單位 + 日平均</option>
+                </select>
+              </div>
             </div>
-            <div className="flex items-center gap-2 text-xs text-slate-500 font-normal">
-              顯示內容：
-              <select 
-                value={lineExportMode}
-                onChange={(e) => setLineExportMode(e.target.value as any)}
-                className="border border-slate-200 rounded px-2 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-green-400"
+            
+            <div className="flex flex-col md:items-end gap-2">
+              <div className="flex items-center gap-1.5 flex-wrap md:justify-end max-w-full md:max-w-[500px]">
+                <span className="text-xs text-slate-500 font-medium whitespace-nowrap">顯示人員：</span>
+                {radiographers.map(r => (
+                  <label key={r.id} className={`text-[11px] px-1.5 py-0.5 rounded cursor-pointer transition-colors border select-none ${!lineExcludedNames.includes(r.name) ? 'bg-emerald-50 text-emerald-700 border-emerald-200 font-bold' : 'bg-white text-slate-400 border-slate-200'}`}>
+                    <input 
+                      type="checkbox" 
+                      className="hidden"
+                      checked={!lineExcludedNames.includes(r.name)}
+                      onChange={(e) => {
+                        if (e.target.checked) setLineExcludedNames(prev => prev.filter(n => n !== r.name));
+                        else setLineExcludedNames(prev => [...prev, r.name]);
+                      }}
+                    />
+                    {r.name}
+                  </label>
+                ))}
+              </div>
+              <button
+                onClick={handleLineCopy}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-bold transition-colors w-fit ${
+                  lineCopied ? 'bg-green-600 text-white' : 'bg-green-50 hover:bg-green-100 text-green-700 border border-green-200'
+                }`}
               >
-                <option value="ALL">綜合 (全部)</option>
-                <option value="ONSITE">現場單位</option>
-                <option value="REMOTE">遠距單班</option>
-                <option value="TOTAL">總單位</option>
-                <option value="TOTAL_AVG">總單位 + 日平均</option>
-              </select>
+                {lineCopied ? <><Check size={14}/> 已複製！</> : <><MessageSquare size={14}/> 複製到剪貼簿</>}
+              </button>
             </div>
-            <button
-              onClick={handleLineCopy}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-bold transition-colors ${
-                lineCopied ? 'bg-green-600 text-white' : 'bg-green-50 hover:bg-green-100 text-green-700 border border-green-200'
-              }`}
-            >
-              {lineCopied ? <><Check size={14}/> 已複製！</> : <><MessageSquare size={14}/> 複製到剪貼簿</>}
-            </button>
           </div>
           <pre className="p-4 text-sm font-mono text-slate-700 whitespace-pre overflow-x-auto leading-relaxed bg-white">{lineText}</pre>
         </div>
       </div>
-
-      {/* Breakdown Modal */}
-      {breakdownUser && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col animate-in fade-in zoom-in duration-200">
-            <div className="px-5 py-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center shrink-0">
-              <h3 className="font-bold text-lg text-slate-800">
-                {breakdownUser.name} 的計算明細
-              </h3>
-              <button onClick={() => setBreakdownUser(null)} className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-200">
-                <X size={20} />
-              </button>
-            </div>
-            <div className="p-5 overflow-y-auto flex flex-col gap-4 text-sm text-slate-700">
-              <div className="border border-slate-200 rounded-lg overflow-hidden">
-                <table className="w-full text-left">
-                  <thead className="bg-slate-50 border-b border-slate-200">
-                    <tr>
-                      <th className="py-2 px-3 font-semibold">項目</th>
-                      <th className="py-2 px-3 font-semibold text-right">數量</th>
-                      <th className="py-2 px-3 font-semibold text-right">加權</th>
-                      <th className="py-2 px-3 font-semibold text-right">小計</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {workloadFieldMeta.filter(f => f.key !== "floorControlOrders" && f.key !== "floorControlPercentage" && !f.key.endsWith("Teaching") && f.key !== "workDays").map(field => {
-                      const baseQty = field.key === "floorControl" ? (breakdownUser.floorControlScore || 0) : (breakdownUser[field.key] || 0);
-                      const teachingQty = (breakdownUser as any)[`${field.key}Teaching`] || 0;
-                      let weight = weights[field.key] ?? 0;
-                      if (field.key === "floorControl") weight = 1;
-
-                      let rowBaseUnits = baseQty * weight;
-                      let teachingUnits = 0;
-
-                      if (teachingQty > 0) {
-                        const tWeight = weights[`${field.key}Teaching` as WorkloadFieldKey] ?? weight;
-                        teachingUnits = teachingQty * tWeight;
-                      }
-
-                      const rowTotal = rowBaseUnits + teachingUnits;
-                      if (rowTotal === 0 && baseQty === 0 && teachingQty === 0) return null;
-
-                      return (
-                        <tr key={field.key} className="hover:bg-slate-50/50 transition-colors">
-                          <td className="py-2 px-3">
-                            {field.label}
-                            {teachingQty > 0 && <span className="text-xs text-orange-600 ml-1">(含教學)</span>}
-                          </td>
-                          <td className="py-2 px-3 text-right">
-                            {field.key === "floorControl" ? "-" : (
-                              teachingQty > 0 ? `${baseQty} + ${teachingQty}` : baseQty
-                            )}
-                          </td>
-                          <td className="py-2 px-3 text-right">
-                            {field.key === "floorControl" ? "-" : weight}
-                          </td>
-                          <td className="py-2 px-3 text-right font-medium text-indigo-700">
-                            {Math.round(rowTotal)}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-
-              <div className="bg-emerald-50/50 p-4 rounded-xl border border-emerald-100 space-y-2">
-                <div className="flex justify-between font-medium">
-                  <span>現場預估:</span>
-                  <span className="text-emerald-700">+{breakdownUser.estOnsiteUnits || 0}</span>
-                </div>
-                <div className="flex justify-between font-medium">
-                  <span>遠距預估:</span>
-                  <span className="text-emerald-700">+{breakdownUser.estRemoteUnits || 0}</span>
-                </div>
-                <div className="flex justify-between font-bold text-lg border-t border-emerald-200 pt-2 mt-2">
-                  <span>總計單位:</span>
-                  <span className="text-emerald-700">
-                    {Math.round(computeTotalUnits(breakdownUser)) + (breakdownUser.estOnsiteUnits || 0) + (breakdownUser.estRemoteUnits || 0)}
-                  </span>
-                </div>
-              </div>
-            </div>
-            <div className="px-5 py-4 bg-slate-50 border-t border-slate-100 flex justify-end">
-              <button
-                onClick={() => setBreakdownUser(null)}
-                className="px-4 py-2 bg-white border border-slate-300 rounded-lg font-bold text-slate-700 hover:bg-slate-50"
-              >
-                關閉
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

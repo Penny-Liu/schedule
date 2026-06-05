@@ -391,9 +391,8 @@ class Store {
     if (perms.includes(PERMISSIONS.VIEW_ANESTHESIA) || isAdmin) {
       aneShiftsReq = this.fetchAnesthesiaShiftsByRange(startDate, endDate);
     }
-    if (perms.includes(PERMISSIONS.VIEW_ADMINISTRATIVE) || isAdmin || role === "HM_SUPERVISOR") {
-      meetingRoomsReq = this.fetchMeetingRoomsByRange(startDate, endDate);
-    }
+    // 所有人皆可查看會議室租借情況
+    meetingRoomsReq = this.fetchMeetingRoomsByRange(startDate, endDate);
 
     const [shiftsRes, hmShiftsRes, dShiftsRes, aneShiftsRes, workloadsRes, leavesRes, meetingRoomsRes] = await Promise.all([
       shiftsReq, hmShiftsReq, docShiftsReq, aneShiftsReq, workloadsReq, leavesReq, meetingRoomsReq
@@ -651,9 +650,8 @@ class Store {
       aneStaffReq = this.fetchPaginated("anesthesia_staff");
       aneShiftsReq = this.fetchAnesthesiaShiftsByRange(startDate, endDate);
     }
-    if (perms.includes(PERMISSIONS.VIEW_ADMINISTRATIVE) || isAdmin || role === "HM_SUPERVISOR") {
-      meetingRoomsReq = this.fetchMeetingRoomsByRange(startDate, endDate);
-    }
+    // 所有人皆可查看會議室租借情況
+    meetingRoomsReq = this.fetchMeetingRoomsByRange(startDate, endDate);
 
     try {
       const [shiftsRes, leavesRes, workloadsRes, doctorsRes, dShiftsRes, hmStaffRes, hmShiftsRes, anesthesiaStaffRes, anesthesiaShiftsRes, meetingRoomsRes] = await Promise.all([
@@ -810,24 +808,32 @@ class Store {
       };
 
       if (w.id) {
-        // 更新現有資料
-        const { error } = await supabase
+        // 更新現有資料，移除 .single() 避免如果 id 被刪除導致 PGRST116
+        const { data, error } = await supabase
           .from("radiographer_workload")
           .update(payload)
           .eq("id", w.id)
-          .select()
-          .single();
+          .select();
         if (error) throw error;
+        
+        // 如果更新沒有找到資料 (可能是 DB 中被刪除)，改用 insert 嘗試
+        if (!data || data.length === 0) {
+          const { data: insData, error: insErr } = await supabase
+            .from("radiographer_workload")
+            .insert(payload)
+            .select();
+          if (insErr) throw insErr;
+          if (insData && insData.length > 0) w.id = insData[0].id;
+        }
       } else {
-        // 新增資料
+        // 新增資料，移除 .single() 避免 PGRST116
         const { data, error } = await supabase
           .from("radiographer_workload")
           .insert(payload)
-          .select()
-          .single();
+          .select();
         if (error) throw error;
-        if (data) {
-          w.id = data.id;
+        if (data && data.length > 0) {
+          w.id = data[0].id;
         }
       }
 
