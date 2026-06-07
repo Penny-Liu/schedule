@@ -4605,16 +4605,27 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                         // LEAVE STATUS CHECK
                                         const activeLeave = db
                                           .getLeaves()
-                                          .find(
-                                            (l) =>
-                                              l.userId === item.user!.id &&
-                                              (l.status ===
-                                                LeaveStatus.APPROVED ||
-                                                l.status ===
-                                                  LeaveStatus.PENDING) &&
-                                              date >= l.startDate &&
-                                              date <= l.endDate,
-                                          );
+                                          .find((l) => {
+                                            if (
+                                              l.status !== LeaveStatus.APPROVED &&
+                                              l.status !== LeaveStatus.PENDING
+                                            )
+                                              return false;
+
+                                            const isRequestor = l.userId === item.user!.id;
+                                            const isTarget = l.targetUserId === item.user!.id;
+
+                                            if (!isRequestor && !isTarget) return false;
+
+                                            const inDateRange = date >= l.startDate && date <= l.endDate;
+                                            const isReturnDate = l.returnDate && date === l.returnDate;
+
+                                            if (l.type === LeaveType.SWAP_SHIFT) {
+                                              return inDateRange || isReturnDate;
+                                            }
+
+                                            return isRequestor && inDateRange;
+                                          });
 
                                         const isPreLeave =
                                           activeLeave?.type ===

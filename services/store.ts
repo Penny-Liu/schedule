@@ -340,7 +340,7 @@ class Store {
   // Generate date window
   private getWindowDates(baseDate: Date) {
     const start = new Date(baseDate.getFullYear(), baseDate.getMonth() - 1, 1);
-    const end = new Date(baseDate.getFullYear(), baseDate.getMonth() + 3, 0); 
+    const end = new Date(baseDate.getFullYear(), baseDate.getMonth() + 7, 0); 
     return {
       startDate: `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-01`,
       endDate: `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, '0')}-${String(end.getDate()).padStart(2, '0')}`,

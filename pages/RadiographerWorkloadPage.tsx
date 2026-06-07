@@ -233,11 +233,8 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
 
   useEffect(() => {
     if (!hasInitializedLineExcluded && radiographers.length > 0) {
-      // 預設將主管排除
-      const supervisors = radiographers
-        .filter(r => r.role === 'SUPERVISOR' || r.role === 'HM_SUPERVISOR' || (r as any).isSupervisor)
-        .map(r => r.name);
-      setLineExcludedNames(supervisors);
+      // 預設將劉雅萍排除
+      setLineExcludedNames(['劉雅萍']);
       setHasInitializedLineExcluded(true);
     }
   }, [radiographers, hasInitializedLineExcluded]);
