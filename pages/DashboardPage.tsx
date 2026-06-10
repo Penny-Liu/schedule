@@ -75,6 +75,13 @@ const isUserLearningOnDate = (user: User | undefined | null, cap: string, date: 
   return true;
 };
 
+const isUserCertifiedOnDate = (user: User | undefined | null, cap: string, date: string): boolean => {
+  if (!user) return false;
+  if (user.capabilities?.includes(cap)) return true;
+  if (user.learningCapabilities?.includes(cap) && user.learningSchedules && user.learningSchedules[cap] && date > user.learningSchedules[cap]) return true;
+  return false;
+};
+
 const isUserLearningStationOnDate = (user: User | undefined | null, station: string, date: string): boolean => {
   if (!user || !user.learningCapabilities) return false;
   return user.learningCapabilities.some(cap => {
@@ -2009,7 +2016,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
 
   const getAssignableCandidates = (station: string, dateStr: string) => {
     return users.filter((user) => {
-      const isCertified = user.capabilities?.includes(station);
+      const isCertified = isUserCertifiedOnDate(user, station, dateStr);
       const isLearning = isUserLearningOnDate(user, station, dateStr);
       const isExcluded = user.excludedCapabilities?.includes(station);
       if (station !== SYSTEM_OFF && !isCertified && !isLearning && !isExcluded)
@@ -2048,7 +2055,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
     return users.filter((user) => {
       if (user.isPartTime) return false; // Skip part-time
       if (user.isRadiographer === false) return false; // Skip non-radiographers
-      const isCertified = user.capabilities?.includes(role);
+      const isCertified = isUserCertifiedOnDate(user, role, dateStr);
       const isLearning = user.learningCapabilities?.includes(role);
       const isExcluded = user.excludedCapabilities?.includes(role);
       if (!isCertified && !isLearning && !isExcluded) return false;

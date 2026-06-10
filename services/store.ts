@@ -85,6 +85,13 @@ export const getPermissionsByRole = (role: UserRole): string[] => {
 
 import { toLocalISOString, countNonSundayDays } from "./utils";
 
+const isUserCertifiedOnDate = (user: User | undefined | null, cap: string, date: string): boolean => {
+  if (!user) return false;
+  if (user.capabilities?.includes(cap)) return true;
+  if (user.learningCapabilities?.includes(cap) && user.learningSchedules && user.learningSchedules[cap] && date > user.learningSchedules[cap]) return true;
+  return false;
+};
+
 class Store {
   loadedMonths: Set<string> = new Set();
   users: User[] = [];
@@ -4482,7 +4489,7 @@ class Store {
           });
 
           const candidateIndex = sortedPool.findIndex((u) => {
-            const isCertified = u.capabilities?.includes(slot);
+            const isCertified = isUserCertifiedOnDate(u, slot, dateStr);
             // Explicitly exclude learners from auto-schedule
             if (!isCertified) return false;
 
@@ -4672,7 +4679,7 @@ class Store {
 
           // b. Must have Capability for the Role
           // User Request: Users must explicitly have the role checked in user management.
-          const isCertified = u.capabilities?.includes(role);
+          const isCertified = isUserCertifiedOnDate(u, role, dateStr);
           const isLearning = u.learningCapabilities?.includes(role);
           if (!isCertified && !isLearning) {
             return false;
