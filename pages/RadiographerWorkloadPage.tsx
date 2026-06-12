@@ -995,9 +995,9 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
     const [y, m] = currentMonth.split('-').map(Number);
     const cycle = cycles.find(c => c.name === `${y}/${String(m).padStart(2,'0')}` || c.name === `${y}/${m}`);
     const mm = String(m).padStart(2, '0');
-    let header = `${y}第${mm}週期 （${startDate.slice(5).replace('-','/')}~${endDate.slice(5).replace('-','/')}）  ${days}天`;
+    let header = `${y}第${mm}週期 \n（${startDate.slice(5).replace('-','/')}~${endDate.slice(5).replace('-','/')}）  ${days}天`;
     if (!includeEstimation && estimationStartDate) {
-      header += ` (統計至: ${estimationStartDate.slice(5).replace('-','/')})`;
+      header += `\n（統計至: ${estimationStartDate.slice(5).replace('-','/')}）`;
     }
 
     const grouped: Record<string, any[]> = {};
@@ -1016,29 +1016,39 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
     const wTotal   = allRows.length ? Math.max(...allRows.map(r => String(Math.round(computeTotalUnits(r) + (includeEstimation ? (r.estOnsiteUnits || 0) + (r.estRemoteUnits || 0) : 0))).length)) : 3;
     const wDays    = allRows.length ? Math.max(...allRows.map(r => String(r.workDays || 0).length)) : 2;
 
-    const pad = (n, w) => String(n).padStart(w, ' ');
+    const pad = (n: any, w: number) => String(n).padStart(w, ' ');
 
     const fmt = (row: any) => {
       const onsite = Math.round(computeUnits(row, onsiteFieldKeys) + (includeEstimation ? (row.estOnsiteUnits || 0) : 0));
       const remote = Math.round(computeUnits(row, remoteFieldKeys) + (includeEstimation ? (row.estRemoteUnits || 0) : 0));
       const total = Math.round(computeTotalUnits(row) + (includeEstimation ? (row.estOnsiteUnits || 0) + (row.estRemoteUnits || 0) : 0));
       const name2 = row.name.slice(-2);
-      let rmk = (includeEstimation && row.estRemark) ? `  (${row.estRemark})` : '';
+      
+      let firstLine = `${name2} ${pad(row.workDays, wDays)}天`;
       if (!includeEstimation && estimationStartDate) {
-        rmk = `  (已上班${row.workedDaysSoFar}天)`;
+        firstLine += ` -已上${row.workedDaysSoFar}天`;
       }
       
-      let result = `${name2} ${pad(row.workDays, wDays)}天`;
-      if (lineExportMode === 'ALL' || lineExportMode === 'ONSITE') result += `   現${pad(onsite, wOnsite)}`;
-      if (lineExportMode === 'ALL' || lineExportMode === 'REMOTE') result += `   遠${pad(remote, wRemote)}`;
-      if (lineExportMode === 'ALL' || lineExportMode === 'TOTAL') result += `   總${pad(total, wTotal)}`;
+      let secondLine = `  `;
+      if (lineExportMode === 'ALL' || lineExportMode === 'ONSITE') secondLine += `現${pad(onsite, wOnsite)} `;
+      if (lineExportMode === 'ALL' || lineExportMode === 'REMOTE') secondLine += `遠${pad(remote, wRemote)} `;
+      if (lineExportMode === 'ALL' || lineExportMode === 'TOTAL') secondLine += `總${pad(total, wTotal)}`;
       if (lineExportMode === 'TOTAL_AVG') {
-        result += `   總${pad(total, wTotal)}`;
+        secondLine += `總${pad(total, wTotal)}`;
         const denom = (!includeEstimation && estimationStartDate) ? row.workedDaysSoFar : row.workDays;
         const avg = denom > 0 ? (total / denom).toFixed(1) : '0.0';
-        result += `   均${pad(avg, 4)}`;
+        secondLine += ` 均${pad(avg, 4)}`;
       }
-      result += rmk;
+
+      let estRmk = (includeEstimation && row.estRemark) ? `  (${row.estRemark})` : '';
+      secondLine += estRmk;
+
+      let result = `${firstLine}\n${secondLine}`;
+      
+      if (row.remarks) {
+        result += `\n（${row.remarks}）`;
+      }
+
       return result;
     };
 
@@ -1050,7 +1060,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
       if (!sortField) {
         rows = [...rows].sort((a, b) => computeTotalUnits(b) - computeTotalUnits(a));
       }
-      rows.forEach(r => { text += fmt(r) + '\n'; });
+      text += rows.map(r => fmt(r)).join('\n\n') + '\n';
     });
     if (unassigned.length) {
       let rows = unassigned.filter(r => !lineExcludedNames.includes(r.name));
@@ -1059,7 +1069,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
         if (!sortField) {
           rows = [...rows].sort((a, b) => computeTotalUnits(b) - computeTotalUnits(a));
         }
-        rows.forEach(r => { text += fmt(r) + '\n'; });
+        text += rows.map(r => fmt(r)).join('\n\n') + '\n';
       }
     }
     return text.trim();
