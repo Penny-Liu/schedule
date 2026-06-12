@@ -198,6 +198,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
 
   const [isEditing, setIsEditing] = useState(false);
   const [estimationStartDate, setEstimationStartDate] = useState<string>("");
+  const [includeEstimation, setIncludeEstimation] = useState<boolean>(true);
   const [editingData, setEditingData] = useState<Record<string, any>>({});
   const [lineExportMode, setLineExportMode] = useState<"ALL" | "ONSITE" | "REMOTE" | "TOTAL" | "TOTAL_AVG">("ALL");
   const [importTarget, setImportTarget] =
@@ -470,6 +471,96 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
   }, [generalDates, shifts]);
 
   const workloadData = useMemo(() => {
+    // 1. 自動分配教學點數：根據學生的排班與老師的搭班情況，按比例把學生的業績分配給指導老師
+    const teachingAllocations: Record<string, Record<string, number>> = {}; 
+
+    radiographers.forEach((student) => {
+      const studentShifts = shifts.filter(
+        (s) =>
+          s.userId === student.id &&
+          generalDates.includes(s.date) &&
+          s.station !== StationDefault.UNASSIGNED &&
+          s.station !== StationDefault.OFF &&
+          s.station !== "休假",
+      );
+
+      const studentWorkloads = workloads.filter(
+        (w) => w.radiographerName === student.name && w.date === currentMonth,
+      );
+      if (studentWorkloads.length === 0) return;
+      const sw = studentWorkloads[0];
+
+      const stationCategories = ["MR", "CT", "超音波", "DX", "MG", "BMD"];
+      
+      stationCategories.forEach(cat => {
+        let learningShiftsCount = 0;
+        let totalShiftsCount = 0;
+        const teacherCounts: Record<string, number> = {};
+
+        studentShifts.forEach(shift => {
+          if (shift.station.includes(cat)) {
+            totalShiftsCount++;
+            
+            const isLearning = student.learningCapabilities?.includes(cat) &&
+              (!student.learningSchedules?.[cat] || shift.date <= student.learningSchedules[cat]);
+
+            if (isLearning) {
+              learningShiftsCount++;
+              
+              const teachersOnSameDay = radiographers.filter(r => {
+                if (r.id === student.id) return false;
+                const teacherShift = shifts.find(s => s.userId === r.id && s.date === shift.date);
+                if (!teacherShift) return false;
+                if (!teacherShift.station.includes(cat)) return false;
+                
+                const teacherIsLearning = r.learningCapabilities?.includes(cat) &&
+                  (!r.learningSchedules?.[cat] || shift.date <= r.learningSchedules[cat]);
+                return !teacherIsLearning;
+              });
+
+              if (teachersOnSameDay.length > 0) {
+                const weightPerTeacher = 1 / teachersOnSameDay.length;
+                teachersOnSameDay.forEach(t => {
+                  teacherCounts[t.id] = (teacherCounts[t.id] || 0) + weightPerTeacher;
+                });
+              }
+            }
+          }
+        });
+
+        if (totalShiftsCount > 0 && learningShiftsCount > 0) {
+          const learningRatio = learningShiftsCount / totalShiftsCount;
+          
+          let fields: string[] = [];
+          if (cat === "MR") fields = ["mr", "mrLargeMale", "mrLargeFemale", "mrMedium", "mrSmall"];
+          else if (cat === "CT") fields = ["ct", "cta", "ctaPostProcessing"];
+          else if (cat === "超音波") fields = ["us", "usA", "usBreast", "usHeart", "usThy", "usCCA", "usNeck", "usPelvisFemale", "usPelvisMale"];
+          else if (cat === "DX") fields = ["dx"];
+          else if (cat === "MG") fields = ["mg"];
+          else if (cat === "BMD") fields = ["bmd"];
+
+          fields.forEach(field => {
+            const getVal = (w: any, k: string) => w[k] || w[k.replace(/[A-Z]/g, (letter: string) => `_${letter.toLowerCase()}`)] || 0;
+            const studentTotalVal = getVal(sw, field);
+            if (studentTotalVal > 0) {
+              const teachingPool = studentTotalVal * learningRatio;
+              
+              const totalTeacherWeights = Object.values(teacherCounts).reduce((a, b) => a + b, 0);
+              if (totalTeacherWeights > 0) {
+                Object.entries(teacherCounts).forEach(([teacherId, weight]) => {
+                  const assignedVal = teachingPool * (weight / totalTeacherWeights);
+                  const teachingFieldKey = `${field}Teaching`;
+                  
+                  if (!teachingAllocations[teacherId]) teachingAllocations[teacherId] = {};
+                  teachingAllocations[teacherId][teachingFieldKey] = (teachingAllocations[teacherId][teachingFieldKey] || 0) + assignedVal;
+                });
+              }
+            }
+          });
+        }
+      });
+    });
+
     return radiographers.map((user) => {
       const [year, month] = currentMonth.split("-").map(Number);
       const stats: any = {
@@ -494,6 +585,8 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
         usPelvisFemale: 0,
         usPelvisMale: 0,
         floorControl: 0,
+        estFloorControl: 0,
+        estFloorControlOrders: 0,
         assist: 0,
         scheduler: 0,
         ct: 0,
@@ -557,26 +650,50 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
           stats.reportTyping += w.reportEntry || w.reportTyping || 0;
           stats.proofreader += w.imageProofing || w.proofreader || 0;
           stats.tsmcReport += w.tsmcReport || w.tsmc_report || 0;
-          stats.mrTeaching += w.mrTeaching || w.mr_teaching || 0;
-          stats.mrLargeMaleTeaching += w.mrLargeMaleTeaching || w.mr_large_male_teaching || 0;
-          stats.mrLargeFemaleTeaching += w.mrLargeFemaleTeaching || w.mr_large_female_teaching || 0;
-          stats.mrMediumTeaching += w.mrMediumTeaching || w.mr_medium_teaching || 0;
-          stats.mrSmallTeaching += w.mrSmallTeaching || w.mr_small_teaching || 0;
-          stats.usTeaching += w.usTeaching || w.us_teaching || 0;
-          stats.usATeaching += w.usATeaching || w.us_a_teaching || 0;
-          stats.usBreastTeaching += w.usBreastTeaching || w.us_breast_teaching || 0;
-          stats.usHeartTeaching += w.usHeartTeaching || w.us_heart_teaching || 0;
-          stats.usThyTeaching += w.usThyTeaching || w.us_thy_teaching || 0;
-          stats.usCCATeaching += w.usCCATeaching || w.us_cca_teaching || 0;
-          stats.usNeckTeaching += w.usNeckTeaching || w.us_neck_teaching || 0;
-          stats.usPelvisFemaleTeaching += w.usPelvisFemaleTeaching || w.us_pelvis_female_teaching || 0;
-          stats.usPelvisMaleTeaching += w.usPelvisMaleTeaching || w.us_pelvis_male_teaching || 0;
-          stats.ctTeaching += w.ctTeaching || w.ct_teaching || 0;
-          stats.dxTeaching += w.dxTeaching || w.dx_teaching || 0;
-          stats.mgTeaching += w.mgTeaching || w.mg_teaching || 0;
-          stats.bmdTeaching += w.bmdTeaching || w.bmd_teaching || 0;
-          stats.ctaTeaching += w.ctaTeaching || w.cta_teaching || 0;
+          stats.mrTeaching += Math.round(teachingAllocations[user.id]?.mrTeaching || 0) + (w.mrTeaching || w.mr_teaching || 0);
+          stats.mrLargeMaleTeaching += Math.round(teachingAllocations[user.id]?.mrLargeMaleTeaching || 0) + (w.mrLargeMaleTeaching || w.mr_large_male_teaching || 0);
+          stats.mrLargeFemaleTeaching += Math.round(teachingAllocations[user.id]?.mrLargeFemaleTeaching || 0) + (w.mrLargeFemaleTeaching || w.mr_large_female_teaching || 0);
+          stats.mrMediumTeaching += Math.round(teachingAllocations[user.id]?.mrMediumTeaching || 0) + (w.mrMediumTeaching || w.mr_medium_teaching || 0);
+          stats.mrSmallTeaching += Math.round(teachingAllocations[user.id]?.mrSmallTeaching || 0) + (w.mrSmallTeaching || w.mr_small_teaching || 0);
+          stats.usTeaching += Math.round(teachingAllocations[user.id]?.usTeaching || 0) + (w.usTeaching || w.us_teaching || 0);
+          stats.usATeaching += Math.round(teachingAllocations[user.id]?.usATeaching || 0) + (w.usATeaching || w.us_a_teaching || 0);
+          stats.usBreastTeaching += Math.round(teachingAllocations[user.id]?.usBreastTeaching || 0) + (w.usBreastTeaching || w.us_breast_teaching || 0);
+          stats.usHeartTeaching += Math.round(teachingAllocations[user.id]?.usHeartTeaching || 0) + (w.usHeartTeaching || w.us_heart_teaching || 0);
+          stats.usThyTeaching += Math.round(teachingAllocations[user.id]?.usThyTeaching || 0) + (w.usThyTeaching || w.us_thy_teaching || 0);
+          stats.usCCATeaching += Math.round(teachingAllocations[user.id]?.usCCATeaching || 0) + (w.usCCATeaching || w.us_cca_teaching || 0);
+          stats.usNeckTeaching += Math.round(teachingAllocations[user.id]?.usNeckTeaching || 0) + (w.usNeckTeaching || w.us_neck_teaching || 0);
+          stats.usPelvisFemaleTeaching += Math.round(teachingAllocations[user.id]?.usPelvisFemaleTeaching || 0) + (w.usPelvisFemaleTeaching || w.us_pelvis_female_teaching || 0);
+          stats.usPelvisMaleTeaching += Math.round(teachingAllocations[user.id]?.usPelvisMaleTeaching || 0) + (w.usPelvisMaleTeaching || w.us_pelvis_male_teaching || 0);
+          stats.ctTeaching += Math.round(teachingAllocations[user.id]?.ctTeaching || 0) + (w.ctTeaching || w.ct_teaching || 0);
+          stats.dxTeaching += Math.round(teachingAllocations[user.id]?.dxTeaching || 0) + (w.dxTeaching || w.dx_teaching || 0);
+          stats.mgTeaching += Math.round(teachingAllocations[user.id]?.mgTeaching || 0) + (w.mgTeaching || w.mg_teaching || 0);
+          stats.bmdTeaching += Math.round(teachingAllocations[user.id]?.bmdTeaching || 0) + (w.bmdTeaching || w.bmd_teaching || 0);
+          stats.ctaTeaching += Math.round(teachingAllocations[user.id]?.ctaTeaching || 0) + (w.ctaTeaching || w.cta_teaching || 0);
         });
+      } else {
+        // 沒有直接業績，但可能有分配到的教學點數
+        const teacherAlloc = teachingAllocations[user.id];
+        if (teacherAlloc) {
+          stats.mrTeaching += Math.round(teacherAlloc.mrTeaching || 0);
+          stats.mrLargeMaleTeaching += Math.round(teacherAlloc.mrLargeMaleTeaching || 0);
+          stats.mrLargeFemaleTeaching += Math.round(teacherAlloc.mrLargeFemaleTeaching || 0);
+          stats.mrMediumTeaching += Math.round(teacherAlloc.mrMediumTeaching || 0);
+          stats.mrSmallTeaching += Math.round(teacherAlloc.mrSmallTeaching || 0);
+          stats.usTeaching += Math.round(teacherAlloc.usTeaching || 0);
+          stats.usATeaching += Math.round(teacherAlloc.usATeaching || 0);
+          stats.usBreastTeaching += Math.round(teacherAlloc.usBreastTeaching || 0);
+          stats.usHeartTeaching += Math.round(teacherAlloc.usHeartTeaching || 0);
+          stats.usThyTeaching += Math.round(teacherAlloc.usThyTeaching || 0);
+          stats.usCCATeaching += Math.round(teacherAlloc.usCCATeaching || 0);
+          stats.usNeckTeaching += Math.round(teacherAlloc.usNeckTeaching || 0);
+          stats.usPelvisFemaleTeaching += Math.round(teacherAlloc.usPelvisFemaleTeaching || 0);
+          stats.usPelvisMaleTeaching += Math.round(teacherAlloc.usPelvisMaleTeaching || 0);
+          stats.ctTeaching += Math.round(teacherAlloc.ctTeaching || 0);
+          stats.dxTeaching += Math.round(teacherAlloc.dxTeaching || 0);
+          stats.mgTeaching += Math.round(teacherAlloc.mgTeaching || 0);
+          stats.bmdTeaching += Math.round(teacherAlloc.bmdTeaching || 0);
+          stats.ctaTeaching += Math.round(teacherAlloc.ctaTeaching || 0);
+        }
       }
 
       // 優先使用個人週期（如有），否則 fallback 到全域 generalDates
@@ -595,6 +712,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
           s.station !== "休假",
       );
       stats.workDays = userShiftsInRange.length;
+      stats.workedDaysSoFar = userShiftsInRange.filter((s) => !estimationStartDate || s.date <= estimationStartDate).length;
 
       let remoteDays = 0;
       let dazhiDays = 0;
@@ -639,8 +757,14 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
 
       let floorControlScore = 0;
       let floorControlOrders = 0;
-      const floorControlShifts = userShiftsInRange.filter((s) => s.station.includes("場控") && (!estimationStartDate || s.date <= estimationStartDate));
+      let estFloorControl = 0;
+      let estFloorControlOrders = 0;
+      const allFloorControlShifts = userShiftsInRange.filter((s) => s.station.includes("場控"));
+      const floorControlShifts = allFloorControlShifts.filter((s) => (!estimationStartDate || s.date <= estimationStartDate));
+      const futureFloorControlShifts = allFloorControlShifts.filter((s) => (estimationStartDate && s.date > estimationStartDate));
+      
       const floorControl = floorControlShifts.length;
+      estFloorControl = futureFloorControlShifts.length;
       
       const pct = (weights.floorControlPercentage ?? 12) / 100;
       floorControlShifts.forEach(s => {
@@ -652,6 +776,15 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
           // Fallback to fixed 30 if no daily stats exist for that day
           floorControlScore += 30;
           floorControlOrders += Math.round(30 / pct); // 逆推顯示的總醫令
+        }
+      });
+      
+      futureFloorControlShifts.forEach(s => {
+        const dStats = (db.settings as any).dailyStats?.[s.date];
+        if (dStats && typeof dStats.total_weighted_orders === "number") {
+          estFloorControlOrders += dStats.total_weighted_orders;
+        } else {
+          estFloorControlOrders += Math.round(30 / pct);
         }
       });
 
@@ -667,8 +800,10 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
           s.station.includes("排班")) && (!estimationStartDate || s.date <= estimationStartDate)
       ).length;
       stats.floorControl = floorControl;
+      stats.estFloorControl = estFloorControl;
       stats.floorControlScore = floorControlScore;
       stats.floorControlOrders = floorControlOrders;
+      stats.estFloorControlOrders = estFloorControlOrders;
       stats.assist = assist;
       stats.scheduler = scheduler;
 
@@ -710,12 +845,12 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
       stats.estOnsiteUnits = estOnsiteUnits;
       stats.estRemoteUnits = estRemoteUnits;
 
-      stats.onsiteUnits = computeUnits(stats, onsiteFieldKeys) + estOnsiteUnits;
-      stats.remoteUnits = computeUnits(stats, remoteFieldKeys) + estRemoteUnits;
-      stats.totalUnits = computeTotalUnits(stats) + estOnsiteUnits + estRemoteUnits;
+      stats.onsiteUnits = computeUnits(stats, onsiteFieldKeys) + (includeEstimation ? estOnsiteUnits : 0);
+      stats.remoteUnits = computeUnits(stats, remoteFieldKeys) + (includeEstimation ? estRemoteUnits : 0);
+      stats.totalUnits = computeTotalUnits(stats) + (includeEstimation ? estOnsiteUnits + estRemoteUnits : 0);
       return stats;
     });
-  }, [radiographers, workloads, currentMonth, weights, generalDates, shifts, estimationStartDate]);
+  }, [radiographers, workloads, currentMonth, weights, generalDates, shifts, estimationStartDate, includeEstimation]);
 
   // Sorted display data (must be after workloadData)
   const displayData = useMemo(() => {
@@ -723,14 +858,16 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
     if (!sortField) return base;
     return [...base].sort((a, b) => {
       let va: number, vb: number;
-      if (sortField === 'onsiteUnits') { va = computeUnits(a, onsiteFieldKeys) + (a.estOnsiteUnits || 0); vb = computeUnits(b, onsiteFieldKeys) + (b.estOnsiteUnits || 0); }
-      else if (sortField === 'remoteUnits') { va = computeUnits(a, remoteFieldKeys) + (a.estRemoteUnits || 0); vb = computeUnits(b, remoteFieldKeys) + (b.estRemoteUnits || 0); }
-      else if (sortField === 'totalUnits') { va = computeTotalUnits(a) + (a.estOnsiteUnits || 0) + (a.estRemoteUnits || 0); vb = computeTotalUnits(b) + (b.estOnsiteUnits || 0) + (b.estRemoteUnits || 0); }
+      if (sortField === 'onsiteUnits') { va = computeUnits(a, onsiteFieldKeys) + (includeEstimation ? (a.estOnsiteUnits || 0) : 0); vb = computeUnits(b, onsiteFieldKeys) + (includeEstimation ? (b.estOnsiteUnits || 0) : 0); }
+      else if (sortField === 'remoteUnits') { va = computeUnits(a, remoteFieldKeys) + (includeEstimation ? (a.estRemoteUnits || 0) : 0); vb = computeUnits(b, remoteFieldKeys) + (includeEstimation ? (b.estRemoteUnits || 0) : 0); }
+      else if (sortField === 'totalUnits') { va = computeTotalUnits(a) + (includeEstimation ? (a.estOnsiteUnits || 0) + (a.estRemoteUnits || 0) : 0); vb = computeTotalUnits(b) + (includeEstimation ? (b.estOnsiteUnits || 0) + (b.estRemoteUnits || 0) : 0); }
       else if (sortField === 'dailyAvg') {
-        const ta = computeTotalUnits(a) + (a.estOnsiteUnits || 0) + (a.estRemoteUnits || 0);
-        const tb = computeTotalUnits(b) + (b.estOnsiteUnits || 0) + (b.estRemoteUnits || 0);
-        va = a.workDays > 0 ? ta / a.workDays : 0;
-        vb = b.workDays > 0 ? tb / b.workDays : 0;
+        const ta = computeTotalUnits(a) + (includeEstimation ? (a.estOnsiteUnits || 0) + (a.estRemoteUnits || 0) : 0);
+        const tb = computeTotalUnits(b) + (includeEstimation ? (b.estOnsiteUnits || 0) + (b.estRemoteUnits || 0) : 0);
+        const aDays = (!includeEstimation && estimationStartDate) ? a.workedDaysSoFar : a.workDays;
+        const bDays = (!includeEstimation && estimationStartDate) ? b.workedDaysSoFar : b.workDays;
+        va = aDays > 0 ? ta / aDays : 0;
+        vb = bDays > 0 ? tb / bDays : 0;
       }
       else { va = Number(a[sortField]) || 0; vb = Number(b[sortField]) || 0; }
       const numA = Number(va) || 0;
@@ -858,7 +995,10 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
     const [y, m] = currentMonth.split('-').map(Number);
     const cycle = cycles.find(c => c.name === `${y}/${String(m).padStart(2,'0')}` || c.name === `${y}/${m}`);
     const mm = String(m).padStart(2, '0');
-    const header = `${y}第${mm}週期 （${startDate.slice(5).replace('-','/')}~${endDate.slice(5).replace('-','/')}）  ${days}天`;
+    let header = `${y}第${mm}週期 （${startDate.slice(5).replace('-','/')}~${endDate.slice(5).replace('-','/')}）  ${days}天`;
+    if (!includeEstimation && estimationStartDate) {
+      header += ` (統計至: ${estimationStartDate.slice(5).replace('-','/')})`;
+    }
 
     const grouped: Record<string, any[]> = {};
     const unassigned: any[] = [];
@@ -871,19 +1011,22 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
     });
 
     const allRows = [...Object.values(grouped).flat(), ...unassigned];
-    const wOnsite = allRows.length ? Math.max(...allRows.map(r => String(Math.round(computeUnits(r, onsiteFieldKeys) + (r.estOnsiteUnits || 0))).length)) : 3;
-    const wRemote  = allRows.length ? Math.max(...allRows.map(r => String(Math.round(computeUnits(r, remoteFieldKeys) + (r.estRemoteUnits || 0))).length)) : 3;
-    const wTotal   = allRows.length ? Math.max(...allRows.map(r => String(Math.round(computeTotalUnits(r) + (r.estOnsiteUnits || 0) + (r.estRemoteUnits || 0))).length)) : 3;
+    const wOnsite = allRows.length ? Math.max(...allRows.map(r => String(Math.round(computeUnits(r, onsiteFieldKeys) + (includeEstimation ? (r.estOnsiteUnits || 0) : 0))).length)) : 3;
+    const wRemote  = allRows.length ? Math.max(...allRows.map(r => String(Math.round(computeUnits(r, remoteFieldKeys) + (includeEstimation ? (r.estRemoteUnits || 0) : 0))).length)) : 3;
+    const wTotal   = allRows.length ? Math.max(...allRows.map(r => String(Math.round(computeTotalUnits(r) + (includeEstimation ? (r.estOnsiteUnits || 0) + (r.estRemoteUnits || 0) : 0))).length)) : 3;
     const wDays    = allRows.length ? Math.max(...allRows.map(r => String(r.workDays || 0).length)) : 2;
 
     const pad = (n, w) => String(n).padStart(w, ' ');
 
     const fmt = (row: any) => {
-      const onsite = Math.round(computeUnits(row, onsiteFieldKeys) + (row.estOnsiteUnits || 0));
-      const remote = Math.round(computeUnits(row, remoteFieldKeys) + (row.estRemoteUnits || 0));
-      const total = Math.round(computeTotalUnits(row) + (row.estOnsiteUnits || 0) + (row.estRemoteUnits || 0));
+      const onsite = Math.round(computeUnits(row, onsiteFieldKeys) + (includeEstimation ? (row.estOnsiteUnits || 0) : 0));
+      const remote = Math.round(computeUnits(row, remoteFieldKeys) + (includeEstimation ? (row.estRemoteUnits || 0) : 0));
+      const total = Math.round(computeTotalUnits(row) + (includeEstimation ? (row.estOnsiteUnits || 0) + (row.estRemoteUnits || 0) : 0));
       const name2 = row.name.slice(-2);
-      const rmk = row.estRemark ? `  (${row.estRemark})` : '';
+      let rmk = (includeEstimation && row.estRemark) ? `  (${row.estRemark})` : '';
+      if (!includeEstimation && estimationStartDate) {
+        rmk = `  (已上班${row.workedDaysSoFar}天)`;
+      }
       
       let result = `${name2} ${pad(row.workDays, wDays)}天`;
       if (lineExportMode === 'ALL' || lineExportMode === 'ONSITE') result += `   現${pad(onsite, wOnsite)}`;
@@ -891,7 +1034,8 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
       if (lineExportMode === 'ALL' || lineExportMode === 'TOTAL') result += `   總${pad(total, wTotal)}`;
       if (lineExportMode === 'TOTAL_AVG') {
         result += `   總${pad(total, wTotal)}`;
-        const avg = row.workDays > 0 ? (total / row.workDays).toFixed(1) : '0.0';
+        const denom = (!includeEstimation && estimationStartDate) ? row.workedDaysSoFar : row.workDays;
+        const avg = denom > 0 ? (total / denom).toFixed(1) : '0.0';
         result += `   均${pad(avg, 4)}`;
       }
       result += rmk;
@@ -1201,9 +1345,9 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
           row.reportTyping || 0,
           row.proofreader || 0,
           row.tsmcReport || 0,
-          Math.round(computeUnits(row, onsiteFieldKeys) + (row.estOnsiteUnits || 0)),
-          Math.round(computeUnits(row, remoteFieldKeys) + (row.estRemoteUnits || 0)),
-          Math.round(computeTotalUnits(row) + (row.estOnsiteUnits || 0) + (row.estRemoteUnits || 0)),
+          Math.round(computeUnits(row, onsiteFieldKeys) + (includeEstimation ? (row.estOnsiteUnits || 0) : 0)),
+          Math.round(computeUnits(row, remoteFieldKeys) + (includeEstimation ? (row.estRemoteUnits || 0) : 0)),
+          Math.round(computeTotalUnits(row) + (includeEstimation ? (row.estOnsiteUnits || 0) + (row.estRemoteUnits || 0) : 0)),
           row.estRemark || "",
         ]);
         
@@ -1254,8 +1398,8 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
       });
 
       const sortDesc = (a: any, b: any) => {
-        const ta = Math.round(computeTotalUnits(a) + (a.estOnsiteUnits || 0) + (a.estRemoteUnits || 0));
-        const tb = Math.round(computeTotalUnits(b) + (b.estOnsiteUnits || 0) + (b.estRemoteUnits || 0));
+        const ta = Math.round(computeTotalUnits(a) + (includeEstimation ? (a.estOnsiteUnits || 0) + (a.estRemoteUnits || 0) : 0));
+        const tb = Math.round(computeTotalUnits(b) + (includeEstimation ? (b.estOnsiteUnits || 0) + (b.estRemoteUnits || 0) : 0));
         return tb - ta;
       };
 
@@ -1287,9 +1431,9 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
         applyHeaderStyle(colHeaderRow, 'FFF2F2F2');
 
         rows.forEach(row => {
-          const onsite = Math.round(computeUnits(row, onsiteFieldKeys) + (row.estOnsiteUnits || 0));
-          const remote = Math.round(computeUnits(row, remoteFieldKeys) + (row.estRemoteUnits || 0));
-          const total = Math.round(computeTotalUnits(row) + (row.estOnsiteUnits || 0) + (row.estRemoteUnits || 0));
+          const onsite = Math.round(computeUnits(row, onsiteFieldKeys) + (includeEstimation ? (row.estOnsiteUnits || 0) : 0));
+          const remote = Math.round(computeUnits(row, remoteFieldKeys) + (includeEstimation ? (row.estRemoteUnits || 0) : 0));
+          const total = Math.round(computeTotalUnits(row) + (includeEstimation ? (row.estOnsiteUnits || 0) + (row.estRemoteUnits || 0) : 0));
           
           const dataRow = worksheet2.addRow([
             row.name,
@@ -1408,6 +1552,15 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
                 onChange={(e) => setEstimationStartDate(e.target.value)}
                 className="text-sm bg-transparent outline-none focus:ring-0 font-bold text-slate-700"
               />
+              <label className="flex items-center gap-1 ml-2 cursor-pointer border-l border-slate-300 pl-2">
+                <input
+                  type="checkbox"
+                  checked={includeEstimation}
+                  onChange={(e) => setIncludeEstimation(e.target.checked)}
+                  className="w-3.5 h-3.5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                />
+                <span className="text-xs font-bold text-slate-500 whitespace-nowrap">計入總和</span>
+              </label>
             </div>
 
             {isEditing ? (
@@ -1718,29 +1871,40 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
                             >
                               {isEditing && !isScheduleField ? (
                                 <div className="flex flex-col items-center gap-1">
-                                  <input
-                                    type="number"
-                                    min="0"
-                                    value={row[field.key]}
-                                    onChange={(e) =>
-                                      handleInputChange(
-                                        row.name,
-                                        field.key,
-                                        e.target.value,
-                                      )
-                                    }
-                                    className="w-16 text-center border border-emerald-200 rounded px-1 py-1 text-sm outline-none focus:ring-2 focus:ring-emerald-500 bg-emerald-50/50"
-                                  />
+                                  <div className="flex items-center gap-1">
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      value={row[field.key]}
+                                      onChange={(e) =>
+                                        handleInputChange(
+                                          row.name,
+                                          field.key,
+                                          e.target.value,
+                                        )
+                                      }
+                                      className="w-16 text-center border border-emerald-200 rounded px-1 py-1 text-sm outline-none focus:ring-2 focus:ring-emerald-500 bg-emerald-50/50"
+                                    />
+                                    {hasTeaching && (
+                                      <span className="text-[10px] text-orange-600 font-bold whitespace-nowrap" title="教學數量">(+{teachingCount})</span>
+                                    )}
+                                  </div>
                                 </div>
                               ) : (
                                 <div className="flex flex-row items-center justify-center gap-1">
                                   <span>
                                     {field.key === "usThy"
                                       ? (() => { const v = (row.usThy || 0) + (row.usNeck || 0); return v ? Math.round(+v * 10) / 10 : "-"; })()
-                                      : scheduleDerivedFieldKeys.includes(field.key)
+                                      : scheduleDerivedFieldKeys.includes(field.key) || field.key === "floorControlOrders"
                                       ? (row[field.key] || "-")
                                       : (() => { const v = row[field.key]; return v ? Math.round(+v * 10) / 10 : "-"; })()}
                                   </span>
+                                  {field.key === "floorControl" && row.estFloorControl > 0 && (
+                                    <span className="text-[10px] text-emerald-600 font-bold whitespace-nowrap ml-0.5" title="預估場控天數">(+{row.estFloorControl})</span>
+                                  )}
+                                  {field.key === "floorControlOrders" && row.estFloorControlOrders > 0 && (
+                                    <span className="text-[10px] text-emerald-600 font-bold whitespace-nowrap ml-0.5" title="預估場控醫令">(+{row.estFloorControlOrders})</span>
+                                  )}
                                   {hasTeaching && (
                                     <span className="text-xs text-orange-600 font-bold whitespace-nowrap" title="教學數量">(+{teachingCount})</span>
                                   )}
@@ -1750,23 +1914,23 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
                           );
                         })}
                         <td className="px-4 py-2.5 text-center font-bold text-slate-800 bg-slate-50">
-                          {Math.round(computeUnits(row, onsiteFieldKeys))}
-                          {row.estOnsiteUnits > 0 && <span className="text-xs text-emerald-600 block leading-tight">+{row.estOnsiteUnits}(預估)</span>}
+                          {Math.round(computeUnits(row, onsiteFieldKeys) + (includeEstimation ? (row.estOnsiteUnits || 0) : 0))}
+                          {row.estOnsiteUnits > 0 && !includeEstimation && <span className="text-xs text-emerald-600 block leading-tight">+{row.estOnsiteUnits}(預估)</span>}
                         </td>
                         <td className="px-4 py-2.5 text-center font-bold text-slate-800 bg-slate-50">
-                          {Math.round(computeUnits(row, remoteFieldKeys))}
-                          {row.estRemoteUnits > 0 && <span className="text-xs text-emerald-600 block leading-tight">+{row.estRemoteUnits}(預估)</span>}
+                          {Math.round(computeUnits(row, remoteFieldKeys) + (includeEstimation ? (row.estRemoteUnits || 0) : 0))}
+                          {row.estRemoteUnits > 0 && !includeEstimation && <span className="text-xs text-emerald-600 block leading-tight">+{row.estRemoteUnits}(預估)</span>}
                         </td>
                         <td className="px-4 py-2.5 text-center font-bold text-slate-800 bg-slate-50">
                           <div className="flex flex-col items-center justify-center gap-0.5">
                             <div className="flex items-center gap-1">
-                              <span>{Math.round(computeTotalUnits(row))}</span>
+                              <span>{Math.round(computeTotalUnits(row) + (includeEstimation ? (row.estOnsiteUnits || 0) + (row.estRemoteUnits || 0) : 0))}</span>
                             </div>
-                            {(row.estOnsiteUnits > 0 || row.estRemoteUnits > 0) && <span className="text-xs text-emerald-600 block leading-tight">+{(row.estOnsiteUnits || 0) + (row.estRemoteUnits || 0)}(預估)</span>}
+                            {(row.estOnsiteUnits > 0 || row.estRemoteUnits > 0) && !includeEstimation && <span className="text-xs text-emerald-600 block leading-tight">+{(row.estOnsiteUnits || 0) + (row.estRemoteUnits || 0)}(預估)</span>}
                           </div>
                         </td>
                         <td className="px-4 py-2.5 text-center font-bold text-emerald-700 bg-emerald-50/50">
-                          {row.workDays > 0 ? (Math.round(((computeTotalUnits(row) + (row.estOnsiteUnits || 0) + (row.estRemoteUnits || 0)) / row.workDays) * 10) / 10).toFixed(1) : '-'}
+                          {((!includeEstimation && estimationStartDate) ? row.workedDaysSoFar : row.workDays) > 0 ? (Math.round(((computeTotalUnits(row) + (includeEstimation ? (row.estOnsiteUnits || 0) + (row.estRemoteUnits || 0) : 0)) / ((!includeEstimation && estimationStartDate) ? row.workedDaysSoFar : row.workDays)) * 10) / 10).toFixed(1) : '-'}
                         </td>
                       </tr>
                       );
