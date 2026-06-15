@@ -269,8 +269,8 @@ async function syncRadiographerWorkload(
     if (value.includes("breast") || value.includes("乳房")) return "us_breast";
     if (value.includes("心臟") || value.includes("心")) return "us_heart";
     if (value.includes("thy") || value.includes("甲狀")) return "us_thy";
-    if (value.includes("cca")) return "us_cca";
-    if (value.includes("neck") || value.includes("頸")) return "us_neck";
+    if (value.includes("cca") || value.includes("頸動脈")) return "us_cca";
+    if (value.includes("neck") || value.includes("頸部") || value.includes("頸")) return "us_neck";
     if (value.includes("上腹")) return "us_a";
     return null;
   };

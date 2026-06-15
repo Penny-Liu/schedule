@@ -225,8 +225,8 @@ async function syncAllWorkloads() {
       if (value.includes("breast") || value.includes("乳房")) return "usBreast";
       if (value.includes("心臟") || value.includes("心")) return "usHeart";
       if (value.includes("thy") || value.includes("甲狀")) return "usThy";
-      if (value.includes("cca")) return "usCCA";
-      if (value.includes("neck") || value.includes("頸")) return "usNeck";
+      if (value.includes("cca") || value.includes("頸動脈")) return "usCCA";
+      if (value.includes("neck") || value.includes("頸部") || value.includes("頸")) return "usNeck";
       if (value.includes("上腹")) return "usA";
       return null;
     };
