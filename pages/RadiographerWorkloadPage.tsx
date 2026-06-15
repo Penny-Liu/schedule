@@ -1281,7 +1281,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
       const headersRow3 = [
         "", // A3 (merged)
         "上班天數", "現場天數", "遠班", "北投天數", "大直天數", "休假", "備註", "配合銷假",
-        "場控", "輔控", "排班", "MR大男", "MR大女", "MR中", "MR小", "腹", "乳", "心", "甲", "頸", "P女", "P男", "CT", "CTA", "CTA後處理", "DX", "MG", "BMD",
+        "場控", "輔控", "排班", "MR大男", "MR大女", "MR中", "MR小", "腹", "乳", "心", "甲", "頸動脈", "P女", "P男", "CT", "CTA", "CTA後處理", "DX", "MG", "BMD",
         "報告登打", "影像校對", "台積電報告",
         "", "", "", "" // AG3, AH3, AI3, AJ3 (merged)
       ];
@@ -1343,7 +1343,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
           (row.usBreast || 0) + ((row as any).usBreastTeaching || 0),
           (row.usHeart || 0) + ((row as any).usHeartTeaching || 0),
           (row.usThy || 0) + (row.usNeck || 0) + ((row as any).usThyTeaching || 0) + ((row as any).usNeckTeaching || 0),  // 甲 = Thy + Neck
-          (row.usCCA || 0) + ((row as any).usCCATeaching || 0),  // 頸 = CCA
+          (row.usCCA || 0) + ((row as any).usCCATeaching || 0),  // 頸動脈(CCA) = CCA
           (row.usPelvisFemale || 0) + ((row as any).usPelvisFemaleTeaching || 0),
           (row.usPelvisMale || 0) + ((row as any).usPelvisMaleTeaching || 0),
           (row.ct || 0) + ((row as any).ctTeaching || 0),
