@@ -459,8 +459,8 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
           .filter(
             (u) =>
               u.isRadiographer === true &&
-              u.isActive !== false &&
               !u.isPartTime &&
+              (u.isActive !== false || hasWorkedInRange(u, generalDates)) &&
               (!generalDates.some((date) => isUserOnEmploymentPause(u, date)) ||
                 hasWorkedInRange(u, generalDates)),
           ),

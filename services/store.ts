@@ -814,34 +814,14 @@ class Store {
         tsmc_report: w.tsmcReport,
       };
 
-      if (w.id) {
-        // 更新現有資料，移除 .single() 避免如果 id 被刪除導致 PGRST116
-        const { data, error } = await supabase
-          .from("radiographer_workload")
-          .update(payload)
-          .eq("id", w.id)
-          .select();
-        if (error) throw error;
-        
-        // 如果更新沒有找到資料 (可能是 DB 中被刪除)，改用 insert 嘗試
-        if (!data || data.length === 0) {
-          const { data: insData, error: insErr } = await supabase
-            .from("radiographer_workload")
-            .insert(payload)
-            .select();
-          if (insErr) throw insErr;
-          if (insData && insData.length > 0) w.id = insData[0].id;
-        }
-      } else {
-        // 新增資料，移除 .single() 避免 PGRST116
-        const { data, error } = await supabase
-          .from("radiographer_workload")
-          .insert(payload)
-          .select();
-        if (error) throw error;
-        if (data && data.length > 0) {
-          w.id = data[0].id;
-        }
+      const { data, error } = await supabase
+        .from("radiographer_workload")
+        .upsert(payload, { onConflict: "year,month,radiographerName" })
+        .select();
+      
+      if (error) throw error;
+      if (data && data.length > 0) {
+        w.id = data[0].id;
       }
 
       // Update local state
@@ -4444,7 +4424,7 @@ class Store {
       });
 
       const allWorkingUsers = this.users.filter((user) => {
-        if (user.isActive === false) return false; // Skip resigned users
+        if (user.isActive === false && (!user.resignationDate || user.resignationDate < dateStr)) return false; // Skip resigned users
         if (user.isPartTime) return false; // Skip part-time staff for auto-scheduling
         if (user.isRadiographer === false) return false; // Skip non-radiographers
         const status = this.getUserStatusOnDate(user.id, dateStr);
@@ -4669,7 +4649,7 @@ class Store {
         const shuffledUsers = [...this.users].sort(() => Math.random() - 0.5);
 
         const candidates = shuffledUsers.filter((u) => {
-          if (u.isActive === false) return false; // Skip resigned users
+          if (u.isActive === false && (!u.resignationDate || u.resignationDate < dateStr)) return false; // Skip resigned users
           if (u.isRadiographer === false) return false; // Skip non-radiographers (e.g. admins)
           if (u.isPartTime) return false; // Skip part-time staff
 

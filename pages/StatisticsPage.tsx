@@ -266,8 +266,8 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
           .filter(
             (u) =>
               u.isRadiographer === true &&
-              u.isActive !== false &&
               !u.isPartTime &&
+              (u.isActive !== false || hasWorkedInRange(u, selectedMonthDateRange)) &&
               (!selectedMonthDateRange.some((date) =>
                 isUserOnEmploymentPause(u, date),
               ) ||
@@ -286,8 +286,8 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
       .filter(
         (u) =>
           u.isRadiographer === true &&
-          u.isActive !== false &&
           !u.isPartTime &&
+          (u.isActive !== false || hasWorkedInRange(u, dateRange)) &&
           (!dateRange.some((date) => isUserOnEmploymentPause(u, date)) ||
             hasWorkedInRange(u, dateRange)),
       );

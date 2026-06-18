@@ -16,12 +16,24 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const todayStr = new Date().toISOString().split('T')[0];
-    const activeUsers = users.filter(u => 
-        u.isActive !== false && 
-        u.isPartTime !== true && 
-        (!u.resignationDate || u.resignationDate > todayStr) &&
-        !isUserOnEmploymentPause(u, todayStr)
-    );
+    const activeUsers = users.filter(u => {
+        // If they are on employment pause, block them
+        if (isUserOnEmploymentPause(u, todayStr)) return false;
+        // If they are part time, block them from logging in here (maybe intentional in legacy code)
+        if (u.isPartTime === true) return false;
+
+        // Check resignation date
+        if (u.resignationDate) {
+            // If the resignation date is strictly before today, block them
+            // (meaning on the resignation day, they are still allowed to log in)
+            if (u.resignationDate < todayStr) return false;
+            // Otherwise, they have a future or current resignation date, so they are allowed to log in!
+            return true;
+        }
+
+        // If no resignation date, just rely on isActive
+        return u.isActive !== false;
+    });
 
     // Sort function: Viewer (位居最上方)
     const sortByRole = (a: any, b: any) => {

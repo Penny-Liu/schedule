@@ -58,6 +58,14 @@ async function syncDailyStats(session, startDate, endDate) {
     total_weighted_orders: 0, // 新增：供場控動態加權使用的總醫令量 (CTA 算 3 份)
   });
 
+  // 確保區間內每一天都有預設值 0，這樣如果某天完全沒有預約，才能蓋掉舊資料
+  const dStart = new Date(startDate.replace(/'/g, ''));
+  const dEnd = new Date(endDate.replace(/'/g, ''));
+  for (let d = new Date(dStart); d <= dEnd; d.setDate(d.getDate() + 1)) {
+    const dateStr = d.toISOString().split('T')[0];
+    dailyResults[dateStr] = initStats();
+  }
+
   result.records.forEach((r) => {
     const date = r.CheckStartDate__c;
     const loc = r.Location__c;
@@ -161,10 +169,7 @@ async function syncDailyStats(session, startDate, endDate) {
     }
   });
 
-  if (Object.keys(dailyResults).length === 0) {
-    console.log("[sync-stats] ⚠️ 此區間內沒有查獲任何每日統計數據。");
-    return;
-  }
+  // 移除 Object.keys === 0 的判斷，即使全空也要覆蓋為 0
 
   console.log("[sync-stats] 📝 正在更新 Supabase 設定表 (每日統計)...");
   const { data: row, error: fetchError } = await supabase

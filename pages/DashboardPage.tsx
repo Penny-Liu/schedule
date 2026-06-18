@@ -606,29 +606,8 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
 
   const handleComplete = async () => {
     if (!isEditMode) return;
-
-    try {
-      setIsProcessing(true);
-      const start = scheduleRange.start;
-      const end = scheduleRange.end;
-
-      // Call the nuclear sync
-      // Pass current 'shifts' state to ensure we save exactly what is visible
-      const { error } = await db.commitShiftsForRange(start, end, shifts);
-
-      if (error) {
-        showToast("儲存失敗，請重試", "error");
-        console.error(error);
-      } else {
-        showToast("排班已成功儲存！", "success");
-        setIsEditMode(false);
-      }
-    } catch (e) {
-      console.error(e);
-      showToast("儲存發生錯誤", "error");
-    } finally {
-      setIsProcessing(false);
-    }
+    setIsEditMode(false);
+    showToast("已退出編輯模式", "success");
   };
 
   const handleBulkClear = async (clearType: "station" | "role") => {
@@ -2637,8 +2616,12 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                           {/* Bottom: Special Roles (Text only, 12px, regular weight) */}
                           {specialRoles.length > 0 && (
                             <div className="w-full flex justify-center items-end bg-white/50 border-t-[0.5px] border-gray-100">
-                              <div className="flex gap-0.5 text-[12px] text-black leading-tight py-0.5">
-                                {specialRoles.map((r) => r[0]).join("")}
+                              <div className="flex gap-0.5 text-[12px] text-black leading-tight py-0.5 items-center">
+                                {specialRoles.map((r) => (
+                                  <span key={r} className={r === "配合銷假" ? "bg-red-100 text-red-700 font-bold px-0.5 rounded-sm border border-red-200 text-[10px]" : ""}>
+                                    {r === "配合銷假" ? "銷" : r[0]}
+                                  </span>
+                                ))}
                               </div>
                             </div>
                           )}
@@ -3517,10 +3500,14 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                             {u.specialRoles.map((r) => (
                                               <span
                                                 key={r}
-                                                className="text-[9px] text-teal-600 font-medium leading-none"
+                                                className={`text-[9px] font-medium leading-none ${
+                                                  r === "配合銷假"
+                                                    ? "bg-red-100 text-red-700 font-bold px-1 py-0.5 rounded-sm border border-red-200"
+                                                    : "text-teal-600"
+                                                }`}
                                               >
                                                 {r ===
-                                                  SPECIAL_ROLES.DAZHI_SUPPORT &&
+                                                SPECIAL_ROLES.DAZHI_SUPPORT &&
                                                 st === "大直"
                                                   ? "遠班"
                                                   : r}
