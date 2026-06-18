@@ -46,7 +46,7 @@ const getSkillIcon = (id: string, category: string) => {
 };
 
 const SkillDashboardPage: React.FC<SkillDashboardPageProps> = ({ currentUser }) => {
-  const [activeTab, setActiveTab] = useState<'personal' | 'team'>('team');
+  const [activeTab, setActiveTab] = useState<'personal' | 'team'>('personal');
   const [radiographers, setRadiographers] = useState<User[]>([]);
   const [selectedUserId, setSelectedUserId] = useState<string>(currentUser.id);
 
@@ -139,17 +139,6 @@ const SkillDashboardPage: React.FC<SkillDashboardPageProps> = ({ currentUser }) 
         
         <div className="flex bg-slate-100 rounded-lg p-1 border border-slate-200">
           <button
-            onClick={() => setActiveTab('team')}
-            className={`flex items-center gap-2 px-4 py-1.5 rounded-md font-bold text-sm transition-all duration-200 ${
-              activeTab === 'team' 
-                ? 'bg-white text-blue-600 shadow-sm border border-slate-200' 
-                : 'text-slate-500 hover:text-slate-700'
-            }`}
-          >
-            <Users size={16} />
-            團隊矩陣
-          </button>
-          <button
             onClick={() => setActiveTab('personal')}
             className={`flex items-center gap-2 px-4 py-1.5 rounded-md font-bold text-sm transition-all duration-200 ${
               activeTab === 'personal' 
@@ -159,6 +148,17 @@ const SkillDashboardPage: React.FC<SkillDashboardPageProps> = ({ currentUser }) 
           >
             <UserIcon size={16} />
             個人戰力
+          </button>
+          <button
+            onClick={() => setActiveTab('team')}
+            className={`flex items-center gap-2 px-4 py-1.5 rounded-md font-bold text-sm transition-all duration-200 ${
+              activeTab === 'team' 
+                ? 'bg-white text-blue-600 shadow-sm border border-slate-200' 
+                : 'text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            <Users size={16} />
+            團隊矩陣
           </button>
         </div>
       </div>
