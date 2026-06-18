@@ -14,6 +14,7 @@ import {
   Calendar,
   Activity,
   Building2,
+  Trophy,
 } from "lucide-react";
 import { User, UserRole, PERMISSIONS } from "../types";
 import { getRoleLabel } from "../services/utils";
@@ -58,6 +59,13 @@ const Sidebar: React.FC<SidebarProps> = ({
           label: "統計",
           icon: BarChart3,
           permission: PERMISSIONS.VIEW_STATS,
+          isRadiographerOnly: true,
+        },
+        {
+          id: "skill_dashboard",
+          label: "技能矩陣",
+          icon: Trophy,
+          permission: null,
           isRadiographerOnly: true,
         },
         {

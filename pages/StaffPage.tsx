@@ -28,7 +28,13 @@ import {
   BookOpen,
   Key,
   GraduationCap,
+  Trophy,
+  Gamepad2,
+  Medal,
+  Target,
 } from "lucide-react";
+
+import { RADIOGRAPHER_SKILLS, SKILL_CATEGORIES, getSkillById } from "../services/skills";
 import ConfirmModal from "../components/ConfirmModal";
 import {
   EMPLOYMENT_PAUSE_KEY,
@@ -95,6 +101,8 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
     capabilities: string[];
     learningCapabilities: string[];
     learningSchedules: Record<string, string>; // New
+    unlockedSkills: string[]; // Gamification
+    learningSkills: string[]; // Gamification
     excludedCapabilities: string[]; // New
     isRadiographer: boolean; // New
     isPartTime: boolean; // New
@@ -117,6 +125,8 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
     capabilities: [],
     learningCapabilities: [],
     learningSchedules: {},
+    unlockedSkills: [],
+    learningSkills: [],
     excludedCapabilities: [], // New
     isRadiographer: false, // New
     isPartTime: false, // New
@@ -142,6 +152,8 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
       capabilities: [],
       learningCapabilities: [],
       learningSchedules: {},
+      unlockedSkills: [],
+      learningSkills: [],
       excludedCapabilities: [],
       isRadiographer: false,
       isActive: true,
@@ -198,6 +210,8 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
           capabilities: formData.capabilities,
           learningCapabilities: formData.learningCapabilities,
           learningSchedules: formData.learningSchedules,
+          unlockedSkills: formData.unlockedSkills,
+          learningSkills: formData.learningSkills,
           excludedCapabilities: formData.excludedCapabilities,
           isRadiographer: formData.isRadiographer,
           isPartTime: formData.isPartTime,
@@ -224,6 +238,8 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
           capabilities: formData.capabilities,
           learningCapabilities: formData.learningCapabilities,
           learningSchedules: formData.learningSchedules,
+          unlockedSkills: formData.unlockedSkills,
+          learningSkills: formData.learningSkills,
           excludedCapabilities: formData.excludedCapabilities,
           isRadiographer: formData.isRadiographer,
           isPartTime: formData.isPartTime,
@@ -271,6 +287,8 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
       capabilities: user.capabilities || [],
       learningCapabilities: user.learningCapabilities || [],
       learningSchedules: user.learningSchedules || {},
+      unlockedSkills: user.unlockedSkills || [],
+      learningSkills: user.learningSkills || [],
       excludedCapabilities: user.excludedCapabilities || [],
       isRadiographer: user.isRadiographer || false,
       isPartTime: user.isPartTime || false,
@@ -351,6 +369,43 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
         return {
           ...prev,
           capabilities: [...prev.capabilities, cap],
+        };
+      }
+    });
+  };
+
+  // 3-State Toggle for Skills: None -> Learning -> Unlocked -> None
+  const toggleSkill = (skillId: string, autoStations: string[]) => {
+    setFormData((prev) => {
+      const isUnlocked = prev.unlockedSkills.includes(skillId);
+      const isLearning = prev.learningSkills.includes(skillId);
+
+      if (isLearning) {
+        // Learning -> Unlocked
+        // Auto-bind capabilities
+        const newCapabilities = new Set(prev.capabilities);
+        autoStations.forEach((st) => {
+          if (!prev.excludedCapabilities.includes(st)) {
+            newCapabilities.add(st);
+          }
+        });
+        return {
+          ...prev,
+          learningSkills: prev.learningSkills.filter((s) => s !== skillId),
+          unlockedSkills: [...prev.unlockedSkills, skillId],
+          capabilities: Array.from(newCapabilities),
+        };
+      } else if (isUnlocked) {
+        // Unlocked -> None
+        return {
+          ...prev,
+          unlockedSkills: prev.unlockedSkills.filter((s) => s !== skillId),
+        };
+      } else {
+        // None -> Learning
+        return {
+          ...prev,
+          learningSkills: [...prev.learningSkills, skillId],
         };
       }
     });
@@ -888,6 +943,60 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                   </div>
                 </div>
 
+                {/* Gamified Skills Selection */}
+                {(formData.isRadiographer || formData.role === UserRole.SYSTEM_ADMIN) && (
+                  <div className="bg-slate-800 rounded-xl p-4 mb-4 border border-slate-700 shadow-inner">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2 text-teal-400">
+                        <Target size={16} />
+                        <label className="text-sm font-bold text-slate-100 block tracking-wide">
+                          專業技能指標
+                        </label>
+                      </div>
+                      <span className="text-[10px] text-slate-400 bg-slate-900 px-2 py-0.5 rounded-full border border-slate-700">
+                        點擊切換：無 → 學習中 → 具備
+                      </span>
+                    </div>
+
+                    <div className="space-y-4">
+                      {SKILL_CATEGORIES.map(category => (
+                        <div key={category}>
+                          <div className="text-xs font-bold text-slate-400 mb-2 uppercase tracking-widest">{category}</div>
+                          <div className="flex flex-wrap gap-2">
+                            {RADIOGRAPHER_SKILLS.filter(s => s.category === category).map(skill => {
+                              const isUnlocked = formData.unlockedSkills.includes(skill.id);
+                              const isLearning = formData.learningSkills.includes(skill.id);
+                              let btnClass = "bg-slate-700 border-slate-600 text-slate-400 hover:bg-slate-600";
+                              let icon = <Square size={12} className="opacity-50" />;
+                              
+                              if (isUnlocked) {
+                                btnClass = "bg-yellow-500/20 border-yellow-500/50 text-yellow-300 font-bold shadow-[0_0_10px_rgba(234,179,8,0.2)]";
+                                icon = <Star size={12} className="text-yellow-400 fill-yellow-400" />;
+                              } else if (isLearning) {
+                                btnClass = "bg-blue-500/20 border-blue-500/50 text-blue-300 font-bold";
+                                icon = <BookOpen size={12} className="text-blue-400" />;
+                              }
+
+                              return (
+                                <button
+                                  key={skill.id}
+                                  type="button"
+                                  onClick={() => toggleSkill(skill.id, skill.autoStations)}
+                                  className={`flex items-center gap-1.5 px-2.5 py-1.5 border rounded-lg text-[11px] transition-all ${btnClass}`}
+                                >
+                                  {icon}
+                                  <span className="font-mono font-bold opacity-70">{skill.id}</span>
+                                  <span>{skill.name}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* Capabilities Selection (Only for Radiographers) */}
                 {(formData.isRadiographer ||
                   formData.role === UserRole.SYSTEM_ADMIN) && (
@@ -1390,9 +1499,39 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                           </span>
                         ))}
 
+                      {/* Unlocked Gamified Skills */}
+                      {user.unlockedSkills &&
+                        user.unlockedSkills.length > 0 &&
+                        user.unlockedSkills.map((skillId) => (
+                          <span
+                            key={skillId}
+                            className="px-2 py-0.5 rounded-full text-[10px] font-bold border flex items-center gap-1 bg-gradient-to-r from-yellow-500/20 to-amber-500/20 text-yellow-600 border-yellow-300 shadow-[0_0_8px_rgba(234,179,8,0.3)]"
+                            title={getSkillById(skillId)?.name}
+                          >
+                            <Medal size={10} className="text-yellow-500" />
+                            {skillId}
+                          </span>
+                        ))}
+
+                      {/* Learning Gamified Skills */}
+                      {user.learningSkills &&
+                        user.learningSkills.length > 0 &&
+                        user.learningSkills.map((skillId) => (
+                          <span
+                            key={skillId}
+                            className="px-2 py-0.5 rounded-full text-[10px] font-bold border flex items-center gap-1 bg-blue-50 text-blue-600 border-blue-200"
+                            title={getSkillById(skillId)?.name}
+                          >
+                            <Gamepad2 size={10} className="text-blue-500" />
+                            {skillId}
+                          </span>
+                        ))}
+
                       {!user.capabilities?.length &&
                         !user.learningCapabilities?.length &&
-                        !user.excludedCapabilities?.length && (
+                        !user.excludedCapabilities?.length &&
+                        !user.unlockedSkills?.length &&
+                        !user.learningSkills?.length && (
                           <span className="text-[10px] text-gray-300 italic px-1">
                             未設定技能
                           </span>
