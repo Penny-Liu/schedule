@@ -114,6 +114,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
     employmentPauseStartDate: string;
     employmentPauseEndDate: string;
     groupIndex: number; // For Group D rotation order
+    groupHistory: { date: string; groupId: StaffGroup; groupIndex?: number }[];
     permissions: string[];
   }>({
     name: "",
@@ -138,6 +139,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
     employmentPauseStartDate: "",
     employmentPauseEndDate: "",
     groupIndex: 0,
+    groupHistory: [],
     permissions: [PERMISSIONS.VIEW_PHYSICIAN],
   });
 
@@ -165,6 +167,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
       employmentPauseStartDate: "",
       employmentPauseEndDate: "",
       groupIndex: 0,
+      groupHistory: [],
       permissions: [PERMISSIONS.VIEW_PHYSICIAN],
     });
     setEditingId(null);
@@ -224,6 +227,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
             formData.groupId === StaffGroup.GROUP_D
               ? formData.groupIndex
               : undefined,
+          groupHistory: formData.groupHistory,
           permissions: formData.permissions,
         });
       } else {
@@ -252,6 +256,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
             formData.groupId === StaffGroup.GROUP_D
               ? formData.groupIndex
               : undefined,
+          groupHistory: formData.groupHistory,
           password: "1234",
           mustChangePassword: true,
           permissions: formData.permissions,
@@ -299,7 +304,8 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
       personalCycles: user.personalCycles || {},
       employmentPauseStartDate: employmentPause?.startDate || "",
       employmentPauseEndDate: employmentPause?.endDate || "",
-      groupIndex: user.groupIndex ?? 0,
+      groupIndex: user.groupIndex || 0,
+      groupHistory: user.groupHistory || [],
       permissions: user.permissions || [],
     });
   };
@@ -907,6 +913,98 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                         </p>
                       </div>
                     )}
+                  
+                  {/* Group History Section */}
+                  {(formData.isRadiographer || formData.role === UserRole.SYSTEM_ADMIN) && (
+                    <div className="pt-2 border-t border-gray-100">
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="text-xs font-semibold text-gray-500">
+                          未來組別變更排程
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => setFormData({
+                            ...formData,
+                            groupHistory: [...formData.groupHistory, { date: "", groupId: StaffGroup.GROUP_A, groupIndex: 0 }]
+                          })}
+                          className="text-xs text-teal-600 hover:text-teal-700 font-bold flex items-center gap-1"
+                        >
+                          <Plus size={12} /> 新增變更
+                        </button>
+                      </div>
+                      
+                      {formData.groupHistory.length > 0 ? (
+                        <div className="space-y-2">
+                          {formData.groupHistory.map((history, idx) => (
+                            <div key={idx} className="flex flex-col gap-2 p-2 bg-gray-50 rounded-lg border border-gray-100">
+                              <div className="flex items-center justify-between gap-2">
+                                <input
+                                  type="date"
+                                  value={history.date}
+                                  onChange={(e) => {
+                                    const newHistory = [...formData.groupHistory];
+                                    newHistory[idx].date = e.target.value;
+                                    setFormData({ ...formData, groupHistory: newHistory });
+                                  }}
+                                  className="flex-1 px-2 py-1 text-xs border border-gray-200 rounded focus:ring-1 focus:ring-teal-500 outline-none"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const newHistory = [...formData.groupHistory];
+                                    newHistory.splice(idx, 1);
+                                    setFormData({ ...formData, groupHistory: newHistory });
+                                  }}
+                                  className="p-1 text-red-500 hover:bg-red-50 rounded"
+                                >
+                                  <X size={14} />
+                                </button>
+                              </div>
+                              <div className="flex gap-2">
+                                <select
+                                  value={history.groupId}
+                                  onChange={(e) => {
+                                    const newHistory = [...formData.groupHistory];
+                                    newHistory[idx].groupId = e.target.value as StaffGroup;
+                                    if (e.target.value !== StaffGroup.GROUP_D) {
+                                      delete newHistory[idx].groupIndex;
+                                    } else {
+                                      newHistory[idx].groupIndex = 0;
+                                    }
+                                    setFormData({ ...formData, groupHistory: newHistory });
+                                  }}
+                                  className="flex-1 px-2 py-1 text-xs border border-gray-200 rounded focus:ring-1 focus:ring-teal-500 outline-none"
+                                >
+                                  <option value={StaffGroup.GROUP_A}>A 組</option>
+                                  <option value={StaffGroup.GROUP_B}>B 組</option>
+                                  <option value={StaffGroup.GROUP_C}>C 組</option>
+                                  <option value={StaffGroup.GROUP_D}>D 組</option>
+                                </select>
+                                {history.groupId === StaffGroup.GROUP_D && (
+                                  <select
+                                    value={history.groupIndex || 0}
+                                    onChange={(e) => {
+                                      const newHistory = [...formData.groupHistory];
+                                      newHistory[idx].groupIndex = Number(e.target.value);
+                                      setFormData({ ...formData, groupHistory: newHistory });
+                                    }}
+                                    className="w-20 px-2 py-1 text-xs border border-gray-200 rounded focus:ring-1 focus:ring-teal-500 outline-none"
+                                  >
+                                    <option value={0}>Idx 0</option>
+                                    <option value={1}>Idx 1</option>
+                                    <option value={2}>Idx 2</option>
+                                    <option value={3}>Idx 3</option>
+                                  </select>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-[10px] text-gray-400 italic">無未來變更排程，將永遠套用上方預設組別。</div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* Color Selection */}

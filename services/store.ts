@@ -1746,6 +1746,7 @@ class Store {
       learningSkills: "learning_skills",
       excludedCapabilities: "excluded_capabilities",
       specialRoles: "special_roles",
+      groupHistory: "group_history",
       userId: "user_id",
       targetUserId: "target_user_id",
       returnDate: "return_date",
@@ -1816,6 +1817,7 @@ class Store {
       learning_skills: "learningSkills",
       excluded_capabilities: "excludedCapabilities",
       special_roles: "specialRoles",
+      group_history: "groupHistory",
       target_user_id: "targetUserId",
       return_date: "returnDate",
       approver_id: "approverId",
@@ -3132,6 +3134,30 @@ class Store {
     return addedCount;
   }
 
+  getEffectiveGroupAndIndex(user: User, targetDate: string): { groupId: StaffGroup, groupIndex?: number } {
+    if (!user.groupHistory || user.groupHistory.length === 0) {
+      return { groupId: user.groupId, groupIndex: user.groupIndex };
+    }
+    
+    // History is presumed to be dates when the group changes.
+    // If targetDate is >= a history entry's date, we use that entry's group.
+    // So we sort by date ascending.
+    const sortedHistory = [...user.groupHistory].sort((a,b) => a.date.localeCompare(b.date));
+    let effectiveGroup = user.groupId;
+    let effectiveIndex = user.groupIndex;
+    
+    for (const entry of sortedHistory) {
+      if (targetDate >= entry.date) {
+        effectiveGroup = entry.groupId;
+        effectiveIndex = entry.groupIndex;
+      } else {
+        break;
+      }
+    }
+    
+    return { groupId: effectiveGroup, groupIndex: effectiveIndex };
+  }
+
   // Base Status Logic (Modified to include today check)
   calculateBaseStatus(dateStr: string, groupId: string): string | null {
     // 1. Find the applicable anchor
@@ -3217,8 +3243,10 @@ class Store {
 
     // Part-Time users skip Group Cycle logic entirely
     if (!user.isPartTime) {
+      const { groupId, groupIndex } = this.getEffectiveGroupAndIndex(user, dateStr);
+
       // --- Group D: Rolling Rotation (Sun off, Mon-Sat rotate by fixed index) ---
-      if (user.groupId === StaffGroup.GROUP_D) {
+      if (groupId === StaffGroup.GROUP_D) {
         const d = new Date(dateStr + "T00:00:00");
         // Sunday is always OFF
         if (d.getDay() === 0) {
@@ -3231,14 +3259,14 @@ class Store {
         const nonSundayCount = countNonSundayDays(ref, d);
 
         // Fixed index: groupIndex 0-3 for 4-person D group
-        const myIndex = user.groupIndex ?? 0;
+        const myIndex = groupIndex ?? 0;
         const groupSize = 4;
         const result = nonSundayCount % groupSize === myIndex ? "OFF" : "WORK";
         return result;
       }
 
       // --- Groups A/B/C: existing 6-day cycle logic ---
-      const baseStatus = this.calculateBaseStatus(dateStr, user.groupId);
+      const baseStatus = this.calculateBaseStatus(dateStr, groupId);
       if (baseStatus === SYSTEM_OFF) {
         return "OFF";
       }

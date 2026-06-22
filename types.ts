@@ -90,6 +90,12 @@ export interface AnesthesiaStaff {
   displayOrder?: number;
 }
 
+export interface GroupHistoryEntry {
+  date: string; // YYYY-MM-DD
+  groupId: StaffGroup;
+  groupIndex?: number;
+}
+
 export interface User {
   id: string;
   name: string;
@@ -115,6 +121,7 @@ export interface User {
   isHealthMgmt?: boolean; // New: Flag for health management staff
   healthMgmtLocation?: "全部" | "北投" | "大直"; // New: Restricts HM_SUPERVISOR/HM_STAFF view and edit location. '全部' allows dropdown.
   groupIndex?: number; // New: Fixed rotation index for Group D (0-based, determines rest day order)
+  groupHistory?: GroupHistoryEntry[]; // New: Historical group changes
   personalCycles?: Record<
     string,
     { startDate: string; endDate: string; memo: string }
