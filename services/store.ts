@@ -881,6 +881,77 @@ class Store {
     }
   }
 
+  // [New] Save Daily Workloads
+  async saveDailyWorkloads(records: Partial<RadiographerDailyWorkload>[]) {
+    if (!this.currentUser || records.length === 0) return;
+    try {
+      const payloads = records.map(w => ({
+        date: w.date,
+        radiographer_name: w.radiographerName,
+        mr: w.mr || 0,
+        mr_large_male: w.mrLargeMale || 0,
+        mr_large_female: w.mrLargeFemale || 0,
+        mr_medium: w.mrMedium || 0,
+        mr_small: w.mrSmall || 0,
+        us: w.us || 0,
+        us_a: w.usA || 0,
+        us_breast: w.usBreast || 0,
+        us_heart: w.usHeart || 0,
+        us_thy: w.usThy || 0,
+        us_cca: w.usCCA || 0,
+        us_neck: w.usNeck || 0,
+        us_pelvis_female: w.usPelvisFemale || 0,
+        us_pelvis_male: w.usPelvisMale || 0,
+        ct: w.ct || 0,
+        cta: w.cta || 0,
+        dx: w.dx || 0,
+        mg: w.mg || 0,
+        bmd: w.bmd || 0,
+        cta_post_processing: w.ctaPostProcessing || 0,
+        report_entry: w.reportTyping || 0,
+        image_proofing: w.proofreader || 0,
+        tsmc_report: w.tsmcReport || 0,
+        total: w.total || 0,
+      }));
+
+      // upsert in batches of 100 to avoid payload limits
+      for (let i = 0; i < payloads.length; i += 100) {
+        const batch = payloads.slice(i, i + 100);
+        const { error } = await supabase
+          .from("radiographer_daily_workload")
+          .upsert(batch, { onConflict: "date,radiographer_name" });
+        if (error) throw error;
+      }
+      console.log(`Saved ${payloads.length} daily workloads.`);
+    } catch (e) {
+      console.error("[Store] Error saving daily workloads", e);
+      throw e;
+    }
+  }
+
+  // [New] Fetch Daily Workloads
+  async fetchDailyWorkloadsByRange(startDate: string, endDate: string): Promise<RadiographerDailyWorkload[]> {
+    try {
+      const { data, error } = await supabase
+        .from("radiographer_daily_workload")
+        .select("*")
+        .gte("date", startDate)
+        .lte("date", endDate);
+      
+      if (error) throw error;
+      if (!data) return [];
+      
+      return data.map(d => {
+        const m = { ...d };
+        this.mapFromDbFields(m);
+        return m as any;
+      });
+    } catch (e) {
+      console.error("[Store] Error fetching daily workloads", e);
+      return [];
+    }
+  }
+
   // [New] Cleanup Tool for Duplicates
   async cleanupDuplicateShifts() {
     console.log("Starting DB Cleanup...");

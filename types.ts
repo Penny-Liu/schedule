@@ -481,6 +481,9 @@ export interface RadiographerWorkload {
   scheduler: number;
 }
 
+export type RadiographerDailyWorkload = Omit<RadiographerWorkload, "year" | "month">;
+
+
 export interface MeetingRoomBooking {
   id: string;
   date: string;

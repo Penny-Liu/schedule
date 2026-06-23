@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from "react";
-import { User, StationDefault, SPECIAL_ROLES } from "../types";
+import { User, StationDefault, SPECIAL_ROLES, RadiographerDailyWorkload } from "../types";
 import { db } from "../services/store";
 import {
   BarChart3,
@@ -529,8 +529,6 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
         });
 
         if (totalShiftsCount > 0 && learningShiftsCount > 0) {
-          const learningRatio = learningShiftsCount / totalShiftsCount;
-          
           let fields: string[] = [];
           if (cat === "MR") fields = ["mr", "mrLargeMale", "mrLargeFemale", "mrMedium", "mrSmall"];
           else if (cat === "CT") fields = ["ct", "cta", "ctaPostProcessing"];
@@ -543,18 +541,18 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
             const getVal = (w: any, k: string) => w[k] || w[k.replace(/[A-Z]/g, (letter: string) => `_${letter.toLowerCase()}`)] || 0;
             const studentTotalVal = getVal(sw, field);
             if (studentTotalVal > 0) {
-              const teachingPool = studentTotalVal * learningRatio;
-              
-              const totalTeacherWeights = Object.values(teacherCounts).reduce((a, b) => a + b, 0);
-              if (totalTeacherWeights > 0) {
-                Object.entries(teacherCounts).forEach(([teacherId, weight]) => {
-                  const assignedVal = teachingPool * (weight / totalTeacherWeights);
-                  const teachingFieldKey = `${field}Teaching`;
-                  
-                  if (!teachingAllocations[teacherId]) teachingAllocations[teacherId] = {};
-                  teachingAllocations[teacherId][teachingFieldKey] = (teachingAllocations[teacherId][teachingFieldKey] || 0) + assignedVal;
-                });
-              }
+              // 學生該科目的總工作量 (studentTotalVal) 是他在該週期「所有該科目的班」累積的。
+              // 因此，平均每一班的工作量價值 = studentTotalVal / totalShiftsCount。
+              // 老師的 weight 是他所帶領的「班次數量總和」（如果有兩人共同帶一班，各得 0.5）。
+              // 老師應得的工作量 = (單班價值) * (老師帶領的班次數量)。
+              // 這樣即使有「孤兒學習班」（沒有老師帶的學習班），老師也不會吸收到那些多出來的工作量，導致老師獲得比學生本身還多的不合理現象。
+              Object.entries(teacherCounts).forEach(([teacherId, weight]) => {
+                const assignedVal = studentTotalVal * (weight / totalShiftsCount);
+                const teachingFieldKey = `${field}Teaching`;
+                
+                if (!teachingAllocations[teacherId]) teachingAllocations[teacherId] = {};
+                teachingAllocations[teacherId][teachingFieldKey] = (teachingAllocations[teacherId][teachingFieldKey] || 0) + assignedVal;
+              });
             }
           });
         }
@@ -1230,6 +1228,187 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
     event.target.value = "";
   };
 
+  const handleImportDailyExcel = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      const buffer = e.target?.result as ArrayBuffer;
+      let rows: any[][] = [];
+
+      try {
+        const workbook = new ExcelJS.Workbook();
+        await workbook.xlsx.load(buffer);
+        const worksheet = workbook.worksheets[0];
+        worksheet.eachRow((row) => {
+          const values = Array.isArray(row.values) ? row.values : [];
+          rows.push(values.slice(1));
+        });
+      } catch (err) {
+        alert("無法讀取 Excel，請確認檔案格式是否正確 (.xlsx)");
+        return;
+      }
+
+      if (rows.length < 2) return;
+
+      const headers = rows[0].map(h => String(h || "").trim());
+      const dateIdx = headers.findIndex(h => h === "日期" || h === "Date" || h.includes("Date") || h.includes("日期"));
+      const nameIdx = headers.findIndex(h => h === "姓名" || h === "Name" || h === "放射師");
+
+      if (dateIdx === -1 || nameIdx === -1) {
+        alert(`找不到「日期」或「姓名」欄位！這份 Excel 可能不是每日報表格式。\n檔案中的標題：\n${headers.join(", ")}`);
+        return;
+      }
+
+      // 欄位對應
+      const fieldMap: Record<string, string> = {
+        "MR": "mr",
+        "MR(大男)": "mrLargeMale",
+        "MR(大女)": "mrLargeFemale",
+        "MR(中)": "mrMedium",
+        "MR(小)": "mrSmall",
+        "CT": "ct",
+        "超音波": "us",
+        "DX": "dx",
+        "MG": "mg",
+        "BMD": "bmd",
+        "CTA後處理": "ctaPostProcessing",
+      };
+      
+      const colIndices: Record<string, number> = {};
+      Object.keys(fieldMap).forEach(key => {
+        const idx = headers.findIndex(h => h === key || h === fieldMap[key] || h.includes(key));
+        if (idx !== -1) colIndices[fieldMap[key]] = idx;
+      });
+
+      const radiographerNames = Object.keys(workloadData.reduce((acc, d) => ({ ...acc, [d.radiographerName]: 1 }), {}));
+      
+      const dailyRecords: Partial<RadiographerDailyWorkload>[] = [];
+      
+      // 無論是否已在編輯狀態，都以畫面上最新的資料作為基底
+      const newData: Record<string, any> = {};
+      workloadData.forEach((d) => {
+        newData[d.radiographerName] = { ...d };
+      });
+
+      let parsedCount = 0;
+
+      rows.slice(1).forEach((row) => {
+        const dateStr = String(row[dateIdx] || "").trim();
+        const nameStr = String(row[nameIdx] || "").trim();
+        
+        if (!dateStr || !nameStr || !radiographerNames.includes(nameStr)) return;
+        
+        // Convert Excel date or text to YYYY-MM-DD
+        let formattedDate = dateStr;
+        const dObj = new Date(dateStr);
+        if (!isNaN(dObj.getTime())) {
+          formattedDate = dObj.toISOString().split("T")[0];
+        } else {
+            // Excel serial date to JS Date
+            const serial = parseFloat(dateStr);
+            if (!isNaN(serial)) {
+                const jsDate = new Date(Math.round((serial - 25569) * 86400 * 1000));
+                formattedDate = jsDate.toISOString().split("T")[0];
+            }
+        }
+
+        const record: Partial<RadiographerDailyWorkload> = {
+          date: formattedDate,
+          radiographerName: nameStr,
+        };
+        
+        // Sum into monthly data
+        if (!newData[nameStr]) newData[nameStr] = {};
+
+        Object.keys(colIndices).forEach(field => {
+          const valStr = String(row[colIndices[field]] || "0").replace(/,/g, "");
+          const val = parseFloat(valStr) || 0;
+          if (val > 0) {
+            record[field as keyof RadiographerDailyWorkload] = val;
+            // Aggregate
+            newData[nameStr][field] = (newData[nameStr][field] || 0) + val;
+          }
+        });
+        
+        dailyRecords.push(record);
+        parsedCount++;
+      });
+
+      if (parsedCount === 0) {
+        alert("找不到任何有效的資料列！請確認人員名稱與系統相符。");
+        return;
+      }
+
+      try {
+        await db.saveDailyWorkloads(dailyRecords);
+        setEditingData(newData);
+        setIsEditing(true);
+        alert(`✅ 成功匯入並儲存 ${parsedCount} 筆每日明細資料！\n\n畫面上的月總量已自動更新，請確認總量無誤後點擊「儲存」按鈕以更新本週期的月總量。`);
+      } catch (err) {
+        alert("儲存每日明細失敗：" + err);
+      }
+    };
+    reader.readAsArrayBuffer(file);
+    event.target.value = "";
+  };
+
+  const handleExportDaily = async () => {
+    try {
+      const startDate = generalDates[0];
+      const endDate = generalDates[generalDates.length - 1];
+      if (!startDate || !endDate) return;
+
+      const dailyData = await db.fetchDailyWorkloadsByRange(startDate, endDate);
+      if (dailyData.length === 0) {
+        alert(`這段期間 (${startDate} ~ ${endDate}) 沒有找到每日明細資料。`);
+        return;
+      }
+
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet("每日工作量明細");
+
+      worksheet.columns = [
+        { header: "日期", key: "date", width: 15 },
+        { header: "姓名", key: "radiographerName", width: 15 },
+        { header: "MR", key: "mr", width: 10 },
+        { header: "MR(大男)", key: "mrLargeMale", width: 10 },
+        { header: "MR(大女)", key: "mrLargeFemale", width: 10 },
+        { header: "MR(中)", key: "mrMedium", width: 10 },
+        { header: "MR(小)", key: "mrSmall", width: 10 },
+        { header: "CT", key: "ct", width: 10 },
+        { header: "超音波", key: "us", width: 10 },
+        { header: "DX", key: "dx", width: 10 },
+        { header: "MG", key: "mg", width: 10 },
+        { header: "BMD", key: "bmd", width: 10 },
+        { header: "CTA後處理", key: "ctaPostProcessing", width: 10 },
+      ];
+
+      // Sort by date, then name
+      dailyData.sort((a, b) => {
+        if (a.date !== b.date) return a.date.localeCompare(b.date);
+        return a.radiographerName.localeCompare(b.radiographerName);
+      });
+
+      dailyData.forEach(d => worksheet.addRow(d));
+
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = `每日放射師工作量明細_${startDate}_${endDate}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (e: any) {
+      console.error("Export daily Excel failed", e);
+      alert(`匯出每日 Excel 失敗: ${e.message}`);
+    }
+  };
+
   const handleExport = async () => {
     try {
       const workbook = new ExcelJS.Workbook();
@@ -1617,6 +1796,15 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
                       onChange={handleImportExcel}
                     />
                   </label>
+                  <label className="flex items-center gap-1.5 bg-blue-50 hover:bg-blue-100 border-l border-slate-200 text-blue-700 px-3 py-1.5 text-sm font-bold transition-colors cursor-pointer" title="匯入每日報表格式的 Excel">
+                    <UploadCloud size={16} /> 匯入每日
+                    <input
+                      type="file"
+                      accept=".xls,.xlsx,.csv"
+                      className="hidden"
+                      onChange={handleImportDailyExcel}
+                    />
+                  </label>
                 </div>
                 <button
                   onClick={handleToggleEdit}
@@ -1625,10 +1813,17 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
                   <Edit3 size={16} /> 編輯數據
                 </button>
                 <button
+                  onClick={handleExportDaily}
+                  className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-sm font-bold transition-colors shadow-sm shadow-blue-200"
+                  title={`匯出 ${currentMonth} 期間的每日明細`}
+                >
+                  <FileSpreadsheet size={16} /> 單日匯出
+                </button>
+                <button
                   onClick={handleExport}
                   className="flex items-center gap-2 bg-teal-600 hover:bg-teal-700 text-white px-3 py-1.5 rounded-lg text-sm font-bold transition-colors shadow-sm shadow-teal-200"
                 >
-                  <FileSpreadsheet size={16} /> 匯出 Excel
+                  <FileSpreadsheet size={16} /> 月總匯出
                 </button>
                 <button
                   onClick={() => setShowGroupPanel(v => !v)}
