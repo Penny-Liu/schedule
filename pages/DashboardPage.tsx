@@ -162,6 +162,13 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
     content: string;
   } | null>(null);
 
+  // Station Note Modal State (for temp students)
+  const [stationNoteModal, setStationNoteModal] = useState<{
+    date: string;
+    station: string;
+    content: string;
+  } | null>(null);
+
   // Hover Tooltip State
   const [hoveredDate, setHoveredDate] = useState<string | null>(null);
 
@@ -1847,6 +1854,27 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
     );
   };
 
+  const getDatesBetween = (startDate: string, endDate: string) => {
+    const dates: string[] = [];
+    const [sY, sM, sD] = startDate.split("-").map(Number);
+    const [eY, eM, eD] = endDate.split("-").map(Number);
+    const start = new Date(sY, sM - 1, sD);
+    const end = new Date(eY, eM - 1, eD);
+
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      dates.push(toLocalISOString(d));
+    }
+    return dates;
+  };
+
+  const frequentStationNotes = (() => {
+    if (!db.settings.stationNotes) return [];
+    const names = Object.values(db.settings.stationNotes)
+      .map((v) => v.trim())
+      .filter(Boolean);
+    return Array.from(new Set(names));
+  })();
+
   const getStationStaff = (stationName: string, dateStr: string) => {
     return shifts
       .filter((s) => s.date === dateStr && s.station === stationName)
@@ -2564,82 +2592,106 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
           </thead>
           <tbody>
             {viewMode === "user" ? (
-              users.map((user, idx) => (
-                <tr
-                  key={user.id}
-                  className={idx % 2 === 0 ? "bg-white" : "bg-slate-50"}
-                >
-                  <td className="border-[0.5px] border-gray-400 p-1 font-bold text-left pl-2 text-gray-900 bg-gray-50 text-sm whitespace-nowrap overflow-hidden">
-                    {user.name}
-                  </td>
-                  {dateRange.map((date) => {
-                    const { station, specialRoles, isOff } = getDayShift(
-                      user.id,
-                      date,
-                    );
-                    const event = holidays.find((h) => h.date === date);
-                    const isClosed = event?.type === DateEventType.CLOSED;
-
-                    let content: React.ReactNode = "";
-                    let cellClass = "";
-
-                    if (isOff || isClosed) {
-                      content = (
-                        <div className="flex items-center justify-center h-full">
-                          <span className="text-gray-300 font-bold text-lg">
-                            休
-                          </span>
-                        </div>
+              (() => {
+                const mainUsers = users.filter((u) => u.role !== UserRole.RADIOGRAPHER_ASSISTANT);
+                const assistants = users.filter((u) => u.role === UserRole.RADIOGRAPHER_ASSISTANT);
+                
+                const renderRow = (user: User, idx: number) => (
+                  <tr
+                    key={user.id}
+                    className={idx % 2 === 0 ? "bg-white" : "bg-slate-50"}
+                  >
+                    <td className="border-[0.5px] border-gray-400 p-1 font-bold text-left pl-2 text-gray-900 bg-gray-50 text-sm whitespace-nowrap overflow-hidden">
+                      {user.name}
+                    </td>
+                    {dateRange.map((date) => {
+                      const { station, specialRoles, isOff } = getDayShift(
+                        user.id,
+                        date,
                       );
-                      cellClass = "text-gray-400 bg-gray-100";
-                    } else {
-                      // Force layout: Station at Top (Full Bg), Special Roles at Bottom (Text Only)
-                      content = (
-                        <div className="flex flex-col h-full w-full">
-                          {/* Top: Station (Fill remaining space) */}
-                          <div className="flex-1 w-full flex items-center justify-center">
-                            {station &&
-                            station !== StationDefault.UNASSIGNED ? (
-                              // Removed rounded, added w-full h-full to fill
-                              <div
-                                className={`w-full h-full flex items-center justify-center ${getStationStyle(station).replace("border-teal-200", "border-gray-300").replace("shadow-sm", "").replace("rounded-md", "")} `}
-                              >
-                                <span className="font-bold text-[10px] sm:text-sm leading-tight text-center whitespace-normal break-words px-0.5">
-                                  {station}
-                                </span>
+                      const event = holidays.find((h) => h.date === date);
+                      const isClosed = event?.type === DateEventType.CLOSED;
+
+                      let content: React.ReactNode = "";
+                      let cellClass = "";
+
+                      if (isOff || isClosed) {
+                        content = (
+                          <div className="flex items-center justify-center h-full">
+                            <span className="text-gray-300 font-bold text-lg">
+                              休
+                            </span>
+                          </div>
+                        );
+                        cellClass = "text-gray-400 bg-gray-100";
+                      } else {
+                        // Force layout: Station at Top (Full Bg), Special Roles at Bottom (Text Only)
+                        content = (
+                          <div className="flex flex-col h-full w-full">
+                            {/* Top: Station (Fill remaining space) */}
+                            <div className="flex-1 w-full flex items-center justify-center">
+                              {station &&
+                              station !== StationDefault.UNASSIGNED ? (
+                                // Removed rounded, added w-full h-full to fill
+                                <div
+                                  className={`w-full h-full flex items-center justify-center ${getStationStyle(station).replace("border-teal-200", "border-gray-300").replace("shadow-sm", "").replace("rounded-md", "")} `}
+                                >
+                                  <span className="font-bold text-[10px] sm:text-sm leading-tight text-center whitespace-normal break-words px-0.5">
+                                    {station}
+                                  </span>
+                                </div>
+                              ) : (
+                                <span className="text-gray-200 text-xs">-</span>
+                              )}
+                            </div>
+
+                            {/* Bottom: Special Roles (Text only, 12px, regular weight) */}
+                            {specialRoles.length > 0 && (
+                              <div className="w-full flex justify-center items-end bg-white/50 border-t-[0.5px] border-gray-100">
+                                <div className="flex gap-0.5 text-[12px] text-black leading-tight py-0.5 items-center">
+                                  {specialRoles.map((r) => (
+                                    <span key={r} className={r === "配合銷假" ? "bg-red-100 text-red-700 font-bold px-0.5 rounded-sm border border-red-200 text-[10px]" : ""}>
+                                      {r === "配合銷假" ? "銷" : r[0]}
+                                    </span>
+                                  ))}
+                                </div>
                               </div>
-                            ) : (
-                              <span className="text-gray-200 text-xs">-</span>
                             )}
                           </div>
+                        );
+                      }
 
-                          {/* Bottom: Special Roles (Text only, 12px, regular weight) */}
-                          {specialRoles.length > 0 && (
-                            <div className="w-full flex justify-center items-end bg-white/50 border-t-[0.5px] border-gray-100">
-                              <div className="flex gap-0.5 text-[12px] text-black leading-tight py-0.5 items-center">
-                                {specialRoles.map((r) => (
-                                  <span key={r} className={r === "配合銷假" ? "bg-red-100 text-red-700 font-bold px-0.5 rounded-sm border border-red-200 text-[10px]" : ""}>
-                                    {r === "配合銷假" ? "銷" : r[0]}
-                                  </span>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                        </div>
+                      return (
+                        <td
+                          key={date}
+                          className={`border-[0.5px] border-gray-400 p-0 text-center align-top h-16 ${cellClass} `}
+                        >
+                          {content}
+                        </td>
                       );
-                    }
-
-                    return (
-                      <td
-                        key={date}
-                        className={`border-[0.5px] border-gray-400 p-0 text-center align-top h-16 ${cellClass} `}
-                      >
-                        {content}
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))
+                    })}
+                  </tr>
+                );
+                
+                return (
+                  <>
+                    {mainUsers.map(renderRow)}
+                    {assistants.length > 0 && (
+                      <>
+                        <tr>
+                          <td
+                            colSpan={dateRange.length + 1}
+                            className="bg-slate-300 border-y-2 border-slate-500 py-1.5 text-center text-sm font-black text-slate-800 tracking-[0.2em] shadow-inner"
+                          >
+                            === 放射師助理 ===
+                          </td>
+                        </tr>
+                        {assistants.map((user, idx) => renderRow(user, mainUsers.length + idx))}
+                      </>
+                    )}
+                  </>
+                );
+              })()
             ) : (
               <>
                 {rowConfigs.map((row, idx) => (
@@ -4848,6 +4900,32 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                         </div>
                                       </div>
                                     )}
+
+                                    {/* Station Notes (e.g., Temp Student) */}
+                                    {row.label === StationDefault.ASSISTANT && (
+                                      <div
+                                        className={`mt-1 w-full px-1 ${isEditMode ? "cursor-pointer hover:bg-slate-100" : ""} rounded transition-colors`}
+                                        onClick={() => {
+                                          if (!isEditMode) return;
+                                          const currentNote = db.getStationNote(date, row.label);
+                                          setStationNoteModal({
+                                            date,
+                                            station: row.label,
+                                            content: currentNote,
+                                          });
+                                        }}
+                                      >
+                                        {db.getStationNote(date, row.label) ? (
+                                          <div className="text-[10px] text-teal-700 bg-teal-50 border border-teal-200 rounded px-1 py-0.5 text-center truncate shadow-sm">
+                                            {db.getStationNote(date, row.label)}
+                                          </div>
+                                        ) : isEditMode ? (
+                                          <div className="text-[9px] text-slate-400 text-center border border-dashed border-slate-300 rounded px-1 opacity-50 hover:opacity-100">
+                                            + 手動輸入
+                                          </div>
+                                        ) : null}
+                                      </div>
+                                    )}
                                   </div>
                                 </td>
                               );
@@ -5271,6 +5349,76 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                 確認修改並登入
               </button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Station Note Modal */}
+      {stationNoteModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div className="bg-gradient-to-r from-teal-500 to-emerald-500 px-5 py-3 flex justify-between items-center">
+              <h3 className="text-white font-bold flex items-center gap-2">
+                編輯 {stationNoteModal.station} 備註
+              </h3>
+              <button
+                onClick={() => setStationNoteModal(null)}
+                className="text-white/80 hover:text-white transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="p-5 flex flex-col gap-3">
+              <label className="text-xs font-bold text-gray-600">
+                手動輸入內容 (或從下方常用選單點選)
+              </label>
+              <input
+                list="frequent-station-notes"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 text-gray-800 transition-all"
+                placeholder="例如：王小明..."
+                value={stationNoteModal.content}
+                onChange={(e) =>
+                  setStationNoteModal({ ...stationNoteModal, content: e.target.value })
+                }
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    db.setStationNote(stationNoteModal.date, stationNoteModal.station, stationNoteModal.content);
+                    setStationNoteModal(null);
+                  }
+                }}
+              />
+              {frequentStationNotes.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-1">
+                  {frequentStationNotes.map((note, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => setStationNoteModal({ ...stationNoteModal, content: note })}
+                      className="px-2 py-1 bg-teal-50 text-teal-700 text-xs rounded border border-teal-200 hover:bg-teal-100 transition-colors shadow-sm"
+                    >
+                      {note}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <div className="flex justify-end gap-2 mt-2">
+                <button
+                  onClick={() => setStationNoteModal(null)}
+                  className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg text-sm font-medium transition-colors"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={() => {
+                    db.setStationNote(stationNoteModal.date, stationNoteModal.station, stationNoteModal.content);
+                    setStationNoteModal(null);
+                  }}
+                  className="px-6 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-sm font-bold shadow-md shadow-teal-200 transition-all"
+                >
+                  確認儲存
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

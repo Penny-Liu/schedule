@@ -7,6 +7,7 @@ export enum UserRole {
   HM_STAFF = "HM_STAFF", // 健管同仁
   VIEWER = "VIEWER", // 瀏覽者 (僅查看)
   FINANCE = "FINANCE", // 財會 (僅查看醫師排班/工作統計/個人設定)
+  RADIOGRAPHER_ASSISTANT = "RADIOGRAPHER_ASSISTANT", // 放射師助理
   SCHEDULER = "SCHEDULER", // Legacy: 舊版管理員
 }
 
@@ -160,6 +161,7 @@ export enum StationDefault {
   REMOTE = "遠距",
   ADMIN = "行政",
   DAZHI_BRANCH = "大直",
+  ASSISTANT = "助理",
   OFF = "休假",
   UNASSIGNED = "未分配",
 }
@@ -373,6 +375,7 @@ export interface SystemSettings {
   healthMgmtCycles?: RosterCycle[]; // New: Independent cycles for HM
   healthMgmtLeaveTypes?: string[]; // New: Health management leave types
   radiographerWorkloadWeights?: Record<string, number>; // 放射師工作量欄位權重
+  stationNotes?: Record<string, string>; // Map of 'YYYY-MM-DD_StationName' -> text
 }
 
 // ── 操作日誌介面 ──────────────────────────

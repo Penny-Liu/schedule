@@ -1517,6 +1517,39 @@ class Store {
     if (!this.settings.stationDisplayOrder)
       this.settings.stationDisplayOrder = [];
     if (!this.settings.cycleAnchors) this.settings.cycleAnchors = [];
+    if (!this.settings.stationNotes) this.settings.stationNotes = {};
+    
+    // Ensure "助理" station exists
+    let needSave = false;
+    if (!this.settings.stations.includes(StationDefault.ASSISTANT)) {
+      this.settings.stations.push(StationDefault.ASSISTANT);
+      needSave = true;
+    }
+    
+    // Ensure ASSISTANT is under TECH_SUPPORT in display order
+    if (this.settings.stationDisplayOrder && this.settings.stationDisplayOrder.length > 0) {
+      const order = this.settings.stationDisplayOrder;
+      const techIdx = order.indexOf(StationDefault.TECH_SUPPORT);
+      const asstIdx = order.indexOf(StationDefault.ASSISTANT);
+      
+      if (techIdx !== -1) {
+        if (asstIdx === -1) {
+          // Insert right after TECH_SUPPORT
+          order.splice(techIdx + 1, 0, StationDefault.ASSISTANT);
+          needSave = true;
+        } else if (asstIdx > techIdx + 1 || asstIdx < techIdx) {
+          // Move to right after TECH_SUPPORT
+          order.splice(asstIdx, 1); // remove from current
+          const newTechIdx = order.indexOf(StationDefault.TECH_SUPPORT); // recalculate in case it shifted
+          order.splice(newTechIdx + 1, 0, StationDefault.ASSISTANT);
+          needSave = true;
+        }
+      }
+    }
+    
+    if (needSave && this.isLoaded) {
+      this.saveSettings();
+    }
     if (!this.settings.holidays) {
       this.settings.holidays = [];
     } else {
@@ -3205,6 +3238,11 @@ class Store {
     if (!user) return "OFF";
 
     if (isUserOnEmploymentPause(user, dateStr)) {
+      return "OFF";
+    }
+
+    // Check Hire Date
+    if (user.hireDate && dateStr < user.hireDate) {
       return "OFF";
     }
 
@@ -5249,6 +5287,24 @@ class Store {
         e,
       );
     }
+  }
+
+  getStationNote(date: string, station: string): string {
+    const key = `${date}_${station}`;
+    return this.settings.stationNotes?.[key] || "";
+  }
+
+  async setStationNote(date: string, station: string, note: string) {
+    if (!this.settings.stationNotes) {
+      this.settings.stationNotes = {};
+    }
+    const key = `${date}_${station}`;
+    if (note.trim() === "") {
+      delete this.settings.stationNotes[key];
+    } else {
+      this.settings.stationNotes[key] = note;
+    }
+    await this.saveSettings();
   }
 }
 

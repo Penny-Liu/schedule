@@ -110,6 +110,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
     healthMgmtLocation: "全部" | "北投" | "大直";
     isActive: boolean; // New
     resignationDate: string; // New
+    hireDate: string; // New
     personalCycles: User["personalCycles"];
     employmentPauseStartDate: string;
     employmentPauseEndDate: string;
@@ -135,6 +136,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
     healthMgmtLocation: "全部",
     isActive: true, // New
     resignationDate: "", // New
+    hireDate: "", // New
     personalCycles: {},
     employmentPauseStartDate: "",
     employmentPauseEndDate: "",
@@ -163,6 +165,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
       isHealthMgmt: false,
       healthMgmtLocation: "全部",
       resignationDate: "",
+      hireDate: "",
       personalCycles: {},
       employmentPauseStartDate: "",
       employmentPauseEndDate: "",
@@ -222,6 +225,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
           healthMgmtLocation: formData.healthMgmtLocation,
           isActive: formData.isActive,
           resignationDate: formData.resignationDate,
+          hireDate: formData.hireDate,
           personalCycles: updatedPersonalCycles,
           groupIndex:
             formData.groupId === StaffGroup.GROUP_D
@@ -251,6 +255,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
           healthMgmtLocation: formData.healthMgmtLocation,
           isActive: formData.isActive,
           resignationDate: formData.resignationDate,
+          hireDate: formData.hireDate,
           personalCycles: updatedPersonalCycles,
           groupIndex:
             formData.groupId === StaffGroup.GROUP_D
@@ -301,6 +306,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
       healthMgmtLocation: user.healthMgmtLocation || "全部",
       isActive: user.isActive !== undefined ? user.isActive : true,
       resignationDate: user.resignationDate || "",
+      hireDate: user.hireDate || "",
       personalCycles: user.personalCycles || {},
       employmentPauseStartDate: employmentPause?.startDate || "",
       employmentPauseEndDate: employmentPause?.endDate || "",
@@ -741,8 +747,24 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                   </label>
                 </div>
 
-                {!formData.isActive && (
-                  <div className="bg-red-50 p-3 rounded-lg border border-red-100 mb-2">
+                <div className="grid grid-cols-2 gap-3 mb-3">
+                  <div>
+                    <label className="text-xs font-bold text-teal-700 mb-1 block">
+                      到職日期 (此日期前不排班)
+                    </label>
+                    <input
+                      type="date"
+                      value={formData.hireDate}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          hireDate: e.target.value,
+                        })
+                      }
+                      className="w-full px-3 py-2 border border-teal-200 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 outline-none"
+                    />
+                  </div>
+                  <div>
                     <label className="text-xs font-bold text-red-700 mb-1 block">
                       離職日期 (此日期後不排班)
                     </label>
@@ -758,7 +780,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                       className="w-full px-3 py-2 border border-red-200 rounded-lg text-sm focus:ring-2 focus:ring-red-500 outline-none"
                     />
                   </div>
-                )}
+                </div>
 
                 <div className="bg-indigo-50 p-3 rounded-lg border border-indigo-100 mb-2">
                   <div className="flex items-center justify-between gap-2 mb-2">
@@ -824,7 +846,8 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                           newRole === UserRole.HM_STAFF;
                         const isRadio =
                           newRole === UserRole.SUPERVISOR ||
-                          newRole === UserRole.RADIOGRAPHER_STAFF;
+                          newRole === UserRole.RADIOGRAPHER_STAFF ||
+                          newRole === UserRole.RADIOGRAPHER_ASSISTANT;
 
                         setFormData({
                           ...formData,
@@ -838,6 +861,9 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                     >
                       <option value={UserRole.RADIOGRAPHER_STAFF}>
                         放射師同仁
+                      </option>
+                      <option value={UserRole.RADIOGRAPHER_ASSISTANT}>
+                        放射師助理
                       </option>
                       <option value={UserRole.SUPERVISOR}>放射師主管</option>
                       <option value={UserRole.HM_STAFF}>健管同仁</option>
@@ -1496,7 +1522,9 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                                       ? "bg-gray-50 text-gray-500 border-gray-200"
                                       : user.role === UserRole.HM_STAFF
                                         ? "bg-emerald-50 text-emerald-700 border-emerald-100"
-                                        : "bg-blue-50 text-blue-700 border-blue-100"
+                                        : user.role === UserRole.RADIOGRAPHER_ASSISTANT
+                                          ? "bg-teal-50 text-teal-700 border-teal-100"
+                                          : "bg-blue-50 text-blue-700 border-blue-100"
                             }`}
                           >
                             {user.role === UserRole.SUPERVISOR
@@ -1514,7 +1542,9 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                                         ? "財會"
                                         : user.role === UserRole.HM_STAFF
                                           ? "健管同仁"
-                                          : "放射師同仁"}
+                                          : user.role === UserRole.RADIOGRAPHER_ASSISTANT
+                                            ? "放射師助理"
+                                            : "放射師同仁"}
                           </span>
                           {user.role !== UserRole.SYSTEM_ADMIN && (
                             <span className="text-[10px] px-2 py-0.5 rounded font-bold border bg-orange-50 text-orange-700 border-orange-100 flex items-center gap-1">
