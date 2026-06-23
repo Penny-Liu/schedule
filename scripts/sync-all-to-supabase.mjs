@@ -332,6 +332,45 @@ async function syncRadiographerWorkload(
   };
   usersData.forEach((u) => ensureUser(u.name));
 
+  const dailyWorkloadMap = {};
+  const ensureDailyUser = (dateStr, name) => {
+    if (!dateStr) return null;
+    const formattedDate = dateStr.split("T")[0]; // ensure YYYY-MM-DD
+    if (!dailyWorkloadMap[formattedDate]) {
+      dailyWorkloadMap[formattedDate] = {};
+    }
+    if (!dailyWorkloadMap[formattedDate][name]) {
+      dailyWorkloadMap[formattedDate][name] = {
+        date: formattedDate,
+        radiographer_name: name,
+        mr: 0,
+        mr_large_male: 0,
+        mr_large_female: 0,
+        mr_medium: 0,
+        mr_small: 0,
+        us: 0,
+        us_a: 0,
+        us_breast: 0,
+        us_heart: 0,
+        us_thy: 0,
+        us_cca: 0,
+        us_neck: 0,
+        us_pelvis_female: 0,
+        us_pelvis_male: 0,
+        ct: 0,
+        cta: 0,
+        dx: 0,
+        mg: 0,
+        bmd: 0,
+        image_proofing: 0,
+        cta_post_processing: 0,
+        report_entry: 0,
+        tsmc_report: 0
+      };
+    }
+    return dailyWorkloadMap[formattedDate][name];
+  };
+
   const getModalityFromStation = (station) => {
     const s = String(station || "").toUpperCase();
     if (s.includes("MR")) return "mr";
@@ -418,26 +457,36 @@ async function syncRadiographerWorkload(
     const cleanName = findNameInPath([rawName], validNamesMap);
     if (cleanName === "Unknown") return;
     ensureUser(cleanName);
+    const dWorkload = ensureDailyUser(date, cleanName);
+
     if (category === "ct") {
       workloadMap[cleanName].ct += 1;
+      if (dWorkload) dWorkload.ct += 1;
       if (date && dailyTeachers[date]?.ct?.[cleanName]) {
-        dailyTeachers[date].ct[cleanName].forEach(tName => { ensureUser(tName); workloadMap[tName].ct_teaching += 1; });
+        dailyTeachers[date].ct[cleanName].forEach(tName => { 
+          ensureUser(tName); 
+          workloadMap[tName].ct_teaching += 1; 
+          // 每日明細中目前沒有紀錄 teaching 欄位，但若未來需要可於此處擴充
+        });
       }
     }
     if (category === "dx") {
       workloadMap[cleanName].dx += 1;
+      if (dWorkload) dWorkload.dx += 1;
       if (date && dailyTeachers[date]?.bmd?.[cleanName]) { // DX 和 BMD 同一崗位 (modality = bmd)
         dailyTeachers[date].bmd[cleanName].forEach(tName => { ensureUser(tName); workloadMap[tName].dx_teaching += 1; });
       }
     }
     if (category === "mg") {
       workloadMap[cleanName].mg += 1;
+      if (dWorkload) dWorkload.mg += 1;
       if (date && dailyTeachers[date]?.bmd?.[cleanName]) {
         dailyTeachers[date].bmd[cleanName].forEach(tName => { ensureUser(tName); workloadMap[tName].mg_teaching += 1; });
       }
     }
     if (category === "bmd") {
       workloadMap[cleanName].bmd += 1;
+      if (dWorkload) dWorkload.bmd += 1;
       if (date && dailyTeachers[date]?.bmd?.[cleanName]) {
         dailyTeachers[date].bmd[cleanName].forEach(tName => { ensureUser(tName); workloadMap[tName].bmd_teaching += 1; });
       }
@@ -467,9 +516,17 @@ async function syncRadiographerWorkload(
     const cleanName = findNameInPath([rawName], validNamesMap);
     if (cleanName === "Unknown") return;
     ensureUser(cleanName);
+    const dWorkload = ensureDailyUser(date, cleanName);
+
     workloadMap[cleanName].us += 1;
+    if (dWorkload) dWorkload.us += 1;
+    
     const subtype = parseUsSubtype(checkupName);
-    if (subtype) workloadMap[cleanName][subtype] += 1;
+    if (subtype) {
+      workloadMap[cleanName][subtype] += 1;
+      if (dWorkload) dWorkload[subtype] += 1;
+    }
+    
     if (date && dailyTeachers[date]?.us?.[cleanName]) {
       dailyTeachers[date].us[cleanName].forEach(tName => { 
         ensureUser(tName); 
@@ -522,8 +579,16 @@ async function syncRadiographerWorkload(
       const cleanName = findNameInPath([rawName], validNamesMap);
       if (cleanName === "Unknown") return;
       ensureUser(cleanName);
+      const dWorkload = ensureDailyUser(date, cleanName);
+
       workloadMap[cleanName].mr += itemCount;
       workloadMap[cleanName][subtype] += ratio;
+
+      if (dWorkload) {
+        dWorkload.mr += itemCount;
+        dWorkload[subtype] += ratio;
+      }
+
       if (date && dailyTeachers[date]?.mr?.[cleanName]) {
         dailyTeachers[date].mr[cleanName].forEach(tName => { 
           ensureUser(tName); 
@@ -565,6 +630,9 @@ async function syncRadiographerWorkload(
       ctaOrders.add(key);
       workloadMap[cleanName].cta += 1;
       
+      const dWorkload = ensureDailyUser(date, cleanName);
+      if (dWorkload) dWorkload.cta += 1;
+      
       // CTA teaching uses the CT modality station
       if (date && dailyTeachers[date] && dailyTeachers[date]["ct"] && dailyTeachers[date]["ct"][cleanName]) {
          dailyTeachers[date]["ct"][cleanName].forEach(tName => {
@@ -578,11 +646,11 @@ async function syncRadiographerWorkload(
 
   // 3. 影像校對
   console.log(`[sync-stats]   - [SOQL] 正在查詢 '影像校對' (Order__c)...`);
-  const proofingSoql = `SELECT Image_Proofreader__r.Name person, COUNT(Id) cnt 
+  const proofingSoql = `SELECT ReserveDate__c date, Image_Proofreader__r.Name person, COUNT(Id) cnt 
                         FROM Order__c 
                         WHERE (ReserveDate__c >= ${reportStartDate} AND ReserveDate__c <= ${reportEndDate}) 
                         AND Image_Proofreader__c != null 
-                        GROUP BY Image_Proofreader__r.Name`;
+                        GROUP BY ReserveDate__c, Image_Proofreader__r.Name`;
   const proofingData = await runSoqlQuery({
     instanceUrl: session.instanceUrl,
     accessToken: session.accessToken,
@@ -591,9 +659,12 @@ async function syncRadiographerWorkload(
   (proofingData.records || []).forEach((rec) => {
     const rawName = rec.person || rec.Image_Proofreader__r?.Name;
     const value = parseInt(rec.cnt || rec.expr0 || 0, 10);
+    const date = rec.date || rec.ReserveDate__c;
     const cleanName = findNameInPath([rawName], validNamesMap);
     if (cleanName !== "Unknown" && workloadMap[cleanName]) {
       workloadMap[cleanName].imageProofing += value;
+      const dWorkload = ensureDailyUser(date, cleanName);
+      if (dWorkload) dWorkload.image_proofing += value;
     }
   });
 
@@ -648,6 +719,41 @@ async function syncRadiographerWorkload(
     .from("radiographer_workload")
     .insert(updates);
   if (error) throw error;
+  
+  // 寫入每日明細
+  console.log(`[sync-stats] [SF API] 正在清理每日明細舊資料 (${startDate} ~ ${endDate})...`);
+  await supabase
+    .from("radiographer_daily_workload")
+    .delete()
+    .gte("date", startDate)
+    .lte("date", endDate);
+
+  const dailyUpdates = [];
+  Object.values(dailyWorkloadMap).forEach(usersMap => {
+    Object.values(usersMap).forEach(w => {
+        dailyUpdates.push({
+            ...w,
+            mr: Math.round(w.mr),
+            mr_large_male: round2(w.mr_large_male),
+            mr_large_female: round2(w.mr_large_female),
+            mr_medium: round2(w.mr_medium),
+            mr_small: round2(w.mr_small)
+        });
+    });
+  });
+
+  if (dailyUpdates.length > 0) {
+    console.log(`[sync-stats] [SF API] 正在寫入 ${dailyUpdates.length} 筆每日明細資料...`);
+    // 分批寫入避免 payload 過大
+    for (let i = 0; i < dailyUpdates.length; i += 100) {
+      const batch = dailyUpdates.slice(i, i + 100);
+      const { error: dailyErr } = await supabase
+        .from("radiographer_daily_workload")
+        .insert(batch);
+      if (dailyErr) console.error("[sync-stats] [SF API] 每日明細寫入失敗:", dailyErr);
+    }
+  }
+
   console.log(`[sync-stats] [SF API] ✅ 同步成功！`);
 }
 

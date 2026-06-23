@@ -1770,72 +1770,72 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
               </>
             ) : (
               <>
-                <div className="flex items-center gap-2 bg-white border border-slate-200 pl-2 rounded-lg shadow-sm overflow-hidden">
-                  <span className="text-sm text-slate-500 font-medium">
-                    匯入目標：
-                  </span>
-                  <select
-                    value={importTarget}
-                    onChange={(e) =>
-                      setImportTarget(e.target.value as WorkloadFieldKey)
-                    }
-                    className="text-sm text-slate-700 bg-transparent py-1.5 outline-none font-bold"
-                  >
-                    {workloadFieldMeta.map((field) => (
-                      <option key={field.key} value={field.key}>
-                        {field.label}
-                      </option>
-                    ))}
-                  </select>
-                  <label className="flex items-center gap-1.5 bg-slate-50 hover:bg-slate-100 border-l border-slate-200 text-slate-700 px-3 py-1.5 text-sm font-bold transition-colors cursor-pointer">
-                    <UploadCloud size={16} /> 匯入 xls/csv
-                    <input
-                      type="file"
-                      accept=".xls,.xlsx,.csv"
-                      className="hidden"
-                      onChange={handleImportExcel}
-                    />
-                  </label>
-                  <label className="flex items-center gap-1.5 bg-blue-50 hover:bg-blue-100 border-l border-slate-200 text-blue-700 px-3 py-1.5 text-sm font-bold transition-colors cursor-pointer" title="匯入每日報表格式的 Excel">
-                    <UploadCloud size={16} /> 匯入每日
-                    <input
-                      type="file"
-                      accept=".xls,.xlsx,.csv"
-                      className="hidden"
-                      onChange={handleImportDailyExcel}
-                    />
+                {/* 匯入群組 */}
+                <div className="flex items-center gap-1 bg-white border border-slate-200 p-1 rounded-lg shadow-sm">
+                  <div className="flex items-center pl-1.5">
+                    <span className="text-xs text-slate-500 font-bold whitespace-nowrap">
+                      目標:
+                    </span>
+                    <select
+                      value={importTarget}
+                      onChange={(e) => setImportTarget(e.target.value as WorkloadFieldKey)}
+                      className="text-xs text-slate-700 bg-transparent py-1 outline-none font-bold ml-1"
+                    >
+                      {workloadFieldMeta.map((field) => (
+                        <option key={field.key} value={field.key}>{field.label}</option>
+                      ))}
+                    </select>
+                    <label className="flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 px-2 py-1 text-xs font-bold transition-colors cursor-pointer rounded ml-1">
+                      <UploadCloud size={14} /> 單欄匯入
+                      <input type="file" accept=".xls,.xlsx,.csv" className="hidden" onChange={handleImportExcel} />
+                    </label>
+                  </div>
+                  
+                  <div className="w-px h-4 bg-slate-200 mx-1"></div>
+                  
+                  <label className="flex items-center gap-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 px-2 py-1 text-xs font-bold transition-colors cursor-pointer rounded border border-blue-200" title="匯入每日報表格式的 Excel">
+                    <UploadCloud size={14} /> 每日報表匯入
+                    <input type="file" accept=".xls,.xlsx,.csv" className="hidden" onChange={handleImportDailyExcel} />
                   </label>
                 </div>
-                <button
-                  onClick={handleToggleEdit}
-                  className="flex items-center gap-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-3 py-1.5 rounded-lg text-sm font-bold transition-colors shadow-sm"
-                >
-                  <Edit3 size={16} /> 編輯數據
-                </button>
-                <button
-                  onClick={handleExportDaily}
-                  className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-sm font-bold transition-colors shadow-sm shadow-blue-200"
-                  title={`匯出 ${currentMonth} 期間的每日明細`}
-                >
-                  <FileSpreadsheet size={16} /> 單日匯出
-                </button>
-                <button
-                  onClick={handleExport}
-                  className="flex items-center gap-2 bg-teal-600 hover:bg-teal-700 text-white px-3 py-1.5 rounded-lg text-sm font-bold transition-colors shadow-sm shadow-teal-200"
-                >
-                  <FileSpreadsheet size={16} /> 月總匯出
-                </button>
-                <button
-                  onClick={() => setShowGroupPanel(v => !v)}
-                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-bold transition-colors border shadow-sm ${
-                    showGroupPanel
-                      ? 'bg-violet-600 text-white border-violet-700'
-                      : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
-                  }`}
-                >
-                  <Tag size={16} /> 分類
-                </button>
 
+                {/* 匯出群組 */}
+                <div className="flex items-center gap-1 bg-white border border-slate-200 p-1 rounded-lg shadow-sm">
+                  <button
+                    onClick={handleExportDaily}
+                    className="flex items-center gap-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 px-2.5 py-1 rounded text-xs font-bold transition-colors"
+                    title={`匯出 ${currentMonth} 期間的每日明細`}
+                  >
+                    <FileSpreadsheet size={14} /> 單日匯出
+                  </button>
+                  <div className="w-px h-4 bg-slate-200 mx-0.5"></div>
+                  <button
+                    onClick={handleExport}
+                    className="flex items-center gap-1.5 bg-teal-50 hover:bg-teal-100 text-teal-700 px-2.5 py-1 rounded text-xs font-bold transition-colors"
+                  >
+                    <FileSpreadsheet size={14} /> 月總匯出
+                  </button>
+                </div>
+
+                {/* 工具群組 */}
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleToggleEdit}
+                    className="flex items-center gap-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors shadow-sm"
+                  >
+                    <Edit3 size={14} /> 編輯
+                  </button>
+                  <button
+                    onClick={() => setShowGroupPanel(v => !v)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors border shadow-sm ${
+                      showGroupPanel
+                        ? 'bg-violet-600 text-white border-violet-700'
+                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                    }`}
+                  >
+                    <Tag size={14} /> 分類
+                  </button>
+                </div>
               </>
             )}
           </div>
