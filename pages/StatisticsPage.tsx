@@ -373,6 +373,9 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
         });
         stats.proofreader += cloudShifts.length;
 
+        // Exclude dates before hireDate
+        if (user.hireDate && dateStr < user.hireDate) return;
+
         const status = db.getUserStatusOnDate(user.id, dateStr);
         if (status === "OFF") {
           stats.off++;

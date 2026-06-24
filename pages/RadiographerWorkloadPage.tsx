@@ -876,6 +876,9 @@ const stats: any = {
 
       let offDays = 0;
       userDates.forEach((date) => {
+        // [Modification]: Exclude dates before hireDate
+        if (user.hireDate && date < user.hireDate) return;
+
         if (db.getUserStatusOnDate(user.id, date) === "OFF") {
           offDays++;
         }

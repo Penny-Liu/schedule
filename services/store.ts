@@ -540,16 +540,17 @@ class Store {
 
             for (const [station, endDate] of Object.entries(mappedUser.learningSchedules)) {
               if (endDate && today >= (endDate as string)) {
-                needsUpdate = true;
-                delete updatedSchedules[station];
                 
-                // Remove from learning
+                // Only graduate if they are currently in learningCapabilities
                 const index = updatedLearning.indexOf(station);
-                if (index !== -1) updatedLearning.splice(index, 1);
-                
-                // Add to independent capabilities
-                if (!updatedCapabilities.includes(station)) {
-                  updatedCapabilities.push(station);
+                if (index !== -1) {
+                  needsUpdate = true;
+                  updatedLearning.splice(index, 1);
+                  
+                  // Add to independent capabilities
+                  if (!updatedCapabilities.includes(station)) {
+                    updatedCapabilities.push(station);
+                  }
                 }
               }
             }

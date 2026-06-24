@@ -722,7 +722,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
         let workDaysCount = 0;
 
         dateRange.forEach((date) => {
-          const { station, specialRoles, isOff } = getDayShift(user.id, date);
+          const { station, specialRoles, isOff, isNotHired } = getDayShift(user.id, date);
           const event = holidays.find((h) => h.date === date);
           const isClosed = event?.type === DateEventType.CLOSED;
 
@@ -733,7 +733,9 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
             station !== SYSTEM_OFF &&
             !station.includes("休假");
 
-          if ((isOff || isClosed) && !hasAssignedStation) {
+          if (isNotHired) {
+            rowData.push("－");
+          } else if ((isOff || isClosed) && !hasAssignedStation) {
             rowData.push("休");
           } else {
             // Build content: Station + Roles
@@ -1097,7 +1099,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
           let workDaysCount = 0;
 
           dateRange.forEach((date) => {
-            const { station, specialRoles, isOff } = getDayShift(user.id, date);
+            const { station, specialRoles, isOff, isNotHired } = getDayShift(user.id, date);
             const event = holidays.find((h) => h.date === date);
             const isClosed = event?.type === DateEventType.CLOSED;
 
@@ -1108,7 +1110,9 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
               station !== SYSTEM_OFF &&
               !station.includes("休假");
 
-            if ((isOff || isClosed) && !hasAssignedStation) {
+            if (isNotHired) {
+              rowData.push("－");
+            } else if ((isOff || isClosed) && !hasAssignedStation) {
               // Fix: Use simple string content for 'Off' so custom drawer doesn't duplicate it
               rowData.push("休");
             } else {
@@ -1652,8 +1656,14 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
   // --- Data Access Helpers ---
   const getDayShift = (userId: string, dateStr: string) => {
     const user = users.find((u) => u.id === userId);
+    
+    // 0. Check if the user is hired yet
+    if (user && user.hireDate && dateStr < user.hireDate) {
+      return { station: null, specialRoles: [], isOff: false, isNotHired: true };
+    }
+
     if (isUserOnEmploymentPause(user, dateStr)) {
-      return { station: null, specialRoles: [], isOff: true };
+      return { station: null, specialRoles: [], isOff: true, isNotHired: false };
     }
 
     // Optimized Lookup O(1)
@@ -1665,6 +1675,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
         station: override.station === SYSTEM_OFF ? null : override.station,
         specialRoles: override.specialRoles || [],
         isOff: override.station === SYSTEM_OFF,
+        isNotHired: false,
       };
     }
 
@@ -1677,6 +1688,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
         station: hmShift.station === "休假" ? null : hmShift.station,
         specialRoles: hmShift.task ? [hmShift.task] : [],
         isOff: hmShift.station === "休假",
+        isNotHired: false,
       };
     }
 
@@ -1684,16 +1696,16 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
     const event = holidays.find((h) => h.date === dateStr);
     const isClosed = event?.type === DateEventType.CLOSED;
 
-    if (isClosed) return { station: null, specialRoles: [], isOff: true };
-    if (!user) return { station: null, specialRoles: [], isOff: false };
+    if (isClosed) return { station: null, specialRoles: [], isOff: true, isNotHired: false };
+    if (!user) return { station: null, specialRoles: [], isOff: false, isNotHired: false };
 
     // Use getUserStatusOnDate for ALL group logic (A/B/C cycle + Group D rolling rotation)
     const status = db.getUserStatusOnDate(userId, dateStr);
     if (status === "OFF")
-      return { station: null, specialRoles: [], isOff: true };
+      return { station: null, specialRoles: [], isOff: true, isNotHired: false };
 
     // Default: Unassigned work day
-    return { station: null, specialRoles: [], isOff: false };
+    return { station: null, specialRoles: [], isOff: false, isNotHired: false };
   };
 
   const getPendingRequest = (userId: string, dateStr: string) => {
@@ -1986,6 +1998,11 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
         user.resignationDate &&
         dateStr > user.resignationDate
       ) {
+        return false;
+      }
+      
+      // Exclude if OFF due to not being hired yet
+      if (user.hireDate && dateStr < user.hireDate) {
         return false;
       }
       return true;
@@ -2605,7 +2622,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                       {user.name}
                     </td>
                     {dateRange.map((date) => {
-                      const { station, specialRoles, isOff } = getDayShift(
+                      const { station, specialRoles, isOff, isNotHired } = getDayShift(
                         user.id,
                         date,
                       );
@@ -2615,7 +2632,22 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                       let content: React.ReactNode = "";
                       let cellClass = "";
 
-                      if (isOff || isClosed) {
+                      const hasAssignedStation =
+                        station &&
+                        station !== StationDefault.UNASSIGNED &&
+                        station !== SYSTEM_OFF &&
+                        !station.includes("休假");
+
+                      if (isNotHired) {
+                        content = (
+                          <div className="flex items-center justify-center h-full">
+                            <span className="text-gray-300 font-normal text-lg">
+                              －
+                            </span>
+                          </div>
+                        );
+                        cellClass = "text-gray-300 bg-gray-50";
+                      } else if ((isOff || isClosed) && !hasAssignedStation) {
                         content = (
                           <div className="flex items-center justify-center h-full">
                             <span className="text-gray-300 font-bold text-lg">
@@ -3750,6 +3782,9 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                   .filter((u) => {
                     const dateStr = toLocalISOString(dailyDate);
 
+                    // Exclude if not hired yet
+                    if (u.hireDate && dateStr < u.hireDate) return false;
+
                     // Radio Shift Check
                     const radioShift = shifts.find(
                       (s) => s.userId === u.id && s.date === dateStr,
@@ -3821,7 +3856,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
               const isWeekend = d.getDay() === 0 || d.getDay() === 6;
               const event = holidays.find((h) => h.date === date);
 
-              const { station, specialRoles, isOff } = getDayShift(
+              const { station, specialRoles, isOff, isNotHired } = getDayShift(
                 currentUser.id,
                 date,
               );
@@ -3862,7 +3897,11 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                       </div>
                     )}
 
-                    {isOff ? (
+                    {isNotHired ? (
+                      <div className="text-slate-300 font-normal text-lg flex items-center gap-2">
+                        未到職
+                      </div>
+                    ) : isOff ? (
                       <div className="text-slate-400 font-bold text-lg flex items-center gap-2">
                         <div className="w-2.5 h-2.5 rounded-full bg-slate-300"></div>{" "}
                         休假
@@ -4208,7 +4247,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                             </div>
                           </td>
                           {dateRange.map((date) => {
-                            const { station, specialRoles, isOff } =
+                            const { station, specialRoles, isOff, isNotHired } =
                               getDayShift(user.id, date);
                             const isToday =
                               toLocalISOString(new Date()) === date;
@@ -4228,7 +4267,13 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                 className={`p-0.5 border-r border-slate-100 align-top h-16 ${isToday ? "bg-teal-50/10" : ""} ${isOff ? "bg-slate-100/60" : isClosed ? "bg-slate-100/30" : isCoopCancel ? "bg-pink-50" : ""} relative`}
                               >
                                 {pendingReq && getLeaveBadge(pendingReq.type)}
-                                {isOff ? (
+                                {isNotHired ? (
+                                  <div className="h-full w-full flex flex-col items-center justify-center">
+                                    <span className="text-slate-200 font-normal select-none text-[12px]">
+                                      －
+                                    </span>
+                                  </div>
+                                ) : isOff ? (
                                   <div className="h-full w-full flex flex-col items-center justify-center gap-1">
                                     <span className="text-slate-300 font-bold select-none text-[12px]">
                                       休
