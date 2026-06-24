@@ -520,7 +520,9 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
         );
       else if (cat === "MR")
         matches = allCaps.filter((c: string) => c && c.startsWith("MR"));
-      else matches = allCaps.filter((c: string) => c === cat);
+      else if (cat === "CT")
+        matches = allCaps.filter((c: string) => c && c.startsWith("CT"));
+      else matches = allCaps.filter((c: string) => c && c.includes(cat));
 
       return matches.some((cap: string) => {
         const isExplicitLearning = user.learningCapabilities?.includes(cap);
@@ -2261,10 +2263,14 @@ const stats: any = {
             teachingLearningRemark,
           ]);
 
-          dataRow.height = 22;
+          dataRow.height = 35;
           dataRow.eachCell({ includeEmpty: true }, (cell: any) => {
             cell.font = { size: 11, name: "微軟正黑體" };
-            cell.alignment = { vertical: "middle", horizontal: "center" };
+            cell.alignment = {
+              vertical: "middle",
+              horizontal: "center",
+              wrapText: true,
+            };
             cell.border = {
               top: { style: "thin", color: { argb: "FFEEEEEE" } },
               left: { style: "thin", color: { argb: "FFEEEEEE" } },

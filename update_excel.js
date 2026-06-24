@@ -1,57 +1,60 @@
-const fs = require('fs');
+const fs = require("fs");
 
-let content = fs.readFileSync('/Users/liuyaping/Downloads/schedule/pages/RadiographerWorkloadPage.tsx', 'utf-8');
+let content = fs.readFileSync(
+  "/Users/liuyaping/Downloads/schedule/pages/RadiographerWorkloadPage.tsx",
+  "utf-8",
+);
 
 // 1. Add filter logic at the start of handleExport
 content = content.replace(
   '  const handleExport = async () => {\n    try {\n      const workbook = new ExcelJS.Workbook();\n      const worksheet = workbook.addWorksheet("工作量統計");',
-  `  const handleExport = async () => {\n    try {\n      const workbook = new ExcelJS.Workbook();\n      const worksheet = workbook.addWorksheet("工作量統計");\n\n      const assistants = radiographers\n        .filter(r => r.role === 'RADIOGRAPHER_ASSISTANT')\n        .map(r => r.name);\n      const excludedNames = ['劉雅萍', ...assistants];\n      const filteredWorkloadData = workloadData.filter(r => !excludedNames.includes(r.name));\n      const filteredDisplayData = displayData.filter(r => !excludedNames.includes(r.name));`
+  `  const handleExport = async () => {\n    try {\n      const workbook = new ExcelJS.Workbook();\n      const worksheet = workbook.addWorksheet("工作量統計");\n\n      const assistants = radiographers\n        .filter(r => r.role === 'RADIOGRAPHER_ASSISTANT')\n        .map(r => r.name);\n      const excludedNames = ['劉雅萍', ...assistants];\n      const filteredWorkloadData = workloadData.filter(r => !excludedNames.includes(r.name));\n      const filteredDisplayData = displayData.filter(r => !excludedNames.includes(r.name));`,
 );
 
 // 2. Replace workloadData.forEach with filteredWorkloadData.forEach
 content = content.replace(
-  '      // 資料列\n      workloadData.forEach((row) => {',
-  '      // 資料列\n      filteredWorkloadData.forEach((row) => {'
+  "      // 資料列\n      workloadData.forEach((row) => {",
+  "      // 資料列\n      filteredWorkloadData.forEach((row) => {",
 );
 
 // 3. Replace displayData.forEach with filteredDisplayData.forEach
 content = content.replace(
-  '      displayData.forEach(row => {',
-  '      filteredDisplayData.forEach(row => {'
+  "      displayData.forEach(row => {",
+  "      filteredDisplayData.forEach(row => {",
 );
 
 // 4. Update Worksheet 3 header for 場控天數
 content = content.replace(
   'const titleRow = worksheet3.addRow([title, "", "", "", "", "", "", "", "", "", ""]);',
-  'const titleRow = worksheet3.addRow([title, "", "", "", "", "", "", "", "", "", "", ""]);'
+  'const titleRow = worksheet3.addRow([title, "", "", "", "", "", "", "", "", "", "", ""]);',
 );
 content = content.replace(
-  'worksheet3.mergeCells(titleRow.number, 1, titleRow.number, 11);',
-  'worksheet3.mergeCells(titleRow.number, 1, titleRow.number, 12);'
+  "worksheet3.mergeCells(titleRow.number, 1, titleRow.number, 11);",
+  "worksheet3.mergeCells(titleRow.number, 1, titleRow.number, 12);",
 );
 content = content.replace(
   "const colHeaderRow = worksheet3.addRow(['姓名', '上班天數', '現場單位', 'MR', 'US', 'CT+CTA', 'CTA後處理', 'BMD+DX+MG', '遠班單位', '總單位', '教學與學習']);",
-  "const colHeaderRow = worksheet3.addRow(['姓名', '上班天數', '現場單位', '場控天數', 'MR', 'US', 'CT+CTA', 'CTA後處理', 'BMD+DX+MG', '遠班單位', '總單位', '教學與學習']);"
+  "const colHeaderRow = worksheet3.addRow(['姓名', '上班天數', '現場單位', '場控天數', 'MR', 'US', 'CT+CTA', 'CTA後處理', 'BMD+DX+MG', '遠班單位', '總單位', '教學與學習']);",
 );
 content = content.replace(
   "for (let i = 3; i <= 8; i++) {",
-  "for (let i = 3; i <= 9; i++) {"
+  "for (let i = 3; i <= 9; i++) {",
 );
 content = content.replace(
   "colHeaderRow.getCell(9).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDDEBF7' } };\n        colHeaderRow.getCell(10).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFCE4D6' } };",
-  "colHeaderRow.getCell(10).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDDEBF7' } };\n        colHeaderRow.getCell(11).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFCE4D6' } };"
+  "colHeaderRow.getCell(10).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDDEBF7' } };\n        colHeaderRow.getCell(11).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFCE4D6' } };",
 );
 
 // Update data row in worksheet 3
 content = content.replace(
-  '          const dataRow = worksheet3.addRow([\n            row.name,\n            row.workDays || 0,\n            onsite,\n            mrTotal,',
-  '          const dataRow = worksheet3.addRow([\n            row.name,\n            row.workDays || 0,\n            onsite,\n            row.floorControl || 0,\n            mrTotal,'
+  "          const dataRow = worksheet3.addRow([\n            row.name,\n            row.workDays || 0,\n            onsite,\n            mrTotal,",
+  "          const dataRow = worksheet3.addRow([\n            row.name,\n            row.workDays || 0,\n            onsite,\n            row.floorControl || 0,\n            mrTotal,",
 );
 
 // Update worksheet 3 columns
 content = content.replace(
-  '      worksheet3.columns = [\n        { width: 12 }, // 姓名\n        { width: 10 }, // 上班天數\n        { width: 10 }, // 現場單位\n        { width: 10 }, // MR',
-  '      worksheet3.columns = [\n        { width: 12 }, // 姓名\n        { width: 10 }, // 上班天數\n        { width: 10 }, // 現場單位\n        { width: 10 }, // 場控天數\n        { width: 10 }, // MR'
+  "      worksheet3.columns = [\n        { width: 12 }, // 姓名\n        { width: 10 }, // 上班天數\n        { width: 10 }, // 現場單位\n        { width: 10 }, // MR",
+  "      worksheet3.columns = [\n        { width: 12 }, // 姓名\n        { width: 10 }, // 上班天數\n        { width: 10 }, // 現場單位\n        { width: 10 }, // 場控天數\n        { width: 10 }, // MR",
 );
 
 // 5. Add Worksheet 4
@@ -83,7 +86,7 @@ const worksheet4Logic = `
           "",
           "【影像報告】",
           \`• 報告登打：\${reportTyping} 份\`,
-          \`• 校對影像：\${proofreader} 份（含北投與大直）\`,
+          \`• 校對影像：\${proofreader} 份\`,
           \`• 台積電登打校對：\${tsmcReport}\`,
           "",
           "【專案推動】",
@@ -143,7 +146,13 @@ const worksheet4Logic = `
       const buffer = await workbook.xlsx.writeBuffer();
 `;
 
-content = content.replace('      const buffer = await workbook.xlsx.writeBuffer();', worksheet4Logic);
+content = content.replace(
+  "      const buffer = await workbook.xlsx.writeBuffer();",
+  worksheet4Logic,
+);
 
-fs.writeFileSync('/Users/liuyaping/Downloads/schedule/pages/RadiographerWorkloadPage.tsx', content);
-console.log('Update successful');
+fs.writeFileSync(
+  "/Users/liuyaping/Downloads/schedule/pages/RadiographerWorkloadPage.tsx",
+  content,
+);
+console.log("Update successful");
