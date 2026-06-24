@@ -583,8 +583,10 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
               }
 
               const studentStations = studentShifts
-                .filter(s => s.date === shift.date && isStationCat(s.station, cat))
-                .map(s => s.station);
+                .filter(
+                  (s) => s.date === shift.date && isStationCat(s.station, cat),
+                )
+                .map((s) => s.station);
 
               const teachersOnSameDay = radiographers.filter((r) => {
                 if (r.id === student.id) return false;
@@ -594,7 +596,9 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
                 if (teacherShiftsForDate.length === 0) return false;
 
                 // 老師必須跟學生在至少一個「完全相同」的崗位上
-                const hasMatchingStation = teacherShiftsForDate.some(ts => studentStations.includes(ts.station));
+                const hasMatchingStation = teacherShiftsForDate.some((ts) =>
+                  studentStations.includes(ts.station),
+                );
                 if (!hasMatchingStation) return false;
 
                 const teacherIsLearning = isLearningCat(r, cat, shift.date);
@@ -603,16 +607,37 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
 
               if (teachersOnSameDay.length > 0) {
                 const weightPerTeacher = 1 / teachersOnSameDay.length;
-                
+
                 // 從 cycleDailyData 中抓取該名學生「這一天」實際產出的工作量
-                const dData = cycleDailyData.find(d => d.radiographerName === student.name && d.date === shift.date);
+                const dData = cycleDailyData.find(
+                  (d) =>
+                    d.radiographerName === student.name &&
+                    d.date === shift.date,
+                );
 
                 let fields: string[] = [];
                 if (cat === "MR")
-                  fields = ["mr", "mrLargeMale", "mrLargeFemale", "mrMedium", "mrSmall"];
-                else if (cat === "CT") fields = ["ct", "cta", "ctaPostProcessing"];
+                  fields = [
+                    "mr",
+                    "mrLargeMale",
+                    "mrLargeFemale",
+                    "mrMedium",
+                    "mrSmall",
+                  ];
+                else if (cat === "CT")
+                  fields = ["ct", "cta", "ctaPostProcessing"];
                 else if (cat === "超音波")
-                  fields = ["us", "usA", "usBreast", "usHeart", "usThy", "usCCA", "usNeck", "usPelvisFemale", "usPelvisMale"];
+                  fields = [
+                    "us",
+                    "usA",
+                    "usBreast",
+                    "usHeart",
+                    "usThy",
+                    "usCCA",
+                    "usNeck",
+                    "usPelvisFemale",
+                    "usPelvisMale",
+                  ];
                 else if (cat === "DX") fields = ["dx"];
                 else if (cat === "MG") fields = ["mg"];
                 else if (cat === "BMD") fields = ["bmd"];
@@ -638,10 +663,13 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
                           0
                         );
                       };
-                      
+
                       const actualPoints = getVal(dData, field);
                       if (actualPoints > 0) {
-                        if (student.name === "張庭榕" && field === "usPelvisMale") {
+                        if (
+                          student.name === "張庭榕" &&
+                          field === "usPelvisMale"
+                        ) {
                           console.log("TEACHING DEBUG:", {
                             date: shift.date,
                             student: student.name,
@@ -649,7 +677,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
                             field,
                             actualPoints,
                             weightPerTeacher,
-                            assignedVal: actualPoints * weightPerTeacher
+                            assignedVal: actualPoints * weightPerTeacher,
                           });
                         }
                         const assignedVal = actualPoints * weightPerTeacher;
@@ -673,7 +701,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
 
     return radiographers.map((user) => {
       const [year, month] = currentMonth.split("-").map(Number);
-const stats: any = {
+      const stats: any = {
         id: undefined,
         year,
         month,
@@ -734,69 +762,134 @@ const stats: any = {
         (w) => w.radiographerName === user.name && w.date === currentMonth,
       );
 
-      let wToUse: any = { ...(userWorkloads.length > 0 ? userWorkloads[0] : {}) };
+      let wToUse: any = {
+        ...(userWorkloads.length > 0 ? userWorkloads[0] : {}),
+      };
       if (selectedDate) {
         const dData = cycleDailyData.find(
-          (d) => d.radiographerName === user.name && d.date === selectedDate
+          (d) => d.radiographerName === user.name && d.date === selectedDate,
         );
         if (dData) {
           wToUse = { ...wToUse, ...dData };
         } else {
           // Zero out daily count fields if no data for this day
           [
-            "mr", "mrLargeMale", "mrLargeFemale", "mrMedium", "mrSmall",
-            "us", "usA", "usBreast", "usHeart", "usThy", "usCCA", "usNeck", "usPelvisFemale", "usPelvisMale",
-            "ct", "cta", "ctaPostProcessing", "dx", "mg", "bmd",
-            "reportEntry", "reportTyping", "imageProofing", "proofreader", "tsmcReport", "tsmc_report"
-          ].forEach((k) => { wToUse[k] = 0; });
+            "mr",
+            "mrLargeMale",
+            "mrLargeFemale",
+            "mrMedium",
+            "mrSmall",
+            "us",
+            "usA",
+            "usBreast",
+            "usHeart",
+            "usThy",
+            "usCCA",
+            "usNeck",
+            "usPelvisFemale",
+            "usPelvisMale",
+            "ct",
+            "cta",
+            "ctaPostProcessing",
+            "dx",
+            "mg",
+            "bmd",
+            "reportEntry",
+            "reportTyping",
+            "imageProofing",
+            "proofreader",
+            "tsmcReport",
+            "tsmc_report",
+          ].forEach((k) => {
+            wToUse[k] = 0;
+          });
         }
       }
 
       if (userWorkloads.length > 0) {
         stats.id = userWorkloads[0].id;
         const w = wToUse;
-                stats.mr += w.mr || 0;
-                  stats.mrLargeMale += w.mrLargeMale || w.mr_large_male || 0;
-                  stats.mrLargeFemale += w.mrLargeFemale || w.mr_large_female || 0;
-                  stats.mrMedium += w.mrMedium || w.mr_medium || 0;
-                  stats.mrSmall += w.mrSmall || w.mr_small || 0;
-                  stats.us += w.us || 0;
-                  stats.usA += w.usA || w.us_a || 0;
-                  stats.usBreast += w.usBreast || w.us_breast || 0;
-                  stats.usHeart += w.usHeart || w.us_heart || 0;
-                  stats.usThy += w.usThy || w.us_thy || 0;
-                  stats.usCCA += w.usCCA || w.us_cca || 0;
-                  stats.usNeck += w.usNeck || w.us_neck || 0;
-                  stats.usPelvisFemale += w.usPelvisFemale || w.us_pelvis_female || 0;
-                  stats.usPelvisMale += w.usPelvisMale || w.us_pelvis_male || 0;
-                  stats.ct += w.ct || 0;
-                  stats.dx += w.dx || 0;
-                  stats.mg += w.mg || 0;
-                  stats.bmd += w.bmd || 0;
-                  stats.cta += w.cta || 0;
-                  stats.ctaPostProcessing += w.ctaPostProcessing || w.cta_post_processing || 0;
-                  stats.reportTyping += w.reportEntry || w.reportTyping || 0;
-                  stats.proofreader += w.imageProofing || w.proofreader || 0;
-                  stats.tsmcReport += w.tsmcReport || w.tsmc_report || 0;
-                  stats.mrTeaching += Math.round(teachingAllocations[user.id]?.mrTeaching || 0);
-                  stats.mrLargeMaleTeaching += Math.round(teachingAllocations[user.id]?.mrLargeMaleTeaching || 0);
-                  stats.mrLargeFemaleTeaching += Math.round(teachingAllocations[user.id]?.mrLargeFemaleTeaching || 0);
-                  stats.mrMediumTeaching += Math.round(teachingAllocations[user.id]?.mrMediumTeaching || 0);
-                  stats.mrSmallTeaching += Math.round(teachingAllocations[user.id]?.mrSmallTeaching || 0);
-                  stats.usTeaching += Math.round(teachingAllocations[user.id]?.usTeaching || 0);
-                  stats.usATeaching += Math.round(teachingAllocations[user.id]?.usATeaching || 0);
-                  stats.usBreastTeaching += Math.round(teachingAllocations[user.id]?.usBreastTeaching || 0);
-                  stats.usHeartTeaching += Math.round(teachingAllocations[user.id]?.usHeartTeaching || 0);
-                  stats.usThyTeaching += Math.round(teachingAllocations[user.id]?.usThyTeaching || 0);
-                  stats.usCCATeaching += Math.round(teachingAllocations[user.id]?.usCCATeaching || 0);
-                  stats.usNeckTeaching += Math.round(teachingAllocations[user.id]?.usNeckTeaching || 0);
-                  stats.usPelvisFemaleTeaching += Math.round(teachingAllocations[user.id]?.usPelvisFemaleTeaching || 0);
-                  stats.usPelvisMaleTeaching += Math.round(teachingAllocations[user.id]?.usPelvisMaleTeaching || 0);
-                  stats.ctTeaching += Math.round(teachingAllocations[user.id]?.ctTeaching || 0);
-                  stats.dxTeaching += Math.round(teachingAllocations[user.id]?.dxTeaching || 0);
-                  stats.mgTeaching += Math.round(teachingAllocations[user.id]?.mgTeaching || 0);
-                  stats.bmdTeaching += Math.round(teachingAllocations[user.id]?.bmdTeaching || 0);
-                  stats.ctaTeaching += Math.round(teachingAllocations[user.id]?.ctaTeaching || 0);
+        stats.mr += w.mr || 0;
+        stats.mrLargeMale += w.mrLargeMale || w.mr_large_male || 0;
+        stats.mrLargeFemale += w.mrLargeFemale || w.mr_large_female || 0;
+        stats.mrMedium += w.mrMedium || w.mr_medium || 0;
+        stats.mrSmall += w.mrSmall || w.mr_small || 0;
+        stats.us += w.us || 0;
+        stats.usA += w.usA || w.us_a || 0;
+        stats.usBreast += w.usBreast || w.us_breast || 0;
+        stats.usHeart += w.usHeart || w.us_heart || 0;
+        stats.usThy += w.usThy || w.us_thy || 0;
+        stats.usCCA += w.usCCA || w.us_cca || 0;
+        stats.usNeck += w.usNeck || w.us_neck || 0;
+        stats.usPelvisFemale += w.usPelvisFemale || w.us_pelvis_female || 0;
+        stats.usPelvisMale += w.usPelvisMale || w.us_pelvis_male || 0;
+        stats.ct += w.ct || 0;
+        stats.dx += w.dx || 0;
+        stats.mg += w.mg || 0;
+        stats.bmd += w.bmd || 0;
+        stats.cta += w.cta || 0;
+        stats.ctaPostProcessing +=
+          w.ctaPostProcessing || w.cta_post_processing || 0;
+        stats.reportTyping += w.reportEntry || w.reportTyping || 0;
+        stats.proofreader += w.imageProofing || w.proofreader || 0;
+        stats.tsmcReport += w.tsmcReport || w.tsmc_report || 0;
+        stats.mrTeaching += Math.round(
+          teachingAllocations[user.id]?.mrTeaching || 0,
+        );
+        stats.mrLargeMaleTeaching += Math.round(
+          teachingAllocations[user.id]?.mrLargeMaleTeaching || 0,
+        );
+        stats.mrLargeFemaleTeaching += Math.round(
+          teachingAllocations[user.id]?.mrLargeFemaleTeaching || 0,
+        );
+        stats.mrMediumTeaching += Math.round(
+          teachingAllocations[user.id]?.mrMediumTeaching || 0,
+        );
+        stats.mrSmallTeaching += Math.round(
+          teachingAllocations[user.id]?.mrSmallTeaching || 0,
+        );
+        stats.usTeaching += Math.round(
+          teachingAllocations[user.id]?.usTeaching || 0,
+        );
+        stats.usATeaching += Math.round(
+          teachingAllocations[user.id]?.usATeaching || 0,
+        );
+        stats.usBreastTeaching += Math.round(
+          teachingAllocations[user.id]?.usBreastTeaching || 0,
+        );
+        stats.usHeartTeaching += Math.round(
+          teachingAllocations[user.id]?.usHeartTeaching || 0,
+        );
+        stats.usThyTeaching += Math.round(
+          teachingAllocations[user.id]?.usThyTeaching || 0,
+        );
+        stats.usCCATeaching += Math.round(
+          teachingAllocations[user.id]?.usCCATeaching || 0,
+        );
+        stats.usNeckTeaching += Math.round(
+          teachingAllocations[user.id]?.usNeckTeaching || 0,
+        );
+        stats.usPelvisFemaleTeaching += Math.round(
+          teachingAllocations[user.id]?.usPelvisFemaleTeaching || 0,
+        );
+        stats.usPelvisMaleTeaching += Math.round(
+          teachingAllocations[user.id]?.usPelvisMaleTeaching || 0,
+        );
+        stats.ctTeaching += Math.round(
+          teachingAllocations[user.id]?.ctTeaching || 0,
+        );
+        stats.dxTeaching += Math.round(
+          teachingAllocations[user.id]?.dxTeaching || 0,
+        );
+        stats.mgTeaching += Math.round(
+          teachingAllocations[user.id]?.mgTeaching || 0,
+        );
+        stats.bmdTeaching += Math.round(
+          teachingAllocations[user.id]?.bmdTeaching || 0,
+        );
+        stats.ctaTeaching += Math.round(
+          teachingAllocations[user.id]?.ctaTeaching || 0,
+        );
       } else {
         // 沒有直接業績，但可能有分配到的教學點數
         const teacherAlloc = teachingAllocations[user.id];
@@ -2669,7 +2762,7 @@ const stats: any = {
         const tsmcReport = liuyapingData.tsmcReport || 0;
 
         addMetricRow("• 報告登打", reportTyping, "份");
-        addMetricRow("• 校對影像", proofreader, "份", "（含北投與大直）"); // put extra note in label2
+        addMetricRow("• 校對影像", proofreader, "份"); // put extra note in label2
         addMetricRow("• 台積電登打校對", tsmcReport, "份");
 
         // 3. 專案推動
