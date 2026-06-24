@@ -3318,6 +3318,17 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                       note?: string;
                     }[] = [];
 
+                    if (stationName === StationDefault.ASSISTANT) {
+                      const assistants = db.assistantShifts[dateStr] || [];
+                      assistants.forEach((name) => {
+                        assignments.push({
+                          id: `google-${name}`,
+                          name: name,
+                          specialRoles: [],
+                        });
+                      });
+                    }
+
                     if (!isHmType) {
                       // 1. Look in Radiographers
                       allRadiographers.forEach((u) => {
@@ -3411,6 +3422,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                         StationDefault.BMD_DX,
                         "技術支援",
                         "行政",
+                        StationDefault.ASSISTANT,
                       ],
                     },
                     {
