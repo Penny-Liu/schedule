@@ -358,14 +358,12 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
         };
       } else if (isLearning) {
         // Learning -> Excluded (Independent but No Auto-Schedule)
-        const updatedSchedules = { ...prev.learningSchedules };
-        delete updatedSchedules[cap];
+        // [Modification]: We DO NOT delete learningSchedules here, so history is preserved!
         return {
           ...prev,
           learningCapabilities: prev.learningCapabilities.filter(
             (c) => c !== cap,
           ),
-          learningSchedules: updatedSchedules,
           excludedCapabilities: [...prev.excludedCapabilities, cap],
         };
       } else if (isExcluded) {
