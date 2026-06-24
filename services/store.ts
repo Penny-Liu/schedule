@@ -84,6 +84,7 @@ export const getPermissionsByRole = (role: UserRole): string[] => {
 };
 
 import { toLocalISOString, countNonSundayDays } from "./utils";
+import { fetchAssistantData, AssistantData } from "./assistantService";
 
 const isUserCertifiedOnDate = (user: User | undefined | null, cap: string, date: string): boolean => {
   if (!user) return false;
@@ -101,6 +102,7 @@ class Store {
   healthMgmtShifts: HealthMgmtShift[] = [];
   anesthesiaShifts: AnesthesiaShift[] = [];
   leaves: LeaveRequest[] = [];
+  assistantShifts: AssistantData = {};
   settings: SystemSettings = {
     stations: Object.values(StationDefault),
     cycles: [],
@@ -401,8 +403,13 @@ class Store {
     // 所有人皆可查看會議室租借情況
     meetingRoomsReq = this.fetchMeetingRoomsByRange(startDate, endDate);
 
-    const [shiftsRes, hmShiftsRes, dShiftsRes, aneShiftsRes, workloadsRes, leavesRes, meetingRoomsRes] = await Promise.all([
-      shiftsReq, hmShiftsReq, docShiftsReq, aneShiftsReq, workloadsReq, leavesReq, meetingRoomsReq
+    let assistantReq = Promise.resolve({});
+    if (canViewCloud || canViewPhysician) {
+      assistantReq = fetchAssistantData();
+    }
+
+    const [shiftsRes, hmShiftsRes, dShiftsRes, aneShiftsRes, workloadsRes, leavesRes, meetingRoomsRes, assistantRes] = await Promise.all([
+      shiftsReq, hmShiftsReq, docShiftsReq, aneShiftsReq, workloadsReq, leavesReq, meetingRoomsReq, assistantReq
     ]);
 
     const merge = (existing: any[], incoming: any[]) => {
@@ -410,6 +417,10 @@ class Store {
       return [...existing.filter(e => !incomingIds.has(e.id)), ...incoming];
     };
     
+    if (Object.keys(assistantRes).length > 0) {
+      this.assistantShifts = { ...this.assistantShifts, ...assistantRes };
+    }
+
     if (shiftsRes.data) {
       const parsed = shiftsRes.data.map((s: any) => { const m = {...s}; this.mapFromDbFields(m); return m; });
       this.shifts = merge(this.shifts, parsed);
@@ -661,10 +672,19 @@ class Store {
     // 所有人皆可查看會議室租借情況
     meetingRoomsReq = this.fetchMeetingRoomsByRange(startDate, endDate);
 
+    let assistantReq = Promise.resolve({});
+    if (canViewCloud || canViewPhysician) {
+      assistantReq = fetchAssistantData();
+    }
+
     try {
-      const [shiftsRes, leavesRes, workloadsRes, doctorsRes, dShiftsRes, hmStaffRes, hmShiftsRes, anesthesiaStaffRes, anesthesiaShiftsRes, meetingRoomsRes] = await Promise.all([
-        shiftsReq, leavesReq, workloadsReq, docReq, docShiftsReq, hmStaffReq, hmShiftsReq, aneStaffReq, aneShiftsReq, meetingRoomsReq
+      const [shiftsRes, leavesRes, workloadsRes, doctorsRes, dShiftsRes, hmStaffRes, hmShiftsRes, anesthesiaStaffRes, anesthesiaShiftsRes, meetingRoomsRes, assistantRes] = await Promise.all([
+        shiftsReq, leavesReq, workloadsReq, docReq, docShiftsReq, hmStaffReq, hmShiftsReq, aneStaffReq, aneShiftsReq, meetingRoomsReq, assistantReq
       ]);
+
+      if (Object.keys(assistantRes).length > 0) {
+        this.assistantShifts = { ...this.assistantShifts, ...assistantRes };
+      }
 
       if (shiftsRes.data) {
         const uniqueShiftsMap = new Map();

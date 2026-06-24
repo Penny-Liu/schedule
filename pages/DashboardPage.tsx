@@ -2339,7 +2339,10 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
           type: "ROLE",
           label: item,
           colorClass: colorClass,
-          getData: (date: string) => getSpecialRoleStaff(item, date),
+          getData: (date: string) => {
+            const baseStaff = getSpecialRoleStaff(item, date);
+            return baseStaff;
+          },
         };
       } else if (item === SYSTEM_OFF) {
         return {
@@ -2436,12 +2439,25 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                 }
               });
             }
+
+            // Inject Google Sheets assistant data for 助理 station
+            if (item === StationDefault.ASSISTANT) {
+              const googleNames = db.assistantShifts[date] || [];
+              const googleStaff = googleNames.map((name) => ({
+                user: { name, id: `google-${name}`, isRadiographer: false, isActive: true },
+                shift: { specialRoles: [], station: item, date },
+              }));
+              const existingNames = new Set(staff.map((s) => s.user?.name));
+              const uniqueGoogleStaff = googleStaff.filter((s) => !existingNames.has(s.user.name));
+              staff.push(...uniqueGoogleStaff);
+            }
+
             return staff;
           },
         };
       }
     });
-  }, [displayOrder, shifts]);
+  }, [displayOrder, shifts, db.assistantShifts]);
 
   // Optimize role updates as well
   const handleAddUserToRole = (
@@ -4749,6 +4765,11 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                         let chipClass = getStationChipStyle(
                                           row.label,
                                         );
+
+                                        // Highlight imported Google Sheets data with distinct color
+                                        if (item.user?.id.startsWith("google-")) {
+                                          chipClass = "bg-orange-100 text-red-800 border-orange-200";
+                                        }
 
                                         // Check if this user is a Learner for this specific station
                                         const isLearner =
