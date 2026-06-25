@@ -721,12 +721,14 @@ async function syncRadiographerWorkload(
   if (error) throw error;
   
   // 寫入每日明細
-  console.log(`[sync-stats] [SF API] 正在清理每日明細舊資料 (${startDate} ~ ${endDate})...`);
+  const minDate = startDate < reportStartDate ? startDate : reportStartDate;
+  const maxDate = endDate > reportEndDate ? endDate : reportEndDate;
+  console.log(`[sync-stats] [SF API] 正在清理每日明細舊資料 (${minDate} ~ ${maxDate})...`);
   await supabase
     .from("radiographer_daily_workload")
     .delete()
-    .gte("date", startDate)
-    .lte("date", endDate);
+    .gte("date", minDate)
+    .lte("date", maxDate);
 
   const dailyUpdates = [];
   Object.values(dailyWorkloadMap).forEach(usersMap => {
