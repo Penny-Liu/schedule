@@ -731,8 +731,15 @@ async function syncRadiographerWorkload(
   const dailyUpdates = [];
   Object.values(dailyWorkloadMap).forEach(usersMap => {
     Object.values(usersMap).forEach(w => {
+        const cleanW = { ...w };
+        // Remove teaching columns as they don't exist in radiographer_daily_workload
+        Object.keys(cleanW).forEach(k => {
+          if (k.endsWith('_teaching')) {
+            delete cleanW[k];
+          }
+        });
         dailyUpdates.push({
-            ...w,
+            ...cleanW,
             mr: Math.round(w.mr),
             mr_large_male: round2(w.mr_large_male),
             mr_large_female: round2(w.mr_large_female),

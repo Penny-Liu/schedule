@@ -161,7 +161,8 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
     end1.setDate(today.getDate() + 30);
     const defaultEnd1 = `${end1.getFullYear()}-${String(end1.getMonth() + 1).padStart(2, "0")}-${String(end1.getDate()).padStart(2, "0")}`;
     const firstDay2 = `${y}-${String(mo).padStart(2, "0")}-01`;
-    const lastDay2 = new Date(y, mo, 0).toISOString().split("T")[0];
+    const endDay2 = new Date(y, mo, 0);
+    const lastDay2 = `${endDay2.getFullYear()}-${String(endDay2.getMonth() + 1).padStart(2, "0")}-${String(endDay2.getDate()).padStart(2, "0")}`;
     let prevY = y,
       prevMo = mo - 1;
     if (prevMo === 0) {
