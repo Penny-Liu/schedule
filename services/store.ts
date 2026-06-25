@@ -3089,6 +3089,21 @@ class Store {
       ...savedOrder.filter((item) => allItems.includes(item)),
       ...allItems.filter((item) => !savedOrder.includes(item)),
     ];
+
+    // 如果「助理」是新加入且尚未被使用者儲存排序過，自動把它移到「行政」下面
+    if (
+      !savedOrder.includes(StationDefault.ASSISTANT) &&
+      mergedOrder.includes(StationDefault.ASSISTANT)
+    ) {
+      const adminIdx = mergedOrder.indexOf(StationDefault.ADMIN);
+      if (adminIdx !== -1) {
+        const assistIdx = mergedOrder.indexOf(StationDefault.ASSISTANT);
+        mergedOrder.splice(assistIdx, 1);
+        const newAdminIdx = mergedOrder.indexOf(StationDefault.ADMIN);
+        mergedOrder.splice(newAdminIdx + 1, 0, StationDefault.ASSISTANT);
+      }
+    }
+
     return mergedOrder;
   }
 

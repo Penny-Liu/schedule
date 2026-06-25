@@ -686,7 +686,22 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
       // const exportDate = today.toLocaleDateString('zh-TW');
 
       // --- Sheet 1: User View (人員視角) ---
-      const userSheet = workbook.addWorksheet("人員視角");
+      const userSheet = workbook.addWorksheet("人員視角", {
+        pageSetup: {
+          orientation: "landscape",
+          fitToPage: true,
+          fitToWidth: 1,
+          fitToHeight: 999,
+          margins: {
+            left: 0.25,
+            right: 0.25,
+            top: 0.4,
+            bottom: 0.4,
+            header: 0.2,
+            footer: 0.2,
+          },
+        },
+      });
 
       // Headers
       const userHeaders = [
@@ -699,8 +714,16 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
         "上班天數",
       ];
 
+      // Title Row
+      userSheet.mergeCells(1, 1, 1, userHeaders.length);
+      const userTitleCell = userSheet.getCell(1, 1);
+      userTitleCell.value = `影像醫學部-人員排班表 (${getCycleTitle()})`;
+      userTitleCell.font = { size: 16, bold: true, name: "微軟正黑體" };
+      userTitleCell.alignment = { vertical: "middle", horizontal: "center" };
+      userSheet.getRow(1).height = 35;
+
       const userHeaderRow = userSheet.addRow(userHeaders);
-      userHeaderRow.eachCell((cell) => {
+      userHeaderRow.eachCell((cell, colNumber) => {
         cell.fill = {
           type: "pattern",
           pattern: "solid",
@@ -712,8 +735,23 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
           bottom: { style: "thin" },
           right: { style: "thin" },
         };
-        cell.font = { bold: true };
         cell.alignment = { vertical: "middle", horizontal: "center" };
+
+        if (colNumber > 1 && colNumber < userHeaders.length) {
+          const dateStr = dateRange[colNumber - 2];
+          const d = new Date(dateStr);
+          const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+          const isHoliday = holidays.some((h) => h.date === dateStr && h.type === DateEventType.CLOSED);
+          
+          if (isWeekend || isHoliday) {
+            cell.font = { bold: true, name: "微軟正黑體", color: { argb: "FFDC2626" } };
+            cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFF0F5" } };
+          } else {
+            cell.font = { bold: true, name: "微軟正黑體" };
+          }
+        } else {
+          cell.font = { bold: true, name: "微軟正黑體" };
+        }
       });
 
       // Data Rows (User View)
@@ -740,6 +778,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
           } else {
             // Build content: Station + Roles
             let cellText = "";
+            let specialText = "";
             if (station && station !== StationDefault.UNASSIGNED)
               cellText += station;
             if (specialRoles.length > 0) {
@@ -754,10 +793,16 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
               const rolesShort = specialRoles
                 .map((r) => roleMap[r] || r[0])
                 .join("");
-              // Use Newline for separation
-              cellText += (cellText ? "\n" : "") + rolesShort;
+              specialText = (cellText ? "\n" : "") + rolesShort;
             }
-            rowData.push(cellText);
+            if (specialText) {
+              const rtf = [];
+              if (cellText) rtf.push({ font: { name: "微軟正黑體" }, text: cellText });
+              if (specialText) rtf.push({ font: { name: "微軟正黑體", color: { argb: "FFEA580C" } }, text: specialText });
+              rowData.push(rtf.length > 0 ? { richText: rtf } : "");
+            } else {
+              rowData.push(cellText || "");
+            }
 
             if (
               station &&
@@ -772,6 +817,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
         rowData.push(workDaysCount);
 
         const row = userSheet.addRow(rowData);
+        row.height = 35; // 增加行高讓版面更不擁擠
         row.eachCell((cell, colNumber) => {
           cell.border = {
             top: { style: "thin" },
@@ -784,14 +830,41 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
             horizontal: "center",
             wrapText: true,
           };
+          if (!(cell.value && typeof cell.value === "object" && (cell.value as any).richText)) {
+            cell.font = { name: "微軟正黑體" };
+          }
+
+          if (colNumber === 1) {
+            cell.font = { bold: true, name: "微軟正黑體" };
+            cell.fill = {
+              type: "pattern",
+              pattern: "solid",
+              fgColor: { argb: "FFF8F9FA" },
+            };
+          }
 
           // Styling Logic
           if (colNumber > 1 && colNumber < userHeaders.length + 1) {
+            const dateStr = dateRange[colNumber - 2];
+            if (dateStr) {
+              const d = new Date(dateStr);
+              const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+              const isHoliday = holidays.some((h) => h.date === dateStr && h.type === DateEventType.CLOSED);
+              if (isWeekend || isHoliday) {
+                cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFF0F5" } };
+              }
+            }
+
             // Date Columns
-            const cellValue = cell.value?.toString() || "";
+            let cellValue = "";
+            if (cell.value && typeof cell.value === "object" && (cell.value as any).richText) {
+              cellValue = (cell.value as any).richText.map((rt: any) => rt.text).join("");
+            } else {
+              cellValue = cell.value?.toString() || "";
+            }
 
             if (cellValue === "休") {
-              // White
+              // White or keep weekend pink
             } else {
               if (cellValue.includes("銷"))
                 cell.fill = {
@@ -884,7 +957,22 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
       ];
 
       // --- Sheet 2: Station View (崗位視角) ---
-      const stationSheet = workbook.addWorksheet("崗位視角");
+      const stationSheet = workbook.addWorksheet("崗位視角", {
+        pageSetup: {
+          orientation: "landscape",
+          fitToPage: true,
+          fitToWidth: 1,
+          fitToHeight: 999,
+          margins: {
+            left: 0.25,
+            right: 0.25,
+            top: 0.4,
+            bottom: 0.4,
+            header: 0.2,
+            footer: 0.2,
+          },
+        },
+      });
 
       // Header
       const stationHeaders = [
@@ -896,8 +984,16 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
         }),
       ];
 
+      // Title Row
+      stationSheet.mergeCells(1, 1, 1, stationHeaders.length);
+      const stationTitleCell = stationSheet.getCell(1, 1);
+      stationTitleCell.value = `影像醫學部-崗位分配表 (${getCycleTitle()})`;
+      stationTitleCell.font = { size: 16, bold: true, name: "微軟正黑體" };
+      stationTitleCell.alignment = { vertical: "middle", horizontal: "center" };
+      stationSheet.getRow(1).height = 35;
+
       const stationHeaderRow = stationSheet.addRow(stationHeaders);
-      stationHeaderRow.eachCell((cell) => {
+      stationHeaderRow.eachCell((cell, colNumber) => {
         cell.fill = {
           type: "pattern",
           pattern: "solid",
@@ -909,8 +1005,23 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
           bottom: { style: "thin" },
           right: { style: "thin" },
         };
-        cell.font = { bold: true };
         cell.alignment = { vertical: "middle", horizontal: "center" };
+
+        if (colNumber > 1) {
+          const dateStr = dateRange[colNumber - 2];
+          const d = new Date(dateStr);
+          const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+          const isHoliday = holidays.some((h) => h.date === dateStr && h.type === DateEventType.CLOSED);
+          
+          if (isWeekend || isHoliday) {
+            cell.font = { bold: true, name: "微軟正黑體", color: { argb: "FFDC2626" } };
+            cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFF0F5" } };
+          } else {
+            cell.font = { bold: true, name: "微軟正黑體" };
+          }
+        } else {
+          cell.font = { bold: true, name: "微軟正黑體" };
+        }
       });
 
       // Data Rows (Station View)
@@ -923,7 +1034,12 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
       );
 
       stationsToExport.forEach((rowConfig) => {
+        const isOffRow = rowConfig.label.includes("休");
+        const nameFontSize = isOffRow ? 10 : 12;
+        const nameFontBold = !isOffRow;
+        
         const rowData: any[] = [rowConfig.label];
+        let maxLines = 1;
 
         dateRange.forEach((date) => {
           const staff = rowConfig.getData(date);
@@ -938,8 +1054,19 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
           });
 
           // Build Content: Name + Roles
-          const contentParts = staff.map((s) => {
-            let text = formatName(s.user?.name || "");
+          const richTextChunks: any[] = [];
+
+          staff.forEach((s, idx) => {
+            let nameText = formatName(s.user?.name || "");
+            if (idx > 0) nameText = "\n" + nameText;
+            
+            if (nameText) {
+              richTextChunks.push({
+                 font: { name: "微軟正黑體", size: nameFontSize, bold: nameFontBold, color: { argb: "FF222222" } },
+                 text: nameText
+              });
+            }
+
             if (s.shift.specialRoles.length > 0) {
               const roleMap: Record<string, string> = {
                 [SPECIAL_ROLES.OPENING]: "開機",
@@ -949,17 +1076,25 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                 配合銷假: "配合銷假",
               };
               let roleLabels = s.shift.specialRoles.map((r) => roleMap[r] || r);
-              text += `\n(${roleLabels.join(",")})`;
+              const noteText = `\n(${roleLabels.join(",")})`;
+              if (noteText) {
+                richTextChunks.push({
+                   font: { name: "微軟正黑體", size: 9, color: { argb: "FFEA580C" } },
+                   text: noteText
+                });
+              }
             }
-            return text;
           });
 
-          const cellContent = contentParts.join("\n"); // Stack multiple people
-          rowData.push(cellContent);
+          const cellContentString = richTextChunks.map(rt => rt.text).join("");
+          const lineCount = cellContentString.split("\n").length;
+          if (lineCount > maxLines) maxLines = lineCount;
+
+          rowData.push(richTextChunks.length > 0 ? { richText: richTextChunks } : "");
         });
 
         const row = stationSheet.addRow(rowData);
-        row.height = 40;
+        row.height = Math.max(isOffRow ? 30 : 36, maxLines * (isOffRow ? 16 : 20));
         row.eachCell((cell, colNumber) => {
           cell.border = {
             top: { style: "thin" },
@@ -972,60 +1107,56 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
             horizontal: "center",
             wrapText: true,
           };
+          if (!(cell.value && typeof cell.value === "object" && (cell.value as any).richText)) {
+            cell.font = { name: "微軟正黑體", size: 10 }; // 稍微縮小字體以適應多個名字
+          }
 
           if (colNumber === 1) {
-            const label = cell.value?.toString() || "";
+            cell.font = { name: "微軟正黑體", bold: true, size: 11 };
+            let label = "";
+            if (cell.value && typeof cell.value === "object" && (cell.value as any).richText) {
+              label = (cell.value as any).richText.map((rt: any) => rt.text).join("");
+            } else {
+              label = cell.value?.toString() || "";
+            }
             if (label.includes("MR"))
-              cell.fill = {
-                type: "pattern",
-                pattern: "solid",
-                fgColor: { argb: "FFFFEDD5" },
-              };
+              cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFEDD5" } };
             else if (label.includes("US"))
-              cell.fill = {
-                type: "pattern",
-                pattern: "solid",
-                fgColor: { argb: "FFCEFFCE" },
-              };
+              cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFCEFFCE" } };
             else if (label.includes("CT"))
-              cell.fill = {
-                type: "pattern",
-                pattern: "solid",
-                fgColor: { argb: "FFF0F9FF" },
-              };
+              cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF0F9FF" } };
             else if (label.includes("場控"))
-              cell.fill = {
-                type: "pattern",
-                pattern: "solid",
-                fgColor: { argb: "FFFFFF" },
-              };
+              cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFFF" } };
             else if (label.includes("遠"))
-              cell.fill = {
-                type: "pattern",
-                pattern: "solid",
-                fgColor: { argb: "FFFAE8FF" },
-              };
+              cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFAE8FF" } };
             else if (label.includes("BMD") || label.includes("DX"))
-              cell.fill = {
-                type: "pattern",
-                pattern: "solid",
-                fgColor: { argb: "FFEFF6FF" },
-              };
+              cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFEFF6FF" } };
             else if (label.includes("大直"))
-              cell.fill = {
-                type: "pattern",
-                pattern: "solid",
-                fgColor: { argb: "FFDDD6FF" },
-              };
+              cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFDDD6FF" } };
+            else if (label.includes("休"))
+              cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF1F5F9" } };
+          } else {
+            // Check weekend background
+            const dateStr = dateRange[colNumber - 2];
+            if (dateStr) {
+              const d = new Date(dateStr);
+              const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+              const isHoliday = holidays.some((h) => h.date === dateStr && h.type === DateEventType.CLOSED);
+              if (isWeekend || isHoliday) {
+                cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFF0F5" } };
+              }
+            }
           }
         });
       });
 
       // Adjust Column Widths
-      stationSheet.columns.forEach((col, index) => {
-        if (index === 0) col.width = 15;
-        else col.width = 15;
-      });
+      if (stationSheet.columns) {
+        stationSheet.columns.forEach((col, index) => {
+          if (index === 0) col.width = 15;
+          else col.width = 15;
+        });
+      }
 
       // Generate & Download
       const buffer = await workbook.xlsx.writeBuffer();
@@ -1038,9 +1169,9 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
       link.download = `${cycleTitle}_排班表.xlsx`;
       link.click();
       URL.revokeObjectURL(link.href);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Excel Export Error:", error);
-      showToast("Excel 匯出失敗", "error");
+      showToast(`Excel 匯出失敗: ${error.message || error}`, "error");
     } finally {
       setIsExporting(false);
     }
