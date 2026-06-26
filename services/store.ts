@@ -546,8 +546,8 @@ class Store {
             let needsUpdate = false;
             
             const updatedSchedules = { ...mappedUser.learningSchedules };
-            const updatedLearning = [...(mappedUser.learningCapabilities || [])];
-            const updatedCapabilities = [...(mappedUser.capabilities || [])];
+            const updatedLearning = [...(Array.isArray(mappedUser.learningCapabilities) ? mappedUser.learningCapabilities : [])];
+            const updatedCapabilities = [...(Array.isArray(mappedUser.capabilities) ? mappedUser.capabilities : [])];
 
             for (const [station, endDate] of Object.entries(mappedUser.learningSchedules)) {
               if (endDate && today >= (endDate as string)) {
