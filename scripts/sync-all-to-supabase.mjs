@@ -603,15 +603,16 @@ export async function syncRadiographerWorkload(
     });
   });
 
-  // 2. CTA後處理
+  // 2. CTA 掃描 (CT with contrast)
   console.log(
-    `[sync-stats]   - [SOQL] 正在查詢 'CTA後處理' (CheckupReservation__c)...`,
+    `[sync-stats]   - [SOQL] 正在查詢 'CTA掃描' (CheckupReservation__c)...`,
   );
-  const ctaSoql = `SELECT CTA_Further_Rad__r.Name, Order__c, Order__r.ReserveDate__c 
+  const ctaSoql = `SELECT Radiologist__r.Name, Order__c, Order__r.ReserveDate__c 
                    FROM CheckupReservation__c 
                    WHERE (Order__r.ReserveDate__c >= ${startDate} AND Order__r.ReserveDate__c <= ${endDate}) 
-                   AND CTA_Further_Rad__c != null 
-                   AND Checkup_Status__c = '10'`;
+                   AND Radiologist__c != null 
+                   AND Checkup_Status__c = '10'
+                   AND CTAUseTime__c != null`;
   const ctaData = await runSoqlQuery({
     instanceUrl: session.instanceUrl,
     accessToken: session.accessToken,
@@ -621,7 +622,7 @@ export async function syncRadiographerWorkload(
   
   const ctaOrders = new Set();
   (ctaData.records || []).forEach((rec) => {
-    const rawName = rec.CTA_Further_Rad__r?.Name;
+    const rawName = rec.Radiologist__r?.Name;
     const orderId = rec.Order__c;
     const date = rec.Order__r?.ReserveDate__c;
     const cleanName = findNameInPath([rawName], validNamesMap);
@@ -646,6 +647,41 @@ export async function syncRadiographerWorkload(
            }
          });
       }
+    }
+  });
+
+  // 2.5 CTA 後處理
+  console.log(
+    `[sync-stats]   - [SOQL] 正在查詢 'CTA後處理' (CheckupReservation__c)...`,
+  );
+  const ctaPostSoql = `SELECT CTA_Further_Rad__r.Name, Order__c, Order__r.ReserveDate__c 
+                   FROM CheckupReservation__c 
+                   WHERE (Order__r.ReserveDate__c >= ${startDate} AND Order__r.ReserveDate__c <= ${endDate}) 
+                   AND CTA_Further_Rad__c != null 
+                   AND Checkup_Status__c = '10'`;
+  const ctaPostData = await runSoqlQuery({
+    instanceUrl: session.instanceUrl,
+    accessToken: session.accessToken,
+    soql: ctaPostSoql,
+  });
+  
+  const ctaPostOrders = new Set();
+  (ctaPostData.records || []).forEach((rec) => {
+    const rawName = rec.CTA_Further_Rad__r?.Name;
+    const orderId = rec.Order__c;
+    const date = rec.Order__r?.ReserveDate__c;
+    const cleanName = findNameInPath([rawName], validNamesMap);
+    
+    if (cleanName === "Unknown" || !workloadMap[cleanName] || !orderId) return;
+    
+    // We want COUNT_DISTINCT(Order__c) per person
+    const key = `${cleanName}_${orderId}`;
+    if (!ctaPostOrders.has(key)) {
+      ctaPostOrders.add(key);
+      workloadMap[cleanName].cta_post_processing += 1;
+      
+      const dWorkload = ensureDailyUser(date, cleanName);
+      if (dWorkload) dWorkload.cta_post_processing += 1;
     }
   });
 
