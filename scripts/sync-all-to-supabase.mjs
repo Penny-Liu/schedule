@@ -633,10 +633,10 @@ export async function syncRadiographerWorkload(
     const key = `${cleanName}_${orderId}`;
     if (!ctaOrders.has(key)) {
       ctaOrders.add(key);
-      workloadMap[cleanName].cta_post_processing += 1;
+      workloadMap[cleanName].cta += 1;
       
       const dWorkload = ensureDailyUser(date, cleanName);
-      if (dWorkload) dWorkload.cta_post_processing += 1;
+      if (dWorkload) dWorkload.cta += 1;
       
       // CTA teaching uses the CT modality station
       if (date && dailyTeachers[date] && dailyTeachers[date]["ct"] && dailyTeachers[date]["ct"][cleanName]) {
