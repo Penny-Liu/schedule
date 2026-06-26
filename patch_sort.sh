@@ -1,1 +1,0 @@
-sed -i '' -e 's/return sortDir === '"'asc'"' ? numA - numB : numB - numA;/if (numA !== numB) return sortDir === '"'asc'"' ? numA - numB : numB - numA; return a.name.localeCompare(b.name);/g' /Users/liuyaping/Downloads/schedule/pages/RadiographerWorkloadPage.tsx

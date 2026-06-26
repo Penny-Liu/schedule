@@ -1,1 +1,0 @@
-sed -i '' -e 's|{/\* Sort state \*/}|{/\* Sort state \*/}\n        <div className="bg-red-600 text-white p-4 m-4 font-bold rounded">DEBUG SORT: 欄位={sortField || "null"}, 方向={sortDir}<br/>順序={displayData.map(d => d.name).join(", ")}</div>|g' /Users/liuyaping/Downloads/schedule/pages/RadiographerWorkloadPage.tsx
