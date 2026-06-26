@@ -217,7 +217,6 @@ async function syncRadiographerWorkload(
   const { data: usersData } = await supabase
     .from("users")
     .select("id, name, alias, learning_capabilities")
-    .eq("is_radiographer", true)
     .eq("is_part_time", false);
   const validNamesMap = {};
   usersData.forEach((u) => {
@@ -603,12 +602,11 @@ async function syncRadiographerWorkload(
   console.log(
     `[sync-stats]   - [SOQL] 正在查詢 'CTA後處理' (CheckupReservation__c)...`,
   );
-  const ctaSoql = `SELECT Radiologist__r.Name, Order__c, Order__r.ReserveDate__c 
+  const ctaSoql = `SELECT CTA_Further_Rad__r.Name, Order__c, Order__r.ReserveDate__c 
                    FROM CheckupReservation__c 
                    WHERE (Order__r.ReserveDate__c >= ${startDate} AND Order__r.ReserveDate__c <= ${endDate}) 
-                   AND Radiologist__c != null 
-                   AND Checkup_Status__c = '10'
-                   AND CTAUseTime__c != null`;
+                   AND CTA_Further_Rad__c != null 
+                   AND Checkup_Status__c = '10'`;
   const ctaData = await runSoqlQuery({
     instanceUrl: session.instanceUrl,
     accessToken: session.accessToken,
@@ -617,7 +615,7 @@ async function syncRadiographerWorkload(
   
   const ctaOrders = new Set();
   (ctaData.records || []).forEach((rec) => {
-    const rawName = rec.Radiologist__r?.Name;
+    const rawName = rec.CTA_Further_Rad__r?.Name;
     const orderId = rec.Order__c;
     const date = rec.Order__r?.ReserveDate__c;
     const cleanName = findNameInPath([rawName], validNamesMap);
@@ -668,20 +666,42 @@ async function syncRadiographerWorkload(
     }
   });
 
-  // 4. 影像報告登打「不候入同步，保留手動填寫的値」
+  // 4. 報告登打 (影像報告助理)
+  console.log(`[sync-stats]   - [SOQL] 正在查詢 '報告登打' (Order__c)...`);
+  const assistantSoql = `SELECT ReserveDate__c date, Image_Assistant__r.Name person, COUNT(Id) cnt 
+                        FROM Order__c 
+                        WHERE (ReserveDate__c >= ${reportStartDate} AND ReserveDate__c <= ${reportEndDate}) 
+                        AND Image_Assistant__c != null 
+                        GROUP BY ReserveDate__c, Image_Assistant__r.Name`;
+  const assistantData = await runSoqlQuery({
+    instanceUrl: session.instanceUrl,
+    accessToken: session.accessToken,
+    soql: assistantSoql,
+  });
+  (assistantData.records || []).forEach((rec) => {
+    const rawName = rec.person || rec.Image_Assistant__r?.Name;
+    const value = parseInt(rec.cnt || rec.expr0 || 0, 10);
+    const date = rec.date || rec.ReserveDate__c;
+    const cleanName = findNameInPath([rawName], validNamesMap);
+    
+    if (cleanName !== "Unknown") {
+      ensureUser(cleanName);
+      workloadMap[cleanName].report_entry += value;
+      const dWorkload = ensureDailyUser(date, cleanName);
+      if (dWorkload) dWorkload.report_entry += value;
+    }
+  });
 
-  // 備份手動填寫的欄位（cta_post_processing、report_entry），同步後恢復
-  console.log(`[sync-stats] [SF API] 備份手動欄位 (cta_post_processing, report_entry)...`);
+  // 5. 備份手動填寫的欄位（tsmc_report），同步後恢復
+  console.log(`[sync-stats] [SF API] 備份手動欄位 (tsmc_report)...`);
   const { data: existingRows } = await supabase
     .from("radiographer_workload")
-    .select("radiographerName, cta_post_processing, report_entry, tsmc_report")
+    .select("radiographerName, tsmc_report")
     .eq("year", yearNum)
     .eq("month", monthNum);
   const manualFieldsMap = {};
   (existingRows || []).forEach((r) => {
     manualFieldsMap[r.radiographerName] = {
-      cta_post_processing: r.cta_post_processing ?? null,
-      report_entry: r.report_entry ?? null,
       tsmc_report: r.tsmc_report ?? null,
     };
   });
@@ -709,8 +729,6 @@ async function syncRadiographerWorkload(
     mr_medium_teaching: round2(w.mr_medium_teaching),
     mr_small_teaching: round2(w.mr_small_teaching),
     // 恢復手動填寫的值，不讓同步覆蓋
-    cta_post_processing: manualFieldsMap[w.radiographerName]?.cta_post_processing ?? null,
-    report_entry: manualFieldsMap[w.radiographerName]?.report_entry ?? null,
     tsmc_report: manualFieldsMap[w.radiographerName]?.tsmc_report ?? null,
   }));
 

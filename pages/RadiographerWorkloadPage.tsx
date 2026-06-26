@@ -2408,8 +2408,10 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
           "",
           "",
           "",
+          "",
+          "",
         ]);
-        worksheet3.mergeCells(titleRow.number, 1, titleRow.number, 12);
+        worksheet3.mergeCells(titleRow.number, 1, titleRow.number, 14);
         applyHeaderStyle(titleRow, "FFDDEBF7");
         titleRow.getCell(1).alignment = {
           vertical: "middle",
@@ -2427,26 +2429,28 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
           "CT+CTA",
           "CTA後處理",
           "BMD+DX+MG",
+          "影像校對",
+          "報告登打",
           "遠班單位",
           "總單位",
           "教學與學習",
         ]);
         applyHeaderStyle(colHeaderRow, "FFF2F2F2");
 
-        // 將現場單位與其附件(場控/MR/US/CT+CTA/CTA後/BMD+DX+MG)上黃色，遠班上藍色，總單位上橘色
-        for (let i = 3; i <= 9; i++) {
+        // 將現場單位與其附件(場控/MR/US/CT+CTA/CTA後/BMD+DX+MG/影像校對/報告登打)上黃色，遠班上藍色，總單位上橘色
+        for (let i = 3; i <= 11; i++) {
           colHeaderRow.getCell(i).fill = {
             type: "pattern",
             pattern: "solid",
             fgColor: { argb: "FFFFF2CC" },
           };
         }
-        colHeaderRow.getCell(10).fill = {
+        colHeaderRow.getCell(12).fill = {
           type: "pattern",
           pattern: "solid",
           fgColor: { argb: "FFDDEBF7" },
         };
-        colHeaderRow.getCell(11).fill = {
+        colHeaderRow.getCell(13).fill = {
           type: "pattern",
           pattern: "solid",
           fgColor: { argb: "FFFCE4D6" },
@@ -2473,6 +2477,8 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
           const ctCtaTotal = (row.ct || 0) + (row.cta || 0);
           const ctaPostTotal = row.ctaPostProcessing || 0;
           const bmdDxMgTotal = (row.bmd || 0) + (row.dx || 0) + (row.mg || 0);
+          const proofTotal = row.proofreader || row.imageProofing || 0;
+          const reportTotal = row.reportTyping || row.reportEntry || 0;
 
           let richTextValue: any = { richText: [] };
           if (row.teachingDates && Object.keys(row.teachingDates).length > 0) {
@@ -2516,6 +2522,8 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
             ctCtaTotal,
             ctaPostTotal,
             bmdDxMgTotal,
+            proofTotal,
+            reportTotal,
             remote,
             total,
             teachingLearningRemark,
@@ -2554,6 +2562,8 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
         { width: 12 }, // CT+CTA
         { width: 14 }, // CTA後處理
         { width: 16 }, // BMD+DX+MG
+        { width: 14 }, // 影像校對
+        { width: 14 }, // 報告登打
         { width: 10 }, // 遠班單位
         { width: 10 }, // 總單位
         { width: 30 }, // 教學與學習
