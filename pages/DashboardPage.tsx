@@ -835,7 +835,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
           }
 
           if (colNumber === 1) {
-            cell.font = { bold: true, name: "微軟正黑體" };
+            cell.font = { bold: true, name: "微軟正黑體", size: 14 };
             cell.fill = {
               type: "pattern",
               pattern: "solid",
@@ -1035,7 +1035,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
 
       stationsToExport.forEach((rowConfig) => {
         const isOffRow = rowConfig.label.includes("休");
-        const nameFontSize = isOffRow ? 10 : 12;
+        const nameFontSize = isOffRow ? 10 : 14;
         const nameFontBold = !isOffRow;
         
         const rowData: any[] = [rowConfig.label];
@@ -1094,7 +1094,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
         });
 
         const row = stationSheet.addRow(rowData);
-        row.height = Math.max(isOffRow ? 30 : 36, maxLines * (isOffRow ? 16 : 20));
+        row.height = Math.max(isOffRow ? 30 : 42, maxLines * (isOffRow ? 16 : 24));
         row.eachCell((cell, colNumber) => {
           cell.border = {
             top: { style: "thin" },

@@ -200,7 +200,7 @@ async function syncDailyStats(session, startDate, endDate) {
 // --- [2/3] 放射師工作量統計 ---
 // --- 放射師工作量統計 ---
 // --- 放射師工作量統計 ---
-async function syncRadiographerWorkload(
+export async function syncRadiographerWorkload(
   session,
   startDate,
   endDate,
@@ -217,7 +217,8 @@ async function syncRadiographerWorkload(
   const { data: usersData } = await supabase
     .from("users")
     .select("id, name, alias, learning_capabilities")
-    .eq("is_part_time", false);
+    
+  
   const validNamesMap = {};
   usersData.forEach((u) => {
     validNamesMap[u.name.trim()] = u.name.trim();
@@ -325,7 +326,8 @@ async function syncRadiographerWorkload(
         mg_teaching: 0,
         bmd_teaching: 0,
         imageProofing: 0,
-        // 不候入同步：cta_post_processing、report_entry 由手動填寫，保留原有値
+        cta_post_processing: 0,
+        report_entry: 0,
       };
     }
   };
@@ -454,6 +456,7 @@ async function syncRadiographerWorkload(
     const category = (rec.category || rec.ResourceCategory__c || "").toLowerCase();
     const date = rec.date || rec.Order__r?.ReserveDate__c;
     const cleanName = findNameInPath([rawName], validNamesMap);
+    
     if (cleanName === "Unknown") return;
     ensureUser(cleanName);
     const dWorkload = ensureDailyUser(date, cleanName);
@@ -513,6 +516,7 @@ async function syncRadiographerWorkload(
     const checkupName = rec.CheckupName__c || "";
     const date = rec.Order__r?.ReserveDate__c;
     const cleanName = findNameInPath([rawName], validNamesMap);
+    
     if (cleanName === "Unknown") return;
     ensureUser(cleanName);
     const dWorkload = ensureDailyUser(date, cleanName);
@@ -576,6 +580,7 @@ async function syncRadiographerWorkload(
     Object.entries(radiologistCounts).forEach(([rawName, itemCount]) => {
       const ratio = itemCount / count;
       const cleanName = findNameInPath([rawName], validNamesMap);
+    
       if (cleanName === "Unknown") return;
       ensureUser(cleanName);
       const dWorkload = ensureDailyUser(date, cleanName);
@@ -613,6 +618,7 @@ async function syncRadiographerWorkload(
     soql: ctaSoql,
   });
   
+  
   const ctaOrders = new Set();
   (ctaData.records || []).forEach((rec) => {
     const rawName = rec.CTA_Further_Rad__r?.Name;
@@ -620,16 +626,17 @@ async function syncRadiographerWorkload(
     const date = rec.Order__r?.ReserveDate__c;
     const cleanName = findNameInPath([rawName], validNamesMap);
     
+    
     if (cleanName === "Unknown" || !workloadMap[cleanName] || !orderId) return;
     
     // We want COUNT_DISTINCT(Order__c) per person
     const key = `${cleanName}_${orderId}`;
     if (!ctaOrders.has(key)) {
       ctaOrders.add(key);
-      workloadMap[cleanName].cta += 1;
+      workloadMap[cleanName].cta_post_processing += 1;
       
       const dWorkload = ensureDailyUser(date, cleanName);
-      if (dWorkload) dWorkload.cta += 1;
+      if (dWorkload) dWorkload.cta_post_processing += 1;
       
       // CTA teaching uses the CT modality station
       if (date && dailyTeachers[date] && dailyTeachers[date]["ct"] && dailyTeachers[date]["ct"][cleanName]) {
@@ -659,6 +666,7 @@ async function syncRadiographerWorkload(
     const value = parseInt(rec.cnt || rec.expr0 || 0, 10);
     const date = rec.date || rec.ReserveDate__c;
     const cleanName = findNameInPath([rawName], validNamesMap);
+    
     if (cleanName !== "Unknown" && workloadMap[cleanName]) {
       workloadMap[cleanName].imageProofing += value;
       const dWorkload = ensureDailyUser(date, cleanName);
@@ -678,11 +686,13 @@ async function syncRadiographerWorkload(
     accessToken: session.accessToken,
     soql: assistantSoql,
   });
+  
   (assistantData.records || []).forEach((rec) => {
     const rawName = rec.person || rec.Image_Assistant__r?.Name;
     const value = parseInt(rec.cnt || rec.expr0 || 0, 10);
     const date = rec.date || rec.ReserveDate__c;
     const cleanName = findNameInPath([rawName], validNamesMap);
+    
     
     if (cleanName !== "Unknown") {
       ensureUser(cleanName);
