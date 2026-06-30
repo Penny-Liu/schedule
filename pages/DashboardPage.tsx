@@ -5853,19 +5853,21 @@ const DailyManpowerSummary: React.FC<{
       }
 
       if (s.station.includes("遠距") || s.station.includes("遠班")) {
-        remoteCount++;
-        remoteHeader.push(name);
-        if (isDualBMD) {
-          const remoteLabel = isDazhiSupport
-            ? `${name}(大直支援)`
-            : `${name}(兼BMD/DX)`;
-          remote.push(remoteLabel);
-          remote_short.push(
-            u ? `${u.name.slice(-2)}(兼BMD/DX)` : `${name}(兼BMD/DX)`,
-          );
-        } else {
-          remote.push(isDazhiSupport ? `${name}(大直支援)` : name);
-          remote_short.push(u ? u.name.slice(-2) : name);
+        if (s.location !== "台中") {
+          remoteCount++;
+          remoteHeader.push(name);
+          if (isDualBMD) {
+            const remoteLabel = isDazhiSupport
+              ? `${name}(大直支援)`
+              : `${name}(兼BMD/DX)`;
+            remote.push(remoteLabel);
+            remote_short.push(
+              u ? `${u.name.slice(-2)}(兼BMD/DX)` : `${name}(兼BMD/DX)`,
+            );
+          } else {
+            remote.push(isDazhiSupport ? `${name}(大直支援)` : name);
+            remote_short.push(u ? u.name.slice(-2) : name);
+          }
         }
       } else if (isLearning) {
         // Learning doesn't count towards Beitou manpower
@@ -5960,7 +5962,7 @@ const DailyManpowerSummary: React.FC<{
     // For Remote Header and Third Line Support, we need the suffix included
     // Pass the shift 's' directly to ensure we use the correct explanationTaskType for THAT shift
     const remoteDocsWithSuffix = docShifts
-      .filter((s) => s.station === "遠")
+      .filter((s) => s.station === "遠" && s.location !== "台中")
       .map((s) => formatShiftWithSuffix(s, getDocAlias(s.doctorId)));
     const supportDocsWithSuffix = docShifts
       .filter((s) => s.station === "支援")
@@ -5968,7 +5970,7 @@ const DailyManpowerSummary: React.FC<{
 
     // Raw aliases for detail mapping (we'll re-apply suffix logic there or just use the helper if cleaner)
     const remoteDocsRaw = docShifts
-      .filter((s) => s.station === "遠")
+      .filter((s) => s.station === "遠" && s.location !== "台中")
       .map((s) => getDocAlias(s.doctorId));
 
     // --- Radiographer Data: "Third Line" Detection ---
@@ -6186,7 +6188,7 @@ BMD :{{bmd}}
     let remDocStr = "";
     if (remoteDocsRaw.length > 0) {
       remDocStr = docShifts
-        .filter((s) => s.station === "遠")
+        .filter((s) => s.station === "遠" && s.location !== "台中")
         .map((s) => {
           const alias = getDocAlias(s.doctorId);
           const doc = doctors.find((d) => d.id === s.doctorId);
