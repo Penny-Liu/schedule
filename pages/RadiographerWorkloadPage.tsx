@@ -1429,6 +1429,9 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
       if (!includeEstimation && estimationStartDate) {
         firstLine += ` -已上${row.workedDaysSoFar}天`;
       }
+      if (row.remarks) {
+        firstLine += `（${row.remarks}）`;
+      }
 
       let secondLine = `  `;
       if (lineExportMode === "ALL" || lineExportMode === "ONSITE")
@@ -1468,10 +1471,6 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
       }
       if (tRmk.length > 0) {
         result += `\n  ${tRmk.join(" / ")}`;
-      }
-
-      if (row.remarks) {
-        result += `\n（${row.remarks}）`;
       }
 
       return result;
