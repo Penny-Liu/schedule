@@ -562,7 +562,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
         (s) =>
           s.userId === student.id &&
           studentDates.includes(s.date) &&
-          (!estimationStartDate || s.date <= estimationStartDate) &&
+          (!estimationStartDate || s.date <= estimationStartDate || includeEstimation) &&
           s.station !== StationDefault.UNASSIGNED &&
           s.station !== StationDefault.OFF &&
           s.station !== "休假",
@@ -1454,12 +1454,12 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
       let result = `${firstLine}\n${secondLine}`;
 
       let tRmk = [];
-      if (row.teachingDates && Object.keys(row.teachingDates).length > 0) {
-        const parts = Object.entries(row.teachingDates).map(
-          ([cat, dates]: any) => `${cat}${dates.size}天`,
-        );
-        tRmk.push(`教學：${parts.join("，")}`);
-      }
+      // if (row.teachingDates && Object.keys(row.teachingDates).length > 0) {
+      //   const parts = Object.entries(row.teachingDates).map(
+      //     ([cat, dates]: any) => `${cat}${dates.size}天`,
+      //   );
+      //   tRmk.push(`教學：${parts.join("，")}`);
+      // }
       if (row.learningDates && Object.keys(row.learningDates).length > 0) {
         const parts = Object.entries(row.learningDates).map(
           ([cat, dates]: any) => `${cat}${dates.size}天`,
