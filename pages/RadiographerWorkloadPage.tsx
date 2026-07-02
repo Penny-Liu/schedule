@@ -1448,7 +1448,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
       }
 
       let estRmk =
-        includeEstimation && row.estRemark ? `  (${row.estRemark})` : "";
+        includeEstimation && row.estRemark ? `\n  (${row.estRemark})` : "";
       secondLine += estRmk;
 
       let result = `${firstLine}\n${secondLine}`;
