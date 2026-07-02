@@ -5213,7 +5213,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                 } else if (rowLabel === "影像") {
                                   return st === "影像";
                                 } else if (rowLabel === "遠班") {
-                                  return st.includes("遠");
+                                  return st.includes("遠") && s.location !== "台中";
                                 } else if (rowLabel === "支援") {
                                   return st === "支援";
                                 }

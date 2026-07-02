@@ -1029,6 +1029,15 @@ async function syncPhysicianWorkload(session, startDate, endDate) {
     });
   });
 
+  console.log(
+    `[sync-stats] 📝 清除 ${startDate} 至 ${endDate} 的舊有影像醫師工作量...`,
+  );
+  await supabase
+    .from("physician_workload_daily")
+    .delete()
+    .gte("date", startDate)
+    .lte("date", endDate);
+
   if (updates.length > 0) {
     console.log(
       `[sync-stats] 📝 正在寫入 ${updates.length} 筆影像醫師工作量數據 (以客戶為單位)...`,

@@ -311,10 +311,14 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
   ];
 
   const computeScheduleFields = (userId: string) => {
+    const user = db.getUsers().find(u => u.id === userId);
+    const uCycle = user?.personalCycles?.[currentMonth];
+    const uDates = uCycle ? buildDateRange(uCycle.startDate, uCycle.endDate) : generalDates;
+
     const userShifts = shifts.filter(
       (s) =>
         s.userId === userId &&
-        generalDates.includes(s.date) &&
+        uDates.includes(s.date) &&
         s.station !== StationDefault.UNASSIGNED &&
         s.station !== StationDefault.OFF &&
         s.station !== "休假",
@@ -487,12 +491,17 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
         db
           .getUsers()
           .filter(
-            (u) =>
-              u.isRadiographer === true &&
-              !u.isPartTime &&
-              (u.isActive !== false || hasWorkedInRange(u, generalDates)) &&
-              (!generalDates.some((date) => isUserOnEmploymentPause(u, date)) ||
-                hasWorkedInRange(u, generalDates)),
+            (u) => {
+              const uCycle = u.personalCycles?.[currentMonth];
+              const uDates = uCycle ? buildDateRange(uCycle.startDate, uCycle.endDate) : generalDates;
+              return (
+                u.isRadiographer === true &&
+                !u.isPartTime &&
+                (u.isActive !== false || hasWorkedInRange(u, uDates)) &&
+                (!uDates.some((date) => isUserOnEmploymentPause(u, date)) ||
+                  hasWorkedInRange(u, uDates))
+              );
+            }
           ),
       );
     };
@@ -547,10 +556,12 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
     };
 
     radiographers.forEach((student) => {
+      const studentCycle = student.personalCycles?.[currentMonth];
+      const studentDates = studentCycle ? buildDateRange(studentCycle.startDate, studentCycle.endDate) : generalDates;
       const studentShifts = shifts.filter(
         (s) =>
           s.userId === student.id &&
-          generalDates.includes(s.date) &&
+          studentDates.includes(s.date) &&
           (!estimationStartDate || s.date <= estimationStartDate) &&
           s.station !== StationDefault.UNASSIGNED &&
           s.station !== StationDefault.OFF &&
@@ -982,7 +993,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
 
       let memo = personalCycle?.memo || "";
       let coopLeave = "";
-      if (generalDates.length > 0) {
+      if (userDates.length > 0) {
         const coopDates: string[] = [];
         userShiftsInRange.forEach((s) => {
           if (s.specialRoles.includes("配合銷假")) {
@@ -1066,7 +1077,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
         const futureShifts = shifts.filter(
           (s) =>
             s.userId === user.id &&
-            generalDates.includes(s.date) &&
+            userDates.includes(s.date) &&
             s.date > estimationStartDate &&
             s.station !== StationDefault.UNASSIGNED &&
             s.station !== StationDefault.OFF &&
