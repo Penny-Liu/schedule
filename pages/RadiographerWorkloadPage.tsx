@@ -476,14 +476,23 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
 
   // 取得該週期的每日明細資料 (以支援單日切換)
   useEffect(() => {
-    if (generalDates.length > 0) {
-      const startDate = generalDates[0];
-      const endDate = generalDates[generalDates.length - 1];
-      db.fetchDailyWorkloadsByRange(startDate, endDate)
+    if (generalDates.length > 0 && radiographers.length > 0) {
+      let minDate = generalDates[0];
+      let maxDate = generalDates[generalDates.length - 1];
+
+      radiographers.forEach((u) => {
+        const uCycle = u.personalCycles?.[currentMonth];
+        if (uCycle) {
+          if (uCycle.startDate < minDate) minDate = uCycle.startDate;
+          if (uCycle.endDate > maxDate) maxDate = uCycle.endDate;
+        }
+      });
+
+      db.fetchDailyWorkloadsByRange(minDate, maxDate)
         .then((data) => setCycleDailyData(data))
         .catch(console.error);
     }
-  }, [generalDates]);
+  }, [generalDates, radiographers, currentMonth]);
 
   useEffect(() => {
     const refreshData = () => {
@@ -769,6 +778,12 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
         ctaTeaching: 0,
       };
 
+      // 優先使用個人週期（如有），否則 fallback 到全域 generalDates
+      const personalCycle = user.personalCycles?.[currentMonth];
+      const userDates = personalCycle
+        ? buildDateRange(personalCycle.startDate, personalCycle.endDate)
+        : generalDates;
+
       const userWorkloads = workloads.filter(
         (w) => w.radiographerName === user.name && w.date === currentMonth,
       );
@@ -805,14 +820,24 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
             "dx",
             "mg",
             "bmd",
-            "reportEntry",
-            "reportTyping",
-            "imageProofing",
-            "proofreader",
-            "tsmcReport",
-            "tsmc_report",
           ].forEach((k) => {
             wToUse[k] = 0;
+          });
+        }
+      } else {
+        // Aggregate daily workloads within the user's personal cycle dates
+        const userDailyData = cycleDailyData.filter(
+          (d) => d.radiographerName === user.name && userDates.includes(d.date)
+        );
+
+        if (userDailyData.length > 0) {
+          [
+            "mr", "mrLargeMale", "mrLargeFemale", "mrMedium", "mrSmall",
+            "us", "usA", "usBreast", "usHeart", "usThy", "usCCA", "usNeck",
+            "usPelvisFemale", "usPelvisMale", "ct", "cta", "ctaPostProcessing",
+            "dx", "mg", "bmd"
+          ].forEach((k) => {
+            wToUse[k] = userDailyData.reduce((sum, d) => sum + (d[k] || 0), 0);
           });
         }
       }
@@ -943,11 +968,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
         }
       }
 
-      // 優先使用個人週期（如有），否則 fallback 到全域 generalDates
-      const personalCycle = user.personalCycles?.[currentMonth];
-      const userDates = personalCycle
-        ? buildDateRange(personalCycle.startDate, personalCycle.endDate)
-        : generalDates;
+      // (Moved userDates calculation to the top of the mapping function)
 
       // 從排班計算上班天數與場控/輔控/排班
       const userShiftsInRange = shifts.filter(
