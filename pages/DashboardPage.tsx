@@ -2197,11 +2197,13 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
         const isRemoteShift =
           shift.station.includes("遠班") || shift.station.includes("遠距");
         const isDualTarget = station.includes("BMD") || station.includes("DX");
-        if (!(isRemoteShift && isDualTarget)) {
+        const isDazhiTarget = station.includes("大直");
+        if (!(isRemoteShift && (isDualTarget || isDazhiTarget))) {
           return false;
         }
-        // If they're remote and already have the dual role, don't show them in the dropdown
-        if (shift.specialRoles.includes(SPECIAL_ROLES.DUAL_BMD)) return false;
+        // If they're remote and already have the role, don't show them in the dropdown
+        if (isDualTarget && shift.specialRoles.includes(SPECIAL_ROLES.DUAL_BMD)) return false;
+        if (isDazhiTarget && shift.specialRoles.includes(SPECIAL_ROLES.DAZHI_SUPPORT)) return false;
       }
       if (shift && shift.station === station) return false;
       return true;
@@ -2242,11 +2244,15 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
         existingShift.station.includes("遠距") ||
         existingShift.station.includes("遠班");
       const isDualBMDTarget = station.includes("BMD") || station.includes("DX");
+      const isDazhiTarget = station.includes("大直");
 
-      // Allow Remote users to take Dual BMD without changing primary station
-      if (isRemoteShift && isDualBMDTarget) {
-        if (!roles.includes(SPECIAL_ROLES.DUAL_BMD)) {
+      // Allow Remote users to take Dual BMD or Dazhi without changing primary station
+      if (isRemoteShift && (isDualBMDTarget || isDazhiTarget)) {
+        if (isDualBMDTarget && !roles.includes(SPECIAL_ROLES.DUAL_BMD)) {
           roles.push(SPECIAL_ROLES.DUAL_BMD);
+        }
+        if (isDazhiTarget && !roles.includes(SPECIAL_ROLES.DAZHI_SUPPORT)) {
+          roles.push(SPECIAL_ROLES.DAZHI_SUPPORT);
         }
         handleUpdateShift(userId, dateStr, existingShift.station, roles);
         return;
@@ -2274,10 +2280,17 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
     const isDualBMDTarget =
       stationLabel &&
       (stationLabel.includes("BMD") || stationLabel.includes("DX"));
+    const isDazhiTarget = stationLabel && stationLabel.includes("大直");
 
-    // If clicking X on a Dual BMD badge in the BMD row, only remove the role, don't clear the main station
+    // If clicking X on a Dual BMD/Dazhi badge in their respective row, only remove the role, don't clear the main station
     if (existingShift && isDualBMDTarget && roles.includes(SPECIAL_ROLES.DUAL_BMD)) {
       roles = roles.filter((r) => r !== SPECIAL_ROLES.DUAL_BMD);
+      handleUpdateShift(userId, dateStr, existingShift.station, roles);
+      return;
+    }
+    
+    if (existingShift && isDazhiTarget && roles.includes(SPECIAL_ROLES.DAZHI_SUPPORT)) {
+      roles = roles.filter((r) => r !== SPECIAL_ROLES.DAZHI_SUPPORT);
       handleUpdateShift(userId, dateStr, existingShift.station, roles);
       return;
     }
