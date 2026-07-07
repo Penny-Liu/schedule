@@ -2302,6 +2302,11 @@ class Store {
   }
 
   async upsertShift(shift: Shift) {
+    if (shift.station === "休假" || shift.station === "OFF" || shift.station === "SYSTEM_OFF") {
+      shift.specialRoles = [];
+      shift.supportLocation = undefined;
+    }
+
     // 1. Update Local State: Optimistic Update
     const otherIndices: number[] = [];
     let foundIndex = -1;
@@ -3444,6 +3449,13 @@ class Store {
   // Batch Upsert
   async upsertShifts(shiftsToUpsert: Shift[]) {
     if (shiftsToUpsert.length === 0) return;
+
+    shiftsToUpsert.forEach(shift => {
+      if (shift.station === "休假" || shift.station === "OFF" || shift.station === "SYSTEM_OFF") {
+        shift.specialRoles = [];
+        shift.supportLocation = undefined;
+      }
+    });
 
     // Update local state first
     shiftsToUpsert.forEach((shift) => {

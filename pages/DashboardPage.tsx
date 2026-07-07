@@ -2171,6 +2171,8 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
 
   const getAssignableCandidates = (station: string, dateStr: string) => {
     return users.filter((user) => {
+      if (station === SYSTEM_OFF && user.isPartTime) return false;
+      
       const isCertified = isUserCertifiedOnDate(user, station, dateStr);
       const isLearning = isUserLearningOnDate(user, station, dateStr);
       const isExcluded = user.excludedCapabilities?.includes(station);
@@ -2267,15 +2269,14 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
     const existingShift = db.shifts.find(
       (s) => s.userId === userId && s.date === dateStr,
     );
-    if (!existingShift) return;
 
-    let roles = [...existingShift.specialRoles];
+    let roles = existingShift ? [...existingShift.specialRoles] : [];
     const isDualBMDTarget =
       stationLabel &&
       (stationLabel.includes("BMD") || stationLabel.includes("DX"));
 
     // If clicking X on a Dual BMD badge in the BMD row, only remove the role, don't clear the main station
-    if (isDualBMDTarget && roles.includes(SPECIAL_ROLES.DUAL_BMD)) {
+    if (existingShift && isDualBMDTarget && roles.includes(SPECIAL_ROLES.DUAL_BMD)) {
       roles = roles.filter((r) => r !== SPECIAL_ROLES.DUAL_BMD);
       handleUpdateShift(userId, dateStr, existingShift.station, roles);
       return;

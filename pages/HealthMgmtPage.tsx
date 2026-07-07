@@ -82,6 +82,7 @@ export const getMatchedGroupId = (sText: string) => {
     D: ["D", "代謝", "營養", "營1", "營2"],
     M: ["M", "醫檢", "檢驗"],
     P: ["P", "藥師"],
+    HA: ["HA", "醫務助理"],
   };
 
   for (const [key, vals] of Object.entries(STATION_GROUPS)) {
@@ -4444,7 +4445,7 @@ const HMTodayView: React.FC<{
   const groups = useMemo(() => {
     // User Request: Use categorized view for ALL locations (Beitou, Dazhi, All)
     // This ensures R (Counter) and D (Metabolism) are always categorized/found properly
-    return [
+    const baseGroups = [
       {
         id: "H",
         label: "接待(H)",
@@ -4510,8 +4511,40 @@ const HMTodayView: React.FC<{
         icon: <Pill size={18} />,
         color: "teal",
       },
+      {
+        id: "HA",
+        label: "醫務助理(HA)",
+        stations: ["HA", "HA班", "醫務助理"],
+        icon: <Users size={18} />,
+        color: "slate",
+      },
     ];
-  }, []);
+
+    const allConfiguredStations = db.getHealthMgmtStations(location === "全部" ? undefined : location);
+    
+    const mappedStations = new Set<string>();
+    baseGroups.forEach(g => {
+      if (g.stations) {
+        g.stations.forEach(s => mappedStations.add(s));
+      }
+    });
+
+    const unmappedStations = allConfiguredStations.filter(s => 
+      !mappedStations.has(s) && 
+      s !== "休假" && 
+      s !== "未分配"
+    );
+
+    const dynamicGroups = unmappedStations.map(s => ({
+      id: s,
+      label: s,
+      stations: [s],
+      icon: <Users size={18} />,
+      color: "slate",
+    }));
+
+    return [...baseGroups, ...dynamicGroups];
+  }, [location]);
 
   const getGroupAssignments = (group: any) => {
     let assignments: any[] = [];
@@ -4588,7 +4621,11 @@ const HMTodayView: React.FC<{
           const shiftLoc = s.location || u.location || "";
           if (location !== "全部" && shiftLoc !== location) return false;
 
-          return getMatchedGroupId(sText) === group.id;
+          const matchedId = getMatchedGroupId(sText);
+          if (matchedId) return matchedId === group.id;
+          
+          const groupIdUpper = (group.id || "").toUpperCase();
+          return sText === groupIdUpper || baseStation === groupIdUpper;
         })
         .map((s) => {
           const u = staff.find((st) => st.id === s.userId);
@@ -4761,6 +4798,7 @@ const HMTodayView: React.FC<{
               sky: "border-sky-600 text-sky-700 bg-sky-50",
               violet: "border-violet-600 text-violet-700 bg-violet-50",
               teal: "border-teal-600 text-teal-700 bg-teal-50",
+              slate: "border-slate-600 text-slate-700 bg-slate-50",
             };
 
             const accentColor = colorClasses[group.color || "teal"]
