@@ -844,128 +844,53 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
 
       if (userWorkloads.length > 0) {
         stats.id = userWorkloads[0].id;
-        const w = wToUse;
-        stats.mr += w.mr || 0;
-        stats.mrLargeMale += w.mrLargeMale || w.mr_large_male || 0;
-        stats.mrLargeFemale += w.mrLargeFemale || w.mr_large_female || 0;
-        stats.mrMedium += w.mrMedium || w.mr_medium || 0;
-        stats.mrSmall += w.mrSmall || w.mr_small || 0;
-        stats.us += w.us || 0;
-        stats.usA += w.usA || w.us_a || 0;
-        stats.usBreast += w.usBreast || w.us_breast || 0;
-        stats.usHeart += w.usHeart || w.us_heart || 0;
-        stats.usThy += w.usThy || w.us_thy || 0;
-        stats.usCCA += w.usCCA || w.us_cca || 0;
-        stats.usNeck += w.usNeck || w.us_neck || 0;
-        stats.usPelvisFemale += w.usPelvisFemale || w.us_pelvis_female || 0;
-        stats.usPelvisMale += w.usPelvisMale || w.us_pelvis_male || 0;
-        stats.ct += w.ct || 0;
-        stats.dx += w.dx || 0;
-        stats.mg += w.mg || 0;
-        stats.bmd += w.bmd || 0;
-        stats.cta += w.cta || 0;
-        stats.ctaPostProcessing +=
-          w.ctaPostProcessing || w.cta_post_processing || 0;
-        stats.reportTyping += w.reportEntry || w.reportTyping || 0;
-        stats.proofreader += w.imageProofing || w.proofreader || 0;
-        stats.tsmcReport += w.tsmcReport || w.tsmc_report || 0;
-        stats.mrTeaching += Math.round(
-          teachingAllocations[user.id]?.mrTeaching || 0,
-        );
-        stats.mrLargeMaleTeaching += Math.round(
-          teachingAllocations[user.id]?.mrLargeMaleTeaching || 0,
-        );
-        stats.mrLargeFemaleTeaching += Math.round(
-          teachingAllocations[user.id]?.mrLargeFemaleTeaching || 0,
-        );
-        stats.mrMediumTeaching += Math.round(
-          teachingAllocations[user.id]?.mrMediumTeaching || 0,
-        );
-        stats.mrSmallTeaching += Math.round(
-          teachingAllocations[user.id]?.mrSmallTeaching || 0,
-        );
-        stats.usTeaching += Math.round(
-          teachingAllocations[user.id]?.usTeaching || 0,
-        );
-        stats.usATeaching += Math.round(
-          teachingAllocations[user.id]?.usATeaching || 0,
-        );
-        stats.usBreastTeaching += Math.round(
-          teachingAllocations[user.id]?.usBreastTeaching || 0,
-        );
-        stats.usHeartTeaching += Math.round(
-          teachingAllocations[user.id]?.usHeartTeaching || 0,
-        );
-        stats.usThyTeaching += Math.round(
-          teachingAllocations[user.id]?.usThyTeaching || 0,
-        );
-        stats.usCCATeaching += Math.round(
-          teachingAllocations[user.id]?.usCCATeaching || 0,
-        );
-        stats.usNeckTeaching += Math.round(
-          teachingAllocations[user.id]?.usNeckTeaching || 0,
-        );
-        stats.usPelvisFemaleTeaching += Math.round(
-          teachingAllocations[user.id]?.usPelvisFemaleTeaching || 0,
-        );
-        stats.usPelvisMaleTeaching += Math.round(
-          teachingAllocations[user.id]?.usPelvisMaleTeaching || 0,
-        );
-        stats.ctTeaching += Math.round(
-          teachingAllocations[user.id]?.ctTeaching || 0,
-        );
-        stats.dxTeaching += Math.round(
-          teachingAllocations[user.id]?.dxTeaching || 0,
-        );
-        stats.mgTeaching += Math.round(
-          teachingAllocations[user.id]?.mgTeaching || 0,
-        );
-        stats.bmdTeaching += Math.round(
-          teachingAllocations[user.id]?.bmdTeaching || 0,
-        );
-        stats.ctaTeaching += Math.round(
-          teachingAllocations[user.id]?.ctaTeaching || 0,
-        );
-      } else {
-        // 沒有直接業績，但可能有分配到的教學點數
-        const teacherAlloc = teachingAllocations[user.id];
-        if (teacherAlloc) {
-          stats.mrTeaching += Math.round(teacherAlloc.mrTeaching || 0);
-          stats.mrLargeMaleTeaching += Math.round(
-            teacherAlloc.mrLargeMaleTeaching || 0,
-          );
-          stats.mrLargeFemaleTeaching += Math.round(
-            teacherAlloc.mrLargeFemaleTeaching || 0,
-          );
-          stats.mrMediumTeaching += Math.round(
-            teacherAlloc.mrMediumTeaching || 0,
-          );
-          stats.mrSmallTeaching += Math.round(
-            teacherAlloc.mrSmallTeaching || 0,
-          );
-          stats.usTeaching += Math.round(teacherAlloc.usTeaching || 0);
-          stats.usATeaching += Math.round(teacherAlloc.usATeaching || 0);
-          stats.usBreastTeaching += Math.round(
-            teacherAlloc.usBreastTeaching || 0,
-          );
-          stats.usHeartTeaching += Math.round(
-            teacherAlloc.usHeartTeaching || 0,
-          );
-          stats.usThyTeaching += Math.round(teacherAlloc.usThyTeaching || 0);
-          stats.usCCATeaching += Math.round(teacherAlloc.usCCATeaching || 0);
-          stats.usNeckTeaching += Math.round(teacherAlloc.usNeckTeaching || 0);
-          stats.usPelvisFemaleTeaching += Math.round(
-            teacherAlloc.usPelvisFemaleTeaching || 0,
-          );
-          stats.usPelvisMaleTeaching += Math.round(
-            teacherAlloc.usPelvisMaleTeaching || 0,
-          );
-          stats.ctTeaching += Math.round(teacherAlloc.ctTeaching || 0);
-          stats.dxTeaching += Math.round(teacherAlloc.dxTeaching || 0);
-          stats.mgTeaching += Math.round(teacherAlloc.mgTeaching || 0);
-          stats.bmdTeaching += Math.round(teacherAlloc.bmdTeaching || 0);
-          stats.ctaTeaching += Math.round(teacherAlloc.ctaTeaching || 0);
-        }
+      }
+      const w = wToUse;
+      stats.mr += w.mr || 0;
+      stats.mrLargeMale += w.mrLargeMale || w.mr_large_male || 0;
+      stats.mrLargeFemale += w.mrLargeFemale || w.mr_large_female || 0;
+      stats.mrMedium += w.mrMedium || w.mr_medium || 0;
+      stats.mrSmall += w.mrSmall || w.mr_small || 0;
+      stats.us += w.us || 0;
+      stats.usA += w.usA || w.us_a || 0;
+      stats.usBreast += w.usBreast || w.us_breast || 0;
+      stats.usHeart += w.usHeart || w.us_heart || 0;
+      stats.usThy += w.usThy || w.us_thy || 0;
+      stats.usCCA += w.usCCA || w.us_cca || 0;
+      stats.usNeck += w.usNeck || w.us_neck || 0;
+      stats.usPelvisFemale += w.usPelvisFemale || w.us_pelvis_female || 0;
+      stats.usPelvisMale += w.usPelvisMale || w.us_pelvis_male || 0;
+      stats.ct += w.ct || 0;
+      stats.dx += w.dx || 0;
+      stats.mg += w.mg || 0;
+      stats.bmd += w.bmd || 0;
+      stats.cta += w.cta || 0;
+      stats.ctaPostProcessing += w.ctaPostProcessing || w.cta_post_processing || 0;
+      stats.reportTyping += w.reportEntry || w.reportTyping || 0;
+      stats.proofreader += w.imageProofing || w.proofreader || 0;
+      stats.tsmcReport += w.tsmcReport || w.tsmc_report || 0;
+
+      const teacherAlloc = teachingAllocations[user.id];
+      if (teacherAlloc) {
+        stats.mrTeaching += Math.round(teacherAlloc.mrTeaching || 0);
+        stats.mrLargeMaleTeaching += Math.round(teacherAlloc.mrLargeMaleTeaching || 0);
+        stats.mrLargeFemaleTeaching += Math.round(teacherAlloc.mrLargeFemaleTeaching || 0);
+        stats.mrMediumTeaching += Math.round(teacherAlloc.mrMediumTeaching || 0);
+        stats.mrSmallTeaching += Math.round(teacherAlloc.mrSmallTeaching || 0);
+        stats.usTeaching += Math.round(teacherAlloc.usTeaching || 0);
+        stats.usATeaching += Math.round(teacherAlloc.usATeaching || 0);
+        stats.usBreastTeaching += Math.round(teacherAlloc.usBreastTeaching || 0);
+        stats.usHeartTeaching += Math.round(teacherAlloc.usHeartTeaching || 0);
+        stats.usThyTeaching += Math.round(teacherAlloc.usThyTeaching || 0);
+        stats.usCCATeaching += Math.round(teacherAlloc.usCCATeaching || 0);
+        stats.usNeckTeaching += Math.round(teacherAlloc.usNeckTeaching || 0);
+        stats.usPelvisFemaleTeaching += Math.round(teacherAlloc.usPelvisFemaleTeaching || 0);
+        stats.usPelvisMaleTeaching += Math.round(teacherAlloc.usPelvisMaleTeaching || 0);
+        stats.ctTeaching += Math.round(teacherAlloc.ctTeaching || 0);
+        stats.dxTeaching += Math.round(teacherAlloc.dxTeaching || 0);
+        stats.mgTeaching += Math.round(teacherAlloc.mgTeaching || 0);
+        stats.bmdTeaching += Math.round(teacherAlloc.bmdTeaching || 0);
+        stats.ctaTeaching += Math.round(teacherAlloc.ctaTeaching || 0);
       }
 
       // (Moved userDates calculation to the top of the mapping function)
