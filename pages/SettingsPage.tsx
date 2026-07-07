@@ -139,6 +139,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
     end.setDate(today.getDate() + 30);
     return `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, "0")}-${String(end.getDate()).padStart(2, "0")}`;
   });
+  const [selectedSyncTasks, setSelectedSyncTasks] = useState<number[]>([1]);
 
   const isSupervisorOrAdmin =
     currentUser.role === UserRole.SUPERVISOR ||
@@ -882,15 +883,19 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
       return;
     }
     
+    if (selectedSyncTasks.length === 0) {
+      alert("請至少選擇一項同步功能！");
+      return;
+    }
+    
     setIsSyncing(true);
-    // 只有功能一
-    const selectedTasks = [{
-      id: 1,
-      name: "每日統計 (醫令數與客戶量)",
+    const selectedTasks = selectedSyncTasks.map((id) => ({
+      id,
+      name: id === 1 ? "每日統計 (醫令數與客戶量)" : id === 2 ? "放射師工作量" : "影像醫師工作量",
       selected: true,
       start: syncStart,
       end: syncEnd,
-    }];
+    }));
     const payloadStr = JSON.stringify(selectedTasks);
 
     try {
@@ -2539,15 +2544,54 @@ BMD :{{bmd}}
                 <div className="px-6 py-4 border-b border-gray-100 bg-teal-50/50">
                   <h3 className="font-bold text-teal-800 flex items-center gap-2">
                     <RefreshCw size={18} className="text-teal-600" />
-                    後台資料同步 (功能一)
+                    後台資料同步 (功能一、二、三)
                   </h3>
                 </div>
                 <div className="p-6">
                   <p className="text-sm text-gray-500 mb-4">
-                    此功能將從 Salesforce 同步每日的醫令數與客戶量統計資料。
+                    選擇您想要從 Salesforce 抓取並同步到資料庫的功能項目。
                   </p>
                   <div className="flex flex-col gap-4">
-                    <div className="flex items-center gap-3">
+                    <div className="flex flex-col gap-2 bg-slate-50 p-3 rounded-lg border border-slate-100">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={selectedSyncTasks.includes(1)}
+                          onChange={(e) => {
+                            if (e.target.checked) setSelectedSyncTasks(prev => [...prev, 1]);
+                            else setSelectedSyncTasks(prev => prev.filter(id => id !== 1));
+                          }}
+                          className="w-4 h-4 text-teal-600 rounded border-gray-300 focus:ring-teal-500"
+                        />
+                        <span className="text-sm font-medium text-slate-700">功能一：每日統計 (醫令數與客戶量)</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={selectedSyncTasks.includes(2)}
+                          onChange={(e) => {
+                            if (e.target.checked) setSelectedSyncTasks(prev => [...prev, 2]);
+                            else setSelectedSyncTasks(prev => prev.filter(id => id !== 2));
+                          }}
+                          className="w-4 h-4 text-teal-600 rounded border-gray-300 focus:ring-teal-500"
+                        />
+                        <span className="text-sm font-medium text-slate-700">功能二：放射師工作量 (每日明細)</span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={selectedSyncTasks.includes(3)}
+                          onChange={(e) => {
+                            if (e.target.checked) setSelectedSyncTasks(prev => [...prev, 3]);
+                            else setSelectedSyncTasks(prev => prev.filter(id => id !== 3));
+                          }}
+                          className="w-4 h-4 text-teal-600 rounded border-gray-300 focus:ring-teal-500"
+                        />
+                        <span className="text-sm font-medium text-slate-700">功能三：影像醫師工作量</span>
+                      </label>
+                    </div>
+                    
+                    <div className="flex items-center gap-3 mt-2">
                       <span className="text-sm font-medium text-slate-600 w-20">同步區間</span>
                       <input
                         type="date"

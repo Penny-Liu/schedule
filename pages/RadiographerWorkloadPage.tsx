@@ -516,7 +516,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
     };
     refreshData();
     return db.subscribe(refreshData);
-  }, [generalDates, shifts]);
+  }, [generalDates]);
 
   const workloadData = useMemo(() => {
     // 1. 自動分配教學點數：根據學生的排班與老師的搭班情況，按比例把學生的業績分配給指導老師
@@ -1090,6 +1090,9 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
     shifts,
     estimationStartDate,
     includeEstimation,
+    cycleDailyData,
+    selectedDate,
+    cloudSchedule,
   ]);
 
   // Sorted display data (must be after workloadData)
