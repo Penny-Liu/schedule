@@ -401,9 +401,19 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
 
         stats.totalWork++;
 
-        if (station.includes("遠")) stats.remote++;
-        else if (station.includes("大直")) stats.dazhi++;
-        else stats.beitou++;
+        const isRemote = station.includes("遠");
+        const isDazhiSupport = roles.includes(SPECIAL_ROLES.DAZHI_SUPPORT);
+        const shiftLoc = manualShift?.location || "";
+        const isDazhi = station.includes("大直") || shiftLoc.includes("大直");
+
+        if (isRemote) {
+          stats.remote++;
+          if (isDazhiSupport) stats.dazhi++;
+        } else if (isDazhi || isDazhiSupport) {
+          stats.dazhi++;
+        } else {
+          stats.beitou++;
+        }
 
         if (station.includes("場控")) stats.floorControl++;
         if (station.includes("BMD") || station.includes("DX")) stats.bmd++;

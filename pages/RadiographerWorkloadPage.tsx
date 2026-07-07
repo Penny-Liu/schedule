@@ -967,14 +967,18 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
       let dazhiDays = 0;
       let beitouDays = 0;
       userShiftsInRange.forEach((s) => {
-        const isDazhi =
-          s.station.includes("大直") ||
-          (s.location && s.location.includes("大直")) ||
-          (s.specialRoles && s.specialRoles.includes(SPECIAL_ROLES.DAZHI_SUPPORT));
+        const isRemote = s.station.includes("遠");
+        const isDazhiSupport = s.specialRoles && s.specialRoles.includes(SPECIAL_ROLES.DAZHI_SUPPORT);
+        const isDazhi = s.station.includes("大直") || (s.location && s.location.includes("大直"));
 
-        if (isDazhi) dazhiDays++;
-        else if (s.station.includes("遠")) remoteDays++;
-        else beitouDays++;
+        if (isRemote) {
+          remoteDays++;
+          if (isDazhiSupport) dazhiDays++;
+        } else if (isDazhi || isDazhiSupport) {
+          dazhiDays++;
+        } else {
+          beitouDays++;
+        }
       });
       stats.remoteDays = remoteDays;
       stats.dazhiDays = dazhiDays;
