@@ -1298,9 +1298,14 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
         c.name === `${y}/${m}`,
     );
     const mm = String(m).padStart(2, "0");
-    let header = `${y}第${mm}週期 \n（${startDate.slice(5).replace("-", "/")}~${endDate.slice(5).replace("-", "/")}）  ${days}天`;
-    if (!includeEstimation && estimationStartDate) {
-      header += `\n（統計至: ${estimationStartDate.slice(5).replace("-", "/")}）`;
+    let header = "";
+    if (selectedDate) {
+      header = `📅 ${selectedDate} 工作量統計`;
+    } else {
+      header = `${y}第${mm}週期 \n（${startDate.slice(5).replace("-", "/")}~${endDate.slice(5).replace("-", "/")}）  ${days}天`;
+      if (!includeEstimation && estimationStartDate) {
+        header += `\n（統計至: ${estimationStartDate.slice(5).replace("-", "/")}）`;
+      }
     }
 
     const grouped: Record<string, any[]> = {};
@@ -1380,12 +1385,20 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
       );
       const name2 = row.name.slice(-2);
 
-      let firstLine = `${name2} ${pad(row.workDays, wDays)}天`;
-      if (!includeEstimation && estimationStartDate) {
-        firstLine += ` -已上${row.workedDaysSoFar}天`;
-      }
-      if (row.remarks) {
-        firstLine += `（${row.remarks}）`;
+      let firstLine = "";
+      if (selectedDate) {
+        firstLine = `${name2}`;
+        if (row.remarks) {
+          firstLine += `（${row.remarks}）`;
+        }
+      } else {
+        firstLine = `${name2} ${pad(row.workDays, wDays)}天`;
+        if (!includeEstimation && estimationStartDate) {
+          firstLine += ` -已上${row.workedDaysSoFar}天`;
+        }
+        if (row.remarks) {
+          firstLine += `（${row.remarks}）`;
+        }
       }
 
       let secondLine = `  `;
@@ -1397,12 +1410,14 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
         secondLine += `總${pad(total, wTotal)}`;
       if (lineExportMode === "TOTAL_AVG") {
         secondLine += `總${pad(total, wTotal)}`;
-        const denom =
-          !includeEstimation && estimationStartDate
-            ? row.workedDaysSoFar
-            : row.workDays;
-        const avg = denom > 0 ? (total / denom).toFixed(1) : "0.0";
-        secondLine += ` 均${pad(avg, 4)}`;
+        if (!selectedDate) {
+          const denom =
+            !includeEstimation && estimationStartDate
+              ? row.workedDaysSoFar
+              : row.workDays;
+          const avg = denom > 0 ? (total / denom).toFixed(1) : "0.0";
+          secondLine += ` 均${pad(avg, 4)}`;
+        }
       }
 
       let estRmk =
@@ -2801,35 +2816,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
     }
   };
 
-  const handleDailyLineCopy = () => {
-    const targetDate = selectedDate || currentMonth;
-    let text = `📅 ${targetDate} 工作量統計\n`;
-    text += `------------------------\n`;
-    
-    let hasData = false;
-    displayData.forEach(row => {
-      const onsite = computeUnits(row, onsiteFieldKeys) + (includeEstimation ? row.estOnsiteUnits || 0 : 0);
-      const remote = computeUnits(row, remoteFieldKeys) + (includeEstimation ? row.estRemoteUnits || 0 : 0);
-      const total = computeTotalUnits(row) + (includeEstimation ? (row.estOnsiteUnits || 0) + (row.estRemoteUnits || 0) : 0);
-      
-      if (total > 0) {
-        hasData = true;
-        text += `${row.name}：現場 ${onsite.toFixed(2)} | 遠端 ${remote.toFixed(2)} | 總計 ${total.toFixed(2)}\n`;
-      }
-    });
 
-    if (!hasData) {
-      alert("目前沒有任何大於0的工作量資料可以複製。");
-      return;
-    }
-
-    navigator.clipboard.writeText(text).then(() => {
-      alert("✅ 已複製到剪貼簿，可直接貼上至 LINE");
-    }).catch(err => {
-      console.error("複製失敗", err);
-      alert("❌ 複製失敗，請手動圈選複製");
-    });
-  };
 
   return (
     <div className="h-full flex flex-col bg-slate-50 relative z-20">
@@ -3013,14 +3000,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
                     <FileSpreadsheet size={14} /> 單日匯出
                   </button>
                   <div className="w-px h-4 bg-slate-200 mx-0.5"></div>
-                  <button
-                    onClick={handleDailyLineCopy}
-                    className="flex items-center gap-1.5 bg-green-50 hover:bg-green-100 text-green-700 px-2.5 py-1 rounded text-xs font-bold transition-colors"
-                    title="複製目前畫面資料供 LINE 貼上"
-                  >
-                    <Copy size={14} /> LINE 複製
-                  </button>
-                  <div className="w-px h-4 bg-slate-200 mx-0.5"></div>
+
                   <button
                     onClick={handleExport}
                     className="flex items-center gap-1.5 bg-teal-50 hover:bg-teal-100 text-teal-700 px-2.5 py-1 rounded text-xs font-bold transition-colors"
@@ -3545,19 +3525,36 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
                 <MessageSquare size={15} className="text-green-600" />
                 LINE 複製預覽
               </div>
-              <div className="flex items-center gap-2 text-xs text-slate-500 font-normal">
-                顯示內容：
-                <select
-                  value={lineExportMode}
-                  onChange={(e) => setLineExportMode(e.target.value as any)}
-                  className="border border-slate-200 rounded px-2 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-green-400"
-                >
-                  <option value="ALL">綜合 (全部)</option>
-                  <option value="ONSITE">現場單位</option>
-                  <option value="REMOTE">遠距單班</option>
-                  <option value="TOTAL">總單位</option>
-                  <option value="TOTAL_AVG">總單位 + 日平均</option>
-                </select>
+              <div className="flex flex-wrap items-center gap-4">
+                <div className="flex items-center gap-2 text-xs text-slate-500 font-normal">
+                  顯示內容：
+                  <select
+                    value={lineExportMode}
+                    onChange={(e) => setLineExportMode(e.target.value as any)}
+                    className="border border-slate-200 rounded px-2 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-green-400"
+                  >
+                    <option value="ALL">綜合 (全部)</option>
+                    <option value="ONSITE">現場單位</option>
+                    <option value="REMOTE">遠距單班</option>
+                    <option value="TOTAL">總單位</option>
+                    <option value="TOTAL_AVG">總單位 + 日平均</option>
+                  </select>
+                </div>
+                <div className="flex items-center gap-2 text-xs text-slate-500 font-normal">
+                  單日過濾：
+                  <select
+                    value={selectedDate}
+                    onChange={(e) => setSelectedDate(e.target.value)}
+                    className="border border-slate-200 rounded px-2 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-green-400"
+                  >
+                    <option value="">(全部)</option>
+                    {generalDates.map((d) => (
+                      <option key={d} value={d}>
+                        {d.substring(5)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
             </div>
 
