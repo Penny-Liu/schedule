@@ -1228,6 +1228,11 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
                         天
                       </div><span className="hidden md:inline">當期天數</span>
                       </th>
+                      <th className="px-6 py-4 font-bold text-center md:w-[12%] cursor-pointer" onClick={() => showTooltip("排班天數")}>
+                        <div className="md:hidden inline-flex items-center justify-center w-[18px] h-[18px] rounded-full bg-slate-200 text-slate-700 text-[10px] font-bold leading-none align-middle shadow-sm">
+                        班
+                      </div><span className="hidden md:inline">排班天數</span>
+                      </th>
                       <th className="px-6 py-4 font-bold text-center md:w-[13%] cursor-pointer" onClick={() => showTooltip("操作")}>
                         <div className="md:hidden inline-flex items-center justify-center w-[18px] h-[18px] rounded-full bg-slate-200 text-slate-700 text-[10px] font-bold leading-none align-middle shadow-sm">
                         操
@@ -1262,6 +1267,21 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
                           currentMonthData.startDate,
                           currentMonthData.endDate,
                         );
+
+                        const cycleDates = buildDateRange(
+                          currentMonthData.startDate,
+                          currentMonthData.endDate
+                        );
+                        const scheduledDays = shifts.filter(
+                          (s) =>
+                            s.userId === user.id &&
+                            cycleDates.includes(s.date) &&
+                            s.station !== "OFF" &&
+                            s.station !== "休假" &&
+                            s.station !== StationDefault.UNASSIGNED &&
+                            s.station !== "未指派" &&
+                            s.station !== ""
+                        ).length;
 
                         return (
                           <tr
@@ -1362,6 +1382,13 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
                                 className={`inline-flex items-center justify-center min-w-[3rem] px-2 py-1 font-bold rounded-lg border text-sm ${isCustomized ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-blue-50 text-blue-700 border-blue-100"}`}
                               >
                                 {currentDays} 天
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 text-center">
+                              <span
+                                className="inline-flex items-center justify-center min-w-[3rem] px-2 py-1 font-bold rounded-lg border text-sm bg-teal-50 text-teal-700 border-teal-100"
+                              >
+                                {scheduledDays} 天
                               </span>
                             </td>
                             <td className="px-6 py-4 text-center">
