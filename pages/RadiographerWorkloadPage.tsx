@@ -1314,7 +1314,33 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
       grouped[g.id] = [];
     });
     displayData.forEach((row) => {
+      if (lineExcludedNames.includes(row.name)) return;
+
       const user = radiographers.find((r) => r.name === row.name);
+      
+      if (selectedDate) {
+        if (user) {
+          const shift = shifts.find(
+            (s) => s.userId === user.id && s.date === selectedDate,
+          );
+          if (
+            shift &&
+            (shift.station === "休假" ||
+              shift.station === "OFF" ||
+              shift.station === StationDefault.OFF)
+          ) {
+            return;
+          }
+        }
+        const total = Math.round(
+          computeTotalUnits(row) +
+            (includeEstimation
+              ? (row.estOnsiteUnits || 0) + (row.estRemoteUnits || 0)
+              : 0),
+        );
+        if (total === 0) return;
+      }
+
       const gid = user ? groupAssignments[user.id] : undefined;
       if (gid && grouped[gid] !== undefined) grouped[gid].push(row);
       else unassigned.push(row);
@@ -1448,8 +1474,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
 
     let text = header + "\n";
     groups.forEach((g) => {
-      let rows =
-        grouped[g.id]?.filter((r) => !lineExcludedNames.includes(r.name)) || [];
+      let rows = grouped[g.id] || [];
       if (!rows.length) return;
       text += `\n${g.name}\n`;
       if (!sortField) {
@@ -1460,7 +1485,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
       text += rows.map((r) => fmt(r)).join("\n\n") + "\n";
     });
     if (unassigned.length) {
-      let rows = unassigned.filter((r) => !lineExcludedNames.includes(r.name));
+      let rows = unassigned;
       if (rows.length > 0) {
         text += `\n(未分類)\n`;
         if (!sortField) {
@@ -1484,6 +1509,8 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
     sortField,
     lineExportMode,
     lineExcludedNames,
+    selectedDate,
+    shifts,
   ]);
 
   const handleLineCopy = () => {
