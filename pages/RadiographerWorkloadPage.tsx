@@ -249,12 +249,12 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
 
   useEffect(() => {
     if (!hasInitializedLineExcluded && radiographers.length > 0) {
-      // 預設將劉雅萍與放射師助理排除
+      // 預設將放射師助理排除 (不再預設排除劉雅萍，以符合單日匯出需求)
       const assistants = radiographers
         .filter((r) => r.role === "RADIOGRAPHER_ASSISTANT")
         .map((r) => r.name);
 
-      setLineExcludedNames(["劉雅萍", ...assistants]);
+      setLineExcludedNames([...assistants]);
       setHasInitializedLineExcluded(true);
     }
   }, [radiographers, hasInitializedLineExcluded]);
@@ -520,6 +520,24 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
   }, [generalDates]);
 
   const workloadData = useMemo(() => {
+    const computeDailyTotalWeightedOrders = (date: string) => {
+      const dStats = (db.settings as any).dailyStats?.[date];
+      if (dStats && typeof dStats.total_weighted_orders === "number" && dStats.total_weighted_orders > 0) {
+        return dStats.total_weighted_orders;
+      }
+      let total = 0;
+      cycleDailyData.filter(d => d.date === date).forEach(d => {
+        total += (d.mr || 0);
+        total += (d.us || 0);
+        total += (d.ct || 0);
+        total += (d.dx || 0);
+        total += (d.mg || 0);
+        total += (d.bmd || 0);
+        total += (d.cta || 0) * 3; // CTA is weighted 3
+      });
+      return total;
+    };
+
     // 1. 自動分配教學點數：根據學生的排班與老師的搭班情況，按比例把學生的業績分配給指導老師
     const teachingAllocations: Record<string, Record<string, number>> = {};
     const learningDates: Record<string, Record<string, Set<string>>> = {};
@@ -781,9 +799,13 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
 
       // 優先使用個人週期（如有），否則 fallback 到全域 generalDates
       const personalCycle = user.personalCycles?.[currentMonth];
-      const userDates = personalCycle
+      let userDates = personalCycle
         ? buildDateRange(personalCycle.startDate, personalCycle.endDate)
         : generalDates;
+      
+      if (selectedDate) {
+        userDates = [selectedDate];
+      }
 
       const userWorkloads = workloads.filter(
         (w) => w.radiographerName === user.name && w.date === currentMonth,
@@ -857,31 +879,6 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
           ].forEach((k) => {
             wToUse[k] = 0;
           });
-        }
-
-        const shift = shifts.find(
-          (s) => s.userId === user.id && s.date === selectedDate && s.station !== "休假" && s.station !== "OFF" && s.station !== StationDefault.OFF && s.station !== StationDefault.UNASSIGNED
-        );
-        
-        if (shift) {
-          if (shift.station.includes("場控")) {
-            wToUse.floorControl = 1;
-            const pct = (weights.floorControlPercentage ?? 12) / 100;
-            const dStats = (db.settings as any).dailyStats?.[selectedDate];
-            if (dStats && typeof dStats.total_weighted_orders === "number") {
-              wToUse.floorControlScore = Math.round(dStats.total_weighted_orders * pct);
-              wToUse.floorControlOrders = dStats.total_weighted_orders;
-            } else {
-              wToUse.floorControlScore = 30;
-              wToUse.floorControlOrders = Math.round(30 / pct);
-            }
-          }
-          if (shift.specialRoles?.includes(SPECIAL_ROLES.ASSIST) || shift.station.includes("輔控") || shift.station === "輔") {
-            wToUse.assist = 1;
-          }
-          if (shift.specialRoles?.includes(SPECIAL_ROLES.SCHEDULER) || shift.station.includes("排班")) {
-            wToUse.scheduler = 1;
-          }
         }
       } else {
         // Aggregate daily workloads within the user's personal cycle dates
@@ -1040,24 +1037,14 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
 
       const pct = (weights.floorControlPercentage ?? 12) / 100;
       floorControlShifts.forEach((s) => {
-        const dStats = (db.settings as any).dailyStats?.[s.date];
-        if (dStats && typeof dStats.total_weighted_orders === "number") {
-          floorControlScore += Math.round(dStats.total_weighted_orders * pct);
-          floorControlOrders += dStats.total_weighted_orders;
-        } else {
-          // Fallback to fixed 30 if no daily stats exist for that day
-          floorControlScore += 30;
-          floorControlOrders += Math.round(30 / pct); // 逆推顯示的總醫令
-        }
+        const totalOrders = computeDailyTotalWeightedOrders(s.date);
+        floorControlScore += totalOrders * pct;
+        floorControlOrders += totalOrders;
       });
 
       futureFloorControlShifts.forEach((s) => {
-        const dStats = (db.settings as any).dailyStats?.[s.date];
-        if (dStats && typeof dStats.total_weighted_orders === "number") {
-          estFloorControlOrders += dStats.total_weighted_orders;
-        } else {
-          estFloorControlOrders += Math.round(30 / pct);
-        }
+        const totalOrders = computeDailyTotalWeightedOrders(s.date);
+        estFloorControlOrders += totalOrders;
       });
 
       const assist = userShiftsInRange.filter(
@@ -1139,6 +1126,23 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
       stats.teachingDates = teachingDates[user.id] || {};
 
       return stats;
+    }).filter((stats: any) => {
+      if (selectedDate) {
+        const shift = shifts.find(
+          (s) => s.userId === radiographers.find(r => r.name === stats.name)?.id && s.date === selectedDate
+        );
+        const isOff = !shift || shift.station === "休假" || shift.station === "OFF" || shift.station === StationDefault.OFF || shift.station === StationDefault.UNASSIGNED || shift.station === "" || shift.station === "未指派";
+        
+        // Compute total units for this single date
+        const total = Math.round(
+          computeUnits(stats, [...onsiteFieldKeys, ...remoteFieldKeys])
+        );
+
+        if (isOff || total === 0) {
+          return false;
+        }
+      }
+      return true;
     });
   }, [
     radiographers,
@@ -1358,7 +1362,8 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
     const mm = String(m).padStart(2, "0");
     let header = "";
     if (selectedDate) {
-      header = `📅 ${selectedDate} 工作量統計`;
+      const parts = selectedDate.split("-");
+      header = `${parseInt(parts[1], 10)}/${parseInt(parts[2], 10)}工作量`;
     } else {
       header = `${y}第${mm}週期 \n（${startDate.slice(5).replace("-", "/")}~${endDate.slice(5).replace("-", "/")}）  ${days}天`;
       if (!includeEstimation && estimationStartDate) {
@@ -1376,29 +1381,6 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
 
       const user = radiographers.find((r) => r.name === row.name);
       
-      if (selectedDate) {
-        if (user) {
-          const shift = shifts.find(
-            (s) => s.userId === user.id && s.date === selectedDate,
-          );
-          if (
-            shift &&
-            (shift.station === "休假" ||
-              shift.station === "OFF" ||
-              shift.station === StationDefault.OFF)
-          ) {
-            return;
-          }
-        }
-        const total = Math.round(
-          computeTotalUnits(row) +
-            (includeEstimation
-              ? (row.estOnsiteUnits || 0) + (row.estRemoteUnits || 0)
-              : 0),
-        );
-        if (total === 0) return;
-      }
-
       const gid = user ? groupAssignments[user.id] : undefined;
       if (gid && grouped[gid] !== undefined) grouped[gid].push(row);
       else unassigned.push(row);
@@ -1471,10 +1453,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
 
       let firstLine = "";
       if (selectedDate) {
-        firstLine = `${name2}`;
-        if (row.remarks) {
-          firstLine += `（${row.remarks}）`;
-        }
+        firstLine = `${name2}：`;
       } else {
         firstLine = `${name2} ${pad(row.workDays, wDays)}天`;
         if (!includeEstimation && estimationStartDate) {
@@ -1485,7 +1464,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
         }
       }
 
-      let secondLine = `  `;
+      let secondLine = selectedDate ? "" : `  `;
       if (lineExportMode === "ALL" || lineExportMode === "ONSITE")
         secondLine += `現${pad(onsite, wOnsite)} `;
       if (lineExportMode === "ALL" || lineExportMode === "REMOTE")
@@ -1505,10 +1484,10 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
       }
 
       let estRmk =
-        includeEstimation && row.estRemark ? `\n  (${row.estRemark})` : "";
+        includeEstimation && row.estRemark ? (selectedDate ? ` (${row.estRemark})` : `\n  (${row.estRemark})`) : "";
       secondLine += estRmk;
 
-      let result = `${firstLine}\n${secondLine}`;
+      let result = selectedDate ? `${firstLine}${secondLine.trim()}` : `${firstLine}\n${secondLine}`;
 
       let tRmk = [];
       // if (row.teachingDates && Object.keys(row.teachingDates).length > 0) {
@@ -1540,7 +1519,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
           (a, b) => computeTotalUnits(b) - computeTotalUnits(a),
         );
       }
-      text += rows.map((r) => fmt(r)).join("\n\n") + "\n";
+      text += rows.map((r) => fmt(r)).join(selectedDate ? "\n" : "\n\n") + "\n";
     });
     if (unassigned.length) {
       let rows = unassigned;
@@ -1551,7 +1530,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
             (a, b) => computeTotalUnits(b) - computeTotalUnits(a),
           );
         }
-        text += rows.map((r) => fmt(r)).join("\n\n") + "\n";
+        text += rows.map((r) => fmt(r)).join(selectedDate ? "\n" : "\n\n") + "\n";
       }
     }
     return text.trim();
