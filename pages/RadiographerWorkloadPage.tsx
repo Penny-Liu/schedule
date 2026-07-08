@@ -793,6 +793,34 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
         ...(userWorkloads.length > 0 ? userWorkloads[0] : {}),
       };
       if (selectedDate) {
+        // Zero out cycle-level roles and teaching points before merging daily data
+        wToUse.floorControl = 0;
+        wToUse.floorControlScore = 0;
+        wToUse.floorControlOrders = 0;
+        wToUse.estFloorControl = 0;
+        wToUse.estFloorControlOrders = 0;
+        wToUse.assist = 0;
+        wToUse.scheduler = 0;
+        wToUse.mrTeaching = 0;
+        wToUse.mrLargeMaleTeaching = 0;
+        wToUse.mrLargeFemaleTeaching = 0;
+        wToUse.mrMediumTeaching = 0;
+        wToUse.mrSmallTeaching = 0;
+        wToUse.usTeaching = 0;
+        wToUse.usATeaching = 0;
+        wToUse.usBreastTeaching = 0;
+        wToUse.usHeartTeaching = 0;
+        wToUse.usThyTeaching = 0;
+        wToUse.usCCATeaching = 0;
+        wToUse.usNeckTeaching = 0;
+        wToUse.usPelvisFemaleTeaching = 0;
+        wToUse.usPelvisMaleTeaching = 0;
+        wToUse.ctTeaching = 0;
+        wToUse.ctaTeaching = 0;
+        wToUse.dxTeaching = 0;
+        wToUse.mgTeaching = 0;
+        wToUse.bmdTeaching = 0;
+
         const dData = cycleDailyData.find(
           (d) => d.radiographerName === user.name && d.date === selectedDate,
         );
@@ -821,9 +849,37 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
             "dx",
             "mg",
             "bmd",
+            "reportTyping",
+            "proofreader",
+            "tsmcReport"
           ].forEach((k) => {
             wToUse[k] = 0;
           });
+        }
+
+        const shift = shifts.find(
+          (s) => s.userId === user.id && s.date === selectedDate && s.station !== "休假" && s.station !== "OFF" && s.station !== StationDefault.OFF && s.station !== StationDefault.UNASSIGNED
+        );
+        
+        if (shift) {
+          if (shift.station.includes("場控")) {
+            wToUse.floorControl = 1;
+            const pct = (weights.floorControlPercentage ?? 12) / 100;
+            const dStats = (db.settings as any).dailyStats?.[selectedDate];
+            if (dStats && typeof dStats.total_weighted_orders === "number") {
+              wToUse.floorControlScore = Math.round(dStats.total_weighted_orders * pct);
+              wToUse.floorControlOrders = dStats.total_weighted_orders;
+            } else {
+              wToUse.floorControlScore = 30;
+              wToUse.floorControlOrders = Math.round(30 / pct);
+            }
+          }
+          if (shift.specialRoles?.includes(SPECIAL_ROLES.ASSIST) || shift.station.includes("輔控") || shift.station === "輔") {
+            wToUse.assist = 1;
+          }
+          if (shift.specialRoles?.includes(SPECIAL_ROLES.SCHEDULER) || shift.station.includes("排班")) {
+            wToUse.scheduler = 1;
+          }
         }
       } else {
         // Aggregate daily workloads within the user's personal cycle dates
