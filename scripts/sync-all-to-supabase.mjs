@@ -217,7 +217,7 @@ export async function syncRadiographerWorkload(
   const { data: usersData } = await supabase
     .from("users")
     .select("id, name, alias, learning_capabilities")
-    
+    .eq("is_radiographer", true);
   
   const validNamesMap = {};
   usersData.forEach((u) => {
