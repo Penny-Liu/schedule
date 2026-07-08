@@ -21,6 +21,7 @@ import {
   Check,
   Plus,
   Info,
+  Copy,
 } from "lucide-react";
 import ExcelJS from "exceljs";
 import { isUserOnEmploymentPause, generateUUID } from "../services/utils";
@@ -2800,6 +2801,36 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
     }
   };
 
+  const handleDailyLineCopy = () => {
+    const targetDate = selectedDate || currentMonth;
+    let text = `📅 ${targetDate} 工作量統計\n`;
+    text += `------------------------\n`;
+    
+    let hasData = false;
+    displayData.forEach(row => {
+      const onsite = computeUnits(row, onsiteFieldKeys) + (includeEstimation ? row.estOnsiteUnits || 0 : 0);
+      const remote = computeUnits(row, remoteFieldKeys) + (includeEstimation ? row.estRemoteUnits || 0 : 0);
+      const total = computeTotalUnits(row) + (includeEstimation ? (row.estOnsiteUnits || 0) + (row.estRemoteUnits || 0) : 0);
+      
+      if (total > 0) {
+        hasData = true;
+        text += `${row.name}：現場 ${onsite.toFixed(2)} | 遠端 ${remote.toFixed(2)} | 總計 ${total.toFixed(2)}\n`;
+      }
+    });
+
+    if (!hasData) {
+      alert("目前沒有任何大於0的工作量資料可以複製。");
+      return;
+    }
+
+    navigator.clipboard.writeText(text).then(() => {
+      alert("✅ 已複製到剪貼簿，可直接貼上至 LINE");
+    }).catch(err => {
+      console.error("複製失敗", err);
+      alert("❌ 複製失敗，請手動圈選複製");
+    });
+  };
+
   return (
     <div className="h-full flex flex-col bg-slate-50 relative z-20">
       <div className="flex-none px-4 py-3 md:px-6 md:py-4 bg-white border-b border-slate-200 shadow-sm">
@@ -2980,6 +3011,14 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
                     title={`匯出 ${currentMonth} 期間的每日明細`}
                   >
                     <FileSpreadsheet size={14} /> 單日匯出
+                  </button>
+                  <div className="w-px h-4 bg-slate-200 mx-0.5"></div>
+                  <button
+                    onClick={handleDailyLineCopy}
+                    className="flex items-center gap-1.5 bg-green-50 hover:bg-green-100 text-green-700 px-2.5 py-1 rounded text-xs font-bold transition-colors"
+                    title="複製目前畫面資料供 LINE 貼上"
+                  >
+                    <Copy size={14} /> LINE 複製
                   </button>
                   <div className="w-px h-4 bg-slate-200 mx-0.5"></div>
                   <button
