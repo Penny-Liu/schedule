@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from "react";
-import { User, GeneAppointment, GeneSettings, GeneRule, DailyGeneSchedule } from "../types";
+import { User, GeneAppointment, GeneSettings, GeneRule, DailyGeneSchedule, PERMISSIONS } from "../types";
 import { db } from "../services/store";
 import {
   Calendar as CalendarIcon,
@@ -350,12 +350,14 @@ const GenePage: React.FC<GenePageProps> = ({ currentUser }) => {
             >
               <CalendarIcon size={16} className="inline mr-1" /> 排程檢視
             </button>
-            <button
-              onClick={() => setActiveTab("settings")}
-              className={`px-4 py-2 rounded-md text-sm font-bold transition-all ${activeTab === "settings" ? "bg-white text-pink-700 shadow-sm" : "text-slate-600"}`}
-            >
-              <Settings size={16} className="inline mr-1" /> 區間規則設定
-            </button>
+            {currentUser.permissions?.includes(PERMISSIONS.EDIT_GENE) && (
+              <button
+                onClick={() => setActiveTab("settings")}
+                className={`px-4 py-2 rounded-md text-sm font-bold transition-all ${activeTab === "settings" ? "bg-white text-pink-700 shadow-sm" : "text-slate-600"}`}
+              >
+                <Settings size={16} className="inline mr-1" /> 區間規則設定
+              </button>
+            )}
           </div>
         </div>
 

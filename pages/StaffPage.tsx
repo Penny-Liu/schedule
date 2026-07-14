@@ -1262,7 +1262,10 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                       },
                       {
                         title: "基因業務",
-                        perms: ["VIEW_GENE", "EDIT_GENE"],
+                        perms: [
+                          PERMISSIONS.VIEW_GENE,
+                          PERMISSIONS.EDIT_GENE,
+                        ],
                       },
                       {
                         title: "影像雲",

@@ -163,7 +163,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           id: "gene",
           label: "基因預約",
           icon: FileText,
-          permission: null,
+          permission: PERMISSIONS.VIEW_GENE,
         },
       ],
     },
