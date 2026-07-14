@@ -1,5 +1,5 @@
-import React, { useState, useMemo, useEffect, useRef } from "react";
-import { User, GeneAppointment, GeneSettings } from "../types";
+import React, { useState, useMemo, useEffect } from "react";
+import { User, GeneAppointment, GeneSettings, GeneRule, DailyGeneSchedule } from "../types";
 import { db } from "../services/store";
 import {
   Calendar as CalendarIcon,
@@ -7,13 +7,12 @@ import {
   ChevronRight,
   Plus,
   X,
-  Clock,
   User as UserIcon,
   FileText,
   Trash2,
   Settings,
-  AlertTriangle,
-  CalendarDays
+  CalendarDays,
+  Edit2
 } from "lucide-react";
 import { toLocalISOString, generateUUID } from "../services/utils";
 
@@ -21,27 +20,78 @@ interface GenePageProps {
   currentUser: User;
 }
 
-const DEFAULT_SETTINGS: GeneSettings = {
-  openDays: [1, 2, 3, 4, 5],
+const createDefaultDailySchedule = (isOpen: boolean): DailyGeneSchedule => ({
+  isOpen,
   startTime: "08:00",
   endTime: "17:00",
+  maxAppointmentsPerSlot: 1,
+});
+
+const createDefaultRule = (): GeneRule => ({
+  id: generateUUID(),
+  name: "預設規則",
+  startDate: "2020-01-01",
+  endDate: "2099-12-31",
   intervalMinutes: 30,
+  schedules: [
+    createDefaultDailySchedule(false), // Sun
+    createDefaultDailySchedule(true),  // Mon
+    createDefaultDailySchedule(true),  // Tue
+    createDefaultDailySchedule(true),  // Wed
+    createDefaultDailySchedule(true),  // Thu
+    createDefaultDailySchedule(true),  // Fri
+    createDefaultDailySchedule(false), // Sat
+  ]
+});
+
+const DEFAULT_SETTINGS: GeneSettings = {
+  rules: [createDefaultRule()],
 };
 
-const generateTimeSlots = (settings: GeneSettings) => {
-  const slots = [];
-  const start = settings.startTime.split(":").map(Number);
-  const end = settings.endTime.split(":").map(Number);
-  let currentMinutes = start[0] * 60 + start[1];
-  const endMinutes = end[0] * 60 + end[1];
+const getApplicableRule = (dateStr: string, settings: GeneSettings): GeneRule | null => {
+  if (!settings.rules || !Array.isArray(settings.rules)) return null;
+  // find first rule where date is within range
+  return settings.rules.find(r => dateStr >= r.startDate && dateStr <= r.endDate) || null;
+};
 
-  while (currentMinutes <= endMinutes) {
-    const h = Math.floor(currentMinutes / 60);
-    const m = currentMinutes % 60;
-    slots.push(`${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`);
-    currentMinutes += settings.intervalMinutes;
+// Returns a list of time slots ("08:00", "08:30"...) based on min start and max end of the week
+const generateWeeklyAxis = (weekDays: Date[], settings: GeneSettings) => {
+  let minMinutes = 24 * 60;
+  let maxMinutes = 0;
+  let foundAnyOpen = false;
+  let minInterval = 30; // fallback
+
+  weekDays.forEach(date => {
+    const dateStr = toLocalISOString(date);
+    const rule = getApplicableRule(dateStr, settings);
+    if (!rule) return;
+    const schedule = rule.schedules[date.getDay()];
+    if (schedule && schedule.isOpen) {
+      foundAnyOpen = true;
+      minInterval = rule.intervalMinutes; // assume mostly same interval in a week
+      const start = schedule.startTime.split(":").map(Number);
+      const end = schedule.endTime.split(":").map(Number);
+      const startMins = start[0] * 60 + start[1];
+      const endMins = end[0] * 60 + end[1];
+      if (startMins < minMinutes) minMinutes = startMins;
+      if (endMins > maxMinutes) maxMinutes = endMins;
+    }
+  });
+
+  if (!foundAnyOpen) {
+    minMinutes = 8 * 60; // 08:00
+    maxMinutes = 17 * 60; // 17:00
   }
-  return slots;
+
+  const slots = [];
+  let current = minMinutes;
+  while (current <= maxMinutes) {
+    const h = Math.floor(current / 60);
+    const m = current % 60;
+    slots.push(`${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`);
+    current += minInterval;
+  }
+  return { slots, minInterval };
 };
 
 const GenePage: React.FC<GenePageProps> = ({ currentUser }) => {
@@ -53,26 +103,42 @@ const GenePage: React.FC<GenePageProps> = ({ currentUser }) => {
   }, [currentDate]);
 
   const [appointments, setAppointments] = useState<GeneAppointment[]>(() => db.getGeneAppointments());
-  const [settings, setSettings] = useState<GeneSettings>(() => db.settings.geneSettings || DEFAULT_SETTINGS);
+  
+  // Migration logic for old openDays settings to new rules array
+  const initialSettings = db.settings.geneSettings as any;
+  let defaultSettingsToUse = DEFAULT_SETTINGS;
+  if (initialSettings && initialSettings.openDays && !initialSettings.rules) {
+     const rule = createDefaultRule();
+     rule.intervalMinutes = initialSettings.intervalMinutes || 30;
+     for (let i = 0; i < 7; i++) {
+        rule.schedules[i].isOpen = initialSettings.openDays.includes(i);
+        rule.schedules[i].startTime = initialSettings.startTime || "08:00";
+        rule.schedules[i].endTime = initialSettings.endTime || "17:00";
+     }
+     defaultSettingsToUse = { rules: [rule] };
+  } else if (initialSettings && initialSettings.rules) {
+     defaultSettingsToUse = initialSettings as GeneSettings;
+  }
+
+  const [settings, setSettings] = useState<GeneSettings>(defaultSettingsToUse);
   const [holidays, setHolidays] = useState(() => db.getHolidays());
 
   useEffect(() => {
     const unsubscribe = db.subscribe(() => {
       setAppointments([...db.getGeneAppointments()]);
-      setSettings(db.settings.geneSettings || DEFAULT_SETTINGS);
+      const st = db.settings.geneSettings as any;
+      if (st && st.rules) setSettings(st as GeneSettings);
       setHolidays([...db.getHolidays()]);
     });
     db.initializeAuthData(true); if (db.currentUser) db.initializeDataForUser(db.currentUser, true);
     return () => unsubscribe();
   }, []);
 
-  const timeSlots = useMemo(() => generateTimeSlots(settings), [settings]);
-
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [formData, setFormData] = useState({
     date: toLocalISOString(new Date()),
-    startTime: timeSlots[0] || "08:00",
-    endTime: timeSlots[1] || "08:30",
+    startTime: "08:00",
+    endTime: "08:30",
     medicalRecordNumber: "",
     registeredBy: currentUser.name,
   });
@@ -97,6 +163,7 @@ const GenePage: React.FC<GenePageProps> = ({ currentUser }) => {
     return days;
   }, [currentDate]);
 
+  const { slots: timeSlots } = useMemo(() => generateWeeklyAxis(weekDays, settings), [weekDays, settings]);
   const weekStartStr = toLocalISOString(weekDays[0]);
   const weekEndStr = toLocalISOString(weekDays[6]);
   const weekAppointments = appointments.filter((b) => b.date >= weekStartStr && b.date <= weekEndStr);
@@ -116,24 +183,45 @@ const GenePage: React.FC<GenePageProps> = ({ currentUser }) => {
     setFormData(prev => ({ ...prev, date: targetDateStr }));
     setCurrentDate(target);
 
-    // Auto-select earliest available time slot
-    let foundSlot = false;
-    for (let i = 0; i < timeSlots.length - 1; i++) {
-      const st = timeSlots[i];
-      const et = timeSlots[i + 1];
-      const conflicts = getConflicts(targetDateStr, st, et);
-      if (conflicts.length === 0) {
-        setFormData(prev => ({ ...prev, startTime: st, endTime: et, date: targetDateStr }));
-        foundSlot = true;
-        break;
-      }
+    const rule = getApplicableRule(targetDateStr, settings);
+    const isHoliday = holidays.some(h => h.date === targetDateStr && h.name !== "補班");
+    
+    if (!rule) {
+       alert(`⚠️ 提醒您：\\n${targetDateStr} (星期${dayNames[targetDay]}) 尚未建立開放規則！請先前往「解說設定」建立適用該區間的規則。`);
+       return;
+    }
+    
+    const schedule = rule.schedules[targetDay];
+    if (isHoliday || !schedule.isOpen) {
+      alert(`⚠️ 提醒您：\\n您跳轉的日期 ${targetDateStr} (星期${dayNames[targetDay]}) \\n${!schedule.isOpen ? '非基因解說開放日' : '為國定假日/休診日'}，可能無法排程，請再次確認！`);
     }
 
-    const isHoliday = holidays.some(h => h.date === targetDateStr && h.title !== "補班");
-    const isOpenDay = settings.openDays.includes(targetDay);
+    // Auto-select earliest available time slot based on the daily rule
+    if (schedule && schedule.isOpen) {
+       // Generate daily slots
+       let currentMins = Number(schedule.startTime.split(":")[0]) * 60 + Number(schedule.startTime.split(":")[1]);
+       const endMins = Number(schedule.endTime.split(":")[0]) * 60 + Number(schedule.endTime.split(":")[1]);
+       const maxAppts = schedule.maxAppointmentsPerSlot || 1;
+       let foundSlot = false;
 
-    if (isHoliday || !isOpenDay) {
-      alert(`⚠️ 提醒您：\n您跳轉的日期 ${targetDateStr} (星期${dayNames[targetDay]}) \n${!isOpenDay ? '非基因解說開放日' : '為國定假日/休診日'}，可能無法排程，請再次確認！`);
+       while (currentMins < endMins) {
+         const h1 = Math.floor(currentMins / 60);
+         const m1 = currentMins % 60;
+         const st = `${String(h1).padStart(2, "0")}:${String(m1).padStart(2, "0")}`;
+         
+         const nextMins = currentMins + rule.intervalMinutes;
+         const h2 = Math.floor(nextMins / 60);
+         const m2 = nextMins % 60;
+         const et = `${String(h2).padStart(2, "0")}:${String(m2).padStart(2, "0")}`;
+
+         const conflicts = getConflicts(targetDateStr, st, et);
+         if (conflicts.length < maxAppts) {
+           setFormData(prev => ({ ...prev, startTime: st, endTime: et, date: targetDateStr }));
+           foundSlot = true;
+           break;
+         }
+         currentMins += rule.intervalMinutes;
+       }
     }
   };
 
@@ -148,9 +236,13 @@ const GenePage: React.FC<GenePageProps> = ({ currentUser }) => {
       return;
     }
 
+    const rule = getApplicableRule(formData.date, settings);
+    const day = new Date(formData.date).getDay();
+    const maxAppts = rule?.schedules[day]?.maxAppointmentsPerSlot || 1;
+
     const conflicts = getConflicts(formData.date, formData.startTime, formData.endTime);
-    if (conflicts.length > 0) {
-      if (!confirm("該時段已有預約，確定要重複預約嗎？")) return;
+    if (conflicts.length >= maxAppts) {
+      if (!confirm(`該時段已有 ${conflicts.length} 筆預約，已達(或超過)上限 ${maxAppts} 人。確定要超額預約嗎？`)) return;
     }
 
     try {
@@ -178,18 +270,40 @@ const GenePage: React.FC<GenePageProps> = ({ currentUser }) => {
 
   const registeredByHistory = useMemo(() => {
     const names = appointments.map(a => a.registeredBy).filter(Boolean);
-    return Array.from(new Set(names)).slice(0, 5); // top 5 unique names
+    return Array.from(new Set(names)).slice(0, 5);
   }, [appointments]);
 
-  // Settings Handlers
   const handleSettingsSave = async () => {
     try {
-      db.settings.geneSettings = settings;
-      await db.updateSettings(db.settings);
+      db.settings.geneSettings = settings as any;
+      await db.saveSettings();
       showToast("設定已儲存");
     } catch (err) {
       showToast("儲存失敗", "error");
     }
+  };
+
+  // Rule Editor State
+  const [editingRuleId, setEditingRuleId] = useState<string | null>(null);
+
+  const handleAddRule = () => {
+    const newRule = createDefaultRule();
+    newRule.name = "新規則";
+    newRule.startDate = toLocalISOString(new Date());
+    setSettings(prev => ({ ...prev, rules: [newRule, ...prev.rules] }));
+    setEditingRuleId(newRule.id);
+  };
+
+  const handleDeleteRule = (id: string) => {
+    if (!confirm("確定要刪除此規則嗎？")) return;
+    setSettings(prev => ({ ...prev, rules: prev.rules.filter(r => r.id !== id) }));
+  };
+
+  const updateEditingRule = (updateFn: (rule: GeneRule) => GeneRule) => {
+    setSettings(prev => ({
+      ...prev,
+      rules: prev.rules.map(r => r.id === editingRuleId ? updateFn(r) : r)
+    }));
   };
 
   return (
@@ -198,10 +312,10 @@ const GenePage: React.FC<GenePageProps> = ({ currentUser }) => {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-pink-100 rounded-lg text-pink-600">
-              <UserIcon size={24} />
+              <FileText size={24} />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-gray-800">基因解說系統</h1>
+              <h1 className="text-2xl font-bold text-gray-800">基因預約系統</h1>
               <p className="text-sm text-gray-500">預約與管理基因解說排程</p>
             </div>
           </div>
@@ -216,7 +330,7 @@ const GenePage: React.FC<GenePageProps> = ({ currentUser }) => {
               onClick={() => setActiveTab("settings")}
               className={`px-4 py-2 rounded-md text-sm font-bold transition-all ${activeTab === "settings" ? "bg-white text-pink-700 shadow-sm" : "text-slate-600"}`}
             >
-              <Settings size={16} className="inline mr-1" /> 解說設定
+              <Settings size={16} className="inline mr-1" /> 區間規則設定
             </button>
           </div>
         </div>
@@ -295,8 +409,11 @@ const GenePage: React.FC<GenePageProps> = ({ currentUser }) => {
                   </div>
                   {weekDays.map((date, idx) => {
                     const isToday = date.toDateString() === new Date().toDateString();
-                    const isOpen = settings.openDays.includes(date.getDay());
-                    const holiday = holidays.find(h => h.date === toLocalISOString(date) && h.title !== "補班");
+                    const dateStr = toLocalISOString(date);
+                    const rule = getApplicableRule(dateStr, settings);
+                    const schedule = rule?.schedules[date.getDay()];
+                    const isOpen = schedule?.isOpen || false;
+                    const holiday = holidays.find(h => h.date === dateStr && h.name !== "補班");
                     
                     return (
                       <div
@@ -311,8 +428,18 @@ const GenePage: React.FC<GenePageProps> = ({ currentUser }) => {
                         </div>
                         {holiday && (
                           <div className="text-[10px] bg-red-100 text-red-600 font-bold px-1 py-0.5 rounded mt-1">
-                            {holiday.title}
+                            {holiday.name}
                           </div>
+                        )}
+                        {!rule && (
+                           <div className="text-[10px] bg-slate-200 text-slate-600 font-bold px-1 py-0.5 rounded mt-1">
+                             未設規則
+                           </div>
+                        )}
+                        {rule && isOpen && (
+                           <div className="text-[10px] text-slate-400 mt-1">
+                             上限: {schedule?.maxAppointmentsPerSlot} 人
+                           </div>
                         )}
                       </div>
                     );
@@ -327,16 +454,29 @@ const GenePage: React.FC<GenePageProps> = ({ currentUser }) => {
                       </div>
                       {weekDays.map((date, dayIdx) => {
                         const dateStr = toLocalISOString(date);
+                        const rule = getApplicableRule(dateStr, settings);
+                        const schedule = rule?.schedules[date.getDay()];
+                        const isOpen = schedule?.isOpen || false;
+                        
+                        // Check if this specific time is within this day's open hours
+                        let isTimeSlotOpen = false;
+                        if (isOpen && schedule) {
+                           isTimeSlotOpen = time >= schedule.startTime && time < schedule.endTime;
+                        }
+
                         const slotBookings = weekAppointments.filter(
                           (b) => b.date === dateStr && time >= b.startTime && time < b.endTime
                         );
-                        const isOpen = settings.openDays.includes(date.getDay());
+                        
+                        const maxAppts = schedule?.maxAppointmentsPerSlot || 1;
+                        const isFull = slotBookings.length >= maxAppts;
                         
                         return (
                           <div
                             key={dayIdx}
-                            className={`p-1 border-r border-gray-100 last:border-0 min-h-[60px] relative transition-colors ${!isOpen ? "bg-gray-50/80" : "hover:bg-slate-50 cursor-pointer"}`}
+                            className={`p-1 border-r border-gray-100 last:border-0 min-h-[60px] relative transition-colors ${!isTimeSlotOpen ? "bg-slate-100/80 cursor-not-allowed" : "hover:bg-pink-50/50 cursor-pointer"}`}
                             onClick={(e) => {
+                              if (!isTimeSlotOpen) return; // do nothing if closed
                               if ((e.target as HTMLElement).closest('.booking-card')) return;
                               setFormData({
                                 ...formData,
@@ -351,7 +491,8 @@ const GenePage: React.FC<GenePageProps> = ({ currentUser }) => {
                               <div
                                 key={booking.id}
                                 className="booking-card mb-1 p-1.5 bg-pink-100 border border-pink-200 rounded text-[10px] leading-tight group/card relative hover:shadow-md transition-all z-10"
-                                onClick={() => {
+                                onClick={(e) => {
+                                  e.stopPropagation();
                                   setFormData({
                                     date: booking.date,
                                     startTime: booking.startTime,
@@ -376,6 +517,11 @@ const GenePage: React.FC<GenePageProps> = ({ currentUser }) => {
                                 </div>
                               </div>
                             ))}
+                            {isTimeSlotOpen && !isFull && slotBookings.length > 0 && (
+                                <div className="text-[10px] text-pink-400 font-bold text-center mt-1">
+                                  尚可約 {maxAppts - slotBookings.length}
+                                </div>
+                            )}
                           </div>
                         );
                       })}
@@ -388,77 +534,120 @@ const GenePage: React.FC<GenePageProps> = ({ currentUser }) => {
         )}
 
         {activeTab === "settings" && (
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200 max-w-2xl">
-            <h2 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
-              <Settings size={20} className="text-pink-500" /> 解說開放規則設定
-            </h2>
-            <div className="space-y-6">
-              <div>
-                <label className="block text-sm font-bold text-gray-700 mb-3">開放星期</label>
-                <div className="flex flex-wrap gap-2">
-                  {[1, 2, 3, 4, 5, 6, 0].map((day) => (
-                    <button
-                      key={day}
-                      onClick={() => {
-                        setSettings(prev => {
-                          const newDays = prev.openDays.includes(day)
-                            ? prev.openDays.filter(d => d !== day)
-                            : [...prev.openDays, day];
-                          return { ...prev, openDays: newDays };
-                        });
-                      }}
-                      className={`px-4 py-2 rounded-lg text-sm font-bold border transition-colors ${settings.openDays.includes(day) ? "bg-pink-100 border-pink-300 text-pink-700" : "bg-white border-gray-300 text-gray-500 hover:bg-gray-50"}`}
-                    >
-                      星期{dayNames[day]}
-                    </button>
-                  ))}
+          <div className="flex flex-col gap-4 max-w-5xl">
+            <div className="flex justify-between items-center bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+              <div className="font-bold text-gray-700 flex items-center gap-2">
+                <Settings className="text-pink-500" size={20} /> 管理多組區間規則
+              </div>
+              <div className="flex gap-2">
+                 <button onClick={handleAddRule} className="bg-pink-100 text-pink-700 px-4 py-2 rounded-lg font-bold hover:bg-pink-200 transition-colors text-sm flex items-center gap-1">
+                   <Plus size={16} /> 新增規則
+                 </button>
+                 <button onClick={handleSettingsSave} className="bg-slate-800 text-white px-6 py-2 rounded-lg font-bold hover:bg-slate-900 transition-colors text-sm shadow-sm">
+                   儲存所有設定
+                 </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4">
+              {settings.rules.map((rule) => {
+                const isEditing = editingRuleId === rule.id;
+                return (
+                  <div key={rule.id} className={`bg-white rounded-xl shadow-sm border transition-all ${isEditing ? 'border-pink-400 ring-1 ring-pink-400' : 'border-gray-200'}`}>
+                    <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between bg-slate-50 rounded-t-xl">
+                      <div className="flex items-center gap-4 flex-1">
+                        {isEditing ? (
+                           <input type="text" value={rule.name} onChange={(e) => updateEditingRule(r => ({...r, name: e.target.value}))} className="font-bold text-lg px-2 py-1 border border-pink-300 rounded focus:outline-none" />
+                        ) : (
+                           <div className="font-bold text-lg text-slate-800">{rule.name}</div>
+                        )}
+                        <div className="flex items-center gap-2 text-sm text-slate-600 bg-white px-3 py-1 rounded-full border border-slate-200">
+                           <CalendarIcon size={14} />
+                           {isEditing ? (
+                              <input type="date" value={rule.startDate} onChange={(e) => updateEditingRule(r => ({...r, startDate: e.target.value}))} className="bg-transparent border-b border-pink-300 focus:outline-none" />
+                           ) : (
+                              <span>{rule.startDate}</span>
+                           )}
+                           <span className="text-gray-400">至</span>
+                           {isEditing ? (
+                              <input type="date" value={rule.endDate} onChange={(e) => updateEditingRule(r => ({...r, endDate: e.target.value}))} className="bg-transparent border-b border-pink-300 focus:outline-none" />
+                           ) : (
+                              <span>{rule.endDate}</span>
+                           )}
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                         <button onClick={() => setEditingRuleId(isEditing ? null : rule.id)} className={`p-2 rounded transition-colors ${isEditing ? 'bg-pink-100 text-pink-700' : 'text-slate-500 hover:bg-slate-100'}`}>
+                           {isEditing ? '完成編輯' : <Edit2 size={16} />}
+                         </button>
+                         <button onClick={() => handleDeleteRule(rule.id)} className="p-2 text-red-400 hover:bg-red-50 hover:text-red-600 rounded transition-colors">
+                           <Trash2 size={16} />
+                         </button>
+                      </div>
+                    </div>
+                    
+                    {isEditing && (
+                      <div className="p-5 space-y-6">
+                         <div className="flex items-center gap-4">
+                           <label className="text-sm font-bold text-slate-700">單次預約間隔時間 (分鐘) :</label>
+                           <select value={rule.intervalMinutes} onChange={(e) => updateEditingRule(r => ({...r, intervalMinutes: Number(e.target.value)}))} className="border border-slate-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-pink-500">
+                             <option value={15}>15 分鐘</option>
+                             <option value={30}>30 分鐘</option>
+                             <option value={60}>60 分鐘</option>
+                           </select>
+                         </div>
+
+                         <div>
+                           <label className="block text-sm font-bold text-slate-700 mb-3">每日詳細開放設定</label>
+                           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                             {rule.schedules.map((schedule, dayIdx) => (
+                               <div key={dayIdx} className={`border rounded-lg p-3 ${schedule.isOpen ? 'border-pink-200 bg-pink-50/30' : 'border-gray-200 bg-gray-50'}`}>
+                                 <div className="flex items-center justify-between mb-3 border-b border-gray-100 pb-2">
+                                    <span className="font-bold text-slate-700">星期{dayNames[dayIdx]}</span>
+                                    <label className="relative inline-flex items-center cursor-pointer">
+                                      <input type="checkbox" className="sr-only peer" checked={schedule.isOpen} onChange={(e) => updateEditingRule(r => {
+                                         const ns = [...r.schedules]; ns[dayIdx] = {...ns[dayIdx], isOpen: e.target.checked}; return {...r, schedules: ns};
+                                      })} />
+                                      <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-pink-500"></div>
+                                    </label>
+                                 </div>
+                                 <div className={`space-y-2 ${!schedule.isOpen ? 'opacity-50 pointer-events-none' : ''}`}>
+                                    <div className="flex items-center justify-between gap-2 text-xs">
+                                       <span className="text-gray-500 whitespace-nowrap">開始</span>
+                                       <input type="time" value={schedule.startTime} onChange={(e) => updateEditingRule(r => {
+                                         const ns = [...r.schedules]; ns[dayIdx] = {...ns[dayIdx], startTime: e.target.value}; return {...r, schedules: ns};
+                                       })} className="border border-gray-300 rounded px-2 py-1 w-full" />
+                                    </div>
+                                    <div className="flex items-center justify-between gap-2 text-xs">
+                                       <span className="text-gray-500 whitespace-nowrap">結束</span>
+                                       <input type="time" value={schedule.endTime} onChange={(e) => updateEditingRule(r => {
+                                         const ns = [...r.schedules]; ns[dayIdx] = {...ns[dayIdx], endTime: e.target.value}; return {...r, schedules: ns};
+                                       })} className="border border-gray-300 rounded px-2 py-1 w-full" />
+                                    </div>
+                                    <div className="flex items-center justify-between gap-2 text-xs">
+                                       <span className="text-gray-500 whitespace-nowrap">人數上限</span>
+                                       <input type="number" min={1} max={10} value={schedule.maxAppointmentsPerSlot} onChange={(e) => updateEditingRule(r => {
+                                         const ns = [...r.schedules]; ns[dayIdx] = {...ns[dayIdx], maxAppointmentsPerSlot: Number(e.target.value)}; return {...r, schedules: ns};
+                                       })} className="border border-gray-300 rounded px-2 py-1 w-full" />
+                                    </div>
+                                 </div>
+                               </div>
+                             ))}
+                           </div>
+                         </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+              {settings.rules.length === 0 && (
+                <div className="text-center py-12 text-slate-400 bg-white rounded-xl border border-dashed border-slate-300">
+                   尚未建立任何區間規則。
                 </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2">每日開始時間</label>
-                  <input
-                    type="time"
-                    value={settings.startTime}
-                    onChange={(e) => setSettings({ ...settings, startTime: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2">每日結束時間</label>
-                  <input
-                    type="time"
-                    value={settings.endTime}
-                    onChange={(e) => setSettings({ ...settings, endTime: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-500"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-bold text-gray-700 mb-2">單次預約間隔 (分鐘)</label>
-                <select
-                  value={settings.intervalMinutes}
-                  onChange={(e) => setSettings({ ...settings, intervalMinutes: Number(e.target.value) })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-500"
-                >
-                  <option value={15}>15 分鐘</option>
-                  <option value={30}>30 分鐘</option>
-                  <option value={60}>60 分鐘</option>
-                </select>
-              </div>
-              
-              <div className="pt-6 border-t border-gray-100 flex justify-end">
-                <button
-                  onClick={handleSettingsSave}
-                  className="bg-slate-800 text-white px-6 py-2.5 rounded-lg font-bold hover:bg-slate-900 transition-colors shadow-sm"
-                >
-                  儲存設定
-                </button>
-              </div>
+              )}
             </div>
           </div>
         )}
-
       </div>
 
       {isModalOpen && (
@@ -493,7 +682,7 @@ const GenePage: React.FC<GenePageProps> = ({ currentUser }) => {
                    <button 
                      type="button" 
                      onClick={handleJump2Months}
-                     className="text-xs font-bold text-pink-600 hover:text-pink-800 flex items-center gap-1 bg-pink-50 px-2 py-1 rounded"
+                     className="text-xs font-bold text-pink-600 hover:text-pink-800 flex items-center gap-1 bg-pink-50 px-2 py-1 rounded transition-colors"
                    >
                      <CalendarDays size={12} /> 快速跳至兩個月後
                    </button>

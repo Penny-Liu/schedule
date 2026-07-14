@@ -505,9 +505,23 @@ export interface GeneAppointment {
   createdAt?: string;
 }
 
-export interface GeneSettings {
-  openDays: number[]; // 0=Sun, 1=Mon...
-  startTime: string; // e.g. "08:00"
-  endTime: string; // e.g. "17:00"
+
+export interface DailyGeneSchedule {
+  isOpen: boolean;
+  startTime: string; // "08:00"
+  endTime: string; // "17:00"
+  maxAppointmentsPerSlot: number; // e.g. 1
+}
+
+export interface GeneRule {
+  id: string;
+  name: string;
+  startDate: string; // YYYY-MM-DD
+  endDate: string; // YYYY-MM-DD
   intervalMinutes: number; // e.g. 30
+  schedules: DailyGeneSchedule[]; // Array of 7, index 0=Sun, 1=Mon...
+}
+
+export interface GeneSettings {
+  rules: GeneRule[];
 }

@@ -410,8 +410,14 @@ class Store {
       assistantReq = fetchAssistantData();
     }
 
-    const [shiftsRes, hmShiftsRes, dShiftsRes, aneShiftsRes, workloadsRes, leavesRes, meetingRoomsRes, assistantRes] = await Promise.all([
-      shiftsReq, hmShiftsReq, docShiftsReq, aneShiftsReq, workloadsReq, leavesReq, meetingRoomsReq, assistantReq
+    let geneReq = supabase
+      .from("gene_appointments")
+      .select("*")
+      .gte("date", startDate)
+      .lte("date", endDate);
+
+    const [shiftsRes, hmShiftsRes, dShiftsRes, aneShiftsRes, workloadsRes, leavesRes, meetingRoomsRes, assistantRes, geneRes] = await Promise.all([
+      shiftsReq, hmShiftsReq, docShiftsReq, aneShiftsReq, workloadsReq, leavesReq, meetingRoomsReq, assistantReq, geneReq
     ]);
 
     const merge = (existing: any[], incoming: any[]) => {
