@@ -1982,7 +1982,11 @@ class Store {
 };
     Object.keys(mapping).forEach((key) => {
       if (key in obj && key !== mapping[key]) {
-        obj[mapping[key]] = obj[key];
+        let val = obj[key];
+        if (val === "" && (key.includes("Date") || key.includes("Time"))) {
+          val = null;
+        }
+        obj[mapping[key]] = val;
         delete obj[key];
       }
     });
@@ -2135,8 +2139,8 @@ class Store {
       location: staff.location,
       display_order: staff.displayOrder,
       designation: staff.designation,
-      hire_date: staff.hireDate,
-      termination_date: staff.terminationDate,
+      hire_date: staff.hireDate === "" ? null : staff.hireDate,
+      termination_date: staff.terminationDate === "" ? null : staff.terminationDate,
     });
     if (error) {
       console.error("Failed to add health mgmt staff to Supabase:", error);
@@ -2162,9 +2166,9 @@ class Store {
       dbUpdates.display_order = updates.displayOrder;
     if (updates.designation !== undefined)
       dbUpdates.designation = updates.designation;
-    if (updates.hireDate !== undefined) dbUpdates.hire_date = updates.hireDate;
+    if (updates.hireDate !== undefined) dbUpdates.hire_date = updates.hireDate === "" ? null : updates.hireDate;
     if (updates.terminationDate !== undefined)
-      dbUpdates.termination_date = updates.terminationDate;
+      dbUpdates.termination_date = updates.terminationDate === "" ? null : updates.terminationDate;
 
     if (Object.keys(dbUpdates).length > 0) {
       const { error } = await supabase
