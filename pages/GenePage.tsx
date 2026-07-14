@@ -380,7 +380,7 @@ const GenePage: React.FC<GenePageProps> = ({ currentUser }) => {
         </div>
 
         {toast && (
-          <div className={`fixed top-4 left-1/2 -translate-x-1/2 px-6 py-3 rounded-lg shadow-lg font-bold z-50 animate-fade-in-down ${toast.type === "success" ? "bg-emerald-500 text-white" : "bg-red-500 text-white"}`}>
+          <div className={`fixed top-4 left-1/2 -translate-x-1/2 px-6 py-3 rounded-lg shadow-lg font-bold z-[100] animate-fade-in-down ${toast.type === "success" ? "bg-emerald-500 text-white" : "bg-red-500 text-white"}`}>
             {toast.message}
           </div>
         )}
@@ -435,7 +435,10 @@ const GenePage: React.FC<GenePageProps> = ({ currentUser }) => {
                       setIsModalOpen(true);
                       setFormData(prev => ({
                         ...prev,
-                        date: toLocalISOString(currentDate)
+                        date: toLocalISOString(currentDate),
+                        medicalRecordNumber: "",
+                        startTime: "08:00",
+                        endTime: "08:30"
                       }));
                     }}
                     className="flex items-center gap-2 bg-pink-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-pink-700 transition-colors shadow-sm whitespace-nowrap"
