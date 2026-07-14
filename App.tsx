@@ -20,6 +20,7 @@ import AdministrativeSchedulePage, {
   AdministrativeCategory,
 } from "./pages/AdministrativeSchedulePage";
 import MeetingRoomPage from "./pages/MeetingRoomPage";
+import GenePage from "./pages/GenePage";
 import SkillDashboardPage from "./pages/SkillDashboardPage";
 // Error Boundary Component
 class ErrorBoundary extends React.Component<
@@ -242,6 +243,8 @@ const App: React.FC = () => {
         );
       case "meeting_room":
         return <MeetingRoomPage currentUser={currentUser} />;
+      case "gene":
+        return <GenePage currentUser={currentUser} />;
       case "skill_dashboard":
         return <SkillDashboardPage currentUser={currentUser} />;
       default:

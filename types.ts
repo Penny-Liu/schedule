@@ -376,6 +376,7 @@ export interface SystemSettings {
   healthMgmtLeaveTypes?: string[]; // New: Health management leave types
   radiographerWorkloadWeights?: Record<string, number>; // 放射師工作量欄位權重
   stationNotes?: Record<string, string>; // Map of 'YYYY-MM-DD_StationName' -> text
+  geneSettings?: GeneSettings; // New: Settings for gene appointments
 }
 
 // ── 操作日誌介面 ──────────────────────────
@@ -492,4 +493,21 @@ export interface MeetingRoomBooking {
   unit: string;
   purpose: string;
   userId: string;
+}
+
+export interface GeneAppointment {
+  id: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  medicalRecordNumber: string;
+  registeredBy: string;
+  createdAt?: string;
+}
+
+export interface GeneSettings {
+  openDays: number[]; // 0=Sun, 1=Mon...
+  startTime: string; // e.g. "08:00"
+  endTime: string; // e.g. "17:00"
+  intervalMinutes: number; // e.g. 30
 }
