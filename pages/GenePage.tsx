@@ -184,7 +184,8 @@ const GenePage: React.FC<GenePageProps> = ({ currentUser }) => {
     setCurrentDate(target);
 
     const dayEvents = holidays.filter(h => h.date === targetDateStr && h.name !== "補班" && h.type !== "RADIOGRAPHER_NOTE");
-    const hasSpecialEvent = dayEvents.length > 0;
+    const hasBlockingEvent = dayEvents.some(evt => evt.type === "CLOSED" || evt.type === "NATIONAL");
+    const isUnlocked = settings.unlockedDates?.includes(targetDateStr) || false;
     
     const rule = getApplicableRule(targetDateStr, settings);
     
@@ -194,12 +195,15 @@ const GenePage: React.FC<GenePageProps> = ({ currentUser }) => {
     }
     
     const schedule = rule.schedules[targetDay];
-    if (hasSpecialEvent || !schedule.isOpen) {
-      alert(`⚠️ 提醒您：\n您跳轉的日期 ${targetDateStr} (星期${dayNames[targetDay]}) \n${!schedule.isOpen ? '非基因解說開放日' : '有特殊註記或國定假日'}，可能無法排程，請再次確認！`);
+    const isNormallyOpen = schedule.isOpen;
+    const finalIsOpen = isNormallyOpen && (!hasBlockingEvent || isUnlocked);
+    
+    if (dayEvents.length > 0 || !finalIsOpen) {
+      alert(`⚠️ 提醒您：\n您跳轉的日期 ${targetDateStr} (星期${dayNames[targetDay]}) \n${!finalIsOpen ? '非基因解說開放日' : '有特殊註記或國定假日'}，可能無法排程，請再次確認！`);
     }
 
     // Auto-select earliest available time slot based on the daily rule
-    if (schedule && schedule.isOpen) {
+    if (finalIsOpen && schedule) {
        // Generate daily slots
        let currentMins = Number(schedule.startTime.split(":")[0]) * 60 + Number(schedule.startTime.split(":")[1]);
        const endMins = Number(schedule.endTime.split(":")[0]) * 60 + Number(schedule.endTime.split(":")[1]);
@@ -283,6 +287,18 @@ const GenePage: React.FC<GenePageProps> = ({ currentUser }) => {
     } catch (err) {
       showToast("儲存失敗", "error");
     }
+  };
+
+  const handleToggleUnlock = async (dateStr: string) => {
+    const current = settings.unlockedDates || [];
+    const isUnlocked = current.includes(dateStr);
+    const newUnlocked = isUnlocked ? current.filter(d => d !== dateStr) : [...current, dateStr];
+    
+    const newSettings = { ...settings, unlockedDates: newUnlocked };
+    setSettings(newSettings);
+    db.settings.geneSettings = newSettings as any;
+    await db.saveSettings();
+    showToast(isUnlocked ? "已恢復為不開放" : "已解除假日限制，開放預約");
   };
 
   // Rule Editor State
@@ -414,13 +430,16 @@ const GenePage: React.FC<GenePageProps> = ({ currentUser }) => {
                     const dateStr = toLocalISOString(date);
                     const rule = getApplicableRule(dateStr, settings);
                     const schedule = rule?.schedules[date.getDay()];
-                    const isOpen = schedule?.isOpen || false;
+                    const isNormallyOpen = schedule?.isOpen || false;
                     const dayEvents = holidays.filter(h => h.date === dateStr && h.name !== "補班" && h.type !== "RADIOGRAPHER_NOTE");
+                    const hasBlockingEvent = dayEvents.some(evt => evt.type === "CLOSED" || evt.type === "NATIONAL");
+                    const isUnlocked = settings.unlockedDates?.includes(dateStr) || false;
+                    const finalIsOpen = isNormallyOpen && (!hasBlockingEvent || isUnlocked);
                     
                     return (
                       <div
                         key={idx}
-                        className={`p-3 text-center border-r border-gray-200 last:border-0 ${isToday ? "bg-pink-50" : ""} ${!isOpen ? "opacity-60 bg-gray-50" : ""}`}
+                        className={`p-3 text-center border-r border-gray-200 last:border-0 ${isToday ? "bg-pink-50" : ""} ${!finalIsOpen ? "opacity-60 bg-gray-50" : ""}`}
                       >
                         <div className={`text-sm font-bold ${isToday ? "text-pink-700" : "text-gray-700"}`}>
                           星期{dayNames[date.getDay()]}
@@ -433,12 +452,20 @@ const GenePage: React.FC<GenePageProps> = ({ currentUser }) => {
                             {evt.name}
                           </div>
                         ))}
+                        {hasBlockingEvent && isNormallyOpen && (
+                          <button
+                            onClick={() => handleToggleUnlock(dateStr)}
+                            className={`mt-1 text-[10px] px-1.5 py-0.5 rounded font-bold transition-colors w-full ${isUnlocked ? 'bg-amber-100 text-amber-700 hover:bg-amber-200' : 'bg-slate-200 text-slate-600 hover:bg-slate-300'}`}
+                          >
+                            {isUnlocked ? '重新鎖定' : '解鎖排程'}
+                          </button>
+                        )}
                         {!rule && (
                            <div className="text-[10px] bg-slate-200 text-slate-600 font-bold px-1 py-0.5 rounded mt-1">
                              未設規則
                            </div>
                         )}
-                        {rule && isOpen && (
+                        {rule && finalIsOpen && (
                            <div className="text-[10px] text-slate-400 mt-1">
                              上限: {schedule?.maxAppointmentsPerSlot} 人
                            </div>
@@ -458,11 +485,14 @@ const GenePage: React.FC<GenePageProps> = ({ currentUser }) => {
                         const dateStr = toLocalISOString(date);
                         const rule = getApplicableRule(dateStr, settings);
                         const schedule = rule?.schedules[date.getDay()];
-                        const isOpen = schedule?.isOpen || false;
+                        const isNormallyOpen = schedule?.isOpen || false;
+                        const hasBlockingEvent = holidays.some(h => h.date === dateStr && (h.type === "CLOSED" || h.type === "NATIONAL"));
+                        const isUnlocked = settings.unlockedDates?.includes(dateStr) || false;
+                        const finalIsOpen = isNormallyOpen && (!hasBlockingEvent || isUnlocked);
                         
                         // Check if this specific time is within this day's open hours
                         let isTimeSlotOpen = false;
-                        if (isOpen && schedule) {
+                        if (finalIsOpen && schedule) {
                            isTimeSlotOpen = time >= schedule.startTime && time < schedule.endTime;
                         }
 

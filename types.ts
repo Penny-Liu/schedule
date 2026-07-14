@@ -524,4 +524,5 @@ export interface GeneRule {
 
 export interface GeneSettings {
   rules: GeneRule[];
+  unlockedDates?: string[];
 }
