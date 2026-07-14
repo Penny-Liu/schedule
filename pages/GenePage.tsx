@@ -27,22 +27,28 @@ const createDefaultDailySchedule = (isOpen: boolean): DailyGeneSchedule => ({
   maxAppointmentsPerSlot: 1,
 });
 
-const createDefaultRule = (): GeneRule => ({
-  id: generateUUID(),
-  name: "預設規則",
-  startDate: "2020-01-01",
-  endDate: "2099-12-31",
-  intervalMinutes: 30,
-  schedules: [
-    createDefaultDailySchedule(false), // Sun
-    createDefaultDailySchedule(true),  // Mon
-    createDefaultDailySchedule(true),  // Tue
-    createDefaultDailySchedule(true),  // Wed
-    createDefaultDailySchedule(true),  // Thu
-    createDefaultDailySchedule(true),  // Fri
-    createDefaultDailySchedule(false), // Sat
-  ]
-});
+const createDefaultRule = (): GeneRule => {
+  const today = new Date();
+  const next3Months = new Date(today);
+  next3Months.setMonth(next3Months.getMonth() + 3);
+
+  return {
+    id: generateUUID(),
+    name: "預設規則",
+    startDate: toLocalISOString(today),
+    endDate: toLocalISOString(next3Months),
+    intervalMinutes: 30,
+    schedules: [
+      createDefaultDailySchedule(false), // Sun
+      createDefaultDailySchedule(true),  // Mon
+      createDefaultDailySchedule(true),  // Tue
+      createDefaultDailySchedule(true),  // Wed
+      createDefaultDailySchedule(true),  // Thu
+      createDefaultDailySchedule(true),  // Fri
+      createDefaultDailySchedule(false), // Sat
+    ]
+  };
+};
 
 const DEFAULT_SETTINGS: GeneSettings = {
   rules: [createDefaultRule()],
