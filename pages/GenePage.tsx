@@ -183,17 +183,19 @@ const GenePage: React.FC<GenePageProps> = ({ currentUser }) => {
     setFormData(prev => ({ ...prev, date: targetDateStr }));
     setCurrentDate(target);
 
+    const dayEvents = holidays.filter(h => h.date === targetDateStr && h.name !== "補班" && h.type !== "RADIOGRAPHER_NOTE");
+    const hasSpecialEvent = dayEvents.length > 0;
+    
     const rule = getApplicableRule(targetDateStr, settings);
-    const isHoliday = holidays.some(h => h.date === targetDateStr && h.name !== "補班");
     
     if (!rule) {
-       alert(`⚠️ 提醒您：\\n${targetDateStr} (星期${dayNames[targetDay]}) 尚未建立開放規則！請先前往「解說設定」建立適用該區間的規則。`);
+       alert(`⚠️ 提醒您：\n${targetDateStr} (星期${dayNames[targetDay]}) 尚未建立開放規則！請先前往「解說設定」建立適用該區間的規則。`);
        return;
     }
     
     const schedule = rule.schedules[targetDay];
-    if (isHoliday || !schedule.isOpen) {
-      alert(`⚠️ 提醒您：\\n您跳轉的日期 ${targetDateStr} (星期${dayNames[targetDay]}) \\n${!schedule.isOpen ? '非基因解說開放日' : '為國定假日/休診日'}，可能無法排程，請再次確認！`);
+    if (hasSpecialEvent || !schedule.isOpen) {
+      alert(`⚠️ 提醒您：\n您跳轉的日期 ${targetDateStr} (星期${dayNames[targetDay]}) \n${!schedule.isOpen ? '非基因解說開放日' : '有特殊註記或國定假日'}，可能無法排程，請再次確認！`);
     }
 
     // Auto-select earliest available time slot based on the daily rule
@@ -413,7 +415,7 @@ const GenePage: React.FC<GenePageProps> = ({ currentUser }) => {
                     const rule = getApplicableRule(dateStr, settings);
                     const schedule = rule?.schedules[date.getDay()];
                     const isOpen = schedule?.isOpen || false;
-                    const holiday = holidays.find(h => h.date === dateStr && h.name !== "補班");
+                    const dayEvents = holidays.filter(h => h.date === dateStr && h.name !== "補班" && h.type !== "RADIOGRAPHER_NOTE");
                     
                     return (
                       <div
@@ -426,11 +428,11 @@ const GenePage: React.FC<GenePageProps> = ({ currentUser }) => {
                         <div className={`text-xs mt-1 ${isToday ? "text-pink-600" : "text-gray-500"}`}>
                           {date.getMonth() + 1}/{date.getDate()}
                         </div>
-                        {holiday && (
-                          <div className="text-[10px] bg-red-100 text-red-600 font-bold px-1 py-0.5 rounded mt-1">
-                            {holiday.name}
+                        {dayEvents.map((evt, i) => (
+                          <div key={i} className={`text-[10px] font-bold px-1 py-0.5 rounded mt-1 ${evt.type === 'DOCTOR_NOTE' ? 'bg-blue-100 text-blue-600' : 'bg-red-100 text-red-600'}`}>
+                            {evt.name}
                           </div>
-                        )}
+                        ))}
                         {!rule && (
                            <div className="text-[10px] bg-slate-200 text-slate-600 font-bold px-1 py-0.5 rounded mt-1">
                              未設規則
