@@ -5797,8 +5797,9 @@ const DailyManpowerSummary: React.FC<{
 
     // Categorize Staff
     const mr: string[] = [];
-    const us: string[] = [];
-    const ct: string[] = [];
+    let us: string[] = [];
+    let usCtaPerson: string | null = null;
+    let ct: string[] = [];
     const bmd: string[] = []; // Includes DX
     const remote: string[] = [];
     const remoteHeader: string[] = [];
@@ -5897,7 +5898,13 @@ const DailyManpowerSummary: React.FC<{
 
       // Categories (Exclude Learning from main lists)
       if (s.station.includes("MR") && !isLearning) mr.push(name);
-      if (s.station.includes("US") && !isLearning) us.push(name);
+      if (s.station.includes("US") && !isLearning) {
+        if (s.station === "US1") {
+          usCtaPerson = name;
+        } else {
+          us.push(name);
+        }
+      }
       if (s.station.includes("CT") && !isLearning) ct.push(name);
       if (
         (s.station.includes("BMD") || s.station.includes("DX") || isDualBMD) &&
@@ -5920,6 +5927,7 @@ const DailyManpowerSummary: React.FC<{
       beitouCount,
       mr,
       us,
+      usCtaPerson,
       ct,
       bmd,
       floorControl,
@@ -6108,7 +6116,19 @@ BMD :{{bmd}}
       "{{assist}}": manpower.assist.join("/") || "無",
       "{{scheduler}}": manpower.scheduler.join("/") || "無",
       "{{mr}}": manpower.mr.join("/") || "無",
-      "{{us}}": manpower.us.join("/") || "無",
+      "{{us}}": (() => {
+        let text = manpower.us.length > 0 ? manpower.us.join("/") : "無";
+        if (
+          stats.beitou_cta >= 2 &&
+          manpower.support.length === 0 &&
+          manpower.usCtaPerson
+        ) {
+          text += `\nUS/CTA後處理：${manpower.usCtaPerson}`;
+        } else if (manpower.usCtaPerson) {
+          text = [manpower.usCtaPerson, ...manpower.us].join("/") || "無";
+        }
+        return text;
+      })(),
       "{{ct}}": manpower.ct.join("/") || "無",
       "{{bmd}}": manpower.bmd.join("/") || "無",
       "{{support}}": manpower.support.join("/"),
