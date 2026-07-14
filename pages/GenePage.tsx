@@ -250,6 +250,24 @@ const GenePage: React.FC<GenePageProps> = ({ currentUser }) => {
 
     const rule = getApplicableRule(formData.date, settings);
     const day = new Date(formData.date).getDay();
+    
+    // 防呆：檢查是否為開放日
+    if (!rule) {
+      showToast("此日期尚未建立開放規則，無法預約", "error");
+      return;
+    }
+    
+    const dayEvents = holidays.filter(h => h.date === formData.date && h.name !== "補班" && h.type !== "RADIOGRAPHER_NOTE");
+    const hasBlockingEvent = dayEvents.some(evt => evt.type === "CLOSED" || evt.type === "NATIONAL");
+    const isUnlocked = settings.unlockedDates?.includes(formData.date) || false;
+    const isNormallyOpen = rule.schedules[day]?.isOpen || false;
+    const finalIsOpen = isNormallyOpen && (!hasBlockingEvent || isUnlocked);
+    
+    if (!finalIsOpen) {
+      showToast("此日期為非基因解說日或遇特殊註記，無法預約！", "error");
+      return;
+    }
+
     const maxAppts = rule?.schedules[day]?.maxAppointmentsPerSlot || 1;
 
     const conflicts = getConflicts(formData.date, formData.startTime, formData.endTime);
