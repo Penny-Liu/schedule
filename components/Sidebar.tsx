@@ -159,6 +159,12 @@ const Sidebar: React.FC<SidebarProps> = ({
           icon: Building2,
           permission: null, // 權限設為 null，代表開放給所有人使用
         },
+        {
+          id: "gene",
+          label: "基因預約",
+          icon: FileText,
+          permission: null,
+        },
       ],
     },
     {
