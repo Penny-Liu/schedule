@@ -5899,7 +5899,7 @@ const DailyManpowerSummary: React.FC<{
       // Categories (Exclude Learning from main lists)
       if (s.station.includes("MR") && !isLearning) mr.push(name);
       if (s.station.includes("US") && !isLearning) {
-        if (s.station === "US1") {
+        if (s.station === "US3") {
           usCtaPerson = name;
         } else {
           us.push(name);
