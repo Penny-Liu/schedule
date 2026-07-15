@@ -514,6 +514,7 @@ export interface GeneAppointment {
   registeredBy: string;
   createdAt?: string;
   companionCount?: number; // New: Number of people (1-3)
+  isOnline?: boolean;
 }
 
 

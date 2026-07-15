@@ -165,8 +165,9 @@ const GenePage: React.FC<GenePageProps> = ({ currentUser }) => {
     date: toLocalISOString(new Date()),
     startTime: "08:30",
     companionCount: 1,
-    medicalRecordNumber: "",
-    registeredBy: currentUser.name,
+    medicalRecordNumbers: [""],
+    isOnline: false,
+    registeredBy: "",
   });
 
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
@@ -296,14 +297,14 @@ const GenePage: React.FC<GenePageProps> = ({ currentUser }) => {
     if (finalIsOpen && schedule) {
        // Since availableStartTimes hook depends on state, we manually calculate the first available here
        const st = schedule.morningStartTime;
-       setFormData(prev => ({ ...prev, startTime: st, date: targetDateStr }));
+       setFormData(prev => ({ ...prev, startTime: st, date: targetDateStr, medicalRecordNumbers: [""], isOnline: false }));
     }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.medicalRecordNumber.trim() || !formData.registeredBy.trim()) {
-      showToast("請填寫病歷號與登記人員", "error");
+    if (formData.medicalRecordNumbers.slice(0, formData.companionCount).some(n => !n.trim()) || !formData.registeredBy.trim()) {
+      showToast("請填寫所有病歷號與登記人員", "error");
       return;
     }
 
@@ -354,8 +355,13 @@ const GenePage: React.FC<GenePageProps> = ({ currentUser }) => {
     try {
       const newBooking: GeneAppointment = {
         id: generateUUID(),
-        ...formData,
+        date: formData.date,
+        startTime: formData.startTime,
         endTime: computedEndTime,
+        companionCount: formData.companionCount,
+        medicalRecordNumber: formData.medicalRecordNumbers.slice(0, formData.companionCount).map(n => n.trim()).join(","),
+        isOnline: formData.isOnline,
+        registeredBy: formData.registeredBy,
       };
       await db.addGeneAppointments([newBooking]);
       showToast("預約成功");
@@ -513,9 +519,11 @@ const GenePage: React.FC<GenePageProps> = ({ currentUser }) => {
                       setFormData(prev => ({
                         ...prev,
                         date: toLocalISOString(currentDate),
-                        medicalRecordNumber: "",
-                        startTime: "08:00",
-                        endTime: "08:30"
+                        medicalRecordNumbers: [""],
+                        startTime: "08:30",
+                        companionCount: 1,
+                        isOnline: false,
+                        registeredBy: ""
                       }));
                     }}
                     className="flex items-center gap-2 bg-pink-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-pink-700 transition-colors shadow-sm whitespace-nowrap"
@@ -621,6 +629,9 @@ const GenePage: React.FC<GenePageProps> = ({ currentUser }) => {
                                 date: dateStr,
                                 startTime: time,
                                 companionCount: 1,
+                                medicalRecordNumbers: [""],
+                                isOnline: false,
+                                registeredBy: "",
                               });
                               setIsModalOpen(true);
                             }}
@@ -635,14 +646,15 @@ const GenePage: React.FC<GenePageProps> = ({ currentUser }) => {
                                     date: booking.date,
                                     startTime: booking.startTime,
                                     companionCount: booking.companionCount || 1,
-                                    medicalRecordNumber: booking.medicalRecordNumber,
+                                    medicalRecordNumbers: booking.medicalRecordNumber ? booking.medicalRecordNumber.split(",") : [""],
+                                    isOnline: booking.isOnline || false,
                                     registeredBy: booking.registeredBy
                                   });
                                   setIsModalOpen(true);
                                 }}
                               >
                                 <div className="font-bold text-pink-900 truncate">
-                                  {booking.medicalRecordNumber}
+                                  {booking.medicalRecordNumber} {booking.isOnline ? "(線上)" : ""}
                                 </div>
                                 <div className="text-pink-700 flex justify-between mt-1 items-center">
                                   <span>{booking.registeredBy}</span>
@@ -823,14 +835,49 @@ const GenePage: React.FC<GenePageProps> = ({ currentUser }) => {
             <form onSubmit={handleSubmit} className="p-6 space-y-5">
               <div>
                 <label className="block text-sm font-bold text-gray-700 mb-1">客戶病歷號 *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="輸入病歷號"
-                  value={formData.medicalRecordNumber}
-                  onChange={(e) => setFormData({ ...formData, medicalRecordNumber: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-pink-500 focus:ring-1 focus:ring-pink-500"
-                />
+                <div className="space-y-2">
+                  {Array.from({ length: formData.companionCount }).map((_, idx) => (
+                    <input
+                      key={idx}
+                      type="text"
+                      required
+                      placeholder={`請輸入病歷號碼 ${idx + 1}`}
+                      value={formData.medicalRecordNumbers[idx] || ""}
+                      onChange={(e) => {
+                        const newArr = [...formData.medicalRecordNumbers];
+                        newArr[idx] = e.target.value;
+                        setFormData({ ...formData, medicalRecordNumbers: newArr });
+                      }}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-pink-500 focus:ring-1 focus:ring-pink-500"
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-1">是否要線上解說 *</label>
+                <div className="flex gap-4 mt-2">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="isOnline"
+                      checked={formData.isOnline === true}
+                      onChange={() => setFormData({ ...formData, isOnline: true })}
+                      className="text-pink-500 focus:ring-pink-500"
+                    />
+                    <span className="text-sm">是 (線上解說)</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="isOnline"
+                      checked={formData.isOnline === false}
+                      onChange={() => setFormData({ ...formData, isOnline: false })}
+                      className="text-pink-500 focus:ring-pink-500"
+                    />
+                    <span className="text-sm">否 (實體解說)</span>
+                  </label>
+                </div>
               </div>
 
               <div>
