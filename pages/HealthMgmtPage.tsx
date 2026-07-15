@@ -165,11 +165,11 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
   const [editingStaffRole, setEditingStaffRole] = useState<"ADMIN" | "VIEWER">(
     "VIEWER",
   );
-  const [newStaffLocation, setNewStaffLocation] = useState<"北投" | "大直">(
+  const [newStaffLocation, setNewStaffLocation] = useState<"北投" | "大直" | "全部">(
     "北投",
   );
   const [editingStaffLocation, setEditingStaffLocation] = useState<
-    "北投" | "大直"
+    "北投" | "大直" | "全部"
   >("北投");
   const [newStaffDesignation, setNewStaffDesignation] =
     useState<HMDesignation>("健管師");
@@ -3975,6 +3975,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                     >
                       <option value="北投">北投</option>
                       <option value="大直">大直</option>
+                      <option value="全部">全部 (跨院區)</option>
                     </select>
                   </div>
                 )}
@@ -4021,7 +4022,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                     <span className="text-xs font-bold text-teal-700 bg-teal-50 px-2.5 py-1 rounded-full border border-teal-100">
                       {
                         activeHealthMgmtStaff.filter(
-                          (s) => s.location !== "大直",
+                          (s) => s.location === "北投" || s.location === "全部" || !s.location,
                         ).length
                       }{" "}
                       人
@@ -4029,7 +4030,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                   </h4>
                   <div className="space-y-3">
                     {activeHealthMgmtStaff
-                      .filter((s) => s.location !== "大直")
+                      .filter((s) => s.location === "北投" || s.location === "全部" || !s.location)
                       .map((staff) => (
                         <div
                           key={staff.id}
@@ -4070,7 +4071,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                           </div>
                         </div>
                       ))}
-                    {activeHealthMgmtStaff.filter((s) => s.location !== "大直")
+                    {activeHealthMgmtStaff.filter((s) => s.location === "北投" || s.location === "全部" || !s.location)
                       .length === 0 && (
                       <div className="text-center text-sm text-teal-600/50 py-6 font-bold bg-teal-50/50 rounded-xl border border-teal-100/50">
                         目前無北投管理人員
@@ -4089,7 +4090,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                     <span className="text-xs font-bold text-rose-700 bg-rose-50 px-2.5 py-1 rounded-full border border-rose-100">
                       {
                         activeHealthMgmtStaff.filter(
-                          (s) => s.location === "大直",
+                          (s) => s.location === "大直" || s.location === "全部",
                         ).length
                       }{" "}
                       人
@@ -4097,7 +4098,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                   </h4>
                   <div className="space-y-3">
                     {activeHealthMgmtStaff
-                      .filter((s) => s.location === "大直")
+                      .filter((s) => s.location === "大直" || s.location === "全部")
                       .map((staff) => (
                         <div
                           key={staff.id}
@@ -4143,7 +4144,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                           </div>
                         </div>
                       ))}
-                    {activeHealthMgmtStaff.filter((s) => s.location === "大直")
+                    {activeHealthMgmtStaff.filter((s) => s.location === "大直" || s.location === "全部")
                       .length === 0 && (
                       <div className="text-center text-sm text-rose-600/50 py-6 font-bold bg-rose-50/50 rounded-xl border border-rose-100/50">
                         目前無大直管理人員
