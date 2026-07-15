@@ -398,10 +398,9 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
       
       const anesStaffData = db.getAnesthesiaStaff();
       // Auto-migrate Anesthesia Staff to Health Mgmt Staff
-      let needsHmUpdate = false;
       anesStaffData.forEach((anes) => {
         if (!hmStaffData.find((hm) => hm.id === anes.id)) {
-          hmStaffData.push({
+          const newStaff: any = {
             id: anes.id,
             name: anes.name,
             alias: anes.alias,
@@ -410,13 +409,11 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
             designation: "麻護",
             location: anes.locations?.[0] || "北投",
             displayOrder: anes.displayOrder,
-          });
-          needsHmUpdate = true;
+          };
+          hmStaffData.push(newStaff);
+          db.addHealthMgmtStaff(newStaff);
         }
       });
-      if (needsHmUpdate) {
-        db.saveHealthMgmtStaff(hmStaffData);
-      }
       setHealthMgmtStaff(hmStaffData);
       
       const hmShiftsData = db.getHealthMgmtShifts().filter((s) => {
