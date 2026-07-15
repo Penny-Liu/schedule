@@ -125,6 +125,14 @@ const GenePage: React.FC<GenePageProps> = ({ currentUser }) => {
      }
      defaultSettingsToUse = { rules: [rule] };
   } else if (initialSettings && initialSettings.rules) {
+     initialSettings.rules.forEach((rule: any) => {
+       rule.schedules?.forEach((sch: any) => {
+         if (sch.morningStartTime === undefined) sch.morningStartTime = "08:30";
+         if (sch.morningEndTime === undefined) sch.morningEndTime = "10:30";
+         if (sch.afternoonStartTime === undefined) sch.afternoonStartTime = "13:00";
+         if (sch.afternoonEndTime === undefined) sch.afternoonEndTime = "15:00";
+       });
+     });
      defaultSettingsToUse = initialSettings as GeneSettings;
   }
 
@@ -135,7 +143,17 @@ const GenePage: React.FC<GenePageProps> = ({ currentUser }) => {
     const unsubscribe = db.subscribe(() => {
       setAppointments([...db.getGeneAppointments()]);
       const st = db.settings.geneSettings as any;
-      if (st && st.rules) setSettings(st as GeneSettings);
+      if (st && st.rules) {
+        st.rules.forEach((rule: any) => {
+          rule.schedules?.forEach((sch: any) => {
+            if (sch.morningStartTime === undefined) sch.morningStartTime = "08:30";
+            if (sch.morningEndTime === undefined) sch.morningEndTime = "10:30";
+            if (sch.afternoonStartTime === undefined) sch.afternoonStartTime = "13:00";
+            if (sch.afternoonEndTime === undefined) sch.afternoonEndTime = "15:00";
+          });
+        });
+        setSettings(st as GeneSettings);
+      }
       setHolidays([...db.getHolidays()]);
     });
     db.initializeAuthData(true); if (db.currentUser) db.initializeDataForUser(db.currentUser, true);
