@@ -182,11 +182,11 @@ const GenePage: React.FC<GenePageProps> = ({ currentUser }) => {
     const todayStr = toLocalISOString(now);
     const nowTime = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
 
-    return bookings.filter((b) => {
+    return appointments.filter((b) => {
       // 只要還沒過期就保留
       return b.date > todayStr || (b.date === todayStr && b.endTime > nowTime);
     }).sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime));
-  }, [bookings]);
+  }, [appointments]);
 
 
   const weekDays = useMemo(() => {
