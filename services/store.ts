@@ -1511,7 +1511,9 @@ class Store {
         start_time: b.startTime,
         end_time: b.endTime,
         medical_record_number: b.medicalRecordNumber,
-        registered_by: b.registeredBy
+        registered_by: b.registeredBy,
+        companion_count: b.companionCount,
+        is_online: b.isOnline
       }));
       const { error } = await supabase.from("gene_appointments").insert(records);
       if (error) throw error;
@@ -2038,6 +2040,8 @@ class Store {
       hire_date: "hireDate",
       termination_date: "terminationDate",
       radiographer_name: "radiographerName",
+      companion_count: "companionCount",
+      is_online: "isOnline",
       mr_large_male: "mrLargeMale",
       mr_large_female: "mrLargeFemale",
       mr_medium: "mrMedium",
