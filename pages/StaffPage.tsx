@@ -1265,6 +1265,8 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                         perms: [
                           PERMISSIONS.VIEW_GENE,
                           PERMISSIONS.EDIT_GENE,
+                          PERMISSIONS.VIEW_GENE_SCHEDULE,
+                          PERMISSIONS.EDIT_GENE_SCHEDULE,
                         ],
                       },
                       {

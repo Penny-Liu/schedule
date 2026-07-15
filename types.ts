@@ -40,6 +40,8 @@ export const PERMISSIONS = {
   EDIT_ADMINISTRATIVE: "administrative_edit",
   VIEW_GENE: "gene_view",
   EDIT_GENE: "gene_edit",
+  VIEW_GENE_SCHEDULE: "gene_schedule_view",
+  EDIT_GENE_SCHEDULE: "gene_schedule_edit",
 };
 
 export const PERMISSION_LABELS: Record<string, string> = {
@@ -63,6 +65,8 @@ export const PERMISSION_LABELS: Record<string, string> = {
   [PERMISSIONS.EDIT_ADMINISTRATIVE]: "編輯行政排班",
   [PERMISSIONS.VIEW_GENE]: "查看基因預約",
   [PERMISSIONS.EDIT_GENE]: "編輯基因設定",
+  [PERMISSIONS.VIEW_GENE_SCHEDULE]: "查看基因排班",
+  [PERMISSIONS.EDIT_GENE_SCHEDULE]: "編輯基因排班",
 };
 
 export type HMDesignation =

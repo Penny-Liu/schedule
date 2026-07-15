@@ -162,7 +162,7 @@ const AdministrativeSchedulePage: React.FC<AdministrativeSchedulePageProps> = ({
   const isGeneOnly =
     categories?.length === 1 && categories[0] === AdministrativeCategory.GENE;
   const requiredPermission = isGeneOnly
-    ? "EDIT_GENE"
+    ? PERMISSIONS.EDIT_GENE_SCHEDULE
     : PERMISSIONS.EDIT_ADMINISTRATIVE;
 
   const canEdit =
