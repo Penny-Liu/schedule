@@ -314,13 +314,6 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
   const activeHealthMgmtStaff = useMemo(() => {
     let staff = healthMgmtStaff.filter((s) => s.isActive !== false);
 
-    // Filter by location
-    if (currentUserLocation !== "全部") {
-      staff = staff.filter(
-        (s) => s.location === currentUserLocation || !s.location,
-      );
-    }
-
     // Filter by hire/termination dates
     const now = new Date();
     let cycleStart: Date, cycleEnd: Date;
@@ -345,6 +338,26 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
       // Fallback to current month
       cycleStart = new Date(now.getFullYear(), now.getMonth(), 1);
       cycleEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    }
+
+    const cycleStartStr = toLocalISOString(cycleStart);
+    const cycleEndStr = toLocalISOString(cycleEnd);
+
+    // Filter by location
+    if (currentUserLocation !== "全部") {
+      staff = staff.filter((s) => {
+        if (s.location === currentUserLocation || !s.location) return true;
+        
+        // If their home location doesn't match, check if they have any shift in the current location during this cycle
+        const hasShiftInLocation = shifts.some(
+          (shift) =>
+            shift.userId === s.id &&
+            shift.location === currentUserLocation &&
+            shift.date >= cycleStartStr &&
+            shift.date <= cycleEndStr
+        );
+        return hasShiftInLocation;
+      });
     }
 
     staff = staff.filter((s) => {
@@ -391,6 +404,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
     });
   }, [
     healthMgmtStaff,
+    shifts,
     currentUserLocation,
     currentCycle,
     selectedCycleId,
