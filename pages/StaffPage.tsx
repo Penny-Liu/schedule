@@ -55,9 +55,9 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
       setUsers(db.getUsers());
     };
     const unsubscribe = db.subscribe(loadData);
-    return () => unsubscribe();
   }, []);
   const [error, setError] = useState<string | null>(null);
+  const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const allStations = db
     .getStations()
@@ -1493,7 +1493,10 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                     </div>
                   )}
 
-                  <div className="flex items-start gap-4">
+                  <div 
+                    className="flex items-start gap-4 cursor-pointer"
+                    onClick={() => setExpandedUserId(expandedUserId === user.id ? null : user.id)}
+                  >
                     {/* Colored Avatar */}
                     <div
                       className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg shadow-sm"
@@ -1574,9 +1577,11 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                     </div>
                   </div>
 
+
                   {/* Skills Display */}
-                  <div className="border-t border-gray-50 pt-3 mt-1">
-                    <h5 className="text-[10px] text-gray-400 font-bold uppercase mb-1.5 tracking-wider flex items-center gap-2">
+                  {expandedUserId === user.id && (
+                    <div className="border-t border-gray-50 pt-3 mt-1 animate-in fade-in slide-in-from-top-2 duration-200">
+                      <h5 className="text-[10px] text-gray-400 font-bold uppercase mb-1.5 tracking-wider flex items-center gap-2">
                       技能與特殊任務
                     </h5>
                     <div className="flex flex-wrap gap-1">
@@ -1670,6 +1675,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                         )}
                     </div>
                   </div>
+                  )}
                 </div>
               );
             })}
