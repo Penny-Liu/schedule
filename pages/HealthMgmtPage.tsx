@@ -414,49 +414,9 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
     let isInitialLoad = true;
     const loadData = () => {
       let hmStaffData = db.getHealthMgmtStaff();
-      
-      const anesStaffData = db.getAnesthesiaStaff();
-      // Auto-migrate Anesthesia Staff to Health Mgmt Staff
-      anesStaffData.forEach((anes) => {
-        if (!hmStaffData.find((hm) => hm.id === anes.id)) {
-          const newStaff: any = {
-            id: anes.id,
-            name: anes.name,
-            alias: anes.alias,
-            isActive: anes.isActive,
-            role: anes.role || "VIEWER",
-            designation: "麻護",
-            location: anes.locations?.[0] || "北投",
-            displayOrder: anes.displayOrder,
-          };
-          hmStaffData.push(newStaff);
-          db.addHealthMgmtStaff(newStaff);
-        }
-      });
       setHealthMgmtStaff(hmStaffData);
       
       let hmShiftsData = db.getHealthMgmtShifts();
-
-      // Auto-migrate Anesthesia Shifts to Health Mgmt Shifts
-      const oldAnesShifts = db.getAnesthesiaShifts();
-      oldAnesShifts.forEach((s) => {
-        // Find if this shift has already been migrated (same ID or same date/user with A)
-        if (!hmShiftsData.find((h) => h.id === s.id)) {
-          const mappedStation = s.station.replace(/^麻/, "A");
-          const newShift: HealthMgmtShift = {
-            id: s.id, // keep the same ID so we know it's migrated
-            userId: s.userId,
-            date: s.date,
-            station: mappedStation,
-            task: s.task,
-            time: s.workTime, // migrate workTime to time
-            location: s.location,
-            specialRoles: s.note ? [s.note] : undefined, // migrate note to specialRoles
-          };
-          hmShiftsData.push(newShift);
-          db.upsertHealthMgmtShift(newShift);
-        }
-      });
 
       hmShiftsData = hmShiftsData.filter((s) => {
         const staff = hmStaffData.find((st) => st.id === s.userId);
