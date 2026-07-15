@@ -12,7 +12,8 @@ import {
   Trash2,
   Settings,
   CalendarDays,
-  Edit2
+  Edit2,
+  List as ListIcon
 } from "lucide-react";
 import { toLocalISOString, generateUUID } from "../services/utils";
 
@@ -175,6 +176,18 @@ const GenePage: React.FC<GenePageProps> = ({ currentUser }) => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3000);
   };
+
+  const upcomingBookings = useMemo(() => {
+    const now = new Date();
+    const todayStr = toLocalISOString(now);
+    const nowTime = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+
+    return bookings.filter((b) => {
+      // 只要還沒過期就保留
+      return b.date > todayStr || (b.date === todayStr && b.endTime > nowTime);
+    }).sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime));
+  }, [bookings]);
+
 
   const weekDays = useMemo(() => {
     const start = new Date(currentDate);
@@ -469,8 +482,9 @@ const GenePage: React.FC<GenePageProps> = ({ currentUser }) => {
         )}
 
         {activeTab === "schedule" && (
-          <div className="flex flex-col gap-4">
-            <div className="flex flex-col md:flex-row items-center justify-between bg-white p-4 rounded-2xl shadow-sm border border-gray-100 gap-4">
+          <div className="flex flex-col lg:flex-row gap-6 items-start">
+            <div className="flex-1 flex flex-col gap-4 w-full">
+              <div className="flex flex-col md:flex-row items-center justify-between bg-white p-4 rounded-2xl shadow-sm border border-gray-100 gap-4">
               <div className="flex items-center gap-4">
                 <button
                   onClick={() => {
@@ -678,6 +692,52 @@ const GenePage: React.FC<GenePageProps> = ({ currentUser }) => {
                     </div>
                   ))}
                 </div>
+              </div>
+              </div>
+            </div>
+
+            {/* Right: Upcoming Bookings Sidebar */}
+            <div className="w-full lg:w-72 bg-white rounded-2xl shadow-sm border border-slate-200 flex flex-col h-[400px] lg:h-auto shrink-0">
+              <div className="px-5 py-4 border-b border-slate-100 bg-slate-50 flex items-center justify-between rounded-t-2xl">
+                <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                  <ListIcon size={18} className="text-pink-600" />
+                  目前預約清單
+                </h3>
+                <span className="text-xs bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full font-bold">
+                  {upcomingBookings.length}
+                </span>
+              </div>
+              <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar lg:max-h-[800px]">
+                {upcomingBookings.length === 0 ? (
+                  <div className="text-center text-slate-400 text-sm mt-10">
+                    目前尚無預約
+                  </div>
+                ) : (
+                  upcomingBookings.map((b) => (
+                    <div key={b.id} className="p-3 border border-slate-100 rounded-xl bg-white hover:bg-pink-50 transition-colors shadow-sm">
+                      <div className="flex justify-between items-start mb-1">
+                        <div className="font-bold text-slate-800 text-sm flex items-center gap-1">
+                          <CalendarIcon size={12} className="text-pink-500" />
+                          {b.date.replace(/-/g, "/")}
+                        </div>
+                        <div className="text-xs font-bold text-pink-600 bg-pink-100 px-2 py-0.5 rounded">
+                          {b.startTime} - {b.endTime}
+                        </div>
+                      </div>
+                      <div className="text-xs text-slate-600 mt-2 space-y-1">
+                        <div className="flex items-center gap-1">
+                          <UserIcon size={12} />
+                          <span className="font-bold">病歷號：</span>
+                          <span className="truncate" title={b.medicalRecordNumber}>{b.medicalRecordNumber}</span> {b.isOnline ? "(線上)" : ""}
+                        </div>
+                        <div className="flex justify-between items-center text-slate-400 mt-2 pt-2 border-t border-slate-100">
+                          <span className="flex items-center gap-1 truncate"><FileText size={10} /> {b.registeredBy || "未登記"}</span>
+                          <span className="shrink-0">{b.companionCount > 1 ? `${b.companionCount} 人` : "單人"}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           </div>
