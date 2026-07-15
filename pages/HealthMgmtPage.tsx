@@ -120,10 +120,29 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
     db.getHealthMgmtStations(),
   );
   const [healthMgmtStaff, setHealthMgmtStaff] = useState<HealthMgmtStaff[]>([]); // Changed from healthMgmtUsers
-  const [anesthesiaStaff, setAnesthesiaStaff] = useState<AnesthesiaStaff[]>([]);
-  const [anesthesiaShifts, setAnesthesiaShifts] = useState<AnesthesiaShift[]>(
-    [],
-  );
+  const anesthesiaStaff: AnesthesiaStaff[] = useMemo(() => {
+    return healthMgmtStaff
+      .filter((s) => s.designation === "麻護")
+      .map((s) => ({
+        ...s,
+        locations: s.location === "全部" ? ["北投", "大直"] : [s.location || "北投"],
+      })) as AnesthesiaStaff[];
+  }, [healthMgmtStaff]);
+
+  const anesthesiaShifts: AnesthesiaShift[] = useMemo(() => {
+    return shifts
+      .filter((s) => s.station.startsWith("A") || s.station.startsWith("麻"))
+      .map((s) => ({
+        id: s.id,
+        userId: s.userId,
+        date: s.date,
+        station: s.station.replace(/^A/, "麻"), // Map A back to 麻 for UI
+        task: s.task,
+        workTime: s.time,
+        location: s.location,
+        note: s.specialRoles?.[0] || "",
+      }));
+  }, [shifts]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -416,7 +435,30 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
       });
       setHealthMgmtStaff(hmStaffData);
       
-      const hmShiftsData = db.getHealthMgmtShifts().filter((s) => {
+      let hmShiftsData = db.getHealthMgmtShifts();
+
+      // Auto-migrate Anesthesia Shifts to Health Mgmt Shifts
+      const oldAnesShifts = db.getAnesthesiaShifts();
+      oldAnesShifts.forEach((s) => {
+        // Find if this shift has already been migrated (same ID or same date/user with A)
+        if (!hmShiftsData.find((h) => h.id === s.id)) {
+          const mappedStation = s.station.replace(/^麻/, "A");
+          const newShift: HealthMgmtShift = {
+            id: s.id, // keep the same ID so we know it's migrated
+            userId: s.userId,
+            date: s.date,
+            station: mappedStation,
+            task: s.task,
+            time: s.workTime, // migrate workTime to time
+            location: s.location,
+            specialRoles: s.note ? [s.note] : undefined, // migrate note to specialRoles
+          };
+          hmShiftsData.push(newShift);
+          db.upsertHealthMgmtShift(newShift);
+        }
+      });
+
+      hmShiftsData = hmShiftsData.filter((s) => {
         const staff = hmStaffData.find((st) => st.id === s.userId);
         if (staff && staff.terminationDate && s.date > staff.terminationDate)
           return false;
@@ -431,27 +473,6 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
       const cycles = db.getHealthMgmtCycles();
       setHmCycles(cycles);
       setHolidays(db.getHolidays());
-
-      // Set Anesthesia Staff from Health Mgmt Staff where designation is "麻護"
-      const mappedAnesStaff: AnesthesiaStaff[] = hmStaffData
-        .filter((s) => s.designation === "麻護")
-        .map((s) => ({
-          ...s,
-          locations: [s.location || "北投"],
-        }));
-      setAnesthesiaStaff(mappedAnesStaff);
-
-      const anesShiftsData = db.getAnesthesiaShifts().filter((s) => {
-        const staff = mappedAnesStaff.find((st) => st.id === s.userId);
-        if (
-          staff &&
-          (staff as any).terminationDate &&
-          s.date > (staff as any).terminationDate
-        )
-          return false;
-        return true;
-      });
-      setAnesthesiaShifts(anesShiftsData);
 
       if (isInitialLoad) {
         // Auto-select current cycle if not already set or if it's 'month'
@@ -1319,7 +1340,40 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
   ) => {
     if (isAnesReadOnly) return;
     try {
-      await db.assignAnesthesiaShift(userId, date, station, location, task);
+      const existing = shifts.find((s) => s.userId === userId && s.date === date);
+      const newShift: HealthMgmtShift = {
+        id: existing?.id || "",
+        userId,
+        date,
+        station: station ? station.replace(/^麻/, "A") : station,
+        location: location,
+        task: task,
+        time: existing?.time, // Keep existing time if any
+        specialRoles: existing?.specialRoles,
+      };
+      
+      // If station is empty, it deletes it in upsert if it's the only shift.
+      await db.upsertHealthMgmtShift(newShift);
+      
+      // Update local state instead of doing full reload
+      setShifts((prev) => {
+        const idx = prev.findIndex((s) => s.userId === userId && s.date === date);
+        if (station === "" || station === "清除") {
+           if (idx !== -1) {
+              const newArr = [...prev];
+              newArr.splice(idx, 1);
+              return newArr;
+           }
+           return prev;
+        }
+        
+        if (idx !== -1) {
+          const newArr = [...prev];
+          newArr[idx] = { ...newArr[idx], ...newShift };
+          return newArr;
+        }
+        return [...prev, newShift];
+      });
     } catch (err) {
       console.error("[HealthMgmtPage] handleUpdateAnesShift failed:", err);
       alert(
@@ -2463,9 +2517,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
               onDateChange={setTodayDate}
               location={currentUserLocation}
               shifts={shifts}
-              anesthesiaShifts={anesthesiaShifts}
               staff={healthMgmtStaff}
-              anesStaff={anesthesiaStaff}
               canEdit={!isHmReadOnly}
               onSaveShift={async (userId, date, time) => {
                 const existing = shifts.find(
@@ -2490,38 +2542,6 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                       location: staffMember.location || currentUserLocation,
                     });
                   }
-                }
-              }}
-              onSaveAnesShift={async (userId, date, workTime) => {
-                const existing = anesthesiaShifts.find(
-                  (s) => s.userId === userId && s.date === date,
-                );
-                if (existing) {
-                  await db.assignAnesthesiaShift(
-                    existing.userId,
-                    existing.date,
-                    existing.station || "麻",
-                    existing.location,
-                    existing.task,
-                    workTime,
-                    existing.note,
-                  );
-                } else {
-                  // Handle case where we click a name but no record was pre-fetched
-                  // Use current view location instead of hardcoded '大直'
-                  const targetLoc =
-                    currentUserLocation === "全部"
-                      ? "大直"
-                      : currentUserLocation;
-                  await db.assignAnesthesiaShift(
-                    userId,
-                    date,
-                    "麻",
-                    targetLoc,
-                    "",
-                    workTime,
-                    "",
-                  );
                 }
               }}
             />
@@ -4167,27 +4187,17 @@ const HMTodayView: React.FC<{
   onDateChange: (d: Date) => void;
   location: string;
   shifts: HealthMgmtShift[];
-  anesthesiaShifts: AnesthesiaShift[];
   staff: HealthMgmtStaff[];
-  anesStaff: AnesthesiaStaff[];
   canEdit?: boolean;
   onSaveShift?: (userId: string, date: string, time: string) => Promise<void>;
-  onSaveAnesShift?: (
-    userId: string,
-    date: string,
-    workTime: string,
-  ) => Promise<void>;
 }> = ({
   date,
   onDateChange,
   location,
   shifts,
-  anesthesiaShifts,
   staff,
-  anesStaff,
   canEdit = false,
   onSaveShift,
-  onSaveAnesShift,
 }) => {
   const dateStr = toLocalISOString(date);
   const dateInputRef = useRef<HTMLInputElement>(null);
@@ -4225,30 +4235,6 @@ const HMTodayView: React.FC<{
     });
     return Array.from(uniqueMap.values());
   }, [shifts, dateStr]);
-
-  const filteredAnes = useMemo(() => {
-    const dayShifts = anesthesiaShifts.filter((s) => s.date === dateStr);
-    const uniqueMap = new Map<string, AnesthesiaShift>();
-    dayShifts.forEach((s) => {
-      if (!uniqueMap.has(s.userId)) {
-        uniqueMap.set(s.userId, s);
-      } else {
-        const existing = uniqueMap.get(s.userId)!;
-        const isExistingInvalid =
-          !existing.station ||
-          existing.station.includes("清除") ||
-          existing.station.includes("未分配");
-        const isNewValid =
-          s.station &&
-          !s.station.includes("清除") &&
-          !s.station.includes("未分配");
-        if (isExistingInvalid && isNewValid) {
-          uniqueMap.set(s.userId, s);
-        }
-      }
-    });
-    return Array.from(uniqueMap.values());
-  }, [anesthesiaShifts, dateStr]);
 
   const groups = useMemo(() => {
     // User Request: Use categorized view for ALL locations (Beitou, Dazhi, All)
@@ -4357,55 +4343,9 @@ const HMTodayView: React.FC<{
   const getGroupAssignments = (group: any) => {
     let assignments: any[] = [];
 
-    if (group.isAnesthesia) {
-      assignments = filteredAnes
-        .filter((s) => {
-          const u = anesStaff.find((as) => as.id === s.userId);
-          if (!u || u.isActive === false) return false;
-
-          // Location filter
-          const shiftLoc = s.location;
-          if (location !== "全部") {
-            if (shiftLoc) {
-              if (shiftLoc !== location) return false;
-            } else {
-              // Fallback: check if the requested location is in user's allowed locations
-              if (!u.locations?.includes(location)) return false;
-            }
-          } else {
-            // "全部" view: Default HM logic for Anes: exclude Beitou unless explicitly assigned elsewhere
-            const effectiveLoc =
-              shiftLoc ||
-              (u.locations && u.locations.length > 0 ? u.locations[0] : "");
-            if (effectiveLoc === "北投") return false;
-          }
-
-          const st = (s.station || "").toUpperCase();
-          if (
-            !st.trim() ||
-            st === "清除" ||
-            st === "未分配" ||
-            st.includes("休") ||
-            st.includes("V")
-          )
-            return false;
-
-          return true;
-        })
-        .map((s) => {
-          const u = anesStaff.find((st) => st.id === s.userId);
-          return {
-            name: u?.name || "未知",
-            task: s.station, // station is the task for anes (e.g. 麻1)
-            time: s.workTime || "",
-            raw: { ...s, userId: s.userId },
-            displayOrder: u?.displayOrder ?? 999,
-          };
-        });
-    } else {
-      // Also match by designation for R (行政/counter) and D (代謝/nutrition)
-      assignments = filteredShifts
-        .filter((s) => {
+    // Match by designation for R (行政/counter) and D (代謝/nutrition) and all others
+    assignments = filteredShifts
+      .filter((s) => {
           const sText = (s.station || "").toUpperCase();
           if (
             !sText ||
@@ -4457,7 +4397,6 @@ const HMTodayView: React.FC<{
             displayOrder: u?.displayOrder ?? 999,
           };
         });
-    }
 
     // Apply Sorting
     assignments.sort((a, b) => {
@@ -4641,9 +4580,7 @@ const HMTodayView: React.FC<{
                     members.map((m, idx) => {
                       const isClickable =
                         canEdit &&
-                        (group.isAnesthesia
-                          ? !!onSaveAnesShift
-                          : !!onSaveShift) &&
+                        !!onSaveShift &&
                         m.raw?.userId;
                       return (
                         <div
@@ -4655,7 +4592,6 @@ const HMTodayView: React.FC<{
                               name: m.name,
                               currentTime: m.time,
                               date: dateStr,
-                              isAnes: !!group.isAnesthesia,
                             });
                             setEditingTime(m.time || "");
                           }}
@@ -4778,14 +4714,8 @@ const HMTodayView: React.FC<{
                       if (isSubmitting) return;
                       setIsSubmitting(true);
                       try {
-                        if (onSaveShift && !editingMember.isAnes)
+                        if (onSaveShift)
                           await onSaveShift(
-                            editingMember.userId,
-                            editingMember.date,
-                            "",
-                          );
-                        if (onSaveAnesShift && editingMember.isAnes)
-                          await onSaveAnesShift(
                             editingMember.userId,
                             editingMember.date,
                             "",
@@ -4806,14 +4736,8 @@ const HMTodayView: React.FC<{
                     if (isSubmitting || !editingTime) return;
                     setIsSubmitting(true);
                     try {
-                      if (onSaveShift && !editingMember.isAnes)
+                      if (onSaveShift)
                         await onSaveShift(
-                          editingMember.userId,
-                          editingMember.date,
-                          editingTime,
-                        );
-                      if (onSaveAnesShift && editingMember.isAnes)
-                        await onSaveAnesShift(
                           editingMember.userId,
                           editingMember.date,
                           editingTime,
