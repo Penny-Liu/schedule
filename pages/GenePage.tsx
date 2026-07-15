@@ -22,9 +22,10 @@ interface GenePageProps {
 
 const createDefaultDailySchedule = (isOpen: boolean): DailyGeneSchedule => ({
   isOpen,
-  startTime: "08:00",
-  endTime: "17:00",
-  maxAppointmentsPerSlot: 1,
+  morningStartTime: "08:30",
+  morningEndTime: "10:30",
+  afternoonStartTime: "13:00",
+  afternoonEndTime: "15:00",
 });
 
 const createDefaultRule = (): GeneRule => {
@@ -37,7 +38,6 @@ const createDefaultRule = (): GeneRule => {
     name: "預設規則",
     startDate: toLocalISOString(today),
     endDate: toLocalISOString(next3Months),
-    intervalMinutes: 30,
     schedules: [
       createDefaultDailySchedule(false), // Sun
       createDefaultDailySchedule(true),  // Mon
@@ -60,7 +60,7 @@ const getApplicableRule = (dateStr: string, settings: GeneSettings): GeneRule | 
   return settings.rules.find(r => dateStr >= r.startDate && dateStr <= r.endDate) || null;
 };
 
-// Returns a list of time slots ("08:00", "08:30"...) based on min start and max end of the week
+// Returns a list of time slots ("08:30", "09:00"...) based on min start and max end of the week
 const generateWeeklyAxis = (weekDays: Date[], settings: GeneSettings) => {
   let minMinutes = 24 * 60;
   let maxMinutes = 0;
@@ -74,19 +74,24 @@ const generateWeeklyAxis = (weekDays: Date[], settings: GeneSettings) => {
     const schedule = rule.schedules[date.getDay()];
     if (schedule && schedule.isOpen) {
       foundAnyOpen = true;
-      minInterval = rule.intervalMinutes; // assume mostly same interval in a week
-      const start = schedule.startTime.split(":").map(Number);
-      const end = schedule.endTime.split(":").map(Number);
-      const startMins = start[0] * 60 + start[1];
-      const endMins = end[0] * 60 + end[1];
-      if (startMins < minMinutes) minMinutes = startMins;
-      if (endMins > maxMinutes) maxMinutes = endMins;
+      const mStart = schedule.morningStartTime.split(":").map(Number);
+      const mEnd = schedule.morningEndTime.split(":").map(Number);
+      const aStart = schedule.afternoonStartTime.split(":").map(Number);
+      const aEnd = schedule.afternoonEndTime.split(":").map(Number);
+      
+      const mStartMins = mStart[0] * 60 + mStart[1];
+      const mEndMins = mEnd[0] * 60 + mEnd[1];
+      const aStartMins = aStart[0] * 60 + aStart[1];
+      const aEndMins = aEnd[0] * 60 + aEnd[1];
+
+      if (mStartMins < minMinutes) minMinutes = mStartMins;
+      if (aEndMins > maxMinutes) maxMinutes = aEndMins;
     }
   });
 
   if (!foundAnyOpen) {
-    minMinutes = 8 * 60; // 08:00
-    maxMinutes = 17 * 60; // 17:00
+    minMinutes = 8 * 60 + 30; // 08:30
+    maxMinutes = 15 * 60; // 15:00
   }
 
   const slots = [];
@@ -115,11 +120,8 @@ const GenePage: React.FC<GenePageProps> = ({ currentUser }) => {
   let defaultSettingsToUse = DEFAULT_SETTINGS;
   if (initialSettings && initialSettings.openDays && !initialSettings.rules) {
      const rule = createDefaultRule();
-     rule.intervalMinutes = initialSettings.intervalMinutes || 30;
      for (let i = 0; i < 7; i++) {
         rule.schedules[i].isOpen = initialSettings.openDays.includes(i);
-        rule.schedules[i].startTime = initialSettings.startTime || "08:00";
-        rule.schedules[i].endTime = initialSettings.endTime || "17:00";
      }
      defaultSettingsToUse = { rules: [rule] };
   } else if (initialSettings && initialSettings.rules) {
@@ -143,8 +145,8 @@ const GenePage: React.FC<GenePageProps> = ({ currentUser }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [formData, setFormData] = useState({
     date: toLocalISOString(new Date()),
-    startTime: "08:00",
-    endTime: "08:30",
+    startTime: "08:30",
+    companionCount: 1,
     medicalRecordNumber: "",
     registeredBy: currentUser.name,
   });
@@ -178,6 +180,70 @@ const GenePage: React.FC<GenePageProps> = ({ currentUser }) => {
     return appointments.filter((b) => b.date === date && start < b.endTime && end > b.startTime);
   };
 
+  const availableStartTimes = useMemo(() => {
+    const rule = getApplicableRule(formData.date, settings);
+    if (!rule) return [];
+    const schedule = rule.schedules[new Date(formData.date).getDay()];
+    if (!schedule || !schedule.isOpen) return [];
+
+    const generateSlots = (startStr: string, endStr: string) => {
+      const sParts = startStr.split(":").map(Number);
+      const eParts = endStr.split(":").map(Number);
+      let sMins = sParts[0] * 60 + sParts[1];
+      const eMins = eParts[0] * 60 + eParts[1];
+      const slots = [];
+      while (sMins <= eMins) {
+        const h = Math.floor(sMins / 60);
+        const m = sMins % 60;
+        slots.push(`${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`);
+        sMins += 30;
+      }
+      return slots;
+    };
+
+    let possibleSlots: string[] = [];
+    if (formData.companionCount > 1) {
+      possibleSlots = [schedule.morningStartTime, schedule.afternoonStartTime];
+    } else {
+      possibleSlots = [
+        ...generateSlots(schedule.morningStartTime, schedule.morningEndTime),
+        ...generateSlots(schedule.afternoonStartTime, schedule.afternoonEndTime)
+      ];
+    }
+
+    // Filter out conflicts (with 30 min buffer for non-companions)
+    return possibleSlots.filter(st => {
+      const stMins = Number(st.split(":")[0]) * 60 + Number(st.split(":")[1]);
+      const durationMins = formData.companionCount * 60;
+      const etMins = stMins + durationMins;
+      const etH = Math.floor(etMins / 60);
+      const etM = etMins % 60;
+      const computedEndTime = `${String(etH).padStart(2, "0")}:${String(etM).padStart(2, "0")}`;
+
+      // Check direct overlaps with actual bookings
+      const directConflicts = getConflicts(formData.date, st, computedEndTime);
+      if (directConflicts.length > 0) return false;
+
+      // If non-companion, also check if it falls within the 30 min buffer of any existing booking
+      if (formData.companionCount === 1) {
+        // Find if this slot overlaps with any booking's buffered end time
+        const bufferConflicts = appointments.filter(b => {
+           if (b.date !== formData.date) return false;
+           // If the existing booking was a companion booking, does it have a buffer?
+           // The prompt says "若非同行，須給醫師緩衝時間...每位間隔30分鐘".
+           // This means if I am booking non-companion, I need a 30m gap from the previous one.
+           const bEndMins = Number(b.endTime.split(":")[0]) * 60 + Number(b.endTime.split(":")[1]);
+           const bBufferedEndMins = bEndMins + 30; // buffer
+           const bBufferedEnd = `${String(Math.floor(bBufferedEndMins / 60)).padStart(2, "0")}:${String(bBufferedEndMins % 60).padStart(2, "0")}`;
+           // check overlap of (st, computedEndTime) with (b.startTime, bBufferedEnd)
+           return st < bBufferedEnd && computedEndTime > b.startTime;
+        });
+        if (bufferConflicts.length > 0) return false;
+      }
+      return true;
+    });
+  }, [formData.date, formData.companionCount, settings, appointments]);
+
   const dayNames = ["日", "一", "二", "三", "四", "五", "六"];
 
   const handleJump2Months = () => {
@@ -210,30 +276,9 @@ const GenePage: React.FC<GenePageProps> = ({ currentUser }) => {
 
     // Auto-select earliest available time slot based on the daily rule
     if (finalIsOpen && schedule) {
-       // Generate daily slots
-       let currentMins = Number(schedule.startTime.split(":")[0]) * 60 + Number(schedule.startTime.split(":")[1]);
-       const endMins = Number(schedule.endTime.split(":")[0]) * 60 + Number(schedule.endTime.split(":")[1]);
-       const maxAppts = schedule.maxAppointmentsPerSlot || 1;
-       let foundSlot = false;
-
-       while (currentMins < endMins) {
-         const h1 = Math.floor(currentMins / 60);
-         const m1 = currentMins % 60;
-         const st = `${String(h1).padStart(2, "0")}:${String(m1).padStart(2, "0")}`;
-         
-         const nextMins = currentMins + rule.intervalMinutes;
-         const h2 = Math.floor(nextMins / 60);
-         const m2 = nextMins % 60;
-         const et = `${String(h2).padStart(2, "0")}:${String(m2).padStart(2, "0")}`;
-
-         const conflicts = getConflicts(targetDateStr, st, et);
-         if (conflicts.length < maxAppts) {
-           setFormData(prev => ({ ...prev, startTime: st, endTime: et, date: targetDateStr }));
-           foundSlot = true;
-           break;
-         }
-         currentMins += rule.intervalMinutes;
-       }
+       // Since availableStartTimes hook depends on state, we manually calculate the first available here
+       const st = schedule.morningStartTime;
+       setFormData(prev => ({ ...prev, startTime: st, date: targetDateStr }));
     }
   };
 
@@ -241,10 +286,6 @@ const GenePage: React.FC<GenePageProps> = ({ currentUser }) => {
     e.preventDefault();
     if (!formData.medicalRecordNumber.trim() || !formData.registeredBy.trim()) {
       showToast("請填寫病歷號與登記人員", "error");
-      return;
-    }
-    if (formData.startTime >= formData.endTime) {
-      showToast("開始時間必須早於結束時間", "error");
       return;
     }
 
@@ -268,17 +309,35 @@ const GenePage: React.FC<GenePageProps> = ({ currentUser }) => {
       return;
     }
 
-    const maxAppts = rule?.schedules[day]?.maxAppointmentsPerSlot || 1;
+    const schedule = rule.schedules[day];
+    const maxAppts = 1; // Since each slot is dynamically blocked, standard max is 1 booking per slot. Companions consume multiple hours but still count as 1 block booking.
 
-    const conflicts = getConflicts(formData.date, formData.startTime, formData.endTime);
-    if (conflicts.length >= maxAppts) {
-      if (!confirm(`該時段已有 ${conflicts.length} 筆預約，已達(或超過)上限 ${maxAppts} 人。確定要超額預約嗎？`)) return;
+    // Validation for companions
+    if (formData.companionCount > 1) {
+      if (formData.startTime !== schedule.morningStartTime && formData.startTime !== schedule.afternoonStartTime) {
+        showToast(`同行者必須從上午起始(${schedule.morningStartTime})或下午起始(${schedule.afternoonStartTime})開始預約`, "error");
+        return;
+      }
+    }
+
+    // Auto-calculate end time: 1 hr per person
+    const startParts = formData.startTime.split(":").map(Number);
+    const startMins = startParts[0] * 60 + startParts[1];
+    const endMins = startMins + (formData.companionCount * 60);
+    const h = Math.floor(endMins / 60);
+    const m = endMins % 60;
+    const computedEndTime = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+
+    const conflicts = getConflicts(formData.date, formData.startTime, computedEndTime);
+    if (conflicts.length > 0) {
+      if (!confirm(`該時段已有預約衝突。確定要重疊預約嗎？`)) return;
     }
 
     try {
       const newBooking: GeneAppointment = {
         id: generateUUID(),
         ...formData,
+        endTime: computedEndTime,
       };
       await db.addGeneAppointments([newBooking]);
       showToast("預約成功");
@@ -496,7 +555,7 @@ const GenePage: React.FC<GenePageProps> = ({ currentUser }) => {
                         )}
                         {rule && finalIsOpen && (
                            <div className="text-[10px] text-slate-400 mt-1">
-                             上限: {schedule?.maxAppointmentsPerSlot} 人
+                             {schedule?.morningStartTime}-{schedule?.morningEndTime} / {schedule?.afternoonStartTime}-{schedule?.afternoonEndTime}
                            </div>
                         )}
                       </div>
@@ -522,14 +581,14 @@ const GenePage: React.FC<GenePageProps> = ({ currentUser }) => {
                         // Check if this specific time is within this day's open hours
                         let isTimeSlotOpen = false;
                         if (finalIsOpen && schedule) {
-                           isTimeSlotOpen = time >= schedule.startTime && time < schedule.endTime;
+                           isTimeSlotOpen = (time >= schedule.morningStartTime && time < schedule.morningEndTime) || (time >= schedule.afternoonStartTime && time < schedule.afternoonEndTime);
                         }
 
                         const slotBookings = weekAppointments.filter(
                           (b) => b.date === dateStr && time >= b.startTime && time < b.endTime
                         );
                         
-                        const maxAppts = schedule?.maxAppointmentsPerSlot || 1;
+                        const maxAppts = 1; // dynamically blocked, but standard is 1 per slot
                         const isFull = slotBookings.length >= maxAppts;
                         
                         return (
@@ -543,7 +602,7 @@ const GenePage: React.FC<GenePageProps> = ({ currentUser }) => {
                                 ...formData,
                                 date: dateStr,
                                 startTime: time,
-                                endTime: timeSlots[slotIdx + 1]
+                                companionCount: 1,
                               });
                               setIsModalOpen(true);
                             }}
@@ -557,7 +616,7 @@ const GenePage: React.FC<GenePageProps> = ({ currentUser }) => {
                                   setFormData({
                                     date: booking.date,
                                     startTime: booking.startTime,
-                                    endTime: booking.endTime,
+                                    companionCount: booking.companionCount || 1,
                                     medicalRecordNumber: booking.medicalRecordNumber,
                                     registeredBy: booking.registeredBy
                                   });
@@ -649,13 +708,19 @@ const GenePage: React.FC<GenePageProps> = ({ currentUser }) => {
                     
                     {isEditing && (
                       <div className="p-5 space-y-6">
-                         <div className="flex items-center gap-4">
-                           <label className="text-sm font-bold text-slate-700">單次預約間隔時間 (分鐘) :</label>
-                           <select value={rule.intervalMinutes} onChange={(e) => updateEditingRule(r => ({...r, intervalMinutes: Number(e.target.value)}))} className="border border-slate-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-pink-500">
-                             <option value={15}>15 分鐘</option>
-                             <option value={30}>30 分鐘</option>
-                             <option value={60}>60 分鐘</option>
-                           </select>
+                         <div className="bg-blue-50 text-blue-800 p-4 rounded-lg text-sm mb-4 border border-blue-200">
+                           <h4 className="font-bold flex items-center gap-2 mb-2"><FileText size={16} /> 預設排班規則說明：</h4>
+                           <ul className="list-decimal pl-5 space-y-1">
+                             <li>解說時間：每位 1 小時。</li>
+                             <li>若有同行：<br/>
+                               - 上午：需從設定的上午起始時間開始，最大量三位。<br/>
+                               - 下午：需從設定的下午起始時間開始，最大量三位。
+                             </li>
+                             <li>若非同行，須給醫師緩衝時間：每位客人需間隔 30 分鐘。<br/>
+                               - 上午：最後一位僅能排在上午結束時間。<br/>
+                               - 下午：最後一位僅能排在下午結束時間。
+                             </li>
+                           </ul>
                          </div>
 
                          <div>
@@ -672,24 +737,37 @@ const GenePage: React.FC<GenePageProps> = ({ currentUser }) => {
                                       <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-pink-500"></div>
                                     </label>
                                  </div>
-                                 <div className={`space-y-2 ${!schedule.isOpen ? 'opacity-50 pointer-events-none' : ''}`}>
-                                    <div className="flex items-center justify-between gap-2 text-xs">
-                                       <span className="text-gray-500 whitespace-nowrap">開始</span>
-                                       <input type="time" value={schedule.startTime} onChange={(e) => updateEditingRule(r => {
-                                         const ns = [...r.schedules]; ns[dayIdx] = {...ns[dayIdx], startTime: e.target.value}; return {...r, schedules: ns};
-                                       })} className="border border-gray-300 rounded px-2 py-1 w-full" />
+                                 <div className={`space-y-3 ${!schedule.isOpen ? 'opacity-50 pointer-events-none' : ''}`}>
+                                    <div className="bg-white p-2 rounded border border-gray-100">
+                                      <div className="text-xs font-bold text-slate-600 mb-2 border-b pb-1">上午時段</div>
+                                      <div className="flex items-center justify-between gap-2 text-xs mb-2">
+                                         <span className="text-gray-500 whitespace-nowrap">開始</span>
+                                         <input type="time" value={schedule.morningStartTime} onChange={(e) => updateEditingRule(r => {
+                                           const ns = [...r.schedules]; ns[dayIdx] = {...ns[dayIdx], morningStartTime: e.target.value}; return {...r, schedules: ns};
+                                         })} className="border border-gray-300 rounded px-2 py-1 w-full" />
+                                      </div>
+                                      <div className="flex items-center justify-between gap-2 text-xs">
+                                         <span className="text-gray-500 whitespace-nowrap">最後預約時間</span>
+                                         <input type="time" value={schedule.morningEndTime} onChange={(e) => updateEditingRule(r => {
+                                           const ns = [...r.schedules]; ns[dayIdx] = {...ns[dayIdx], morningEndTime: e.target.value}; return {...r, schedules: ns};
+                                         })} className="border border-gray-300 rounded px-2 py-1 w-full" />
+                                      </div>
                                     </div>
-                                    <div className="flex items-center justify-between gap-2 text-xs">
-                                       <span className="text-gray-500 whitespace-nowrap">結束</span>
-                                       <input type="time" value={schedule.endTime} onChange={(e) => updateEditingRule(r => {
-                                         const ns = [...r.schedules]; ns[dayIdx] = {...ns[dayIdx], endTime: e.target.value}; return {...r, schedules: ns};
-                                       })} className="border border-gray-300 rounded px-2 py-1 w-full" />
-                                    </div>
-                                    <div className="flex items-center justify-between gap-2 text-xs">
-                                       <span className="text-gray-500 whitespace-nowrap">人數上限</span>
-                                       <input type="number" min={1} max={10} value={schedule.maxAppointmentsPerSlot} onChange={(e) => updateEditingRule(r => {
-                                         const ns = [...r.schedules]; ns[dayIdx] = {...ns[dayIdx], maxAppointmentsPerSlot: Number(e.target.value)}; return {...r, schedules: ns};
-                                       })} className="border border-gray-300 rounded px-2 py-1 w-full" />
+                                    
+                                    <div className="bg-white p-2 rounded border border-gray-100">
+                                      <div className="text-xs font-bold text-slate-600 mb-2 border-b pb-1">下午時段</div>
+                                      <div className="flex items-center justify-between gap-2 text-xs mb-2">
+                                         <span className="text-gray-500 whitespace-nowrap">開始</span>
+                                         <input type="time" value={schedule.afternoonStartTime} onChange={(e) => updateEditingRule(r => {
+                                           const ns = [...r.schedules]; ns[dayIdx] = {...ns[dayIdx], afternoonStartTime: e.target.value}; return {...r, schedules: ns};
+                                         })} className="border border-gray-300 rounded px-2 py-1 w-full" />
+                                      </div>
+                                      <div className="flex items-center justify-between gap-2 text-xs">
+                                         <span className="text-gray-500 whitespace-nowrap">最後預約時間</span>
+                                         <input type="time" value={schedule.afternoonEndTime} onChange={(e) => updateEditingRule(r => {
+                                           const ns = [...r.schedules]; ns[dayIdx] = {...ns[dayIdx], afternoonEndTime: e.target.value}; return {...r, schedules: ns};
+                                         })} className="border border-gray-300 rounded px-2 py-1 w-full" />
+                                      </div>
                                     </div>
                                  </div>
                                </div>
@@ -772,19 +850,23 @@ const GenePage: React.FC<GenePageProps> = ({ currentUser }) => {
                     onChange={(e) => setFormData({ ...formData, startTime: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-pink-500 focus:ring-1 focus:ring-pink-500"
                   >
-                    {timeSlots.map((t) => <option key={t} value={t}>{t}</option>)}
+                    {availableStartTimes.length === 0 && <option value="">無可用時段</option>}
+                    {availableStartTimes.map((t) => <option key={t} value={t}>{t}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-1">結束時間 *</label>
+                  <label className="block text-sm font-bold text-gray-700 mb-1">預約人數 (含同行) *</label>
                   <select
                     required
-                    value={formData.endTime}
-                    onChange={(e) => setFormData({ ...formData, endTime: e.target.value })}
+                    value={formData.companionCount}
+                    onChange={(e) => setFormData({ ...formData, companionCount: Number(e.target.value) })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-pink-500 focus:ring-1 focus:ring-pink-500"
                   >
-                    {timeSlots.map((t) => <option key={t} value={t}>{t}</option>)}
+                    <option value={1}>1 人 (非同行)</option>
+                    <option value={2}>2 人 (同行)</option>
+                    <option value={3}>3 人 (同行)</option>
                   </select>
+                  <p className="text-xs text-gray-400 mt-1">選同行只能從上下午起始時間開始</p>
                 </div>
               </div>
 

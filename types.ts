@@ -513,14 +513,16 @@ export interface GeneAppointment {
   medicalRecordNumber: string;
   registeredBy: string;
   createdAt?: string;
+  companionCount?: number; // New: Number of people (1-3)
 }
 
 
 export interface DailyGeneSchedule {
   isOpen: boolean;
-  startTime: string; // "08:00"
-  endTime: string; // "17:00"
-  maxAppointmentsPerSlot: number; // e.g. 1
+  morningStartTime: string; // "08:30"
+  morningEndTime: string;   // "10:30"
+  afternoonStartTime: string; // "13:00"
+  afternoonEndTime: string;   // "15:00"
 }
 
 export interface GeneRule {
@@ -528,7 +530,6 @@ export interface GeneRule {
   name: string;
   startDate: string; // YYYY-MM-DD
   endDate: string; // YYYY-MM-DD
-  intervalMinutes: number; // e.g. 30
   schedules: DailyGeneSchedule[]; // Array of 7, index 0=Sun, 1=Mon...
 }
 
