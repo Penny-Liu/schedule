@@ -5,6 +5,7 @@ export enum UserRole {
   PHYSICIAN_ADMIN = "PHYSICIAN_ADMIN", // 醫師/行政管理
   HM_SUPERVISOR = "HM_SUPERVISOR", // 健管主管
   HM_STAFF = "HM_STAFF", // 健管同仁
+  ANESTHETIST_NURSE = "ANESTHETIST_NURSE", // 麻護
   VIEWER = "VIEWER", // 瀏覽者 (僅查看)
   FINANCE = "FINANCE", // 財會 (僅查看醫師排班/工作統計/個人設定)
   RADIOGRAPHER_ASSISTANT = "RADIOGRAPHER_ASSISTANT", // 放射師助理

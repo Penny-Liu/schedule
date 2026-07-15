@@ -4464,7 +4464,7 @@ const HMTodayView: React.FC<{
       {
         id: "A",
         label: "麻護(A)",
-        isAnesthesia: true,
+        stations: ["A", "麻護", "麻", "麻1", "麻2"],
         icon: <Syringe size={18} />,
         color: "rose",
         taskOrder: ["麻1", "麻2"],
