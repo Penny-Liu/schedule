@@ -1282,6 +1282,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                           PERMISSIONS.VIEW_STAFF,
                           PERMISSIONS.EDIT_STAFF,
                           PERMISSIONS.EDIT_SETTINGS,
+                          PERMISSIONS.EDIT_PASSWORD,
                         ],
                       },
                     ].map((group) => (

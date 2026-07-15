@@ -251,8 +251,13 @@ const Sidebar: React.FC<SidebarProps> = ({
               "hideForRoles" in item &&
               item.hideForRoles &&
               (item.hideForRoles as UserRole[]).includes(currentUser.role)
-            )
-              return false;
+            ) {
+              if (item.id === "settings" && currentUser.permissions?.includes(PERMISSIONS.EDIT_PASSWORD)) {
+                // allow bypass for edit password
+              } else {
+                return false;
+              }
+            }
             if (!item.permission) return true;
             return currentUser.permissions?.includes(item.permission);
           });
