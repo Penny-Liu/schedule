@@ -276,6 +276,12 @@ const GenePage: React.FC<GenePageProps> = ({ currentUser }) => {
     });
   }, [formData.date, formData.companionCount, settings, appointments]);
 
+  useEffect(() => {
+    if (availableStartTimes.length > 0 && !availableStartTimes.includes(formData.startTime)) {
+      setFormData(prev => ({ ...prev, startTime: availableStartTimes[0] }));
+    }
+  }, [availableStartTimes]);
+
   const dayNames = ["日", "一", "二", "三", "四", "五", "六"];
 
   const handleJump2Months = () => {
@@ -347,7 +353,7 @@ const GenePage: React.FC<GenePageProps> = ({ currentUser }) => {
     // Validation for companions
     if (formData.companionCount > 1) {
       if (formData.startTime !== schedule.morningStartTime && formData.startTime !== schedule.afternoonStartTime) {
-        showToast(`同行者必須從上午起始(${schedule.morningStartTime})或下午起始(${schedule.afternoonStartTime})開始預約`, "error");
+        showToast(`同行者必須從上午起始(${schedule.morningStartTime})或下午起始(${schedule.afternoonStartTime})開始預約 (目前選擇了: ${formData.startTime})`, "error");
         return;
       }
     }
