@@ -841,8 +841,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                         const newRole = e.target.value as UserRole;
                         const isHM =
                           newRole === UserRole.HM_SUPERVISOR ||
-                          newRole === UserRole.HM_STAFF ||
-                          newRole === UserRole.ANESTHETIST_NURSE;
+                          newRole === UserRole.HM_STAFF;
                         const isRadio =
                           newRole === UserRole.SUPERVISOR ||
                           newRole === UserRole.RADIOGRAPHER_STAFF ||
@@ -867,7 +866,6 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                       <option value={UserRole.SUPERVISOR}>放射師主管</option>
                       <option value={UserRole.HM_STAFF}>健管同仁</option>
                       <option value={UserRole.HM_SUPERVISOR}>健管主管</option>
-                      <option value={UserRole.ANESTHETIST_NURSE}>麻護</option>
                       <option value={UserRole.PHYSICIAN_ADMIN}>
                         醫師/行政管理
                       </option>

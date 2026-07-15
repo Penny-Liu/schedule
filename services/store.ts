@@ -75,8 +75,6 @@ export const getPermissionsByRole = (role: UserRole): string[] => {
       ];
     case UserRole.HM_STAFF:
       return [PERMISSIONS.VIEW_CLOUD_SCHEDULE, PERMISSIONS.VIEW_HEALTH_MGMT];
-    case UserRole.ANESTHETIST_NURSE:
-      return [PERMISSIONS.VIEW_CLOUD_SCHEDULE, PERMISSIONS.VIEW_HEALTH_MGMT, PERMISSIONS.VIEW_ANESTHESIA];
     case UserRole.FINANCE:
       return [PERMISSIONS.VIEW_PHYSICIAN, PERMISSIONS.VIEW_DOCTOR_STATS];
     case UserRole.VIEWER:

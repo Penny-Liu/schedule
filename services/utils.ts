@@ -76,8 +76,6 @@ export const getRoleLabel = (role: UserRole): string => {
       return "健管主管";
     case "HM_STAFF" as UserRole:
       return "健管同仁";
-    case "ANESTHETIST_NURSE" as UserRole:
-      return "麻護";
     case "RADIOGRAPHER_STAFF" as UserRole:
       return "放射師";
     default:

@@ -288,6 +288,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
     營養師: 3,
     醫檢師: 4,
     藥師: 5,
+    麻護: 6,
   };
 
   // Filtered staff list based on reactive state and location
@@ -393,8 +394,31 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
   useEffect(() => {
     let isInitialLoad = true;
     const loadData = () => {
-      const hmStaffData = db.getHealthMgmtStaff();
+      let hmStaffData = db.getHealthMgmtStaff();
+      
+      const anesStaffData = db.getAnesthesiaStaff();
+      // Auto-migrate Anesthesia Staff to Health Mgmt Staff
+      let needsHmUpdate = false;
+      anesStaffData.forEach((anes) => {
+        if (!hmStaffData.find((hm) => hm.id === anes.id)) {
+          hmStaffData.push({
+            id: anes.id,
+            name: anes.name,
+            alias: anes.alias,
+            isActive: anes.isActive,
+            role: anes.role || "VIEWER",
+            designation: "麻護",
+            location: anes.locations?.[0] || "北投",
+            displayOrder: anes.displayOrder,
+          });
+          needsHmUpdate = true;
+        }
+      });
+      if (needsHmUpdate) {
+        db.saveHealthMgmtStaff(hmStaffData);
+      }
       setHealthMgmtStaff(hmStaffData);
+      
       const hmShiftsData = db.getHealthMgmtShifts().filter((s) => {
         const staff = hmStaffData.find((st) => st.id === s.userId);
         if (staff && staff.terminationDate && s.date > staff.terminationDate)
@@ -411,10 +435,17 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
       setHmCycles(cycles);
       setHolidays(db.getHolidays());
 
-      const anesStaffData = db.getAnesthesiaStaff();
-      setAnesthesiaStaff(anesStaffData);
+      // Set Anesthesia Staff from Health Mgmt Staff where designation is "麻護"
+      const mappedAnesStaff: AnesthesiaStaff[] = hmStaffData
+        .filter((s) => s.designation === "麻護")
+        .map((s) => ({
+          ...s,
+          locations: [s.location || "北投"],
+        }));
+      setAnesthesiaStaff(mappedAnesStaff);
+
       const anesShiftsData = db.getAnesthesiaShifts().filter((s) => {
-        const staff = anesStaffData.find((st) => st.id === s.userId);
+        const staff = mappedAnesStaff.find((st) => st.id === s.userId);
         if (
           staff &&
           (staff as any).terminationDate &&
@@ -1090,6 +1121,8 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
         return ["M", "醫檢"].some((s) => mainStation.includes(s));
       case "藥師":
         return ["P", "藥師"].some((s) => mainStation.includes(s));
+      case "麻護":
+        return ["A", "麻"].some((s) => mainStation.includes(s));
       default:
         return true;
     }
@@ -2323,230 +2356,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
             </div>
 
             {/* Anesthesia Staff Management Section (Optional/Collapsible or inline) */}
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 transition-all">
-              <div
-                className="flex justify-between items-center cursor-pointer group"
-                onClick={() =>
-                  setIsAnesStaffManagementExpanded(
-                    !isAnesStaffManagementExpanded,
-                  )
-                }
-              >
-                <h3 className="font-bold text-gray-700 flex items-center gap-2 group-hover:text-teal-600 transition-colors">
-                  <Users size={18} className="text-teal-600" />
-                  麻護人員管理
-                </h3>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-slate-400 font-medium">
-                    {isAnesStaffManagementExpanded ? "收起" : "展開編輯"}
-                  </span>
-                  {isAnesStaffManagementExpanded ? (
-                    <ChevronUp size={20} className="text-slate-400" />
-                  ) : (
-                    <ChevronDown size={20} className="text-slate-400" />
-                  )}
-                </div>
-              </div>
-              {/* Anesthesia Staff Management Component */}
-              {isAnesStaffManagementExpanded && (
-                <div className="mt-6 animate-in slide-in-from-top-2 duration-300">
-                  {error && (
-                    <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-600 rounded-xl text-sm font-bold">
-                      {error}
-                    </div>
-                  )}
-
-                  <form
-                    onSubmit={
-                      editingAnesId ? updateAnesthesiaStaff : addAnesthesiaStaff
-                    }
-                    className="flex flex-wrap gap-4 items-end mb-6 bg-slate-50 p-4 rounded-xl border border-slate-100"
-                  >
-                    <div className="flex-[1.5] flex flex-col gap-1">
-                      <label className="text-[10px] font-bold text-teal-600 uppercase pl-1">
-                        姓名
-                      </label>
-                      <input
-                        type="text"
-                        value={
-                          editingAnesId ? editingAnesName : newAnesStaffName
-                        }
-                        onChange={(e) =>
-                          editingAnesId
-                            ? setEditingAnesName(e.target.value)
-                            : setNewAnesStaffName(e.target.value)
-                        }
-                        placeholder="姓名 (例: 麻護1)"
-                        className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-teal-500 outline-none bg-white"
-                      />
-                    </div>
-                    <div className="flex-1 flex flex-col gap-1">
-                      <label className="text-[10px] font-bold text-teal-600 uppercase pl-1">
-                        簡稱
-                      </label>
-                      <input
-                        type="text"
-                        value={
-                          editingAnesId ? editingAnesAlias : newAnesStaffAlias
-                        }
-                        onChange={(e) =>
-                          editingAnesId
-                            ? setEditingAnesAlias(e.target.value)
-                            : setNewAnesStaffAlias(e.target.value)
-                        }
-                        placeholder="簡稱 (例: 麻1)"
-                        className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-teal-500 outline-none bg-white"
-                      />
-                    </div>
-                    <div className="flex-1 flex flex-col gap-1">
-                      <label className="text-[10px] font-bold text-teal-600 uppercase pl-1">
-                        權限
-                      </label>
-                      <select
-                        value={
-                          editingAnesId
-                            ? editingAnesStaffRole
-                            : newAnesStaffRole
-                        }
-                        onChange={(e) =>
-                          editingAnesId
-                            ? setEditingAnesStaffRole(e.target.value as any)
-                            : setNewAnesStaffRole(e.target.value as any)
-                        }
-                        className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-teal-500 outline-none bg-white font-bold"
-                      >
-                        <option value="VIEWER">僅查看</option>
-                        <option value="ADMIN">可管理</option>
-                      </select>
-                    </div>
-                    <div className="flex-[1.5] flex flex-col gap-1">
-                      <label className="text-[10px] font-bold text-teal-600 uppercase pl-1">
-                        工作地點
-                      </label>
-                      <div className="flex gap-4 px-2 py-2">
-                        {["北投", "大直"].map((loc) => (
-                          <label
-                            key={loc}
-                            className="flex items-center gap-2 cursor-pointer"
-                          >
-                            <input
-                              type="checkbox"
-                              checked={
-                                editingAnesId
-                                  ? editingAnesStaffLocations.includes(loc)
-                                  : newAnesStaffLocations.includes(loc)
-                              }
-                              onChange={(e) => {
-                                const list = editingAnesId
-                                  ? editingAnesStaffLocations
-                                  : newAnesStaffLocations;
-                                const newList = e.target.checked
-                                  ? [...list, loc]
-                                  : list.filter((l) => l !== loc);
-                                editingAnesId
-                                  ? setEditingAnesStaffLocations(newList)
-                                  : setNewAnesStaffLocations(newList);
-                              }}
-                              className="w-4 h-4 text-teal-600 rounded border-gray-300 focus:ring-teal-500"
-                            />
-                            <span className="text-sm font-bold text-slate-600">
-                              {loc}
-                            </span>
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="flex gap-2">
-                      <button
-                        type="submit"
-                        disabled={
-                          isSaving ||
-                          isAnesReadOnly ||
-                          (editingAnesId
-                            ? editingAnesStaffLocations.length === 0
-                            : newAnesStaffLocations.length === 0)
-                        }
-                        className="whitespace-nowrap bg-teal-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-teal-700 transition-colors disabled:opacity-50 h-[42px]"
-                      >
-                        {editingAnesId ? "儲存更新" : "新增人員"}
-                      </button>
-                      {editingAnesId && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEditingAnesId(null);
-                            setEditingAnesName("");
-                            setEditingAnesAlias("");
-                            setEditingAnesStaffLocations([]);
-                            setEditingAnesStaffRole("VIEWER");
-                          }}
-                          className="px-4 py-2 text-slate-500 hover:bg-slate-200 rounded-lg font-bold transition-colors h-[42px]"
-                        >
-                          取消
-                        </button>
-                      )}
-                    </div>
-                  </form>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                    {activeAnesthesiaStaff.map((as) => (
-                      <div
-                        key={as.id}
-                        className="flex justify-between items-center p-4 border border-slate-100 rounded-xl hover:bg-slate-50 transition-colors bg-white shadow-sm"
-                      >
-                        <div className="flex flex-col gap-0.5">
-                          <div className="flex items-center gap-2">
-                            <span className="font-bold text-slate-700">
-                              {as.name}
-                            </span>
-                            {as.alias && (
-                              <span className="text-xs text-slate-400">
-                                ({as.alias})
-                              </span>
-                            )}
-                            {as.role === "ADMIN" && (
-                              <span className="text-[10px] font-bold px-1.5 py-0.5 bg-indigo-50 text-indigo-600 rounded border border-indigo-100">
-                                管理
-                              </span>
-                            )}
-                          </div>
-                          <div className="flex gap-1">
-                            {as.locations?.map((l) => (
-                              <span
-                                key={l}
-                                className="text-[9px] font-bold px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded"
-                              >
-                                {l}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {!isAnesReadOnly && (
-                            <>
-                              <button
-                                onClick={() => handleEditAnesStaff(as)}
-                                className="p-2 text-teal-600 hover:bg-teal-50 rounded-lg transition-colors"
-                                title="編輯"
-                              >
-                                <Users size={16} />
-                              </button>
-                              <button
-                                onClick={() => setDeleteTargetId(as.id)}
-                                className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                title="停用"
-                              >
-                                <Trash2 size={16} />
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
+            {/* Anesthesia Staff Management Component Removed */}
 
             {/* Anesthesia Inline Popup */}
             {selectedAnesCell && (
