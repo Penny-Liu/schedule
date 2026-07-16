@@ -1181,6 +1181,11 @@ class Store {
         { event: "*", schema: "public", table: "meeting_room_bookings" },
         (payload) => this.handleRealtimeMeetingRoomUpdate(payload),
       )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "gene_appointments" },
+        (payload) => this.handleRealtimeGeneAppointmentUpdate(payload),
+      )
       .subscribe((status) => {
         if (status === "SUBSCRIBED") {
           console.log("[Realtime] Subscribed to all database changes");
@@ -1649,6 +1654,25 @@ class Store {
       );
     }
     this.notifyListeners();
+  }
+
+  private handleRealtimeGeneAppointmentUpdate(payload: any) {
+    const { eventType, new: newRecord, old: oldRecord } = payload;
+    const record = { ...newRecord };
+    if (record.id) this.mapFromDbFields(record);
+
+    if (eventType === "INSERT" || eventType === "UPDATE") {
+      const index = this.geneAppointments.findIndex((b) => b.id === record.id);
+      if (index !== -1) {
+        this.geneAppointments[index] = record as GeneAppointment;
+      } else {
+        this.geneAppointments.push(record as GeneAppointment);
+      }
+      this.notifyListeners();
+    } else if (eventType === "DELETE") {
+      this.geneAppointments = this.geneAppointments.filter((b) => b.id !== oldRecord.id);
+      this.notifyListeners();
+    }
   }
 
   private handleRealtimeSettingsUpdate(payload: any) {
