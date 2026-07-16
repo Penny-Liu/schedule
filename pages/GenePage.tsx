@@ -408,6 +408,11 @@ const GenePage: React.FC<GenePageProps> = ({ currentUser }) => {
       showToast("預約成功");
       setIsModalOpen(false);
     } catch (err: any) {
+      if (err.message === "OVERLAP_DETECTED") {
+        showToast("該時段剛剛被其他人預約了，請選擇其他時段", "error");
+        db.loadDataForMonth(currentDate.getFullYear(), currentDate.getMonth() + 1);
+        return;
+      }
       showToast(err.message || "預約失敗", "error");
     }
   };

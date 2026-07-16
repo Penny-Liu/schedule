@@ -1506,6 +1506,21 @@ class Store {
   }
 
   async addGeneAppointments(appointments: GeneAppointment[]) {
+    // PRE-FLIGHT CONCURRENCY CHECK
+    for (const b of appointments) {
+      const { data: existing, error: checkError } = await supabase
+        .from("gene_appointments")
+        .select("id")
+        .eq("date", b.date)
+        .lt("start_time", b.endTime)
+        .gt("end_time", b.startTime);
+      
+      if (checkError) throw checkError;
+      if (existing && existing.length > 0) {
+        throw new Error("OVERLAP_DETECTED");
+      }
+    }
+
     this.geneAppointments.push(...appointments);
     this.notifyListeners();
 
@@ -1522,6 +1537,7 @@ class Store {
       }));
       const { error } = await supabase.from("gene_appointments").insert(records);
       if (error) throw error;
+      
       
       await this.logOperation("gene_appointment_create", `新增基因預約 ${appointments.length} 筆`);
     } catch (e) {
