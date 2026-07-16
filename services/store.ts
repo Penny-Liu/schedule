@@ -2042,6 +2042,8 @@ class Store {
       radiographer_name: "radiographerName",
       companion_count: "companionCount",
       is_online: "isOnline",
+      medical_record_number: "medicalRecordNumber",
+      registered_by: "registeredBy",
       mr_large_male: "mrLargeMale",
       mr_large_female: "mrLargeFemale",
       mr_medium: "mrMedium",
@@ -2065,6 +2067,13 @@ class Store {
         delete obj[key];
       }
     });
+
+    if (typeof obj.startTime === "string" && obj.startTime.length >= 8) {
+      obj.startTime = obj.startTime.slice(0, 5);
+    }
+    if (typeof obj.endTime === "string" && obj.endTime.length >= 8) {
+      obj.endTime = obj.endTime.slice(0, 5);
+    }
   }
 
   async updateUser(id: string, updates: Partial<User>) {
