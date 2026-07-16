@@ -153,7 +153,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
     currentUser.role === UserRole.PHYSICIAN_ADMIN ||
     canManageHealthMgmt;
   const isSystemAdmin = currentUser.role === UserRole.SYSTEM_ADMIN;
-  const isFinanceOnly = currentUser.role === UserRole.FINANCE;
+  const isSimplifiedSettings = currentUser.role === UserRole.FINANCE || currentUser.role === UserRole.VIEWER;
   const isHR =
     currentUser.role === UserRole.SCHEDULER ||
     currentUser.role === UserRole.PHYSICIAN_ADMIN;
@@ -793,7 +793,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
     (s) => s !== SYSTEM_OFF && s !== StationDefault.UNASSIGNED,
   );
 
-  if (isFinanceOnly) {
+  if (isSimplifiedSettings) {
     return (
       <div className="p-6 max-w-lg mx-auto">
         <div className="mb-6 flex items-center gap-3">
