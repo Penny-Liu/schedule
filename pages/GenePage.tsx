@@ -367,14 +367,18 @@ const GenePage: React.FC<GenePageProps> = ({ currentUser }) => {
     const computedEndTime = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 
     if (schedule && schedule.isOpen) {
-      const isMorning = formData.startTime >= schedule.morningStartTime && formData.startTime < schedule.morningEndTime;
-      const isAfternoon = formData.startTime >= schedule.afternoonStartTime && formData.startTime < schedule.afternoonEndTime;
+      const isMorning = formData.startTime >= schedule.morningStartTime && formData.startTime <= schedule.morningEndTime;
+      const isAfternoon = formData.startTime >= schedule.afternoonStartTime && formData.startTime <= schedule.afternoonEndTime;
       
       let exceeds = false;
-      if (isMorning && computedEndTime > schedule.morningEndTime) {
-        exceeds = true;
-      } else if (isAfternoon && computedEndTime > schedule.afternoonEndTime) {
-        exceeds = true;
+      if (isMorning) {
+        const [h, m] = schedule.morningEndTime.split(":").map(Number);
+        const maxEndMins = h * 60 + m + 60; 
+        if (endMins > maxEndMins) exceeds = true;
+      } else if (isAfternoon) {
+        const [h, m] = schedule.afternoonEndTime.split(":").map(Number);
+        const maxEndMins = h * 60 + m + 60;
+        if (endMins > maxEndMins) exceeds = true;
       }
       
       if (exceeds) {
@@ -644,7 +648,7 @@ const GenePage: React.FC<GenePageProps> = ({ currentUser }) => {
                         // Check if this specific time is within this day's open hours
                         let isTimeSlotOpen = false;
                         if (finalIsOpen && schedule) {
-                           isTimeSlotOpen = (time >= schedule.morningStartTime && time < schedule.morningEndTime) || (time >= schedule.afternoonStartTime && time < schedule.afternoonEndTime);
+                           isTimeSlotOpen = (time >= schedule.morningStartTime && time <= schedule.morningEndTime) || (time >= schedule.afternoonStartTime && time <= schedule.afternoonEndTime);
                         }
 
                         const now = new Date();
@@ -663,7 +667,7 @@ const GenePage: React.FC<GenePageProps> = ({ currentUser }) => {
                           <div
                             key={dayIdx}
                             className={`p-1 border-r border-gray-100 last:border-0 min-h-[60px] relative transition-colors ${
-                              isPast ? "bg-slate-100/60 opacity-60 cursor-not-allowed grayscale" :
+                              isPast ? "bg-slate-100/60 cursor-not-allowed" :
                               !isTimeSlotOpen ? "bg-slate-100/80 cursor-not-allowed" : 
                               "hover:bg-pink-50/50 cursor-pointer"
                             }`}
