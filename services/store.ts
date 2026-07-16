@@ -690,9 +690,15 @@ class Store {
       assistantReq = fetchAssistantData();
     }
 
+    let geneReq = supabase
+      .from("gene_appointments")
+      .select("*")
+      .gte("date", startDate)
+      .lte("date", endDate);
+
     try {
-      const [shiftsRes, leavesRes, workloadsRes, doctorsRes, dShiftsRes, hmStaffRes, hmShiftsRes, anesthesiaStaffRes, anesthesiaShiftsRes, meetingRoomsRes, assistantRes] = await Promise.all([
-        shiftsReq, leavesReq, workloadsReq, docReq, docShiftsReq, hmStaffReq, hmShiftsReq, aneStaffReq, aneShiftsReq, meetingRoomsReq, assistantReq
+      const [shiftsRes, leavesRes, workloadsRes, doctorsRes, dShiftsRes, hmStaffRes, hmShiftsRes, anesthesiaStaffRes, anesthesiaShiftsRes, meetingRoomsRes, assistantRes, geneRes] = await Promise.all([
+        shiftsReq, leavesReq, workloadsReq, docReq, docShiftsReq, hmStaffReq, hmShiftsReq, aneStaffReq, aneShiftsReq, meetingRoomsReq, assistantReq, geneReq
       ]);
 
       if (Object.keys(assistantRes).length > 0) {
@@ -715,6 +721,10 @@ class Store {
 
       if (leavesRes.data) {
         this.leaves = leavesRes.data.map((l: any) => { const m = {...l}; this.mapFromDbFields(m); return m; });
+      }
+
+      if (geneRes.data) {
+        this.geneAppointments = geneRes.data.map((b: any) => { const m = {...b}; this.mapFromDbFields(m); return m; });
       }
 
       if (workloadsRes.data) {
