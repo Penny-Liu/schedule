@@ -389,7 +389,8 @@ const GenePage: React.FC<GenePageProps> = ({ currentUser }) => {
 
     const conflicts = getConflicts(formData.date, formData.startTime, computedEndTime);
     if (conflicts.length > 0) {
-      if (!confirm(`該時段已有預約衝突。確定要重疊預約嗎？`)) return;
+      showToast("該時段已有預約，無法重複預約", "error");
+      return;
     }
 
     try {
