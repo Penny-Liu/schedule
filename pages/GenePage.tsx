@@ -97,7 +97,7 @@ const generateWeeklyAxis = (weekDays: Date[], settings: GeneSettings) => {
 
   const slots = [];
   let current = minMinutes;
-  while (current <= maxMinutes) {
+  while (current <= maxMinutes + minInterval) {
     const h = Math.floor(current / 60);
     const m = current % 60;
     slots.push(`${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`);
