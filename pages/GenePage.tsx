@@ -366,6 +366,23 @@ const GenePage: React.FC<GenePageProps> = ({ currentUser }) => {
     const m = endMins % 60;
     const computedEndTime = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 
+    if (schedule && schedule.isOpen) {
+      const isMorning = formData.startTime >= schedule.morningStartTime && formData.startTime < schedule.morningEndTime;
+      const isAfternoon = formData.startTime >= schedule.afternoonStartTime && formData.startTime < schedule.afternoonEndTime;
+      
+      let exceeds = false;
+      if (isMorning && computedEndTime > schedule.morningEndTime) {
+        exceeds = true;
+      } else if (isAfternoon && computedEndTime > schedule.afternoonEndTime) {
+        exceeds = true;
+      }
+      
+      if (exceeds) {
+        showToast("解說時間將超過排程結束時間，不開放預約", "error");
+        return;
+      }
+    }
+
     const conflicts = getConflicts(formData.date, formData.startTime, computedEndTime);
     if (conflicts.length > 0) {
       if (!confirm(`該時段已有預約衝突。確定要重疊預約嗎？`)) return;
@@ -630,6 +647,11 @@ const GenePage: React.FC<GenePageProps> = ({ currentUser }) => {
                            isTimeSlotOpen = (time >= schedule.morningStartTime && time < schedule.morningEndTime) || (time >= schedule.afternoonStartTime && time < schedule.afternoonEndTime);
                         }
 
+                        const now = new Date();
+                        const todayStr = toLocalISOString(now);
+                        const currentTimeStr = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+                        const isPast = dateStr < todayStr || (dateStr === todayStr && time < currentTimeStr);
+
                         const slotBookings = weekAppointments.filter(
                           (b) => b.date === dateStr && time >= b.startTime && time < b.endTime
                         );
@@ -640,9 +662,13 @@ const GenePage: React.FC<GenePageProps> = ({ currentUser }) => {
                         return (
                           <div
                             key={dayIdx}
-                            className={`p-1 border-r border-gray-100 last:border-0 min-h-[60px] relative transition-colors ${!isTimeSlotOpen ? "bg-slate-100/80 cursor-not-allowed" : "hover:bg-pink-50/50 cursor-pointer"}`}
+                            className={`p-1 border-r border-gray-100 last:border-0 min-h-[60px] relative transition-colors ${
+                              isPast ? "bg-slate-100/60 opacity-60 cursor-not-allowed grayscale" :
+                              !isTimeSlotOpen ? "bg-slate-100/80 cursor-not-allowed" : 
+                              "hover:bg-pink-50/50 cursor-pointer"
+                            }`}
                             onClick={(e) => {
-                              if (!isTimeSlotOpen) return; // do nothing if closed
+                              if (!isTimeSlotOpen || isPast) return; // do nothing if closed or past
                               if ((e.target as HTMLElement).closest('.booking-card')) return;
                               setFormData({
                                 ...formData,
