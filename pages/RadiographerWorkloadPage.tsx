@@ -951,7 +951,28 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
 
       // (Moved userDates calculation to the top of the mapping function)
 
-      // 從排班計算上班天數與場控/輔控/排班
+      let offDays = 0;
+      let validDays = 0;
+      let workedDaysSoFar = 0;
+
+      userDates.forEach((date) => {
+        // [Modification]: Exclude dates before hireDate
+        if (user.hireDate && date < user.hireDate) return;
+        
+        validDays++;
+        if (db.getUserStatusOnDate(user.id, date) === "OFF") {
+          offDays++;
+        } else {
+          if (!estimationStartDate || date <= estimationStartDate) {
+            workedDaysSoFar++;
+          }
+        }
+      });
+      stats.offDays = offDays;
+      stats.workDays = validDays - offDays;
+      stats.workedDaysSoFar = workedDaysSoFar;
+
+      // 從排班計算各站點天數 (場控/輔控/排班等)
       const userShiftsInRange = shifts.filter(
         (s) =>
           s.userId === user.id &&
@@ -960,10 +981,6 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
           s.station !== StationDefault.OFF &&
           s.station !== "休假",
       );
-      stats.workDays = userShiftsInRange.length;
-      stats.workedDaysSoFar = userShiftsInRange.filter(
-        (s) => !estimationStartDate || s.date <= estimationStartDate,
-      ).length;
 
       let remoteDays = 0;
       let dazhiDays = 0;
@@ -986,17 +1003,6 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
       stats.dazhiDays = dazhiDays;
       stats.beitouDays = beitouDays;
       stats.onSiteDays = stats.workDays - remoteDays;
-
-      let offDays = 0;
-      userDates.forEach((date) => {
-        // [Modification]: Exclude dates before hireDate
-        if (user.hireDate && date < user.hireDate) return;
-
-        if (db.getUserStatusOnDate(user.id, date) === "OFF") {
-          offDays++;
-        }
-      });
-      stats.offDays = offDays;
 
       let memo = personalCycle?.memo || "";
       let coopLeave = "";
