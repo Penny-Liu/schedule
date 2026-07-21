@@ -15,7 +15,7 @@ async function syncDailyStats(session, startDate, endDate) {
 
   // 一次性抓取整個區間的資料，取代原本跑 31 次報表的低效做法
   const soql = `
-      SELECT CheckupName__c, Location__c, Order__c, MedicalRecordNo__c, CheckStartDate__c, ResourceCategory__c, Id_No__c
+      SELECT CheckupName__c, Location__c, Order__c, MedicalRecordNo__c, CheckStartDate__c, ResourceCategory__c
       FROM CheckupReservation__c 
       WHERE (Location__c = '北投' OR Location__c = '大直')
         AND CheckStartDate__c >= ${startDate}
@@ -102,9 +102,8 @@ async function syncDailyStats(session, startDate, endDate) {
     const loc = r.Location__c;
     const name = r.CheckupName__c || "";
     const category = (r.ResourceCategory__c || "").toLowerCase();
-    const idNo = r.Id_No__c || "";
-    // Check gender (2nd char of ID)
-    const gender = (idNo.length > 1 && idNo[1] === "2") ? "女" : "男";
+    // Gender unknown without Id_No__c; default to 男 for MR large classification
+    const gender = "男";
 
     const clientId = r.MedicalRecordNo__c || r.Order__c;
 
