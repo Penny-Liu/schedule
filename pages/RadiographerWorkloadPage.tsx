@@ -406,7 +406,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
     [
       "scheduler",
       "mrSmall",
-      "usPelvisMale",
+      "usFibrosis",
       "ctaPostProcessing",
       "bmd",
     ].includes(field);
