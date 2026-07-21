@@ -6570,7 +6570,7 @@ BMD :{{bmd}}
     const calcUsSlots = (st: any) => r(st.us * 2 + st.usHeart * 3);
     const calcCtSlots = (st: any) => r(st.ct * 1 + st.cta * 2 + st.ctaPostProcessing * 5);
     const calcBmdSlots = (st: any) => r(st.bmd * 2);
-    const calcDxSlots = (st: any) => r(st.dx * 1);
+    const calcDxSlots = (st: any) => r(st.dx * 0.5);
     const calcMgSlots = (st: any) => r(st.mg * 1);
 
     const formatNameParen = (arr: string[]) => arr.length > 0 ? ` (${arr.join("、")})` : "";

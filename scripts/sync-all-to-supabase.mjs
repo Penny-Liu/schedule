@@ -58,6 +58,14 @@ async function syncDailyStats(session, startDate, endDate) {
   const seenBeitouClient = new Set(); // 追蹤北投已計數客戶 (日期+Order)
   const seenBeitouGI = new Set();
   const seenDazhiGI = new Set();
+  // 各項目去重 Set（以日期+clientId）
+  const seenBeitouCT = new Set();
+  const seenBeitouBMD = new Set();
+  const seenBeitouDX = new Set();
+  const seenBeitouMG = new Set();
+  const seenDazhiBMD = new Set();
+  const seenDazhiDX = new Set();
+  const seenDazhiMG = new Set();
 
   const beitouOrders = new Set(); // 追蹤北投所有客戶 (日期+Order)
   const dazhiTargetOrders = new Set(); // 追蹤大直符合條件的客戶 (日期+Order)
@@ -132,20 +140,31 @@ async function syncDailyStats(session, startDate, endDate) {
     if (!dailyResults[date]) dailyResults[date] = initStats();
     const stats = dailyResults[date];
 
-    // Detailed metrics directly assigned by ResourceCategory or Name
+    // Detailed metrics directly assigned by ResourceCategory or Name (去重，每位客戶只計一次)
+    const ck = `${date}_${clientId}`;
     if (loc === "北投") {
-      if (category === "ct") {
-        if (!name.includes("電腦斷層(顯影)")) { // Exclude CTA which is counted below
-           stats.beitou_ct++;
-        }
+      if (category === "ct" && !name.includes("電腦斷層(顯影)")) {
+        if (!seenBeitouCT.has(ck)) { stats.beitou_ct++; seenBeitouCT.add(ck); }
       }
-      if (category === "bmd" || category.includes("骨質")) stats.beitou_bmd++;
-      if (category === "dx" || category.includes("x光") || name.toUpperCase().includes("X光")) stats.beitou_dx++;
-      if (category === "mg" || category.includes("乳房攝影")) stats.beitou_mg++;
+      if (category === "bmd" || category.includes("骨質")) {
+        if (!seenBeitouBMD.has(ck)) { stats.beitou_bmd++; seenBeitouBMD.add(ck); }
+      }
+      if (category === "dx" || category.includes("x光") || name.toUpperCase().includes("X光")) {
+        if (!seenBeitouDX.has(ck)) { stats.beitou_dx++; seenBeitouDX.add(ck); }
+      }
+      if (category === "mg" || category.includes("乳房攝影")) {
+        if (!seenBeitouMG.has(ck)) { stats.beitou_mg++; seenBeitouMG.add(ck); }
+      }
     } else if (loc === "大直") {
-      if (category === "bmd" || category.includes("骨質")) stats.dazhi_bmd++;
-      if (category === "dx" || category.includes("x光") || name.toUpperCase().includes("X光")) stats.dazhi_dx++;
-      if (category === "mg" || category.includes("乳房攝影")) stats.dazhi_mg++;
+      if (category === "bmd" || category.includes("骨質")) {
+        if (!seenDazhiBMD.has(ck)) { stats.dazhi_bmd++; seenDazhiBMD.add(ck); }
+      }
+      if (category === "dx" || category.includes("x光") || name.toUpperCase().includes("X光")) {
+        if (!seenDazhiDX.has(ck)) { stats.dazhi_dx++; seenDazhiDX.add(ck); }
+      }
+      if (category === "mg" || category.includes("乳房攝影")) {
+        if (!seenDazhiMG.has(ck)) { stats.dazhi_mg++; seenDazhiMG.add(ck); }
+      }
     }
 
     if (loc === "北投") {
@@ -169,7 +188,7 @@ async function syncDailyStats(session, startDate, endDate) {
       }
 
       if (name.includes("電腦斷層(顯影)")) stats.beitou_cta++;
-      if (name.includes("磁振造影") || name.includes("MR")) {
+      if (name.includes("磁振造影") || name.includes("MR") || category === "mr") {
         stats.beitou_mr_orders++;
         const mrKey = `${date}_${clientId}`;
         if (!seenMR.has(mrKey)) {
