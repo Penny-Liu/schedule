@@ -6465,9 +6465,146 @@ BMD :{{bmd}}
     if (remoteLines) {
       section4Parts.push(`遠健\n${remoteLines}`);
     }
+    
     const section4 = section4Parts.join("\n\n");
 
-    return { full: finalText, section1, section2, section3, section4 };
+    // --- Section 5 Calculation ---
+    const beitouStats = {
+      mrLargeMale: 0, mrLargeFemale: 0, mrMedium: 0, mrSmall: 0,
+      us: 0, usHeart: 0, usA: 0, usBreast: 0, usThy: 0, usCCA: 0, usNeck: 0, usPelvisFemale: 0, usPelvisMale: 0, usFibrosis: 0,
+      ct: 0, cta: 0, bmd: 0, dx: 0, mg: 0, ctaPostProcessing: 0
+    };
+    const dazhiStats = { ...beitouStats };
+
+    const names = {
+      beitou: { leader: [] as string[], mr: [] as string[], us: [] as string[], ct: [] as string[], bmd: [] as string[], dx: [] as string[], mg: [] as string[], learning: [] as string[] },
+      dazhi: { us: [] as string[], bmd: [] as string[], dx: [] as string[], mg: [] as string[] }
+    };
+
+    const todayShifts = shifts.filter(s => s.date === date);
+    todayShifts.forEach(s => {
+      if (s.station === SYSTEM_OFF || s.station === StationDefault.UNASSIGNED || s.station === "行政") return;
+      
+      const user = users.find(u => u.id === s.userId);
+      if (!user) return;
+      const alias = user.name?.slice(-2) || user.name || "";
+      const isDazhi = s.station.includes("大直");
+      const isRemote = s.station.includes("遠距") || s.station.includes("遠班");
+      
+      if (isRemote) return;
+
+      const userStat = stats.find(st => st.radiographerName === user.name);
+      const locStats = isDazhi ? dazhiStats : beitouStats;
+
+      if (userStat) {
+        locStats.mrLargeMale += userStat.mrLargeMale || 0;
+        locStats.mrLargeFemale += userStat.mrLargeFemale || 0;
+        locStats.mrMedium += userStat.mrMedium || 0;
+        locStats.mrSmall += userStat.mrSmall || 0;
+        locStats.us += userStat.us || 0;
+        locStats.usHeart += userStat.usHeart || 0;
+        locStats.ct += userStat.ct || 0;
+        locStats.cta += userStat.cta || 0;
+        locStats.bmd += userStat.bmd || 0;
+        locStats.dx += userStat.dx || 0;
+        locStats.mg += userStat.mg || 0;
+        locStats.usA += userStat.usA || 0;
+        locStats.usBreast += userStat.usBreast || 0;
+        locStats.usThy += userStat.usThy || 0;
+        locStats.usCCA += userStat.usCCA || 0;
+        locStats.usNeck += userStat.usNeck || 0;
+        locStats.usFibrosis += userStat.usFibrosis || 0;
+        locStats.usPelvisFemale += userStat.usPelvisFemale || 0;
+        locStats.usPelvisMale += userStat.usPelvisMale || 0;
+        locStats.ctaPostProcessing += userStat.ctaPostProcessing || 0;
+      }
+
+      let groupName = "";
+      if (s.station.toLowerCase().includes("mr")) groupName = "mr";
+      else if (s.station.toLowerCase().includes("us") || s.station.includes("超音波")) groupName = "us";
+      else if (s.station.toLowerCase().includes("ct")) groupName = "ct";
+      else if (s.station.toLowerCase().includes("bmd") || s.station.includes("骨質")) groupName = "bmd";
+      else if (s.station.toLowerCase().includes("x光") || s.station.toLowerCase().includes("dx")) groupName = "dx";
+      else if (s.station.toLowerCase().includes("mg") || s.station.includes("乳房攝影")) groupName = "mg";
+      else if (s.station.includes("場控")) groupName = "leader";
+
+      const isLearning = s.station.includes("學習") || isUserLearningStationOnDate(user, s.station, s.date);
+
+      if (isDazhi) {
+        if (groupName && (names.dazhi as any)[groupName]) {
+           (names.dazhi as any)[groupName].push(alias);
+        }
+      } else {
+        if (isLearning) {
+            names.beitou.learning.push(alias + "學習");
+        } else if (groupName && (names.beitou as any)[groupName]) {
+            (names.beitou as any)[groupName].push(alias);
+        }
+      }
+    });
+
+    const r = (val: number) => Math.round(val || 0);
+    const calcMrCustomers = (st: any) => r(st.mrLargeMale + st.mrLargeFemale + st.mrMedium + st.mrSmall);
+    const calcMrSlots = (st: any) => r(st.mrLargeMale * 7 + st.mrLargeFemale * 9 + st.mrMedium * 3 + st.mrSmall * 3);
+    const calcUsSlots = (st: any) => r(st.us * 2 + st.usHeart * 3);
+    const calcCtSlots = (st: any) => r(st.ct * 1 + st.cta * 2 + st.ctaPostProcessing * 5);
+    const calcBmdSlots = (st: any) => r(st.bmd * 2);
+    const calcDxSlots = (st: any) => r(st.dx * 1);
+
+    const formatNames = (arr: string[]) => arr.length > 0 ? arr.join("、") : "";
+    const formatUsNames = (usArr: string[], learningArr: string[]) => {
+       const all = [...usArr, ...learningArr];
+       return all.length > 0 ? all.join("/") : "";
+    };
+
+    const bCustomers = calcMrCustomers(beitouStats) + r(beitouStats.us) + r(beitouStats.ct) + r(beitouStats.bmd) + r(beitouStats.dx) + r(beitouStats.mg);
+    const dCustomers = r(dazhiStats.us) + r(dazhiStats.bmd) + r(dazhiStats.dx) + r(dazhiStats.mg);
+
+    const out: string[] = [];
+    out.push(workloadDateStr.replace("工作量", ""));
+
+    out.push(`北投(${bCustomers} 位客戶，${r(beitouStats.cta)} CTA）：`);
+    if (names.beitou.leader.length > 0) {
+      out.push(`場控 (${formatNames(names.beitou.leader)})： 掌控全局 Slot，動態調度客戶走向，吸收現場時間變異。`);
+    }
+
+    const bMrCount = calcMrCustomers(beitouStats);
+    out.push(`MR  (${formatNames(names.beitou.mr)})： ${bMrCount}MR(${r(beitouStats.mrLargeMale)}男大/${r(beitouStats.mrLargeFemale)}女大/${r(beitouStats.mrMedium)}中/${r(beitouStats.mrSmall)}小)`);
+    out.push(`→ ${calcMrSlots(beitouStats)} Slot`);
+
+    out.push(`US  (${formatUsNames(names.beitou.us, names.beitou.learning)})： ${r(beitouStats.us)}醫令/${r(beitouStats.usHeart)}心超`);
+    out.push(`→ ${calcUsSlots(beitouStats)} Slot`);
+
+    out.push(`CT  (${formatNames(names.beitou.ct)})：${r(beitouStats.ct)}CT/${r(beitouStats.cta)}CTA+協助MR上下台`);
+    out.push(`→ ${calcCtSlots(beitouStats)} Slot`);
+
+    out.push(`BMD (${formatNames(names.beitou.bmd)})：${r(beitouStats.bmd)}`);
+    out.push(`→ ${calcBmdSlots(beitouStats)} Slot`);
+
+    out.push(`DX  (${formatNames(names.beitou.dx)})：${r(beitouStats.dx)}`);
+    out.push(`→ ${calcDxSlots(beitouStats)} Slot`);
+
+    out.push(`MG  (${formatNames(names.beitou.mg)})：${r(beitouStats.mg)}`);
+    out.push(`→ 0 Slot`);
+
+    out.push("");
+    
+    out.push(`大直(${dCustomers}客戶)：`);
+    out.push(`US  (${formatNames(names.dazhi.us)})：${r(dazhiStats.us)}醫令/${r(dazhiStats.usHeart)}心超`);
+    out.push(`→ ${calcUsSlots(dazhiStats)} Slot`);
+
+    out.push(`BMD (${formatNames(names.dazhi.bmd)})：${r(dazhiStats.bmd)}`);
+    out.push(`→ ${calcBmdSlots(dazhiStats)} Slot`);
+
+    out.push(`DX  (${formatNames(names.dazhi.dx)})：${r(dazhiStats.dx)}`);
+    out.push(`→ ${calcDxSlots(dazhiStats)} Slot`);
+
+    out.push(`MG  (${formatNames(names.dazhi.mg)})：${r(dazhiStats.mg)}`);
+    out.push(`→ 0 Slot`);
+    
+    const section5 = out.join("\n");
+
+    return { full: finalText, section1, section2, section3, section4, section5 };
   }, [date, shifts, manpower, users, stats, doctorShifts, physicianWorkload]);
 
   const handleCopy = (text: string) => {
@@ -6601,6 +6738,30 @@ BMD :{{bmd}}
             }}
             readOnly
             value={copyText.section4}
+          />
+        </div>
+
+        {/* Section 5: Slot 工作量 */}
+        <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mt-4">
+          <div className="flex justify-between items-center mb-2">
+            <div className="text-xs text-gray-500 font-medium">
+              區塊 5：Slot 計算
+            </div>
+            <button
+              type="button"
+              onClick={() => handleCopy((copyText as any).section5)}
+              className="text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 px-2 py-1 rounded-lg flex items-center gap-1"
+            >
+              <Copy size={12} /> 複製
+            </button>
+          </div>
+          <textarea
+            className="w-full text-sm font-mono text-gray-700 bg-transparent outline-none resize-none"
+            style={{
+              minHeight: '20rem',
+            }}
+            readOnly
+            value={(copyText as any).section5}
           />
         </div>
       </div>
