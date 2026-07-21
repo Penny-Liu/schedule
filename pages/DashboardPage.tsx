@@ -6615,7 +6615,7 @@ BMD :{{bmd}}
     const section5 = out.join("\n");
 
     return { full: finalText, section1, section2, section3, section4, section5 };
-  }, [date, shifts, manpower, users, stats, doctorShifts, physicianWorkload, radStats, workloadDateStr]);
+  }, [date, shifts, manpower, users, stats, doctorShifts, physicianWorkload, radStats]);
 
   const handleCopy = (text: string) => {
     navigator.clipboard.writeText(text).catch((err) => {
