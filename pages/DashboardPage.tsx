@@ -6526,7 +6526,9 @@ BMD :{{bmd}}
       
       const user = users.find(u => u.id === s.userId);
       if (!user) return;
-      const alias = user.alias || user.name?.slice(-2) || user.name || "";
+      const rawAlias = user.alias || "";
+      const isEnglishAlias = rawAlias.length > 0 && /^[a-zA-Z0-9]+$/.test(rawAlias);
+      const alias = (!rawAlias || isEnglishAlias) ? (user.name?.slice(-2) || user.name || "") : rawAlias;
       const isDazhi = s.station.includes("大直");
       const isRemote = s.station.includes("遠距") || s.station.includes("遠班");
       
