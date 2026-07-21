@@ -15,7 +15,7 @@ async function syncDailyStats(session, startDate, endDate) {
 
   // 一次性抓取整個區間的資料，取代原本跑 31 次報表的低效做法
   const soql = `
-      SELECT CheckupName__c, Location__c, Order__c, MedicalRecordNo__c, CheckStartDate__c, ResourceCategory__c
+      SELECT CheckupName__c, Location__c, Order__c, MedicalRecordNo__c, CheckStartDate__c, ResourceCategory__c, Id_No__c
       FROM CheckupReservation__c 
       WHERE (Location__c = '北投' OR Location__c = '大直')
         AND CheckStartDate__c >= ${startDate}
@@ -54,8 +54,36 @@ async function syncDailyStats(session, startDate, endDate) {
     dazhi_ultrasound: 0,
     dazhi_ultrasound_heart: 0,
     dazhi_ultrasound_fibrosis: 0,
-    dazhi_beitou_overlap: 0, // 新增：同時有大直與北投檢查的重疊人數
-    total_weighted_orders: 0, // 新增：供場控動態加權使用的總醫令量 (CTA 算 3 份)
+    dazhi_beitou_overlap: 0,
+    total_weighted_orders: 0,
+    
+    // Detailed metrics for slots
+    beitou_mr_large_male: 0,
+    beitou_mr_large_female: 0,
+    beitou_mr_medium: 0,
+    beitou_mr_small: 0,
+    beitou_us_a: 0,
+    beitou_us_breast: 0,
+    beitou_us_thy: 0,
+    beitou_us_cca: 0,
+    beitou_us_neck: 0,
+    beitou_us_pelvis_female: 0,
+    beitou_us_pelvis_male: 0,
+    beitou_ct: 0,
+    beitou_dx: 0,
+    beitou_mg: 0,
+    beitou_bmd: 0,
+
+    dazhi_us_a: 0,
+    dazhi_us_breast: 0,
+    dazhi_us_thy: 0,
+    dazhi_us_cca: 0,
+    dazhi_us_neck: 0,
+    dazhi_us_pelvis_female: 0,
+    dazhi_us_pelvis_male: 0,
+    dazhi_dx: 0,
+    dazhi_mg: 0,
+    dazhi_bmd: 0
   });
 
   // 確保區間內每一天都有預設值 0，這樣如果某天完全沒有預約，才能蓋掉舊資料
@@ -66,15 +94,38 @@ async function syncDailyStats(session, startDate, endDate) {
     dailyResults[dateStr] = initStats();
   }
 
+
+  const mrClients = {}; // { [date_clientId]: { gender, count, loc } }
+
   result.records.forEach((r) => {
     const date = r.CheckStartDate__c;
     const loc = r.Location__c;
     const name = r.CheckupName__c || "";
-    // 使用病歷號來識別唯一客戶，若無病歷號則退回使用醫令單號
+    const category = (r.ResourceCategory__c || "").toLowerCase();
+    const idNo = r.Id_No__c || "";
+    // Check gender (2nd char of ID)
+    const gender = (idNo.length > 1 && idNo[1] === "2") ? "女" : "男";
+
     const clientId = r.MedicalRecordNo__c || r.Order__c;
 
     if (!dailyResults[date]) dailyResults[date] = initStats();
     const stats = dailyResults[date];
+
+    // Detailed metrics directly assigned by ResourceCategory or Name
+    if (loc === "北投") {
+      if (category === "ct") {
+        if (!name.includes("電腦斷層(顯影)")) { // Exclude CTA which is counted below
+           stats.beitou_ct++;
+        }
+      }
+      if (category === "bmd" || category.includes("骨質")) stats.beitou_bmd++;
+      if (category === "dx" || category.includes("x光") || name.toUpperCase().includes("X光")) stats.beitou_dx++;
+      if (category === "mg" || category.includes("乳房攝影")) stats.beitou_mg++;
+    } else if (loc === "大直") {
+      if (category === "bmd" || category.includes("骨質")) stats.dazhi_bmd++;
+      if (category === "dx" || category.includes("x光") || name.toUpperCase().includes("X光")) stats.dazhi_dx++;
+      if (category === "mg" || category.includes("乳房攝影")) stats.dazhi_mg++;
+    }
 
     if (loc === "北投") {
       // 記錄北投的 Client
@@ -104,12 +155,22 @@ async function syncDailyStats(session, startDate, endDate) {
           stats.beitou_mr++;
           seenMR.add(mrKey);
         }
+        
+        // Track for MR sizing
+        if (!mrClients[mrKey]) mrClients[mrKey] = { date, loc, count: 0, gender };
+        mrClients[mrKey].count++;
       }
       if (name.includes("超音波")) {
         if (!stats.beitou_ultrasound) stats.beitou_ultrasound = 0;
         stats.beitou_ultrasound++;
         if (name.includes("心臟")) stats.beitou_ultrasound_heart++;
         if (name.includes("肝纖維")) stats.beitou_ultrasound_fibrosis++;
+        
+        const subtype = parseUsSubtype(name);
+        if (subtype) {
+           const key = `beitou_${subtype}`;
+           if (stats[key] !== undefined) stats[key]++;
+        }
       }
     } else if (loc === "大直") {
       // 大直客戶數：和北投一樣抓有體檢總評/解說的客人
@@ -135,6 +196,12 @@ async function syncDailyStats(session, startDate, endDate) {
         stats.dazhi_ultrasound++;
         if (name.includes("心臟")) stats.dazhi_ultrasound_heart++;
         if (name.includes("肝纖維")) stats.dazhi_ultrasound_fibrosis++;
+
+        const subtype = parseUsSubtype(name);
+        if (subtype) {
+           const key = `dazhi_${subtype}`;
+           if (stats[key] !== undefined) stats[key]++;
+        }
       }
     }
 
@@ -247,39 +314,7 @@ export async function syncRadiographerWorkload(
   const yearNum = parseInt(year, 10);
   const monthNum = parseInt(month, 10);
 
-  // MR 分類：依同一 Order 的 MR 醫令數量
-  // ≥7 → mrLargeMale / mrLargeFemale；4-6 → mrMedium；1-3 → mrSmall
-  // 回傳 snake_case key，直接對應 Supabase 欄位名
-  const classifyMrByOrderCount = (count, gender) => {
-    if (count >= 7) {
-      return gender === "女" || gender === "F" ? "mr_large_female" : "mr_large_male";
-    } else if (count >= 4) {
-      return "mr_medium";
-    } else {
-      return "mr_small";
-    }
-  };
 
-  // US 子分類，回傳 snake_case key
-  const parseUsSubtype = (name = "") => {
-    const value = String(name || "").trim().toLowerCase();
-    if (value.includes("肝纖維") || value.includes("fibro")) return "us_fibrosis";
-    if (
-      value.includes("p女") ||
-      (value.includes("骨盆") && value.includes("女")) ||
-      value.includes("婦科")
-    )
-      return "us_pelvis_female";
-    if (value.includes("p男") || (value.includes("骨盆") && value.includes("男")))
-      return "us_pelvis_male";
-    if (value.includes("breast") || value.includes("乳房")) return "us_breast";
-    if (value.includes("心臟") || value.includes("心")) return "us_heart";
-    if (value.includes("thy") || value.includes("甲狀")) return "us_thy";
-    if (value.includes("cca") || value.includes("頸動脈")) return "us_cca";
-    if (value.includes("neck") || value.includes("頸部") || value.includes("頸")) return "us_neck";
-    if (value.includes("上腹")) return "us_a";
-    return null;
-  };
 
   const workloadMap = {};
   const ensureUser = (name) => {

@@ -5757,7 +5757,7 @@ const DailyManpowerSummary: React.FC<{
   const [physicianWorkload, setPhysicianWorkload] = useState<
     PhysicianWorkloadRow[]
   >([]);
-  const [radStats, setRadStats] = useState<any[]>([]);
+
 
   useEffect(() => {
     supabase
@@ -5770,13 +5770,7 @@ const DailyManpowerSummary: React.FC<{
         if (data) setPhysicianWorkload(data as PhysicianWorkloadRow[]);
       });
 
-    supabase
-      .from("radiographer_daily_workload")
-      .select("*")
-      .eq("date", date)
-      .then(({ data }) => {
-        if (data) setRadStats(data);
-      });
+
   }, [date]);
 
   // Get daily events (holidays, memos, etc.)
@@ -6479,12 +6473,47 @@ BMD :{{bmd}}
     const section4 = section4Parts.join("\n\n");
 
     // --- Section 5 Calculation ---
+    const rawDailyStats = stats || {};
     const beitouStats = {
-      mrLargeMale: 0, mrLargeFemale: 0, mrMedium: 0, mrSmall: 0,
-      us: 0, usHeart: 0, usA: 0, usBreast: 0, usThy: 0, usCCA: 0, usNeck: 0, usPelvisFemale: 0, usPelvisMale: 0, usFibrosis: 0,
-      ct: 0, cta: 0, bmd: 0, dx: 0, mg: 0, ctaPostProcessing: 0
+      mrLargeMale: rawDailyStats.beitou_mr_large_male || 0,
+      mrLargeFemale: rawDailyStats.beitou_mr_large_female || 0,
+      mrMedium: rawDailyStats.beitou_mr_medium || 0,
+      mrSmall: rawDailyStats.beitou_mr_small || 0,
+      us: rawDailyStats.beitou_ultrasound || 0,
+      usHeart: rawDailyStats.beitou_ultrasound_heart || 0,
+      usA: rawDailyStats.beitou_us_a || 0,
+      usBreast: rawDailyStats.beitou_us_breast || 0,
+      usThy: rawDailyStats.beitou_us_thy || 0,
+      usCCA: rawDailyStats.beitou_us_cca || 0,
+      usNeck: rawDailyStats.beitou_us_neck || 0,
+      usPelvisFemale: rawDailyStats.beitou_us_pelvis_female || 0,
+      usPelvisMale: rawDailyStats.beitou_us_pelvis_male || 0,
+      usFibrosis: rawDailyStats.beitou_ultrasound_fibrosis || 0,
+      ct: rawDailyStats.beitou_ct || 0,
+      cta: rawDailyStats.beitou_cta || 0,
+      bmd: rawDailyStats.beitou_bmd || 0,
+      dx: rawDailyStats.beitou_dx || 0,
+      mg: rawDailyStats.beitou_mg || 0,
+      ctaPostProcessing: 0
     };
-    const dazhiStats = { ...beitouStats };
+    const dazhiStats = {
+      mrLargeMale: 0, mrLargeFemale: 0, mrMedium: 0, mrSmall: 0,
+      us: rawDailyStats.dazhi_ultrasound || 0,
+      usHeart: rawDailyStats.dazhi_ultrasound_heart || 0,
+      usA: rawDailyStats.dazhi_us_a || 0,
+      usBreast: rawDailyStats.dazhi_us_breast || 0,
+      usThy: rawDailyStats.dazhi_us_thy || 0,
+      usCCA: rawDailyStats.dazhi_us_cca || 0,
+      usNeck: rawDailyStats.dazhi_us_neck || 0,
+      usPelvisFemale: rawDailyStats.dazhi_us_pelvis_female || 0,
+      usPelvisMale: rawDailyStats.dazhi_us_pelvis_male || 0,
+      usFibrosis: rawDailyStats.dazhi_ultrasound_fibrosis || 0,
+      ct: 0, cta: 0,
+      bmd: rawDailyStats.dazhi_bmd || 0,
+      dx: rawDailyStats.dazhi_dx || 0,
+      mg: rawDailyStats.dazhi_mg || 0,
+      ctaPostProcessing: 0
+    };
 
     const names = {
       beitou: { leader: [] as string[], mr: [] as string[], us: [] as string[], ct: [] as string[], bmd: [] as string[], dx: [] as string[], mg: [] as string[], learning: [] as string[] },
@@ -6503,31 +6532,7 @@ BMD :{{bmd}}
       
       if (isRemote) return;
 
-      const userStat = radStats.find(st => st.radiographer_name === user.name);
-      const locStats = isDazhi ? dazhiStats : beitouStats;
 
-      if (userStat) {
-        locStats.mrLargeMale += userStat.mr_large_male || 0;
-        locStats.mrLargeFemale += userStat.mr_large_female || 0;
-        locStats.mrMedium += userStat.mr_medium || 0;
-        locStats.mrSmall += userStat.mr_small || 0;
-        locStats.us += userStat.us || 0;
-        locStats.usHeart += userStat.us_heart || 0;
-        locStats.ct += userStat.ct || 0;
-        locStats.cta += userStat.cta || 0;
-        locStats.bmd += userStat.bmd || 0;
-        locStats.dx += userStat.dx || 0;
-        locStats.mg += userStat.mg || 0;
-        locStats.usA += userStat.us_a || 0;
-        locStats.usBreast += userStat.us_breast || 0;
-        locStats.usThy += userStat.us_thy || 0;
-        locStats.usCCA += userStat.us_cca || 0;
-        locStats.usNeck += userStat.us_neck || 0;
-        locStats.usFibrosis += userStat.us_fibrosis || 0;
-        locStats.usPelvisFemale += userStat.us_pelvis_female || 0;
-        locStats.usPelvisMale += userStat.us_pelvis_male || 0;
-        locStats.ctaPostProcessing += userStat.cta_post_processing || 0;
-      }
 
       let groupName = "";
       if (s.station.toLowerCase().includes("mr")) groupName = "mr";
@@ -6626,7 +6631,7 @@ BMD :{{bmd}}
     const section5 = out.join("\n");
 
     return { full: finalText, section1, section2, section3, section4, section5 };
-  }, [date, shifts, manpower, users, stats, doctorShifts, physicianWorkload, radStats]);
+  }, [date, shifts, manpower, users, stats, doctorShifts, physicianWorkload]);
 
   const handleCopy = (text: string) => {
     navigator.clipboard.writeText(text).catch((err) => {
