@@ -6607,14 +6607,14 @@ BMD :{{bmd}}
     out.push(`→ ${calcCtSlots(beitouStats)} Slot`);
     out.push("");
 
-    out.push(`BMD ${formatNameParen(names.beitou.bmd)}：${r(beitouStats.bmd)} 醫令`);
+    out.push(`BMD ${formatNameParen(names.beitou.bmd)}：${r(beitouStats.bmd)}`);
     out.push(`→ ${calcBmdSlots(beitouStats)} Slot`);
     
-    out.push(`DX  ${formatNameParen(names.beitou.dx)}：${r(beitouStats.dx)} 醫令`);
+    out.push(`DX  ${formatNameParen(names.beitou.dx)}：${r(beitouStats.dx)}`);
     out.push(`→ ${calcDxSlots(beitouStats)} Slot`);
     out.push("");
 
-    out.push(`MG  ${formatNameParen(names.beitou.mg)}：${r(beitouStats.mg)} 醫令`);
+    out.push(`MG  ${formatNameParen(names.beitou.mg)}：${r(beitouStats.mg)}`);
     out.push(`→ ${calcMgSlots(beitouStats)} Slot`);
 
     out.push("");
@@ -6624,13 +6624,13 @@ BMD :{{bmd}}
     out.push(`→ ${calcUsSlots(dazhiStats)} Slot`);
     out.push("");
 
-    out.push(`BMD ：${r(dazhiStats.bmd)} 醫令`);
+    out.push(`BMD ：${r(dazhiStats.bmd)}`);
     out.push(`→ ${calcBmdSlots(dazhiStats)} Slot`);
 
-    out.push(`DX ：${r(dazhiStats.dx)} 醫令`);
+    out.push(`DX ：${r(dazhiStats.dx)}`);
     out.push(`→ ${calcDxSlots(dazhiStats)} Slot`);
 
-    out.push(`MG  ：${r(dazhiStats.mg)} 醫令`);
+    out.push(`MG  ：${r(dazhiStats.mg)}`);
     out.push(`→ ${calcMgSlots(dazhiStats)} Slot`);
     
     const section5 = out.join("\n");

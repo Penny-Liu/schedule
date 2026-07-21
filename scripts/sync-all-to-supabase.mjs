@@ -266,6 +266,17 @@ async function syncDailyStats(session, startDate, endDate) {
 
   });
 
+  // Process MR clients → classify into large_male/large_female/medium/small
+  for (const mrKey of Object.keys(mrClients)) {
+    const info = mrClients[mrKey];
+    const subtype = classifyMrByOrderCount(info.count, info.gender);
+    const dateStats = dailyResults[info.date];
+    if (dateStats) {
+      const key = `beitou_${subtype}`;
+      if (dateStats[key] !== undefined) dateStats[key]++;
+    }
+  }
+
   // 計算大直與北投的重疊人數
   dazhiTargetOrders.forEach((clientKey) => {
     if (beitouOrders.has(clientKey)) {
