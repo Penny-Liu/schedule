@@ -263,6 +263,7 @@ export async function syncRadiographerWorkload(
   // US 子分類，回傳 snake_case key
   const parseUsSubtype = (name = "") => {
     const value = String(name || "").trim().toLowerCase();
+    if (value.includes("肝纖維") || value.includes("fibro")) return "us_fibrosis";
     if (
       value.includes("p女") ||
       (value.includes("骨盆") && value.includes("女")) ||
@@ -320,6 +321,7 @@ export async function syncRadiographerWorkload(
         us_neck_teaching: 0,
         us_pelvis_female_teaching: 0,
         us_pelvis_male_teaching: 0,
+        us_fibrosis_teaching: 0,
         ct_teaching: 0,
         cta_teaching: 0,
         dx_teaching: 0,
