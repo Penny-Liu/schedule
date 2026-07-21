@@ -6517,7 +6517,7 @@ BMD :{{bmd}}
 
     const names = {
       beitou: { leader: [] as string[], mr: [] as string[], us: [] as string[], ct: [] as string[], bmd: [] as string[], dx: [] as string[], mg: [] as string[], learning: [] as string[] },
-      dazhi: { us: [] as string[], bmd: [] as string[], dx: [] as string[], mg: [] as string[] }
+      dazhi: { leader: [] as string[], us: [] as string[], bmd: [] as string[], dx: [] as string[], mg: [] as string[] }
     };
 
     const todayShifts = shifts.filter(s => s.date === date);
@@ -6526,7 +6526,7 @@ BMD :{{bmd}}
       
       const user = users.find(u => u.id === s.userId);
       if (!user) return;
-      const alias = user.name?.slice(-2) || user.name || "";
+      const alias = user.alias || user.name?.slice(-2) || user.name || "";
       const isDazhi = s.station.includes("大直");
       const isRemote = s.station.includes("遠距") || s.station.includes("遠班");
       
@@ -6548,6 +6548,10 @@ BMD :{{bmd}}
       if (isDazhi) {
         if (groupName && (names.dazhi as any)[groupName]) {
            (names.dazhi as any)[groupName].push(alias);
+        }
+        // 所有大直人員都加入 leader，供標頭顯示
+        if (!names.dazhi.leader.includes(alias)) {
+          names.dazhi.leader.push(alias);
         }
       } else {
         if (isLearning) {
@@ -6574,11 +6578,10 @@ BMD :{{bmd}}
     };
 
     // Collect all Dazhi names for the header
-    const allDazhiNames = [...new Set([...names.dazhi.us, ...names.dazhi.bmd, ...names.dazhi.dx, ...names.dazhi.mg])];
-    const dazhiNamesStr = allDazhiNames.length > 0 ? `：${allDazhiNames.join("/")}` : "";
+    const dazhiNamesStr = names.dazhi.leader.length > 0 ? `：${names.dazhi.leader.join("/")}` : "";
 
-    const bCustomers = calcMrCustomers(beitouStats) + r(beitouStats.us) + r(beitouStats.ct) + r(beitouStats.bmd) + r(beitouStats.dx) + r(beitouStats.mg);
-    const dCustomers = r(dazhiStats.us) + r(dazhiStats.bmd) + r(dazhiStats.dx) + r(dazhiStats.mg);
+    const bCustomers = r(rawDailyStats.beitou_clients || 0);
+    const dCustomers = r(rawDailyStats.dazhi_clients || 0);
 
     const out: string[] = [];
     out.push(workloadDateStr.replace("工作量", ""));
