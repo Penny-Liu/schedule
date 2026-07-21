@@ -9,6 +9,29 @@ const supabaseKey =
   process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
+// ── 共用工具函數 ──────────────────────────────────────────────
+// MR 分類：依同一 Order 的 MR 醫令數量
+const classifyMrByOrderCount = (count, gender) => {
+  if (count >= 7) return gender === "女" || gender === "F" ? "mr_large_female" : "mr_large_male";
+  if (count >= 4) return "mr_medium";
+  return "mr_small";
+};
+
+// US 子分類，回傳 snake_case key
+const parseUsSubtype = (name = "") => {
+  const v = String(name || "").trim().toLowerCase();
+  if (v.includes("肝纖維") || v.includes("fibro")) return "us_fibrosis";
+  if (v.includes("p女") || (v.includes("骨盆") && v.includes("女")) || v.includes("婦科")) return "us_pelvis_female";
+  if (v.includes("p男") || (v.includes("骨盆") && v.includes("男"))) return "us_pelvis_male";
+  if (v.includes("breast") || v.includes("乳房")) return "us_breast";
+  if (v.includes("心臟") || v.includes("心")) return "us_heart";
+  if (v.includes("thy") || v.includes("甲狀")) return "us_thy";
+  if (v.includes("cca") || v.includes("頸動脈")) return "us_cca";
+  if (v.includes("neck") || v.includes("頸部") || v.includes("頸")) return "us_neck";
+  if (v.includes("上腹")) return "us_a";
+  return null;
+};
+
 // --- [1/3] 每日統計 (醫令數與客戶量) ---
 async function syncDailyStats(session, startDate, endDate) {
   console.log(`\n[sync-stats] [1/2] 同步每日統計：${startDate} ~ ${endDate}`);
