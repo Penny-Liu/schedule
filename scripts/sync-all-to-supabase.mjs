@@ -302,6 +302,7 @@ export async function syncRadiographerWorkload(
         us_neck: 0,
         us_pelvis_female: 0,
         us_pelvis_male: 0,
+        us_fibrosis: 0,
         ct: 0,
         cta: 0,          // CTA 檢查量（由 CTAUseTime__c 查詢寫入）
         dx: 0,
@@ -360,6 +361,7 @@ export async function syncRadiographerWorkload(
         us_neck: 0,
         us_pelvis_female: 0,
         us_pelvis_male: 0,
+        us_fibrosis: 0,
         ct: 0,
         cta: 0,
         dx: 0,
