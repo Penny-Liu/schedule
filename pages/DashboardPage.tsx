@@ -6560,12 +6560,17 @@ BMD :{{bmd}}
     const calcCtSlots = (st: any) => r(st.ct * 1 + st.cta * 2 + st.ctaPostProcessing * 5);
     const calcBmdSlots = (st: any) => r(st.bmd * 2);
     const calcDxSlots = (st: any) => r(st.dx * 1);
+    const calcMgSlots = (st: any) => r(st.mg * 1);
 
-    const formatNames = (arr: string[]) => arr.length > 0 ? arr.join("、") : "";
-    const formatUsNames = (usArr: string[], learningArr: string[]) => {
+    const formatNameParen = (arr: string[]) => arr.length > 0 ? ` (${arr.join("、")})` : "";
+    const formatUsNameParen = (usArr: string[], learningArr: string[]) => {
        const all = [...usArr, ...learningArr];
-       return all.length > 0 ? all.join("/") : "";
+       return all.length > 0 ? ` (${all.join("/")})` : "";
     };
+
+    // Collect all Dazhi names for the header
+    const allDazhiNames = [...new Set([...names.dazhi.us, ...names.dazhi.bmd, ...names.dazhi.dx, ...names.dazhi.mg])];
+    const dazhiNamesStr = allDazhiNames.length > 0 ? `：${allDazhiNames.join("/")}` : "";
 
     const bCustomers = calcMrCustomers(beitouStats) + r(beitouStats.us) + r(beitouStats.ct) + r(beitouStats.bmd) + r(beitouStats.dx) + r(beitouStats.mg);
     const dCustomers = r(dazhiStats.us) + r(dazhiStats.bmd) + r(dazhiStats.dx) + r(dazhiStats.mg);
@@ -6573,44 +6578,50 @@ BMD :{{bmd}}
     const out: string[] = [];
     out.push(workloadDateStr.replace("工作量", ""));
 
-    out.push(`北投(${bCustomers} 位客戶，${r(beitouStats.cta)} CTA）：`);
+    out.push(`北投(${bCustomers} 客戶，${r(beitouStats.cta)} CTA）：`);
     if (names.beitou.leader.length > 0) {
-      out.push(`場控 (${formatNames(names.beitou.leader)})： 掌控全局 Slot，動態調度客戶走向，吸收現場時間變異。`);
+      out.push(`場控${formatNameParen(names.beitou.leader)}： 掌控全局 Slot，動態調度客戶走向，吸收現場時間變異。`);
+      out.push("");
     }
 
     const bMrCount = calcMrCustomers(beitouStats);
-    out.push(`MR  (${formatNames(names.beitou.mr)})： ${bMrCount}MR(${r(beitouStats.mrLargeMale)}男大/${r(beitouStats.mrLargeFemale)}女大/${r(beitouStats.mrMedium)}中/${r(beitouStats.mrSmall)}小)`);
+    out.push(`MR ${formatNameParen(names.beitou.mr)}： ${bMrCount}MR(${r(beitouStats.mrLargeMale)}男大/${r(beitouStats.mrLargeFemale)}女大/${r(beitouStats.mrMedium)}中/${r(beitouStats.mrSmall)}小)`);
     out.push(`→ ${calcMrSlots(beitouStats)} Slot`);
+    out.push("");
 
-    out.push(`US  (${formatUsNames(names.beitou.us, names.beitou.learning)})： ${r(beitouStats.us)}醫令/${r(beitouStats.usHeart)}心超`);
+    out.push(`US ${formatUsNameParen(names.beitou.us, names.beitou.learning)}： ${r(beitouStats.us)}醫令/${r(beitouStats.usHeart)}心超`);
     out.push(`→ ${calcUsSlots(beitouStats)} Slot`);
+    out.push("");
 
-    out.push(`CT  (${formatNames(names.beitou.ct)})：${r(beitouStats.ct)}CT/${r(beitouStats.cta)}CTA+協助MR上下台`);
+    out.push(`CT ${formatNameParen(names.beitou.ct)}：${r(beitouStats.ct)}CT/${r(beitouStats.cta)}CTA+協助MR上下台`);
     out.push(`→ ${calcCtSlots(beitouStats)} Slot`);
+    out.push("");
 
-    out.push(`BMD (${formatNames(names.beitou.bmd)})：${r(beitouStats.bmd)}`);
+    out.push(`BMD${formatNameParen(names.beitou.bmd)}：${r(beitouStats.bmd)} 醫令`);
     out.push(`→ ${calcBmdSlots(beitouStats)} Slot`);
-
-    out.push(`DX  (${formatNames(names.beitou.dx)})：${r(beitouStats.dx)}`);
+    
+    out.push(`DX ${formatNameParen(names.beitou.dx)}：${r(beitouStats.dx)} 醫令`);
     out.push(`→ ${calcDxSlots(beitouStats)} Slot`);
+    out.push("");
 
-    out.push(`MG  (${formatNames(names.beitou.mg)})：${r(beitouStats.mg)}`);
-    out.push(`→ 0 Slot`);
+    out.push(`MG ${formatNameParen(names.beitou.mg)}：${r(beitouStats.mg)} 醫令`);
+    out.push(`→ ${calcMgSlots(beitouStats)} Slot`);
 
     out.push("");
     
-    out.push(`大直(${dCustomers}客戶)：`);
-    out.push(`US  (${formatNames(names.dazhi.us)})：${r(dazhiStats.us)}醫令/${r(dazhiStats.usHeart)}心超`);
+    out.push(`大直(${dCustomers} 客戶)${dazhiNamesStr}：`);
+    out.push(`US ：${r(dazhiStats.us)}醫令/${r(dazhiStats.usHeart)}心超`);
     out.push(`→ ${calcUsSlots(dazhiStats)} Slot`);
+    out.push("");
 
-    out.push(`BMD (${formatNames(names.dazhi.bmd)})：${r(dazhiStats.bmd)}`);
+    out.push(`BMD：${r(dazhiStats.bmd)} 醫令`);
     out.push(`→ ${calcBmdSlots(dazhiStats)} Slot`);
-
-    out.push(`DX  (${formatNames(names.dazhi.dx)})：${r(dazhiStats.dx)}`);
+    
+    out.push(`DX ：${r(dazhiStats.dx)} 醫令`);
     out.push(`→ ${calcDxSlots(dazhiStats)} Slot`);
-
-    out.push(`MG  (${formatNames(names.dazhi.mg)})：${r(dazhiStats.mg)}`);
-    out.push(`→ 0 Slot`);
+    
+    out.push(`MG ：${r(dazhiStats.mg)} 醫令`);
+    out.push(`→ ${calcMgSlots(dazhiStats)} Slot`);
     
     const section5 = out.join("\n");
 
