@@ -460,6 +460,7 @@ export interface RadiographerWorkload {
   usNeck: number;
   usPelvisFemale: number;
   usPelvisMale: number;
+  usFibrosis: number;
   ct: number;
   dx: number;
   mg: number;
@@ -483,6 +484,7 @@ export interface RadiographerWorkload {
   usNeckTeaching?: number;
   usPelvisFemaleTeaching?: number;
   usPelvisMaleTeaching?: number;
+  usFibrosisTeaching?: number;
   ctTeaching?: number;
   dxTeaching?: number;
   mgTeaching?: number;

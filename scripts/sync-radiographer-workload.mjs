@@ -133,6 +133,7 @@ async function syncAllWorkloads() {
           usNeck: 0,
           usPelvisFemale: 0,
           usPelvisMale: 0,
+          usFibrosis: 0,
           ct: 0,
           dx: 0,
           mg: 0,
@@ -181,6 +182,7 @@ async function syncAllWorkloads() {
         us_neck_teaching: 0,
         us_pelvis_female_teaching: 0,
         us_pelvis_male_teaching: 0,
+        us_fibrosis_teaching: 0,
         ct_teaching: 0,
         cta_teaching: 0,
         dx_teaching: 0,
@@ -188,6 +190,10 @@ async function syncAllWorkloads() {
         bmd_teaching: 0,
           proofreading: 0,
         };
+      if (!masterData[name].usFibrosis) {
+        masterData[name].usFibrosis = 0;
+        masterData[name].us_fibrosis_teaching = 0;
+      }
     };
 
     const normalizeCheckupName = (name = "") =>
@@ -211,6 +217,7 @@ async function syncAllWorkloads() {
 
     const parseUsSubtype = (name = "") => {
       const value = normalizeCheckupName(name);
+      if (value.includes("肝纖維") || value.includes("fibro")) return "usFibrosis";
       if (
         value.includes("p女") ||
         (value.includes("骨盆") && value.includes("女")) ||
@@ -370,6 +377,7 @@ async function syncAllWorkloads() {
         us_neck: stats.usNeck,
         us_pelvis_female: stats.usPelvisFemale,
         us_pelvis_male: stats.usPelvisMale,
+        us_fibrosis: stats.usFibrosis,
         ct: stats.ct,
         dx: stats.dx,
         mg: stats.mg,

@@ -41,6 +41,7 @@ type WorkloadFieldKey =
   | "usNeck"
   | "usPelvisFemale"
   | "usPelvisMale"
+  | "usFibrosis"
   | "workDays"
   | "floorControl"
   | "assist"
@@ -68,6 +69,7 @@ type WorkloadFieldKey =
   | "usNeckTeaching"
   | "usPelvisFemaleTeaching"
   | "usPelvisMaleTeaching"
+  | "usFibrosisTeaching"
   | "ctTeaching"
   | "dxTeaching"
   | "mgTeaching"
@@ -96,6 +98,7 @@ const workloadFieldMeta: { key: WorkloadFieldKey; label: string }[] = [
   { key: "usNeck", label: "頸部" },
   { key: "usPelvisFemale", label: "P女" },
   { key: "usPelvisMale", label: "P男" },
+  { key: "usFibrosis", label: "肝纖" },
   { key: "ct", label: "CT" },
   { key: "cta", label: "CTA" },
   { key: "ctaPostProcessing", label: "CTA後處理" },
@@ -119,6 +122,7 @@ const workloadFieldMeta: { key: WorkloadFieldKey; label: string }[] = [
   { key: "usNeckTeaching", label: "頸部教學" },
   { key: "usPelvisFemaleTeaching", label: "P女教學" },
   { key: "usPelvisMaleTeaching", label: "P男教學" },
+  { key: "usFibrosisTeaching", label: "肝纖教學" },
   { key: "ctTeaching", label: "CT教學" },
   { key: "dxTeaching", label: "DX教學" },
   { key: "mgTeaching", label: "MG教學" },
@@ -147,6 +151,7 @@ const defaultWorkloadWeights: Record<WorkloadFieldKey, number> = {
   usNeck: 1,
   usPelvisFemale: 1,
   usPelvisMale: 1,
+  usFibrosis: 1,
   ct: 1,
   cta: 1,
   ctaPostProcessing: 1,
@@ -170,6 +175,7 @@ const defaultWorkloadWeights: Record<WorkloadFieldKey, number> = {
   usNeckTeaching: 1,
   usPelvisFemaleTeaching: 1,
   usPelvisMaleTeaching: 1,
+  usFibrosisTeaching: 1,
   ctTeaching: 1,
   dxTeaching: 1,
   mgTeaching: 1,
@@ -274,6 +280,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
     "usNeck",
     "usPelvisFemale",
     "usPelvisMale",
+    "usFibrosis",
     "floorControl",
     "assist",
     "scheduler",
@@ -297,6 +304,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
     "usNeckTeaching",
     "usPelvisFemaleTeaching",
     "usPelvisMaleTeaching",
+    "usFibrosisTeaching",
     "ctTeaching",
     "dxTeaching",
     "mgTeaching",
@@ -676,6 +684,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
                     "usNeck",
                     "usPelvisFemale",
                     "usPelvisMale",
+                    "usFibrosis",
                   ];
                 else if (cat === "DX") fields = ["dx"];
                 else if (cat === "MG") fields = ["mg"];
@@ -761,6 +770,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
         usNeck: 0,
         usPelvisFemale: 0,
         usPelvisMale: 0,
+        usFibrosis: 0,
         floorControl: 0,
         estFloorControl: 0,
         estFloorControlOrders: 0,
@@ -790,6 +800,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
         usNeckTeaching: 0,
         usPelvisFemaleTeaching: 0,
         usPelvisMaleTeaching: 0,
+        usFibrosisTeaching: 0,
         ctTeaching: 0,
         dxTeaching: 0,
         mgTeaching: 0,
@@ -839,6 +850,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
         wToUse.usNeckTeaching = 0;
         wToUse.usPelvisFemaleTeaching = 0;
         wToUse.usPelvisMaleTeaching = 0;
+        wToUse.usFibrosisTeaching = 0;
         wToUse.ctTeaching = 0;
         wToUse.ctaTeaching = 0;
         wToUse.dxTeaching = 0;
@@ -867,6 +879,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
             "usNeck",
             "usPelvisFemale",
             "usPelvisMale",
+            "usFibrosis",
             "ct",
             "cta",
             "ctaPostProcessing",
@@ -890,7 +903,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
           [
             "mr", "mrLargeMale", "mrLargeFemale", "mrMedium", "mrSmall",
             "us", "usA", "usBreast", "usHeart", "usThy", "usCCA", "usNeck",
-            "usPelvisFemale", "usPelvisMale", "ct", "cta", "ctaPostProcessing",
+            "usPelvisFemale", "usPelvisMale", "usFibrosis", "ct", "cta", "ctaPostProcessing",
             "dx", "mg", "bmd"
           ].forEach((k) => {
             wToUse[k] = userDailyData.reduce((sum, d) => sum + (d[k] || 0), 0);
@@ -916,6 +929,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
       stats.usNeck += w.usNeck || w.us_neck || 0;
       stats.usPelvisFemale += w.usPelvisFemale || w.us_pelvis_female || 0;
       stats.usPelvisMale += w.usPelvisMale || w.us_pelvis_male || 0;
+      stats.usFibrosis += w.usFibrosis || w.us_fibrosis || 0;
       stats.ct += w.ct || 0;
       stats.dx += w.dx || 0;
       stats.mg += w.mg || 0;
@@ -942,6 +956,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
         stats.usNeckTeaching += Math.round(teacherAlloc.usNeckTeaching || 0);
         stats.usPelvisFemaleTeaching += Math.round(teacherAlloc.usPelvisFemaleTeaching || 0);
         stats.usPelvisMaleTeaching += Math.round(teacherAlloc.usPelvisMaleTeaching || 0);
+        stats.usFibrosisTeaching += Math.round(teacherAlloc.usFibrosisTeaching || 0);
         stats.ctTeaching += Math.round(teacherAlloc.ctTeaching || 0);
         stats.dxTeaching += Math.round(teacherAlloc.dxTeaching || 0);
         stats.mgTeaching += Math.round(teacherAlloc.mgTeaching || 0);
@@ -2008,6 +2023,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
         "頸動脈",
         "P女",
         "P男",
+        "肝纖",
         "CT",
         "CTA",
         "CTA後處理",
@@ -2154,6 +2170,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
           (row.usPelvisFemale || 0) +
             ((row as any).usPelvisFemaleTeaching || 0),
           (row.usPelvisMale || 0) + ((row as any).usPelvisMaleTeaching || 0),
+          (row.usFibrosis || 0) + ((row as any).usFibrosisTeaching || 0),
           (row.ct || 0) + ((row as any).ctTeaching || 0),
           (row.cta || 0) + ((row as any).ctaTeaching || 0),
           row.ctaPostProcessing || 0,
