@@ -6585,31 +6585,31 @@ BMD :{{bmd}}
 
     out.push(`北投(${bCustomers} 客戶，${r(beitouStats.cta)} CTA）：`);
     if (names.beitou.leader.length > 0) {
-      out.push(`場控${formatNameParen(names.beitou.leader)}： 掌控全局 Slot，動態調度客戶走向，吸收現場時間變異。`);
+      out.push(`場控${formatNameParen(names.beitou.leader)}： 掌控全局 Slot（動態調度客戶走向，吸收現場時間變異）`);
       out.push("");
     }
 
     const bMrCount = calcMrCustomers(beitouStats);
-    out.push(`MR ${formatNameParen(names.beitou.mr)}： ${bMrCount}MR(${r(beitouStats.mrLargeMale)}男大/${r(beitouStats.mrLargeFemale)}女大/${r(beitouStats.mrMedium)}中/${r(beitouStats.mrSmall)}小)`);
+    out.push(`MR  ${formatNameParen(names.beitou.mr)}： ${bMrCount}MR(${r(beitouStats.mrLargeMale)}男大/${r(beitouStats.mrLargeFemale)}女大/${r(beitouStats.mrMedium)}中/${r(beitouStats.mrSmall)}小)`);
     out.push(`→ ${calcMrSlots(beitouStats)} Slot`);
     out.push("");
 
-    out.push(`US ${formatUsNameParen(names.beitou.us, names.beitou.learning)}： ${r(beitouStats.us)}醫令/${r(beitouStats.usHeart)}心超`);
+    out.push(`US  ${formatUsNameParen(names.beitou.us, names.beitou.learning)}： ${r(beitouStats.us)}醫令/${r(beitouStats.usHeart)}心超`);
     out.push(`→ ${calcUsSlots(beitouStats)} Slot`);
     out.push("");
 
-    out.push(`CT ${formatNameParen(names.beitou.ct)}：${r(beitouStats.ct)}CT/${r(beitouStats.cta)}CTA+協助MR上下台`);
+    out.push(`CT  ${formatNameParen(names.beitou.ct)}：${r(beitouStats.ct)}CT/${r(beitouStats.cta)}CTA+協助MR上下台`);
     out.push(`→ ${calcCtSlots(beitouStats)} Slot`);
     out.push("");
 
-    out.push(`BMD${formatNameParen(names.beitou.bmd)}：${r(beitouStats.bmd)} 醫令`);
+    out.push(`BMD ${formatNameParen(names.beitou.bmd)}：${r(beitouStats.bmd)} 醫令`);
     out.push(`→ ${calcBmdSlots(beitouStats)} Slot`);
     
-    out.push(`DX ${formatNameParen(names.beitou.dx)}：${r(beitouStats.dx)} 醫令`);
+    out.push(`DX  ${formatNameParen(names.beitou.dx)}：${r(beitouStats.dx)} 醫令`);
     out.push(`→ ${calcDxSlots(beitouStats)} Slot`);
     out.push("");
 
-    out.push(`MG ${formatNameParen(names.beitou.mg)}：${r(beitouStats.mg)} 醫令`);
+    out.push(`MG  ${formatNameParen(names.beitou.mg)}：${r(beitouStats.mg)} 醫令`);
     out.push(`→ ${calcMgSlots(beitouStats)} Slot`);
 
     out.push("");
@@ -6619,13 +6619,13 @@ BMD :{{bmd}}
     out.push(`→ ${calcUsSlots(dazhiStats)} Slot`);
     out.push("");
 
-    out.push(`BMD：${r(dazhiStats.bmd)} 醫令`);
+    out.push(`BMD ：${r(dazhiStats.bmd)} 醫令`);
     out.push(`→ ${calcBmdSlots(dazhiStats)} Slot`);
-    
+
     out.push(`DX ：${r(dazhiStats.dx)} 醫令`);
     out.push(`→ ${calcDxSlots(dazhiStats)} Slot`);
-    
-    out.push(`MG ：${r(dazhiStats.mg)} 醫令`);
+
+    out.push(`MG  ：${r(dazhiStats.mg)} 醫令`);
     out.push(`→ ${calcMgSlots(dazhiStats)} Slot`);
     
     const section5 = out.join("\n");
