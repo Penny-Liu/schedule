@@ -108,8 +108,7 @@ export const calculateDailyLoadRate = (targetDate: string, location: 'beitou'|'d
     const u = users.find((user) => user.id === s.userId);
     if (!u || u.isPartTime || isUserOnEmploymentPause(u, targetDate)) return;
 
-    const isRemote = s.station.includes("遠距") || s.station.includes("遠班");
-    const isDazhi = s.station.includes("大直") || (isRemote && !s.station.includes("北投"));
+    const isDazhi = s.station.includes("大直");
     if ((location === 'dazhi' && !isDazhi) || (location === 'beitou' && isDazhi)) return;
 
     const isLeader = s.station.includes("場控");
@@ -6635,7 +6634,7 @@ BMD :{{bmd}}
       const isEnglishAlias = rawAlias.length > 0 && /^[a-zA-Z0-9]+$/.test(rawAlias);
       let alias = (!rawAlias || isEnglishAlias) ? (user.name?.slice(-2) || user.name || "") : rawAlias;
       const isRemote = s.station.includes("遠距") || s.station.includes("遠班");
-      const isDazhi = s.station.includes("大直") || isRemote; // 遠班/遠距 歸類為大直人力
+      const isDazhi = s.station.includes("大直");
       
       if (isRemote) {
          alias += "(兼遠班)";
@@ -6720,8 +6719,7 @@ BMD :{{bmd}}
       const u = users.find((user) => user.id === s.userId);
       if (!u || u.isPartTime || isUserOnEmploymentPause(u, date)) return;
 
-      const isRemote = s.station.includes("遠距") || s.station.includes("遠班");
-      const isDazhi = s.station.includes("大直") || (isRemote && !s.station.includes("北投"));
+      const isDazhi = s.station.includes("大直");
       const isLeader = s.station.includes("場控");
       const isAdmin = s.station === "行政"; // Removed remote from isAdmin
       const isLearning = s.station.includes("學習") || isUserLearningStationOnDate(u, s.station, date);
