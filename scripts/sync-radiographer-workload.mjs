@@ -248,7 +248,7 @@ async function syncAllWorkloads() {
                        AND Radiologist__c != null 
                        AND ResourceCategory__c IN ('CT','US','BMD','MG','DX') 
                        AND (NOT Name LIKE '%報到%') 
-                       AND Checkup_Status__c = '10' 
+                       AND Checkup_Status__c != '90' 
                        GROUP BY Radiologist__r.Name, ResourceCategory__c, CheckupName__c`;
 
     const nonMrData = await runSoqlQuery({ ...session, soql: nonMrSoql });
@@ -282,7 +282,7 @@ async function syncAllWorkloads() {
                     AND Radiologist__c != null 
                     AND ResourceCategory__c = 'MR' 
                     AND (NOT Name LIKE '%報到%') 
-                    AND Checkup_Status__c = '10'`;
+                    AND Checkup_Status__c != '90'`;
 
     const mrData = await runSoqlQuery({ ...session, soql: mrSoql });
 
