@@ -206,7 +206,6 @@ const Sidebar: React.FC<SidebarProps> = ({
           label: "設定",
           icon: Settings,
           permission: null,
-          hideForRoles: [UserRole.VIEWER],
         },
       ],
     },
