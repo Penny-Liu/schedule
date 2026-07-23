@@ -6638,7 +6638,10 @@ BMD :{{bmd}}
       const isDazhi = s.station.includes("大直");
       const isRemote = s.station.includes("遠距") || s.station.includes("遠班");
       
-      if (isRemote) return;
+      if (isRemote) {
+         alias += "(兼遠班)";
+         if (!isDazhi && !s.station.includes("北投")) return;
+      }
 
 
 
