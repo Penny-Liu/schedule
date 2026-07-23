@@ -154,6 +154,7 @@ export const calculateDailyLoadRate = (targetDate: string, location: 'beitou'|'d
     locStats.bmd = rawDailyStats.beitou_bmd || 0;
     locStats.dx = rawDailyStats.beitou_dx || 0;
     locStats.mg = rawDailyStats.beitou_mg || 0;
+    locStats.ctaPostProcessing = rawDailyStats.beitou_cta || 0;
   }
 
   const r = (val: number) => Math.round(val || 0);
@@ -6690,7 +6691,7 @@ BMD :{{bmd}}
       usHeart: rawDailyStats.beitou_ultrasound_heart || 0,
       ct: rawDailyStats.beitou_ct || 0,
       cta: rawDailyStats.beitou_cta || 0,
-      ctaPostProcessing: 0,
+      ctaPostProcessing: rawDailyStats.beitou_cta || 0,
       bmd: rawDailyStats.beitou_bmd || 0,
       dx: rawDailyStats.beitou_dx || 0,
       mg: rawDailyStats.beitou_mg || 0
@@ -6805,7 +6806,7 @@ BMD :{{bmd}}
     }
     
     if (beitouStats.ctaPostProcessing > 0) {
-      out.push(`CTA後處理：${r(beitouStats.ctaPostProcessing)}件，${r(beitouStats.ctaPostProcessing * 5)} Slot`);
+      out.push(`CTA後處理：${r(beitouStats.ctaPostProcessing)}位，${r(beitouStats.ctaPostProcessing * 5)} Slot`);
     }
 
     out.push("");
