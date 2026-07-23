@@ -6764,9 +6764,6 @@ BMD :{{bmd}}
        return all.length > 0 ? ` (${all.join("/")})` : "";
     };
 
-    // Collect all Dazhi names for the header
-    const dazhiNamesStr = names.dazhi.leader.length > 0 ? `：${names.dazhi.leader.join("/")}` : "";
-
     const bCustomers = r(rawDailyStats.beitou_clients || 0);
     const dCustomers = r(rawDailyStats.dazhi_clients || 0);
 
@@ -6812,9 +6809,23 @@ BMD :{{bmd}}
       out.push(`CTA後處理：${r(beitouStats.ctaPostProcessing)}位，${r(beitouStats.ctaPostProcessing * 5)} Slot`);
     }
 
+    const normalDazhi = names.dazhi.leader.filter(n => !n.includes("(兼遠班)"));
+    const remoteDazhi = names.dazhi.leader.filter(n => n.includes("(兼遠班)"));
+    let dazhiNamesStr = "";
+    if (normalDazhi.length > 0) {
+       dazhiNamesStr += normalDazhi.join("/");
+    }
+    if (remoteDazhi.length > 0) {
+       if (dazhiNamesStr) dazhiNamesStr += "-/";
+       dazhiNamesStr += remoteDazhi.join("/");
+    }
+    
+    const dazhiHeaderNamePart = dazhiNamesStr ? `：${dazhiNamesStr}` : "";
+    const dazhiDash = remoteDazhi.length > 0 ? " " : "- ";
+
     out.push("");
     
-    out.push(`大直（${dCustomers} 客戶）${dazhiNamesStr}- 負載率 ${getLoadRateStr(dDemand, dazhiSupplySlots)}`);
+    out.push(`大直（${dCustomers} 客戶）${dazhiHeaderNamePart}${dazhiDash}負載率 ${getLoadRateStr(dDemand, dazhiSupplySlots)}`);
     
     if (calcUsSlots(dazhiStats) > 0) {
       out.push(`US ：${r(dazhiStats.us)}醫令+${r(dazhiStats.usHeart)}心超，${calcUsSlots(dazhiStats)} Slot`);
