@@ -3259,6 +3259,15 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
           </div>
         </div>
 
+        <div className="bg-red-100 text-red-900 p-4 rounded text-xs overflow-auto max-h-40 mb-4 font-mono">
+          DEBUG:
+          selectedDate={selectedDate}, 
+          cycleDailyData.length={cycleDailyData.length},
+          dData for 余依珊={JSON.stringify(cycleDailyData.find(d => d.radiographerName === '余依珊' && d.date === selectedDate))}
+          displayData.length={displayData.length}
+          test user={JSON.stringify(displayData.find(d => d.name === '余依珊'))}
+        </div>
+
         {/* Group Panel */}
         {showGroupPanel && (
           <div className="bg-white border border-violet-200 rounded-2xl p-4 shadow-sm mb-4">
