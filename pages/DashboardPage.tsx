@@ -6772,7 +6772,7 @@ BMD :{{bmd}}
 
     out.push(`北投（${bCustomers} 客戶，${r(beitouStats.cta)} CTA）- 負載率 ${getLoadRateStr(bDemand, beitouSupplySlots)}`);
     if (names.beitou.leader.length > 0) {
-      out.push(`場控${formatNameParen(names.beitou.leader)}：掌控全局 Slot（動態調度客戶走向，吸收現場時間變異）`);
+      out.push(`場控${formatNameParen(names.beitou.leader)}：掌控全局 Slot`);
     }
 
     const bMrCount = calcMrCustomers(beitouStats);
