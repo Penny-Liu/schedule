@@ -6813,7 +6813,7 @@ BMD :{{bmd}}
        dazhiNamesStr += normalDazhi.join("/");
     }
     if (remoteDazhi.length > 0) {
-       if (dazhiNamesStr) dazhiNamesStr += "-/";
+       if (dazhiNamesStr) dazhiNamesStr += "/";
        dazhiNamesStr += remoteDazhi.join("/");
     }
     
