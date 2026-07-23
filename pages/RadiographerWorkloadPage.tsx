@@ -493,8 +493,8 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
       radiographers.forEach((u) => {
         const uCycle = u.personalCycles?.[currentMonth];
         if (uCycle) {
-          if (uCycle.startDate < minDate) minDate = uCycle.startDate;
-          if (uCycle.endDate > maxDate) maxDate = uCycle.endDate;
+          if (uCycle.startDate && uCycle.startDate !== "" && uCycle.startDate < minDate) minDate = uCycle.startDate;
+          if (uCycle.endDate && uCycle.endDate !== "" && uCycle.endDate > maxDate) maxDate = uCycle.endDate;
         }
       });
 
@@ -3264,15 +3264,6 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
               </div>
             </div>
           </div>
-        </div>
-
-        <div className="bg-red-100 text-red-900 p-4 rounded text-xs overflow-auto max-h-40 mb-4 font-mono">
-          DEBUG:
-          selectedDate={selectedDate}, 
-          cycleDailyData.length={cycleDailyData.length},
-          generalDates=[{generalDates[0]}, {generalDates[generalDates.length-1]}],
-          displayData.length={displayData.length},
-          fetchStatus={cycleDailyDataDebug}
         </div>
 
         {/* Group Panel */}
