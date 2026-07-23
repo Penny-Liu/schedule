@@ -97,6 +97,81 @@ interface DashboardPageProps {
 
 type ViewMode = "user" | "station" | "daily" | "personal";
 
+export const calculateDailyLoadRate = (targetDate: string, location: 'beitou'|'dazhi', shifts: Shift[], users: User[], stats: any) => {
+  let demandExtra = 0;
+  let supplySlots = 0;
+  
+  shifts.forEach((s) => {
+    if (s.date !== targetDate) return;
+    if (s.station === SYSTEM_OFF || s.station === StationDefault.UNASSIGNED) return;
+    
+    const u = users.find((user) => user.id === s.userId);
+    if (!u || u.isPartTime || isUserOnEmploymentPause(u, targetDate)) return;
+
+    const isDazhi = s.station.includes("大直");
+    if ((location === 'dazhi' && !isDazhi) || (location === 'beitou' && isDazhi)) return;
+
+    const isLeader = s.station.includes("場控");
+    const isAdmin = s.station === "行政" || s.station.includes("遠距") || s.station.includes("遠班");
+    const isLearning = s.station.includes("學習") || isUserLearningStationOnDate(u, s.station, targetDate);
+    
+    if (!isLeader && !isAdmin && !isLearning) {
+       supplySlots += 48;
+    }
+
+    let extra = 0;
+    if (s.station.includes("輔班") || s.specialRoles.includes(SPECIAL_ROLES.ASSIST)) extra += 6;
+    if (s.station.includes("排班") || s.specialRoles.includes(SPECIAL_ROLES.SCHEDULER)) extra += 9;
+    if (s.specialRoles.includes(SPECIAL_ROLES.OPENING)) extra += 12;
+
+    demandExtra += extra;
+  });
+
+  const rawDailyStats = stats || {};
+  let locStats = {
+    mrLargeMale: 0, mrLargeFemale: 0, mrMedium: 0, mrSmall: 0,
+    us: 0, usHeart: 0, ct: 0, cta: 0, bmd: 0, dx: 0, mg: 0,
+    ctaPostProcessing: 0
+  };
+
+  if (location === 'dazhi') {
+    locStats.us = rawDailyStats.dazhi_ultrasound || 0;
+    locStats.usHeart = rawDailyStats.dazhi_ultrasound_heart || 0;
+    locStats.bmd = rawDailyStats.dazhi_bmd || 0;
+    locStats.dx = rawDailyStats.dazhi_dx || 0;
+    locStats.mg = rawDailyStats.dazhi_mg || 0;
+  } else {
+    locStats.mrLargeMale = rawDailyStats.beitou_mr_large_male || 0;
+    locStats.mrLargeFemale = rawDailyStats.beitou_mr_large_female || 0;
+    locStats.mrMedium = rawDailyStats.beitou_mr_medium || 0;
+    locStats.mrSmall = rawDailyStats.beitou_mr_small || 0;
+    locStats.us = rawDailyStats.beitou_ultrasound || 0;
+    locStats.usHeart = rawDailyStats.beitou_ultrasound_heart || 0;
+    locStats.ct = rawDailyStats.beitou_ct || 0;
+    locStats.cta = rawDailyStats.beitou_cta || 0;
+    locStats.bmd = rawDailyStats.beitou_bmd || 0;
+    locStats.dx = rawDailyStats.beitou_dx || 0;
+    locStats.mg = rawDailyStats.beitou_mg || 0;
+  }
+
+  const r = (val: number) => Math.round(val || 0);
+  const calcMrSlots = (st: any) => r(st.mrLargeMale * 7 + st.mrLargeFemale * 9 + st.mrMedium * 7 + st.mrSmall * 3);
+  const calcUsSlots = (st: any) => r(st.us * 2 + st.usHeart * 3);
+  const calcCtSlots = (st: any) => r(st.ct * 1 + st.cta * 2);
+  const calcBmdSlots = (st: any) => r(st.bmd * 2);
+  const calcDxSlots = (st: any) => r(st.dx * 0.5);
+  const calcMgSlots = (st: any) => r(st.mg * 1);
+
+  const demand = calcMrSlots(locStats) + calcUsSlots(locStats) + calcCtSlots(locStats) + locStats.ctaPostProcessing * 5 + calcBmdSlots(locStats) + calcDxSlots(locStats) + calcMgSlots(locStats) + demandExtra;
+
+  if (supplySlots === 0) return { rateStr: demand > 0 ? "100.0% (紅區)" : "0.0% (綠區)", color: demand > 0 ? "text-red-600 bg-red-50" : "text-emerald-600 bg-emerald-50", demand, supply: supplySlots };
+  const rate = (demand / supplySlots) * 100;
+  const rateStr = rate.toFixed(1) + "%";
+  if (rate < 75) return { rateStr: `${rateStr} (綠區)`, color: "text-emerald-600 bg-emerald-50", demand, supply: supplySlots, rate };
+  if (rate <= 90) return { rateStr: `${rateStr} (黃區)`, color: "text-amber-600 bg-amber-50", demand, supply: supplySlots, rate };
+  return { rateStr: `${rateStr} (紅區)`, color: "text-red-600 bg-red-50", demand, supply: supplySlots, rate };
+};
+
 const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
   const isSupervisorOrHigher =
     currentUser.role === UserRole.SUPERVISOR ||
@@ -210,6 +285,19 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
   const [isEditMode, setIsEditMode] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  
+  const [dailyWorkloads, setDailyWorkloads] = useState<any[]>([]);
+
+  // Fetch workloads when selected cycle or date changes
+  useEffect(() => {
+    // Only fetch for the current active date for "Today view", or dateRange for full cycle?
+    // Let's just fetch for the current dailyDate in daily view, and dateRange in other views.
+    const start = scheduleRange.start || new Date().toISOString().split("T")[0];
+    const end = scheduleRange.end || start;
+    if (start && end) {
+      db.fetchDailyWorkloadsByRange(start, end).then(setDailyWorkloads);
+    }
+  }, [scheduleRange]);
 
   // Get current selected cycle object
   const currentCycle = useMemo(() => {
@@ -3435,6 +3523,43 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
               })()}
             </div>
 
+            {/* Load Analysis Block */}
+            {(() => {
+              const dateStr = toLocalISOString(dailyDate);
+              const _dailyStatsForLoad = db.getDailyStats(dateStr);
+              const bLoad = calculateDailyLoadRate(dateStr, "beitou", shifts, users, _dailyStatsForLoad);
+              const dLoad = calculateDailyLoadRate(dateStr, "dazhi", shifts, users, _dailyStatsForLoad);
+
+              const LoadCard = ({ title, data }: { title: string, data: any }) => (
+                <div className="flex-1 bg-white border border-slate-200 rounded-xl p-4 shadow-sm relative overflow-hidden">
+                  <div className={`absolute top-0 left-0 w-1 h-full ${data.color.split(' ')[0].replace('text-', 'bg-')}`} />
+                  <div className="flex justify-between items-start mb-2">
+                    <span className="font-bold text-slate-700 text-sm">{title}</span>
+                    <span className={`text-xs font-black px-2 py-0.5 rounded-full ${data.color}`}>
+                      {data.rateStr}
+                    </span>
+                  </div>
+                  <div className="flex items-end gap-3 mt-4">
+                    <div className="flex flex-col">
+                      <span className="text-[10px] text-slate-400">總設備需求 (s)</span>
+                      <span className="text-lg font-bold text-slate-700">{data.demand} <span className="text-[10px] font-normal">Slots</span></span>
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-[10px] text-slate-400">人員總供給 (t)</span>
+                      <span className="text-lg font-bold text-slate-700">{data.supply} <span className="text-[10px] font-normal">Slots</span></span>
+                    </div>
+                  </div>
+                </div>
+              );
+
+              return (
+                <div className="flex flex-col sm:flex-row gap-4 w-full">
+                  <LoadCard title="北投院區 負載分析" data={bLoad} />
+                  <LoadCard title="大直院區 負載分析" data={dLoad} />
+                </div>
+              );
+            })()}
+
             {/* All Staff Status Grid */}
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
               <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
@@ -3938,6 +4063,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                 shifts={shifts}
                 doctorShifts={doctorShifts}
                 currentUser={currentUser}
+                stats={db.getDailyStats(toLocalISOString(dailyDate))}
               />
 
               {/* Off Staff Summary */}
@@ -4292,6 +4418,28 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                   <div className="h-[12px]"></div>
                                 )}
                             </div>
+                            
+                            {viewMode === "station" && (
+                              <div className="mt-1 w-full flex flex-col gap-0.5 px-0.5">
+                                {(() => {
+                                  const _dailyStatsForLoad = db.getDailyStats(date);
+                                  const bLoad = calculateDailyLoadRate(date, "beitou", shifts, users, _dailyStatsForLoad);
+                                  const dLoad = calculateDailyLoadRate(date, "dazhi", shifts, users, _dailyStatsForLoad);
+                                  return (
+                                    <>
+                                      <div className={`text-[9px] px-0.5 rounded flex justify-between items-center ${bLoad.color} ring-1 ring-inset ring-black/5`} title={`北投 需求:${bLoad.demand} 供給:${bLoad.supply}`}>
+                                        <span className="font-bold opacity-70">北</span>
+                                        <span className="font-black">{bLoad.rateStr.split(' ')[0]}</span>
+                                      </div>
+                                      <div className={`text-[9px] px-0.5 rounded flex justify-between items-center ${dLoad.color} ring-1 ring-inset ring-black/5`} title={`大直 需求:${dLoad.demand} 供給:${dLoad.supply}`}>
+                                        <span className="font-bold opacity-70">大</span>
+                                        <span className="font-black">{dLoad.rateStr.split(' ')[0]}</span>
+                                      </div>
+                                    </>
+                                  );
+                                })()}
+                              </div>
+                            )}
                           </div>
                         </th>
                       );
@@ -5734,7 +5882,8 @@ const DailyManpowerSummary: React.FC<{
   shifts: Shift[];
   doctorShifts: DoctorShift[];
   currentUser: User;
-}> = ({ date, users, shifts, doctorShifts, currentUser }) => {
+  dailyWorkloads: any[];
+}> = ({ date, users, shifts, doctorShifts, currentUser, dailyWorkloads }) => {
   // Fetch Stats directly from Store (Read-Only here)
   const stats = db.getDailyStats(date) || {
     beitou_clients: 0,
@@ -6459,62 +6608,16 @@ BMD :{{bmd}}
       .filter(Boolean)
       .map((n) => `${n}：`)
       .join("\n");
+    // --- Section 4: 工作量 (by location) ---
     const section4Parts: string[] = [workloadDateStr];
-    if (beitouLines) {
-      section4Parts.push(`北投\n${beitouLines}`);
-    }
-    if (dazhiLines) {
-      section4Parts.push(`大直\n${dazhiLines}`);
-    }
-    if (remoteLines) {
-      section4Parts.push(`遠健\n${remoteLines}`);
-    }
-    
+    if (beitouLines) section4Parts.push(`北投\n${beitouLines}`);
+    if (dazhiLines) section4Parts.push(`大直\n${dazhiLines}`);
+    if (remoteLines) section4Parts.push(`遠健\n${remoteLines}`);
     const section4 = section4Parts.join("\n\n");
 
-    // --- Section 5 Calculation ---
-    const rawDailyStats = stats || {};
-    const beitouStats = {
-      mrLargeMale: rawDailyStats.beitou_mr_large_male || 0,
-      mrLargeFemale: rawDailyStats.beitou_mr_large_female || 0,
-      mrMedium: rawDailyStats.beitou_mr_medium || 0,
-      mrSmall: rawDailyStats.beitou_mr_small || 0,
-      us: rawDailyStats.beitou_ultrasound || 0,
-      usHeart: rawDailyStats.beitou_ultrasound_heart || 0,
-      usA: rawDailyStats.beitou_us_a || 0,
-      usBreast: rawDailyStats.beitou_us_breast || 0,
-      usThy: rawDailyStats.beitou_us_thy || 0,
-      usCCA: rawDailyStats.beitou_us_cca || 0,
-      usNeck: rawDailyStats.beitou_us_neck || 0,
-      usPelvisFemale: rawDailyStats.beitou_us_pelvis_female || 0,
-      usPelvisMale: rawDailyStats.beitou_us_pelvis_male || 0,
-      usFibrosis: rawDailyStats.beitou_ultrasound_fibrosis || 0,
-      ct: rawDailyStats.beitou_ct || 0,
-      cta: rawDailyStats.beitou_cta || 0,
-      bmd: rawDailyStats.beitou_bmd || 0,
-      dx: rawDailyStats.beitou_dx || 0,
-      mg: rawDailyStats.beitou_mg || 0,
-      ctaPostProcessing: 0
-    };
-    const dazhiStats = {
-      mrLargeMale: 0, mrLargeFemale: 0, mrMedium: 0, mrSmall: 0,
-      us: rawDailyStats.dazhi_ultrasound || 0,
-      usHeart: rawDailyStats.dazhi_ultrasound_heart || 0,
-      usA: rawDailyStats.dazhi_us_a || 0,
-      usBreast: rawDailyStats.dazhi_us_breast || 0,
-      usThy: rawDailyStats.dazhi_us_thy || 0,
-      usCCA: rawDailyStats.dazhi_us_cca || 0,
-      usNeck: rawDailyStats.dazhi_us_neck || 0,
-      usPelvisFemale: rawDailyStats.dazhi_us_pelvis_female || 0,
-      usPelvisMale: rawDailyStats.dazhi_us_pelvis_male || 0,
-      usFibrosis: rawDailyStats.dazhi_ultrasound_fibrosis || 0,
-      ct: 0, cta: 0,
-      bmd: rawDailyStats.dazhi_bmd || 0,
-      dx: rawDailyStats.dazhi_dx || 0,
-      mg: rawDailyStats.dazhi_mg || 0,
-      ctaPostProcessing: 0
-    };
-
+    // We will use the component level calculateDailyLoadRate
+    const beitouLoad = calculateDailyLoadRate(date, 'beitou', shifts, users, stats);
+    const dazhiLoad = calculateDailyLoadRate(date, 'dazhi', shifts, users, stats);
     const names = {
       beitou: { leader: [] as string[], mr: [] as string[], us: [] as string[], ct: [] as string[], bmd: [] as string[], dx: [] as string[], mg: [] as string[], learning: [] as string[] },
       dazhi: { leader: [] as string[], us: [] as string[], bmd: [] as string[], dx: [] as string[], mg: [] as string[] }
@@ -6568,10 +6671,84 @@ BMD :{{bmd}}
     const calcMrCustomers = (st: any) => r(st.mrLargeMale + st.mrLargeFemale + st.mrMedium + st.mrSmall);
     const calcMrSlots = (st: any) => r(st.mrLargeMale * 7 + st.mrLargeFemale * 9 + st.mrMedium * 3 + st.mrSmall * 3);
     const calcUsSlots = (st: any) => r(st.us * 2 + st.usHeart * 3);
-    const calcCtSlots = (st: any) => r(st.ct * 1 + st.cta * 2 + st.ctaPostProcessing * 5);
+    const calcCtSlots = (st: any) => r(st.ct * 1 + st.cta * 2);
     const calcBmdSlots = (st: any) => r(st.bmd * 2);
     const calcDxSlots = (st: any) => r(st.dx * 0.5);
     const calcMgSlots = (st: any) => r(st.mg * 1);
+
+    // --- Section 5 Calculation ---
+    const rawDailyStats = stats || {};
+    
+    const beitouStats = {
+      mrLargeMale: rawDailyStats.beitou_mr_large_male || 0,
+      mrLargeFemale: rawDailyStats.beitou_mr_large_female || 0,
+      mrMedium: rawDailyStats.beitou_mr_medium || 0,
+      mrSmall: rawDailyStats.beitou_mr_small || 0,
+      us: rawDailyStats.beitou_ultrasound || 0,
+      usHeart: rawDailyStats.beitou_ultrasound_heart || 0,
+      ct: rawDailyStats.beitou_ct || 0,
+      cta: rawDailyStats.beitou_cta || 0,
+      ctaPostProcessing: 0,
+      bmd: rawDailyStats.beitou_bmd || 0,
+      dx: rawDailyStats.beitou_dx || 0,
+      mg: rawDailyStats.beitou_mg || 0
+    };
+    
+    const dazhiStats = {
+      us: rawDailyStats.dazhi_ultrasound || 0,
+      usHeart: rawDailyStats.dazhi_ultrasound_heart || 0,
+      bmd: rawDailyStats.dazhi_bmd || 0,
+      dx: rawDailyStats.dazhi_dx || 0,
+      mg: rawDailyStats.dazhi_mg || 0
+    };
+
+    // Calculate slots from shifts (Demand additions like 開機, 輔班, 排班)
+    let beitouDemandExtra = 0;
+    let dazhiDemandExtra = 0;
+    
+    let beitouSupplySlots = 0;
+    let dazhiSupplySlots = 0;
+
+    shifts.forEach((s) => {
+      if (s.date !== date) return;
+      if (s.station === SYSTEM_OFF || s.station === StationDefault.UNASSIGNED) return;
+      
+      const u = users.find((user) => user.id === s.userId);
+      if (!u || u.isPartTime || isUserOnEmploymentPause(u, date)) return;
+
+      const isDazhi = s.station.includes("大直");
+      const isLeader = s.station.includes("場控");
+      const isAdmin = s.station === "行政" || s.station.includes("遠距") || s.station.includes("遠班");
+      const isLearning = s.station.includes("學習") || isUserLearningStationOnDate(u, s.station, date);
+      
+      // Calculate supply (48 slots per main operator)
+      if (!isLeader && !isAdmin && !isLearning) {
+         if (isDazhi) dazhiSupplySlots += 48;
+         else beitouSupplySlots += 48;
+      }
+
+      // Calculate extra demand
+      let extra = 0;
+      if (s.station.includes("輔班") || s.specialRoles.includes(SPECIAL_ROLES.ASSIST)) extra += 6;
+      if (s.station.includes("排班") || s.specialRoles.includes(SPECIAL_ROLES.SCHEDULER)) extra += 9;
+      if (s.specialRoles.includes(SPECIAL_ROLES.OPENING)) extra += 12;
+
+      if (isDazhi) dazhiDemandExtra += extra;
+      else beitouDemandExtra += extra;
+    });
+
+    // Load Rate Calculation Function
+    const getLoadRateStr = (demand: number, supply: number) => {
+      if (supply === 0) return demand > 0 ? "100% (紅區)" : "0% (綠區)";
+      const rate = (demand / supply) * 100;
+      const rateStr = rate.toFixed(1) + "%";
+      if (rate < 75) return `${rateStr} (綠區)`;
+      if (rate <= 90) return `${rateStr} (黃區)`;
+      return `${rateStr} (紅區)`;
+    };
+
+    const bDemand = calcMrSlots(beitouStats) + calcUsSlots(beitouStats) + calcCtSlots(beitouStats) + beitouStats.ctaPostProcessing * 5 + calcBmdSlots(beitouStats) + calcDxSlots(beitouStats) + calcMgSlots(beitouStats) + beitouDemandExtra;
+    const dDemand = calcUsSlots(dazhiStats) + calcBmdSlots(dazhiStats) + calcDxSlots(dazhiStats) + calcMgSlots(dazhiStats) + dazhiDemandExtra;
 
     const formatNameParen = (arr: string[]) => arr.length > 0 ? ` (${arr.join("、")})` : "";
     const formatUsNameParen = (usArr: string[], learningArr: string[]) => {
@@ -6588,55 +6765,42 @@ BMD :{{bmd}}
     const out: string[] = [];
     out.push(workloadDateStr.replace("工作量", ""));
 
-    out.push(`北投(${bCustomers} 客戶，${r(beitouStats.cta)} CTA）：`);
+    out.push(`北投（${bCustomers} 客戶，${r(beitouStats.cta)} CTA）- 負載率 ${getLoadRateStr(bDemand, beitouSupplySlots)}`);
     if (names.beitou.leader.length > 0) {
-      out.push(`場控${formatNameParen(names.beitou.leader)}： 掌控全局 Slot（動態調度客戶走向，吸收現場時間變異）`);
-      out.push("");
+      out.push(`場控${formatNameParen(names.beitou.leader)}：掌控全局 Slot（動態調度客戶走向，吸收現場時間變異）`);
     }
 
     const bMrCount = calcMrCustomers(beitouStats);
-    out.push(`MR  ${formatNameParen(names.beitou.mr)}： ${bMrCount}MR(${r(beitouStats.mrLargeMale)}男大/${r(beitouStats.mrLargeFemale)}女大/${r(beitouStats.mrMedium)}中/${r(beitouStats.mrSmall)}小)`);
-    out.push(`→ ${calcMrSlots(beitouStats)} Slot`);
-    out.push("");
+    out.push(`MR ${formatNameParen(names.beitou.mr)}：${bMrCount}MR(${r(beitouStats.mrLargeMale)}男大/${r(beitouStats.mrLargeFemale)}女大/${r(beitouStats.mrMedium)}中/${r(beitouStats.mrSmall)}小)，${calcMrSlots(beitouStats)} Slot`);
 
-    out.push(`US  ${formatUsNameParen(names.beitou.us, names.beitou.learning)}： ${r(beitouStats.us)}醫令/${r(beitouStats.usHeart)}心超`);
-    out.push(`→ ${calcUsSlots(beitouStats)} Slot`);
-    out.push("");
+    // Fix the learning array formatting with '+' for US
+    const usAllNames = names.beitou.us.length > 0 ? names.beitou.us.join("/") : "";
+    const usLearningNames = names.beitou.learning.length > 0 ? " + " + names.beitou.learning.join("/") : "";
+    const usNameStr = (usAllNames || usLearningNames) ? ` (${usAllNames}${usLearningNames})` : "";
+    out.push(`US ${usNameStr}：${r(beitouStats.us)}醫令+${r(beitouStats.usHeart)}心超，${calcUsSlots(beitouStats)} Slot`);
 
-    out.push(`CT  ${formatNameParen(names.beitou.ct)}：${r(beitouStats.ct)}CT/${r(beitouStats.cta)}CTA+協助MR上下台`);
-    out.push(`→ ${calcCtSlots(beitouStats)} Slot`);
-    out.push("");
+    out.push(`CT ${formatNameParen(names.beitou.ct)}：${r(beitouStats.ct)}CT+${r(beitouStats.cta)}CTA，${calcCtSlots(beitouStats)} Slot + 協助MR上下台`);
 
-    out.push(`BMD ${formatNameParen(names.beitou.bmd)}：${r(beitouStats.bmd)}`);
-    out.push(`→ ${calcBmdSlots(beitouStats)} Slot`);
+    out.push(`BMD ${formatNameParen(names.beitou.bmd)}：${r(beitouStats.bmd)}位，${calcBmdSlots(beitouStats)} Slot`);
+    out.push(`DX ${formatNameParen(names.beitou.dx)}：${r(beitouStats.dx)}位，${calcDxSlots(beitouStats)} Slot`);
+    out.push(`MG ${formatNameParen(names.beitou.mg)}：${r(beitouStats.mg)}位，${calcMgSlots(beitouStats)} Slot`);
     
-    out.push(`DX  ${formatNameParen(names.beitou.dx)}：${r(beitouStats.dx)}`);
-    out.push(`→ ${calcDxSlots(beitouStats)} Slot`);
-    out.push("");
-
-    out.push(`MG  ${formatNameParen(names.beitou.mg)}：${r(beitouStats.mg)}`);
-    out.push(`→ ${calcMgSlots(beitouStats)} Slot`);
+    if (beitouStats.ctaPostProcessing > 0) {
+      out.push(`CTA後處理：${r(beitouStats.ctaPostProcessing)}件，${r(beitouStats.ctaPostProcessing * 5)} Slot`);
+    }
 
     out.push("");
     
-    out.push(`大直(${dCustomers} 客戶)${dazhiNamesStr}：`);
-    out.push(`US ：${r(dazhiStats.us)}醫令/${r(dazhiStats.usHeart)}心超`);
-    out.push(`→ ${calcUsSlots(dazhiStats)} Slot`);
-    out.push("");
-
-    out.push(`BMD ：${r(dazhiStats.bmd)}`);
-    out.push(`→ ${calcBmdSlots(dazhiStats)} Slot`);
-
-    out.push(`DX ：${r(dazhiStats.dx)}`);
-    out.push(`→ ${calcDxSlots(dazhiStats)} Slot`);
-
-    out.push(`MG  ：${r(dazhiStats.mg)}`);
-    out.push(`→ ${calcMgSlots(dazhiStats)} Slot`);
+    out.push(`大直（${dCustomers} 客戶）${dazhiNamesStr}- 負載率 ${getLoadRateStr(dDemand, dazhiSupplySlots)}`);
+    out.push(`US ：${r(dazhiStats.us)}醫令+${r(dazhiStats.usHeart)}心超，${calcUsSlots(dazhiStats)} Slot`);
+    out.push(`BMD ：${r(dazhiStats.bmd)}位，${calcBmdSlots(dazhiStats)} Slot`);
+    out.push(`DX ：${r(dazhiStats.dx)}位，${calcDxSlots(dazhiStats)} Slot`);
+    out.push(`MG ：${r(dazhiStats.mg)}位，${calcMgSlots(dazhiStats)} Slot`);
     
     const section5 = out.join("\n");
 
     return { full: finalText, section1, section2, section3, section4, section5 };
-  }, [date, shifts, manpower, users, stats, doctorShifts, physicianWorkload]);
+  }, [date, shifts, manpower, users, stats, doctorShifts, physicianWorkload, dailyWorkloads]);
 
   const handleCopy = (text: string) => {
     navigator.clipboard.writeText(text).catch((err) => {
