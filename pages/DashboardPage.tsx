@@ -108,17 +108,16 @@ export const calculateDailyLoadRate = (targetDate: string, location: 'beitou'|'d
     const u = users.find((user) => user.id === s.userId);
     if (!u || u.isPartTime || isUserOnEmploymentPause(u, targetDate)) return;
 
-    const isDazhi = s.station.includes("大直");
+    const isRemote = s.station.includes("遠距") || s.station.includes("遠班");
+    const isDazhi = s.station.includes("大直") || (isRemote && !s.station.includes("北投"));
     if ((location === 'dazhi' && !isDazhi) || (location === 'beitou' && isDazhi)) return;
 
     const isLeader = s.station.includes("場控");
-    const isAdmin = s.station === "行政" || s.station.includes("遠距") || s.station.includes("遠班");
+    const isAdmin = s.station === "行政"; // 遠距/遠班不再視為行政(0 Slot)，而是算作48 Slot
     const isLearning = s.station.includes("學習") || isUserLearningStationOnDate(u, s.station, targetDate);
     
     if (!isLeader && !isAdmin && !isLearning) {
        supplySlots += 48;
-    } else if (isDazhi && s.station.includes("遠班")) {
-       supplySlots += 24; // 大直的遠班算半個人力
     }
 
     let extra = 0;
@@ -6635,12 +6634,11 @@ BMD :{{bmd}}
       const rawAlias = user.alias || "";
       const isEnglishAlias = rawAlias.length > 0 && /^[a-zA-Z0-9]+$/.test(rawAlias);
       let alias = (!rawAlias || isEnglishAlias) ? (user.name?.slice(-2) || user.name || "") : rawAlias;
-      const isDazhi = s.station.includes("大直");
       const isRemote = s.station.includes("遠距") || s.station.includes("遠班");
+      const isDazhi = s.station.includes("大直") || isRemote; // 遠班/遠距 歸類為大直人力
       
       if (isRemote) {
          alias += "(兼遠班)";
-         if (!isDazhi && !s.station.includes("北投")) return;
       }
 
 
@@ -6722,17 +6720,16 @@ BMD :{{bmd}}
       const u = users.find((user) => user.id === s.userId);
       if (!u || u.isPartTime || isUserOnEmploymentPause(u, date)) return;
 
-      const isDazhi = s.station.includes("大直");
+      const isRemote = s.station.includes("遠距") || s.station.includes("遠班");
+      const isDazhi = s.station.includes("大直") || (isRemote && !s.station.includes("北投"));
       const isLeader = s.station.includes("場控");
-      const isAdmin = s.station === "行政" || s.station.includes("遠距") || s.station.includes("遠班");
+      const isAdmin = s.station === "行政"; // Removed remote from isAdmin
       const isLearning = s.station.includes("學習") || isUserLearningStationOnDate(u, s.station, date);
       
       // Calculate supply (48 slots per main operator)
       if (!isLeader && !isAdmin && !isLearning) {
          if (isDazhi) dazhiSupplySlots += 48;
          else beitouSupplySlots += 48;
-      } else if (isDazhi && s.station.includes("遠班")) {
-         dazhiSupplySlots += 24; // 大直的遠班算半個人力
       }
 
       // Calculate extra demand
