@@ -158,7 +158,7 @@ export const calculateDailyLoadRate = (targetDate: string, location: 'beitou'|'d
   }
 
   const r = (val: number) => Math.round(val || 0);
-  const calcMrSlots = (st: any) => r(st.mrLargeMale * 7 + st.mrLargeFemale * 9 + st.mrMedium * 7 + st.mrSmall * 3);
+  const calcMrSlots = (st: any) => r(st.mrLargeMale * 7 + st.mrLargeFemale * 9 + st.mrMedium * 3 + st.mrSmall * 3);
   const calcUsSlots = (st: any) => r(st.us * 2 + st.usHeart * 3);
   const calcCtSlots = (st: any) => r(st.ct * 1 + st.cta * 2);
   const calcBmdSlots = (st: any) => r(st.bmd * 2);
