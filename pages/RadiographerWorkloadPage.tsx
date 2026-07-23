@@ -252,6 +252,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
   // 用來儲存「單日篩選」的狀態
   const [selectedDate, setSelectedDate] = useState<string>("");
   const [cycleDailyData, setCycleDailyData] = useState<any[]>([]);
+  const [cycleDailyDataDebug, setCycleDailyDataDebug] = useState<string>("");
 
   useEffect(() => {
     if (!hasInitializedLineExcluded && radiographers.length > 0) {
@@ -502,8 +503,14 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
       if (selectedDate && selectedDate < minDate) minDate = selectedDate;
 
       db.fetchDailyWorkloadsByRange(minDate, maxDate)
-        .then((data) => setCycleDailyData(data))
-        .catch(console.error);
+        .then((data) => {
+          setCycleDailyDataDebug(`Success: fetched ${data.length} rows, range: ${minDate} to ${maxDate}`);
+          setCycleDailyData(data);
+        })
+        .catch((e) => {
+          setCycleDailyDataDebug(`Error: ${e.message}, range: ${minDate} to ${maxDate}`);
+          console.error(e);
+        });
     }
   }, [generalDates, radiographers, currentMonth, selectedDate]);
 
@@ -3263,9 +3270,9 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
           DEBUG:
           selectedDate={selectedDate}, 
           cycleDailyData.length={cycleDailyData.length},
-          dData for 余依珊={JSON.stringify(cycleDailyData.find(d => d.radiographerName === '余依珊' && d.date === selectedDate))}
-          displayData.length={displayData.length}
-          test user={JSON.stringify(displayData.find(d => d.name === '余依珊'))}
+          generalDates=[{generalDates[0]}, {generalDates[generalDates.length-1]}],
+          displayData.length={displayData.length},
+          fetchStatus={cycleDailyDataDebug}
         </div>
 
         {/* Group Panel */}
