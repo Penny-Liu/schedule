@@ -112,11 +112,16 @@ export const calculateDailyLoadRate = (targetDate: string, location: 'beitou'|'d
     if ((location === 'dazhi' && !isDazhi) || (location === 'beitou' && isDazhi)) return;
 
     const isLeader = s.station.includes("場控");
-    const isAdmin = s.station === "行政"; // 遠距/遠班不再視為行政(0 Slot)，而是算作48 Slot
+    const isAdmin = s.station === "行政"; 
     const isLearning = s.station.includes("學習") || isUserLearningStationOnDate(u, s.station, targetDate);
+    const isRemote = s.station.includes("遠距") || s.station.includes("遠班");
     
     if (!isLeader && !isAdmin && !isLearning) {
-       supplySlots += 48;
+       if (isRemote && !isDazhi && !s.station.includes("骨密")) {
+           // 遠班在大直或骨密才算48 slot，不然不算
+       } else {
+           supplySlots += 48;
+       }
     }
 
     let extra = 0;
@@ -6723,13 +6728,21 @@ BMD :{{bmd}}
       const isDazhiSupport = s.specialRoles?.includes(SPECIAL_ROLES.DAZHI_SUPPORT);
       const isDazhi = s.station.includes("大直") || isDazhiSupport;
       const isLeader = s.station.includes("場控");
-      const isAdmin = s.station === "行政"; // Removed remote from isAdmin
+      const isAdmin = s.station === "行政"; 
       const isLearning = s.station.includes("學習") || isUserLearningStationOnDate(u, s.station, date);
+      const isRemote = s.station.includes("遠距") || s.station.includes("遠班");
       
       // Calculate supply (48 slots per main operator)
       if (!isLeader && !isAdmin && !isLearning) {
-         if (isDazhi) dazhiSupplySlots += 48;
-         else beitouSupplySlots += 48;
+         if (isDazhi) {
+            dazhiSupplySlots += 48;
+         } else {
+            if (isRemote && !s.station.includes("骨密")) {
+               // 遠班在大直或骨密才算48 slot，不然不算
+            } else {
+               beitouSupplySlots += 48;
+            }
+         }
       }
 
       // Calculate extra demand
