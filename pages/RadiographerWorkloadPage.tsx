@@ -497,11 +497,15 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
         }
       });
 
+      // 若選擇的單日超出週期範圍，也要擴展
+      if (selectedDate && selectedDate > maxDate) maxDate = selectedDate;
+      if (selectedDate && selectedDate < minDate) minDate = selectedDate;
+
       db.fetchDailyWorkloadsByRange(minDate, maxDate)
         .then((data) => setCycleDailyData(data))
         .catch(console.error);
     }
-  }, [generalDates, radiographers, currentMonth]);
+  }, [generalDates, radiographers, currentMonth, selectedDate]);
 
   useEffect(() => {
     const refreshData = () => {
