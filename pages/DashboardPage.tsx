@@ -6818,7 +6818,7 @@ BMD :{{bmd}}
     }
     
     const dazhiHeaderNamePart = dazhiNamesStr ? `：${dazhiNamesStr}` : "";
-    const dazhiDash = "- ";
+    const dazhiDash = " - ";
 
     out.push("");
     
