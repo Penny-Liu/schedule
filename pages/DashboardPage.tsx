@@ -135,7 +135,7 @@ export const calculateDailyLoadRate = (targetDate: string, location: 'beitou'|'d
   };
 
   if (location === 'dazhi') {
-    locStats.us = rawDailyStats.dazhi_ultrasound || 0;
+    locStats.us = Math.max(0, (rawDailyStats.dazhi_ultrasound || 0) - (rawDailyStats.dazhi_ultrasound_fibrosis || 0));
     locStats.usHeart = rawDailyStats.dazhi_ultrasound_heart || 0;
     locStats.bmd = rawDailyStats.dazhi_bmd || 0;
     locStats.dx = rawDailyStats.dazhi_dx || 0;
@@ -145,7 +145,7 @@ export const calculateDailyLoadRate = (targetDate: string, location: 'beitou'|'d
     locStats.mrLargeFemale = rawDailyStats.beitou_mr_large_female || 0;
     locStats.mrMedium = rawDailyStats.beitou_mr_medium || 0;
     locStats.mrSmall = rawDailyStats.beitou_mr_small || 0;
-    locStats.us = rawDailyStats.beitou_ultrasound || 0;
+    locStats.us = Math.max(0, (rawDailyStats.beitou_ultrasound || 0) - (rawDailyStats.beitou_ultrasound_fibrosis || 0));
     locStats.usHeart = rawDailyStats.beitou_ultrasound_heart || 0;
     locStats.ct = rawDailyStats.beitou_ct || 0;
     locStats.cta = rawDailyStats.beitou_cta || 0;
@@ -6688,7 +6688,7 @@ BMD :{{bmd}}
       mrLargeFemale: rawDailyStats.beitou_mr_large_female || 0,
       mrMedium: rawDailyStats.beitou_mr_medium || 0,
       mrSmall: rawDailyStats.beitou_mr_small || 0,
-      us: rawDailyStats.beitou_ultrasound || 0,
+      us: Math.max(0, (rawDailyStats.beitou_ultrasound || 0) - (rawDailyStats.beitou_ultrasound_fibrosis || 0)),
       usHeart: rawDailyStats.beitou_ultrasound_heart || 0,
       ct: rawDailyStats.beitou_ct || 0,
       cta: rawDailyStats.beitou_cta || 0,
@@ -6699,7 +6699,7 @@ BMD :{{bmd}}
     };
     
     const dazhiStats = {
-      us: rawDailyStats.dazhi_ultrasound || 0,
+      us: Math.max(0, (rawDailyStats.dazhi_ultrasound || 0) - (rawDailyStats.dazhi_ultrasound_fibrosis || 0)),
       usHeart: rawDailyStats.dazhi_ultrasound_heart || 0,
       bmd: rawDailyStats.dazhi_bmd || 0,
       dx: rawDailyStats.dazhi_dx || 0,
