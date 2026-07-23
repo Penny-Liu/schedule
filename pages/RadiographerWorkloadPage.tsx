@@ -1153,19 +1153,23 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
       return stats;
     }).filter((stats: any) => {
       if (selectedDate) {
-        const shift = shifts.find(
-          (s) => s.userId === radiographers.find(r => r.name === stats.name)?.id && s.date === selectedDate
+        const hasDailyData = cycleDailyData.some(
+          (d) => d.radiographerName === stats.name && d.date === selectedDate
         );
-        const isOff = !shift || shift.station === "休假" || shift.station === "OFF" || shift.station === StationDefault.OFF || shift.station === StationDefault.UNASSIGNED || shift.station === "" || shift.station === "未指派";
-        
-        // Compute total units for this single date
+
+        // 有實際工作量資料就顯示，不被班表狀態影響
+        if (!hasDailyData) {
+          const shift = shifts.find(
+            (s) => s.userId === radiographers.find(r => r.name === stats.name)?.id && s.date === selectedDate
+          );
+          const isOff = !shift || shift.station === "休假" || shift.station === "OFF" || shift.station === StationDefault.OFF || shift.station === StationDefault.UNASSIGNED || shift.station === "" || shift.station === "未指派";
+          if (isOff) return false;
+        }
+
         const total = Math.round(
           computeUnits(stats, [...onsiteFieldKeys, ...remoteFieldKeys])
         );
-
-        if (isOff || total === 0) {
-          return false;
-        }
+        if (total === 0 && !hasDailyData) return false;
       }
       return true;
     });
