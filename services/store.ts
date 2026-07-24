@@ -2113,6 +2113,7 @@ class Store {
       us_neck: "usNeck",
       us_pelvis_female: "usPelvisFemale",
       us_pelvis_male: "usPelvisMale",
+      us_fibrosis: "usFibrosis",
       cta_post_processing: "ctaPostProcessing",
       report_entry: "reportTyping",
       image_proofing: "proofreader",
