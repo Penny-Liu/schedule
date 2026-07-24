@@ -117,7 +117,7 @@ export const calculateDailyLoadRate = (targetDate: string, location: 'beitou'|'d
     const isRemote = s.station.includes("遠距") || s.station.includes("遠班");
     
     if (!isLeader && !isAdmin && !isLearning) {
-       const isBmdStation = s.station.toLowerCase().includes("bmd") || s.station.includes("骨密") || s.station.includes("骨質");
+       const isBmdStation = s.station.toLowerCase().includes("bmd") || s.station.includes("骨密") || s.station.includes("骨質") || (s.specialRoles || []).includes(SPECIAL_ROLES.DUAL_BMD);
        if (isRemote && !isDazhi && !isBmdStation) {
            // 遠班在大直或骨密才算48 slot，不然不算
        } else {
@@ -6653,7 +6653,7 @@ BMD :{{bmd}}
       if (s.station.toLowerCase().includes("mr")) groupName = "mr";
       else if (s.station.toLowerCase().includes("us") || s.station.includes("超音波")) groupName = "us";
       else if (s.station.toLowerCase().includes("ct")) groupName = "ct";
-      else if (s.station.toLowerCase().includes("bmd") || s.station.includes("骨質") || s.station.includes("骨密")) groupName = "bmd";
+      else if (s.station.toLowerCase().includes("bmd") || s.station.includes("骨質") || s.station.includes("骨密") || (s.specialRoles || []).includes(SPECIAL_ROLES.DUAL_BMD)) groupName = "bmd";
       else if (s.station.toLowerCase().includes("x光") || s.station.toLowerCase().includes("dx")) groupName = "dx";
       else if (s.station.toLowerCase().includes("mg") || s.station.includes("乳房攝影")) groupName = "mg";
       else if (s.station.includes("場控")) groupName = "leader";
@@ -6738,7 +6738,8 @@ BMD :{{bmd}}
          if (isDazhi) {
             dazhiSupplySlots += 48;
          } else {
-            if (isRemote && !s.station.includes("骨密")) {
+            const isBmdStation = s.station.toLowerCase().includes("bmd") || s.station.includes("骨密") || s.station.includes("骨質") || (s.specialRoles || []).includes(SPECIAL_ROLES.DUAL_BMD);
+            if (isRemote && !isBmdStation) {
                // 遠班在大直或骨密才算48 slot，不然不算
             } else {
                beitouSupplySlots += 48;
