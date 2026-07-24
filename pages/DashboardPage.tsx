@@ -106,7 +106,7 @@ export const calculateDailyLoadRate = (targetDate: string, location: 'beitou'|'d
     if (s.station === SYSTEM_OFF || s.station === StationDefault.UNASSIGNED) return;
     
     const u = users.find((user) => user.id === s.userId);
-    if (!u || u.isPartTime || isUserOnEmploymentPause(u, targetDate)) return;
+    if (!u || isUserOnEmploymentPause(u, targetDate)) return;
     const isDazhiSupport = s.specialRoles?.includes(SPECIAL_ROLES.DAZHI_SUPPORT);
     const isDazhi = s.station.includes("大直") || isDazhiSupport;
     if ((location === 'dazhi' && !isDazhi) || (location === 'beitou' && isDazhi)) return;
@@ -6723,7 +6723,7 @@ BMD :{{bmd}}
       if (s.station === SYSTEM_OFF || s.station === StationDefault.UNASSIGNED) return;
       
       const u = users.find((user) => user.id === s.userId);
-      if (!u || u.isPartTime || isUserOnEmploymentPause(u, date)) return;
+      if (!u || isUserOnEmploymentPause(u, date)) return;
 
       const isDazhiSupport = s.specialRoles?.includes(SPECIAL_ROLES.DAZHI_SUPPORT);
       const isDazhi = s.station.includes("大直") || isDazhiSupport;
