@@ -138,11 +138,21 @@ export const calculateDailyLoadRate = (targetDate: string, location: 'beitou'|'d
   let locStats = {
     mrLargeMale: 0, mrLargeFemale: 0, mrMedium: 0, mrSmall: 0,
     us: 0, usHeart: 0, ct: 0, cta: 0, bmd: 0, dx: 0, mg: 0,
-    ctaPostProcessing: 0
+    ctaPostProcessing: 0,
+    usThyroid: 0, usCca: 0, usAbdomen: 0, usBreast: 0, usPelvic: 0,
+    usTotal: 0, usFibrosis: 0,
   };
 
   if (location === 'dazhi') {
-    locStats.us = Math.max(0, (rawDailyStats.dazhi_ultrasound || 0) - (rawDailyStats.dazhi_ultrasound_fibrosis || 0));
+    locStats.usTotal = rawDailyStats.dazhi_ultrasound || 0;
+    locStats.usFibrosis = rawDailyStats.dazhi_ultrasound_fibrosis || 0;
+    locStats.usThyroid = rawDailyStats.dazhi_ultrasound_thyroid || 0;
+    locStats.usCca = rawDailyStats.dazhi_ultrasound_cca || 0;
+    locStats.usAbdomen = rawDailyStats.dazhi_ultrasound_abdomen || 0;
+    locStats.usBreast = rawDailyStats.dazhi_ultrasound_breast || 0;
+    locStats.usPelvic = rawDailyStats.dazhi_ultrasound_pelvic || 0;
+    
+    locStats.us = Math.max(0, locStats.usTotal - locStats.usFibrosis);
     locStats.usHeart = rawDailyStats.dazhi_ultrasound_heart || 0;
     locStats.bmd = rawDailyStats.dazhi_bmd || 0;
     locStats.dx = rawDailyStats.dazhi_dx || 0;
@@ -152,7 +162,16 @@ export const calculateDailyLoadRate = (targetDate: string, location: 'beitou'|'d
     locStats.mrLargeFemale = rawDailyStats.beitou_mr_large_female || 0;
     locStats.mrMedium = rawDailyStats.beitou_mr_medium || 0;
     locStats.mrSmall = rawDailyStats.beitou_mr_small || 0;
-    locStats.us = Math.max(0, (rawDailyStats.beitou_ultrasound || 0) - (rawDailyStats.beitou_ultrasound_fibrosis || 0));
+    
+    locStats.usTotal = rawDailyStats.beitou_ultrasound || 0;
+    locStats.usFibrosis = rawDailyStats.beitou_ultrasound_fibrosis || 0;
+    locStats.usThyroid = rawDailyStats.beitou_ultrasound_thyroid || 0;
+    locStats.usCca = rawDailyStats.beitou_ultrasound_cca || 0;
+    locStats.usAbdomen = rawDailyStats.beitou_ultrasound_abdomen || 0;
+    locStats.usBreast = rawDailyStats.beitou_ultrasound_breast || 0;
+    locStats.usPelvic = rawDailyStats.beitou_ultrasound_pelvic || 0;
+    
+    locStats.us = Math.max(0, locStats.usTotal - locStats.usFibrosis);
     locStats.usHeart = rawDailyStats.beitou_ultrasound_heart || 0;
     locStats.ct = rawDailyStats.beitou_ct || 0;
     locStats.cta = rawDailyStats.beitou_cta || 0;
@@ -164,7 +183,13 @@ export const calculateDailyLoadRate = (targetDate: string, location: 'beitou'|'d
 
   const r = (val: number) => Math.round(val || 0);
   const calcMrSlots = (st: any) => r(st.mrLargeMale * 7 + st.mrLargeFemale * 9 + st.mrMedium * 3 + st.mrSmall * 3);
-  const calcUsSlots = (st: any) => r(st.us * 2 + st.usHeart * 3);
+  
+  const calcUsSlots = (st: any) => {
+    const knownDetailsCount = st.usThyroid + st.usCca + st.usAbdomen + st.usBreast + st.usPelvic;
+    const remainingUsCount = Math.max(0, st.usTotal - knownDetailsCount - st.usFibrosis);
+    const knownSlots = (st.usThyroid * 1) + (st.usCca * 1) + (st.usAbdomen * 2) + (st.usBreast * 2) + (st.usPelvic * 1);
+    return r(knownSlots + (remainingUsCount * 2) + (st.usHeart * 3));
+  };
   const calcCtSlots = (st: any) => r(st.ct * 1 + st.cta * 2);
   const calcBmdSlots = (st: any) => r(st.bmd * 2);
   const calcDxSlots = (st: any) => r(st.dx * 0.5);
@@ -6681,7 +6706,12 @@ BMD :{{bmd}}
     const r = (val: number) => Math.round(val || 0);
     const calcMrCustomers = (st: any) => r(st.mrLargeMale + st.mrLargeFemale + st.mrMedium + st.mrSmall);
     const calcMrSlots = (st: any) => r(st.mrLargeMale * 7 + st.mrLargeFemale * 9 + st.mrMedium * 3 + st.mrSmall * 3);
-    const calcUsSlots = (st: any) => r(st.us * 2 + st.usHeart * 3);
+    const calcUsSlots = (st: any) => {
+      const knownDetailsCount = st.usThyroid + st.usCca + st.usAbdomen + st.usBreast + st.usPelvic;
+      const remainingUsCount = Math.max(0, st.usTotal - knownDetailsCount - st.usFibrosis);
+      const knownSlots = (st.usThyroid * 1) + (st.usCca * 1) + (st.usAbdomen * 2) + (st.usBreast * 2) + (st.usPelvic * 1);
+      return r(knownSlots + (remainingUsCount * 2) + (st.usHeart * 3));
+    };
     const calcCtSlots = (st: any) => r(st.ct * 1 + st.cta * 2);
     const calcBmdSlots = (st: any) => r(st.bmd * 2);
     const calcDxSlots = (st: any) => r(st.dx * 0.5);
@@ -6695,6 +6725,13 @@ BMD :{{bmd}}
       mrLargeFemale: rawDailyStats.beitou_mr_large_female || 0,
       mrMedium: rawDailyStats.beitou_mr_medium || 0,
       mrSmall: rawDailyStats.beitou_mr_small || 0,
+      usTotal: rawDailyStats.beitou_ultrasound || 0,
+      usFibrosis: rawDailyStats.beitou_ultrasound_fibrosis || 0,
+      usThyroid: rawDailyStats.beitou_ultrasound_thyroid || 0,
+      usCca: rawDailyStats.beitou_ultrasound_cca || 0,
+      usAbdomen: rawDailyStats.beitou_ultrasound_abdomen || 0,
+      usBreast: rawDailyStats.beitou_ultrasound_breast || 0,
+      usPelvic: rawDailyStats.beitou_ultrasound_pelvic || 0,
       us: Math.max(0, (rawDailyStats.beitou_ultrasound || 0) - (rawDailyStats.beitou_ultrasound_fibrosis || 0)),
       usHeart: rawDailyStats.beitou_ultrasound_heart || 0,
       ct: rawDailyStats.beitou_ct || 0,
@@ -6706,6 +6743,13 @@ BMD :{{bmd}}
     };
     
     const dazhiStats = {
+      usTotal: rawDailyStats.dazhi_ultrasound || 0,
+      usFibrosis: rawDailyStats.dazhi_ultrasound_fibrosis || 0,
+      usThyroid: rawDailyStats.dazhi_ultrasound_thyroid || 0,
+      usCca: rawDailyStats.dazhi_ultrasound_cca || 0,
+      usAbdomen: rawDailyStats.dazhi_ultrasound_abdomen || 0,
+      usBreast: rawDailyStats.dazhi_ultrasound_breast || 0,
+      usPelvic: rawDailyStats.dazhi_ultrasound_pelvic || 0,
       us: Math.max(0, (rawDailyStats.dazhi_ultrasound || 0) - (rawDailyStats.dazhi_ultrasound_fibrosis || 0)),
       usHeart: rawDailyStats.dazhi_ultrasound_heart || 0,
       bmd: rawDailyStats.dazhi_bmd || 0,

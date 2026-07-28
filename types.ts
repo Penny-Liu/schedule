@@ -289,14 +289,24 @@ export interface CycleAnchor {
 export interface DailyManpowerStats {
   beitou_clients: number;
   beitou_cta: number;
-  beitou_ultrasound?: number; // New: Total ultrasound count for Beitou
-  beitou_ultrasound_heart?: number; // New: Heart Ultrasound count for Beitou
-  beitou_ultrasound_fibrosis?: number; // New: Liver Fibrosis Ultrasound count for Beitou
+  beitou_ultrasound?: number; // Total ultrasound count for Beitou
+  beitou_ultrasound_heart?: number;
+  beitou_ultrasound_fibrosis?: number;
+  beitou_ultrasound_thyroid?: number;
+  beitou_ultrasound_cca?: number;
+  beitou_ultrasound_abdomen?: number;
+  beitou_ultrasound_breast?: number;
+  beitou_ultrasound_pelvic?: number;
   dazhi_clients: number;
-  dazhi_metabolism_clients?: number; // New: Metabolism clients count for Dazhi
-  dazhi_ultrasound?: number; // New: Ultrasound order count for Dazhi
-  dazhi_ultrasound_heart?: number; // New: Heart Ultrasound count for Dazhi
-  dazhi_ultrasound_fibrosis?: number; // New: Liver Fibrosis Ultrasound count for Dazhi
+  dazhi_metabolism_clients?: number;
+  dazhi_ultrasound?: number;
+  dazhi_ultrasound_heart?: number;
+  dazhi_ultrasound_fibrosis?: number;
+  dazhi_ultrasound_thyroid?: number;
+  dazhi_ultrasound_cca?: number;
+  dazhi_ultrasound_abdomen?: number;
+  dazhi_ultrasound_breast?: number;
+  dazhi_ultrasound_pelvic?: number;
   beitou_gi?: number; // New: Manual GI cases count
   beitou_mr?: number; // Unique MR clients
   beitou_mr_orders?: number; // New: Total MR order items count
