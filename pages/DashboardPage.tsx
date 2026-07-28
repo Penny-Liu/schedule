@@ -115,8 +115,9 @@ export const calculateDailyLoadRate = (targetDate: string, location: 'beitou'|'d
     const isAdmin = s.station === "行政"; 
     const isLearning = s.station.includes("學習") || isUserLearningStationOnDate(u, s.station, targetDate);
     const isRemote = s.station.includes("遠距") || s.station.includes("遠班");
+    const isAssistant = s.station.includes("助理");
     
-    if (!isLeader && !isAdmin && !isLearning) {
+    if (!isLeader && !isAdmin && !isLearning && !isAssistant) {
        const isBmdStation = s.station.toLowerCase().includes("bmd") || s.station.includes("骨密") || s.station.includes("骨質") || (s.specialRoles || []).includes(SPECIAL_ROLES.DUAL_BMD);
        if (isRemote && !isDazhi && !isBmdStation) {
            // 遠班在大直或骨密才算48 slot，不然不算
@@ -6732,9 +6733,10 @@ BMD :{{bmd}}
       const isAdmin = s.station === "行政"; 
       const isLearning = s.station.includes("學習") || isUserLearningStationOnDate(u, s.station, date);
       const isRemote = s.station.includes("遠距") || s.station.includes("遠班");
+      const isAssistant = s.station.includes("助理");
       
       // Calculate supply (48 slots per main operator)
-      if (!isLeader && !isAdmin && !isLearning) {
+      if (!isLeader && !isAdmin && !isLearning && !isAssistant) {
          if (isDazhi) {
             dazhiSupplySlots += 48;
          } else {
