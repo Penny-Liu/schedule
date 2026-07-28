@@ -6805,12 +6805,12 @@ BMD :{{bmd}}
 
     // Load Rate Calculation Function
     const getLoadRateStr = (demand: number, supply: number) => {
-      if (supply === 0) return demand > 0 ? "100% (紅區)" : "0% (綠區)";
+      if (supply === 0) return demand > 0 ? "100% (🔴)" : "0% (🟢)";
       const rate = (demand / supply) * 100;
       const rateStr = rate.toFixed(1) + "%";
-      if (rate < 75) return `${rateStr} (綠區)`;
-      if (rate <= 90) return `${rateStr} (黃區)`;
-      return `${rateStr} (紅區)`;
+      if (rate < 75) return `${rateStr} (🟢)`;
+      if (rate <= 90) return `${rateStr} (🟡)`;
+      return `${rateStr} (🔴)`;
     };
 
     const bDemand = calcMrSlots(beitouStats) + calcUsSlots(beitouStats) + calcCtSlots(beitouStats) + beitouStats.ctaPostProcessing * 5 + calcBmdSlots(beitouStats) + calcDxSlots(beitouStats) + calcMgSlots(beitouStats) + beitouDemandExtra;
