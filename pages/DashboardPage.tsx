@@ -6881,24 +6881,26 @@ BMD :{{bmd}}
     const dazhiHeaderNamePart = dazhiNamesStr ? `：${dazhiNamesStr}` : "";
     const dazhiDash = " - ";
 
-    out.push("");
-    
-    out.push(`大直（${dCustomers} 客戶）${dazhiHeaderNamePart}${dazhiDash}負載率 ${getLoadRateStr(dDemand, dazhiSupplySlots)}`);
-    
-    if (calcUsSlots(dazhiStats) > 0) {
-      out.push(`US ：${r(dazhiStats.us)}醫令+${r(dazhiStats.usHeart)}心超，${calcUsSlots(dazhiStats)} Slot`);
-    }
-    
-    if (calcBmdSlots(dazhiStats) > 0) {
-      out.push(`BMD ：${r(dazhiStats.bmd)}位，${calcBmdSlots(dazhiStats)} Slot`);
-    }
-    
-    if (calcDxSlots(dazhiStats) > 0) {
-      out.push(`DX ：${r(dazhiStats.dx)}位，${calcDxSlots(dazhiStats)} Slot`);
-    }
-    
-    if (calcMgSlots(dazhiStats) > 0) {
-      out.push(`MG ：${r(dazhiStats.mg)}位，${calcMgSlots(dazhiStats)} Slot`);
+    if (dDemand > 0) {
+      out.push("");
+      
+      out.push(`大直（${dCustomers} 客戶）${dazhiHeaderNamePart}${dazhiDash}負載率 ${getLoadRateStr(dDemand, dazhiSupplySlots)}`);
+      
+      if (calcUsSlots(dazhiStats) > 0) {
+        out.push(`US ：${r(dazhiStats.us)}醫令+${r(dazhiStats.usHeart)}心超，${calcUsSlots(dazhiStats)} Slot`);
+      }
+      
+      if (calcBmdSlots(dazhiStats) > 0) {
+        out.push(`BMD ：${r(dazhiStats.bmd)}位，${calcBmdSlots(dazhiStats)} Slot`);
+      }
+      
+      if (calcDxSlots(dazhiStats) > 0) {
+        out.push(`DX ：${r(dazhiStats.dx)}位，${calcDxSlots(dazhiStats)} Slot`);
+      }
+      
+      if (calcMgSlots(dazhiStats) > 0) {
+        out.push(`MG ：${r(dazhiStats.mg)}位，${calcMgSlots(dazhiStats)} Slot`);
+      }
     }
     
     const section5 = out.join("\n");
