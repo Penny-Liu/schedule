@@ -17,18 +17,17 @@ const classifyMrByOrderCount = (count, gender) => {
   return "mr_small";
 };
 
-// US 子分類，回傳 snake_case key
+// US 子分類，回傳對應的 key 後綴
 const parseUsSubtype = (name = "") => {
   const v = String(name || "").trim().toLowerCase();
-  if (v.includes("肝纖維") || v.includes("fibro")) return "us_fibrosis";
-  if (v.includes("p女") || (v.includes("骨盆") && v.includes("女")) || v.includes("婦科")) return "us_pelvis_female";
-  if (v.includes("p男") || (v.includes("骨盆") && v.includes("男"))) return "us_pelvis_male";
-  if (v.includes("breast") || v.includes("乳房")) return "us_breast";
-  if (v.includes("心臟") || v.includes("心")) return "us_heart";
-  if (v.includes("thy") || v.includes("甲狀")) return "us_thy";
-  if (v.includes("cca") || v.includes("頸動脈")) return "us_cca";
-  if (v.includes("neck") || v.includes("頸部") || v.includes("頸")) return "us_neck";
-  if (v.includes("上腹")) return "us_a";
+  
+  // 為了與前端新建立的 10 個欄位對齊
+  if (v.includes("thy") || v.includes("甲狀")) return "ultrasound_thyroid";
+  if (v.includes("cca") || v.includes("頸動脈")) return "ultrasound_cca";
+  if (v.includes("breast") || v.includes("乳房")) return "ultrasound_breast";
+  if (v.includes("骨盆") || v.includes("p男") || v.includes("p女") || v.includes("婦科")) return "ultrasound_pelvic";
+  if (v.includes("腹部") || v.includes("全腹") || v.includes("上腹")) return "ultrasound_abdomen";
+  
   return null;
 };
 
@@ -93,25 +92,21 @@ async function syncDailyStats(session, startDate, endDate) {
     beitou_mr_large_female: 0,
     beitou_mr_medium: 0,
     beitou_mr_small: 0,
-    beitou_us_a: 0,
-    beitou_us_breast: 0,
-    beitou_us_thy: 0,
-    beitou_us_cca: 0,
-    beitou_us_neck: 0,
-    beitou_us_pelvis_female: 0,
-    beitou_us_pelvis_male: 0,
+    beitou_ultrasound_abdomen: 0,
+    beitou_ultrasound_breast: 0,
+    beitou_ultrasound_thyroid: 0,
+    beitou_ultrasound_cca: 0,
+    beitou_ultrasound_pelvic: 0,
     beitou_ct: 0,
     beitou_dx: 0,
     beitou_mg: 0,
     beitou_bmd: 0,
 
-    dazhi_us_a: 0,
-    dazhi_us_breast: 0,
-    dazhi_us_thy: 0,
-    dazhi_us_cca: 0,
-    dazhi_us_neck: 0,
-    dazhi_us_pelvis_female: 0,
-    dazhi_us_pelvis_male: 0,
+    dazhi_ultrasound_abdomen: 0,
+    dazhi_ultrasound_breast: 0,
+    dazhi_ultrasound_thyroid: 0,
+    dazhi_ultrasound_cca: 0,
+    dazhi_ultrasound_pelvic: 0,
     dazhi_dx: 0,
     dazhi_mg: 0,
     dazhi_bmd: 0
