@@ -17,17 +17,18 @@ const classifyMrByOrderCount = (count, gender) => {
   return "mr_small";
 };
 
-// US 子分類，回傳對應的 key 後綴
+// US 子分類，回傳 snake_case key
 const parseUsSubtype = (name = "") => {
   const v = String(name || "").trim().toLowerCase();
-  
-  // 為了與前端新建立的 10 個欄位對齊
-  if (v.includes("thy") || v.includes("甲狀")) return "ultrasound_thyroid";
-  if (v.includes("cca") || v.includes("頸動脈")) return "ultrasound_cca";
-  if (v.includes("breast") || v.includes("乳房")) return "ultrasound_breast";
-  if (v.includes("骨盆") || v.includes("p男") || v.includes("p女") || v.includes("婦科")) return "ultrasound_pelvic";
-  if (v.includes("腹部") || v.includes("全腹") || v.includes("上腹")) return "ultrasound_abdomen";
-  
+  if (v.includes("肝纖維") || v.includes("fibro")) return "us_fibrosis";
+  if (v.includes("p女") || (v.includes("骨盆") && v.includes("女")) || v.includes("婦科")) return "us_pelvis_female";
+  if (v.includes("p男") || (v.includes("骨盆") && v.includes("男"))) return "us_pelvis_male";
+  if (v.includes("breast") || v.includes("乳房")) return "us_breast";
+  if (v.includes("心臟") || v.includes("心")) return "us_heart";
+  if (v.includes("thy") || v.includes("甲狀")) return "us_thy";
+  if (v.includes("cca") || v.includes("頸動脈")) return "us_cca";
+  if (v.includes("neck") || v.includes("頸部") || v.includes("頸")) return "us_neck";
+  if (v.includes("上腹") || v.includes("全腹") || v.includes("腹部")) return "us_a";
   return null;
 };
 
@@ -203,7 +204,14 @@ async function syncDailyStats(session, startDate, endDate) {
         
         const subtype = parseUsSubtype(name);
         if (subtype) {
-           const key = `beitou_${subtype}`;
+           let mappedSubtype = subtype;
+           if (subtype === "us_thy") mappedSubtype = "ultrasound_thyroid";
+           if (subtype === "us_cca") mappedSubtype = "ultrasound_cca";
+           if (subtype === "us_breast") mappedSubtype = "ultrasound_breast";
+           if (subtype === "us_a") mappedSubtype = "ultrasound_abdomen";
+           if (subtype === "us_pelvis_male" || subtype === "us_pelvis_female") mappedSubtype = "ultrasound_pelvic";
+           
+           const key = `beitou_${mappedSubtype}`;
            if (stats[key] !== undefined) stats[key]++;
         }
       }
@@ -234,7 +242,14 @@ async function syncDailyStats(session, startDate, endDate) {
 
         const subtype = parseUsSubtype(name);
         if (subtype) {
-           const key = `dazhi_${subtype}`;
+           let mappedSubtype = subtype;
+           if (subtype === "us_thy") mappedSubtype = "ultrasound_thyroid";
+           if (subtype === "us_cca") mappedSubtype = "ultrasound_cca";
+           if (subtype === "us_breast") mappedSubtype = "ultrasound_breast";
+           if (subtype === "us_a") mappedSubtype = "ultrasound_abdomen";
+           if (subtype === "us_pelvis_male" || subtype === "us_pelvis_female") mappedSubtype = "ultrasound_pelvic";
+           
+           const key = `dazhi_${mappedSubtype}`;
            if (stats[key] !== undefined) stats[key]++;
         }
       }
