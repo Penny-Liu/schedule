@@ -1227,7 +1227,13 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                     {[
                       {
                         title: "放射師業務",
-                        perms: [PERMISSIONS.VIEW_STATS, PERMISSIONS.VIEW_WORKLOAD_STATS],
+                        perms: [
+                          PERMISSIONS.VIEW_STATS, 
+                          PERMISSIONS.VIEW_WORKLOAD_STATS,
+                          PERMISSIONS.VIEW_DASHBOARD_STAFF,
+                          PERMISSIONS.VIEW_DASHBOARD_STATION,
+                          PERMISSIONS.VIEW_DASHBOARD_TODAY,
+                        ],
                       },
                       {
                         title: "醫師業務",
