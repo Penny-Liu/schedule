@@ -6841,12 +6841,12 @@ BMD :{{bmd}}
 
     // Load Rate Calculation Function
     const getLoadRateStr = (demand: number, supply: number) => {
-      if (supply === 0) return demand > 0 ? "🔴 負載率 100%" : "🟢 負載率 0%";
+      if (supply === 0) return demand > 0 ? "負載率 100% (🔴)" : "負載率 0% (🟢)";
       const rate = (demand / supply) * 100;
       const rateStr = rate.toFixed(1) + "%";
-      if (rate < 75) return `🟢 負載率 ${rateStr}`;
-      if (rate <= 90) return `🟡 負載率 ${rateStr}`;
-      return `🔴 負載率 ${rateStr}`;
+      if (rate < 75) return `負載率 ${rateStr} (🟢)`;
+      if (rate <= 90) return `負載率 ${rateStr} (🟡)`;
+      return `負載率 ${rateStr} (🔴)`;
     };
 
     const bDemand = calcMrSlots(beitouStats) + calcUsSlots(beitouStats) + calcCtSlots(beitouStats) + beitouStats.ctaPostProcessing * 5 + calcBmdSlots(beitouStats) + calcDxSlots(beitouStats) + calcMgSlots(beitouStats) + beitouDemandExtra;
@@ -6855,85 +6855,100 @@ BMD :{{bmd}}
     const bCustomers = r(rawDailyStats.beitou_clients || 0);
     const dCustomers = r(rawDailyStats.dazhi_clients || 0);
 
-    const formatNameParen = (arr: string[]) => arr.length > 0 ? ` (${arr.join("、")})` : "  ";
+    const formatNameParen = (arr: string[]) => arr.length > 0 ? ` (${arr.join("/")})` : "";
+    const padStation = (name: string) => {
+      if (name === "後處理") return "後處理 ";
+      return name.padEnd(3, " ");
+    };
 
     const out: string[] = [];
-    out.push(`【影像醫學部】${workloadDateStr.replace("工作量", "")}`);
-    out.push("");
+    out.push(`${workloadDateStr.replace("工作量", "").trim()} 影像部門排程總表`);
+    out.push("====================");
     
-    out.push(`📍 北投院區 ｜ ${getLoadRateStr(bDemand, beitouSupplySlots)}`);
-    out.push(`‣ 總服務：${bCustomers} 位客戶 ｜ ${r(beitouStats.cta)} CTA`);
-    if (names.beitou.leader.length > 0) {
-      out.push(`‣ 場控 ：${names.beitou.leader.join("、")} (掌控全局)`);
-    }
-    out.push("—— 機台與人力排程 ——");
+    out.push(`■ 北投院區 ｜ ${getLoadRateStr(bDemand, beitouSupplySlots)}`);
+    const bLeaderStr = names.beitou.leader.length > 0 ? ` ｜ 場控：${names.beitou.leader.join("、")}` : "";
+    out.push(`客戶：${bCustomers}位 ｜ CTA：${r(beitouStats.cta)}位${bLeaderStr}`);
 
     const bMrCount = calcMrCustomers(beitouStats);
     if (calcMrSlots(beitouStats) > 0) {
-      out.push(`‣ MR  ${formatNameParen(names.beitou.mr)}：${bMrCount} MR (${r(beitouStats.mrLargeMale)}男大, ${r(beitouStats.mrLargeFemale)}女大, ${r(beitouStats.mrMedium)}中, ${r(beitouStats.mrSmall)}小) ｜ ${calcMrSlots(beitouStats)} Slot`);
+      const mrDetails = [
+        beitouStats.mrLargeMale > 0 ? `${r(beitouStats.mrLargeMale)}男大` : null,
+        beitouStats.mrLargeFemale > 0 ? `${r(beitouStats.mrLargeFemale)}女大` : null,
+        beitouStats.mrMedium > 0 ? `${r(beitouStats.mrMedium)}中` : null,
+        beitouStats.mrSmall > 0 ? `${r(beitouStats.mrSmall)}小` : null
+      ].filter(Boolean).join("/");
+      
+      const pName = formatNameParen(names.beitou.mr);
+      const prefix = pName ? `MR${pName}` : padStation("MR");
+      out.push(`・${prefix}：${bMrCount}MR${mrDetails ? ` (${mrDetails})` : ""} ｜ ${calcMrSlots(beitouStats)} Slot`);
     }
 
     const usAllNames = names.beitou.us.length > 0 ? names.beitou.us.join("/") : "";
-    const usLearningNames = names.beitou.learning.length > 0 ? " + " + names.beitou.learning.join("/") : "";
+    const usLearningNames = names.beitou.learning.length > 0 ? "+" + names.beitou.learning.join("/") : "";
     const usNameStr = (usAllNames || usLearningNames) ? ` (${usAllNames}${usLearningNames})` : "";
     
     if (calcUsSlots(beitouStats) > 0) {
-      out.push(`‣ US  ${usNameStr}：${r(beitouStats.us)} 醫令, ${r(beitouStats.usHeart)} 心超 ｜ ${calcUsSlots(beitouStats)} Slot`);
+      const prefix = usNameStr ? `US${usNameStr}` : padStation("US");
+      out.push(`・${prefix}：${r(beitouStats.us)}醫令 ｜ ${r(beitouStats.usHeart)}心超 ｜ ${calcUsSlots(beitouStats)} Slot`);
     }
 
     if (calcCtSlots(beitouStats) > 0) {
-      out.push(`‣ CT  ${formatNameParen(names.beitou.ct)}：${r(beitouStats.ct)} CT, ${r(beitouStats.cta)} CTA ｜ ${calcCtSlots(beitouStats)} Slot (協助MR上下台)`);
+      const pName = formatNameParen(names.beitou.ct);
+      const prefix = pName ? `CT${pName}` : padStation("CT");
+      out.push(`・${prefix}：${r(beitouStats.ct)}CT ｜ ${r(beitouStats.cta)}CTA ｜ ${calcCtSlots(beitouStats)} Slot (協助MR上下)`);
     }
 
     if (calcBmdSlots(beitouStats) > 0) {
-      out.push(`‣ BMD ${formatNameParen(names.beitou.bmd)}：${r(beitouStats.bmd)} 位 ｜ ${calcBmdSlots(beitouStats)} Slot`);
+      const pName = formatNameParen(names.beitou.bmd);
+      const prefix = pName ? `BMD${pName}` : padStation("BMD");
+      out.push(`・${prefix}：${r(beitouStats.bmd)}位 ｜ ${calcBmdSlots(beitouStats)} Slot`);
     }
     
     if (calcDxSlots(beitouStats) > 0) {
-      out.push(`‣ DX  ${formatNameParen(names.beitou.dx)}：${r(beitouStats.dx)} 位 ｜ ${calcDxSlots(beitouStats)} Slot`);
+      const pName = formatNameParen(names.beitou.dx);
+      const prefix = pName ? `DX${pName}` : padStation("DX");
+      out.push(`・${prefix}：${r(beitouStats.dx)}位 ｜ ${calcDxSlots(beitouStats)} Slot`);
     }
     
     if (calcMgSlots(beitouStats) > 0) {
-      out.push(`‣ MG  ${formatNameParen(names.beitou.mg)}：${r(beitouStats.mg)} 位 ｜ ${calcMgSlots(beitouStats)} Slot`);
+      const pName = formatNameParen(names.beitou.mg);
+      const prefix = pName ? `MG${pName}` : padStation("MG");
+      out.push(`・${prefix}：${r(beitouStats.mg)}位 ｜ ${calcMgSlots(beitouStats)} Slot`);
     }
     
     if (beitouStats.ctaPostProcessing > 0) {
-      out.push(`‣ CTA後處理：${r(beitouStats.ctaPostProcessing)} 位 ｜ ${r(beitouStats.ctaPostProcessing * 5)} Slot`);
+      out.push(`・${padStation("後處理")}：${r(beitouStats.ctaPostProcessing)}位 ｜ ${r(beitouStats.ctaPostProcessing * 5)} Slot`);
     }
 
     if (dDemand > 0) {
       const normalDazhi = names.dazhi.leader.filter(n => !n.includes("(兼遠班)"));
       const remoteDazhi = names.dazhi.leader.filter(n => n.includes("(兼遠班)"));
       let dazhiNamesStr = "";
-      if (normalDazhi.length > 0) dazhiNamesStr += normalDazhi.join("、");
+      if (normalDazhi.length > 0) dazhiNamesStr += normalDazhi.join("/");
       if (remoteDazhi.length > 0) {
-         if (dazhiNamesStr) dazhiNamesStr += "、";
-         dazhiNamesStr += remoteDazhi.join("、");
+         if (dazhiNamesStr) dazhiNamesStr += "/";
+         dazhiNamesStr += remoteDazhi.join("/");
       }
       
       out.push("");
-      out.push(`📍 大直院區 ｜ ${getLoadRateStr(dDemand, dazhiSupplySlots)}`);
-      out.push(`‣ 總服務：${dCustomers} 位客戶`);
-      if (dazhiNamesStr) {
-         out.push(`‣ 人力 ：${dazhiNamesStr}`);
-      }
-      out.push("—— 機台與人力排程 ——");
+      out.push(`■ 大直院區 ｜ ${getLoadRateStr(dDemand, dazhiSupplySlots)}`);
+      const dLeaderStr = dazhiNamesStr ? ` ｜ 放射師：${dazhiNamesStr}` : "";
+      out.push(`客戶：${dCustomers}位${dLeaderStr}`);
       
       if (calcUsSlots(dazhiStats) > 0) {
-        // 大直 US 的名字我這裡就不帶括號，因為原需求裡沒有特別給大直帶上
-        out.push(`‣ US  ：${r(dazhiStats.us)} 醫令, ${r(dazhiStats.usHeart)} 心超 ｜ ${calcUsSlots(dazhiStats)} Slot`);
+        out.push(`・${padStation("US")}：${r(dazhiStats.us)}醫令 ｜ ${r(dazhiStats.usHeart)}心超 ｜ ${calcUsSlots(dazhiStats)} Slot`);
       }
       
       if (calcBmdSlots(dazhiStats) > 0) {
-        out.push(`‣ BMD ：${r(dazhiStats.bmd)} 位 ｜ ${calcBmdSlots(dazhiStats)} Slot`);
+        out.push(`・${padStation("BMD")}：${r(dazhiStats.bmd)}位 ｜ ${calcBmdSlots(dazhiStats)} Slot`);
       }
       
       if (calcDxSlots(dazhiStats) > 0) {
-        out.push(`‣ DX  ：${r(dazhiStats.dx)} 位 ｜ ${calcDxSlots(dazhiStats)} Slot`);
+        out.push(`・${padStation("DX")}：${r(dazhiStats.dx)}位 ｜ ${calcDxSlots(dazhiStats)} Slot`);
       }
       
       if (calcMgSlots(dazhiStats) > 0) {
-        out.push(`‣ MG  ：${r(dazhiStats.mg)} 位 ｜ ${calcMgSlots(dazhiStats)} Slot`);
+        out.push(`・${padStation("MG")}：${r(dazhiStats.mg)}位 ｜ ${calcMgSlots(dazhiStats)} Slot`);
       }
     }
     
