@@ -6822,7 +6822,7 @@ BMD :{{bmd}}
     const formatNameParen = (arr: string[]) => arr.length > 0 ? ` (${arr.join("、")})` : "  ";
 
     const out: string[] = [];
-    out.push(`📊【影像醫學部 營運日報】${workloadDateStr.replace("工作量", "")}`);
+    out.push(`📊【影像醫學部】${workloadDateStr.replace("工作量", "")}`);
     out.push("");
     
     out.push(`📍 北投院區 ｜ ${getLoadRateStr(bDemand, beitouSupplySlots)}`);
