@@ -6826,9 +6826,9 @@ BMD :{{bmd}}
     out.push("");
     
     out.push(`📍 北投院區 ｜ ${getLoadRateStr(bDemand, beitouSupplySlots)}`);
-    out.push(`▸ 總服務：${bCustomers} 位客戶 ｜ ${r(beitouStats.cta)} CTA`);
+    out.push(`▸\u200E 總服務：${bCustomers} 位客戶 ｜ ${r(beitouStats.cta)} CTA`);
     if (names.beitou.leader.length > 0) {
-      out.push(`▸ 場控 ：${names.beitou.leader.join("、")} (掌控全局)`);
+      out.push(`▸\u200E 場控 ：${names.beitou.leader.join("、")} (掌控全局)`);
     }
     out.push("—— 機台與人力排程 ——");
 
@@ -6862,7 +6862,7 @@ BMD :{{bmd}}
     }
     
     if (beitouStats.ctaPostProcessing > 0) {
-      out.push(`▸ 後處理：${r(beitouStats.ctaPostProcessing)} 位 CTA ｜ ${r(beitouStats.ctaPostProcessing * 5)} Slot`);
+      out.push(`▸\u200E 後處理：${r(beitouStats.ctaPostProcessing)} 位 CTA ｜ ${r(beitouStats.ctaPostProcessing * 5)} Slot`);
     }
 
     if (dDemand > 0) {
@@ -6877,9 +6877,9 @@ BMD :{{bmd}}
       
       out.push("");
       out.push(`📍 大直院區 ｜ ${getLoadRateStr(dDemand, dazhiSupplySlots)}`);
-      out.push(`▸ 總服務：${dCustomers} 位客戶`);
+      out.push(`▸\u200E 總服務：${dCustomers} 位客戶`);
       if (dazhiNamesStr) {
-         out.push(`▸ 人力 ：${dazhiNamesStr}`);
+         out.push(`▸\u200E 人力 ：${dazhiNamesStr}`);
       }
       out.push("—— 機台與人力排程 ——");
       
