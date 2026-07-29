@@ -6822,7 +6822,7 @@ BMD :{{bmd}}
     const formatNameParen = (arr: string[]) => arr.length > 0 ? ` (${arr.join("、")})` : "  ";
 
     const out: string[] = [];
-    out.push(`📊【影像醫學部】${workloadDateStr.replace("工作量", "")}`);
+    out.push(`【影像醫學部】${workloadDateStr.replace("工作量", "")}`);
     out.push("");
     
     out.push(`📍 北投院區 ｜ ${getLoadRateStr(bDemand, beitouSupplySlots)}`);
@@ -6846,7 +6846,7 @@ BMD :{{bmd}}
     }
 
     if (calcCtSlots(beitouStats) > 0) {
-      out.push(`‣ CT  ${formatNameParen(names.beitou.ct)}：${r(beitouStats.ct)} CT, ${r(beitouStats.cta)} CTA ｜ ${calcCtSlots(beitouStats)} Slot (助MR上下台)`);
+      out.push(`‣ CT  ${formatNameParen(names.beitou.ct)}：${r(beitouStats.ct)} CT, ${r(beitouStats.cta)} CTA ｜ ${calcCtSlots(beitouStats)} Slot (協助MR上下台)`);
     }
 
     if (calcBmdSlots(beitouStats) > 0) {
