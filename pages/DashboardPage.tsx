@@ -6834,7 +6834,7 @@ BMD :{{bmd}}
 
     const bMrCount = calcMrCustomers(beitouStats);
     if (calcMrSlots(beitouStats) > 0) {
-      out.push(`▸ ＭＲ${formatNameParen(names.beitou.mr)}：${bMrCount} MR (${r(beitouStats.mrLargeMale)}男大, ${r(beitouStats.mrLargeFemale)}女大, ${r(beitouStats.mrMedium)}中, ${r(beitouStats.mrSmall)}小) ｜ ${calcMrSlots(beitouStats)} Slot`);
+      out.push(`▸ MR ${formatNameParen(names.beitou.mr)}：${bMrCount} MR (${r(beitouStats.mrLargeMale)}男大, ${r(beitouStats.mrLargeFemale)}女大, ${r(beitouStats.mrMedium)}中, ${r(beitouStats.mrSmall)}小) ｜ ${calcMrSlots(beitouStats)} Slot`);
     }
 
     const usAllNames = names.beitou.us.length > 0 ? names.beitou.us.join("/") : "";
@@ -6842,23 +6842,23 @@ BMD :{{bmd}}
     const usNameStr = (usAllNames || usLearningNames) ? ` (${usAllNames}${usLearningNames})` : "  ";
     
     if (calcUsSlots(beitouStats) > 0) {
-      out.push(`▸ ＵＳ${usNameStr}：${r(beitouStats.us)} 醫令, ${r(beitouStats.usHeart)} 心超 ｜ ${calcUsSlots(beitouStats)} Slot`);
+      out.push(`▸ US ${usNameStr}：${r(beitouStats.us)} 醫令, ${r(beitouStats.usHeart)} 心超 ｜ ${calcUsSlots(beitouStats)} Slot`);
     }
 
     if (calcCtSlots(beitouStats) > 0) {
-      out.push(`▸ ＣＴ${formatNameParen(names.beitou.ct)}：${r(beitouStats.ct)} CT, ${r(beitouStats.cta)} CTA ｜ ${calcCtSlots(beitouStats)} Slot (助MR上下台)`);
+      out.push(`▸ CT ${formatNameParen(names.beitou.ct)}：${r(beitouStats.ct)} CT, ${r(beitouStats.cta)} CTA ｜ ${calcCtSlots(beitouStats)} Slot (助MR上下台)`);
     }
 
     if (calcBmdSlots(beitouStats) > 0) {
-      out.push(`▸ ＢＭＤ${formatNameParen(names.beitou.bmd)}：${r(beitouStats.bmd)} 位 ｜ ${calcBmdSlots(beitouStats)} Slot`);
+      out.push(`▸ BMD${formatNameParen(names.beitou.bmd)}：${r(beitouStats.bmd)} 位 ｜ ${calcBmdSlots(beitouStats)} Slot`);
     }
     
     if (calcDxSlots(beitouStats) > 0) {
-      out.push(`▸ ＤＸ${formatNameParen(names.beitou.dx)}：${r(beitouStats.dx)} 位 ｜ ${calcDxSlots(beitouStats)} Slot`);
+      out.push(`▸ DX ${formatNameParen(names.beitou.dx)}：${r(beitouStats.dx)} 位 ｜ ${calcDxSlots(beitouStats)} Slot`);
     }
     
     if (calcMgSlots(beitouStats) > 0) {
-      out.push(`▸ ＭＧ${formatNameParen(names.beitou.mg)}：${r(beitouStats.mg)} 位 ｜ ${calcMgSlots(beitouStats)} Slot`);
+      out.push(`▸ MG ${formatNameParen(names.beitou.mg)}：${r(beitouStats.mg)} 位 ｜ ${calcMgSlots(beitouStats)} Slot`);
     }
     
     if (beitouStats.ctaPostProcessing > 0) {
@@ -6885,19 +6885,19 @@ BMD :{{bmd}}
       
       if (calcUsSlots(dazhiStats) > 0) {
         // 大直 US 的名字我這裡就不帶括號，因為原需求裡沒有特別給大直帶上
-        out.push(`▸ ＵＳ ：${r(dazhiStats.us)} 醫令, ${r(dazhiStats.usHeart)} 心超 ｜ ${calcUsSlots(dazhiStats)} Slot`);
+        out.push(`▸ US ：${r(dazhiStats.us)} 醫令, ${r(dazhiStats.usHeart)} 心超 ｜ ${calcUsSlots(dazhiStats)} Slot`);
       }
       
       if (calcBmdSlots(dazhiStats) > 0) {
-        out.push(`▸ ＢＭＤ：${r(dazhiStats.bmd)} 位 ｜ ${calcBmdSlots(dazhiStats)} Slot`);
+        out.push(`▸ BMD：${r(dazhiStats.bmd)} 位 ｜ ${calcBmdSlots(dazhiStats)} Slot`);
       }
       
       if (calcDxSlots(dazhiStats) > 0) {
-        out.push(`▸ ＤＸ ：${r(dazhiStats.dx)} 位 ｜ ${calcDxSlots(dazhiStats)} Slot`);
+        out.push(`▸ DX ：${r(dazhiStats.dx)} 位 ｜ ${calcDxSlots(dazhiStats)} Slot`);
       }
       
       if (calcMgSlots(dazhiStats) > 0) {
-        out.push(`▸ ＭＧ ：${r(dazhiStats.mg)} 位 ｜ ${calcMgSlots(dazhiStats)} Slot`);
+        out.push(`▸ MG ：${r(dazhiStats.mg)} 位 ｜ ${calcMgSlots(dazhiStats)} Slot`);
       }
     }
     
