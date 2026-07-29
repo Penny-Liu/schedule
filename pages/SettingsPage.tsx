@@ -143,7 +143,8 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
 
   const isSupervisorOrAdmin =
     currentUser.role === UserRole.SUPERVISOR ||
-    currentUser.role === UserRole.SYSTEM_ADMIN;
+    currentUser.role === UserRole.SYSTEM_ADMIN ||
+    currentUser.permissions?.includes(PERMISSIONS.EDIT_SETTINGS);
   const canManageHealthMgmt =
     currentUser.role === UserRole.SYSTEM_ADMIN ||
     currentUser.permissions?.includes(PERMISSIONS.EDIT_HEALTH_MGMT);
