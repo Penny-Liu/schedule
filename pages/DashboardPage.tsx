@@ -6862,7 +6862,7 @@ BMD :{{bmd}}
     }
     
     if (beitouStats.ctaPostProcessing > 0) {
-      out.push(`‣ 後處理：${r(beitouStats.ctaPostProcessing)} 位 CTA ｜ ${r(beitouStats.ctaPostProcessing * 5)} Slot`);
+      out.push(`‣ CTA後處理：${r(beitouStats.ctaPostProcessing)} 位 ｜ ${r(beitouStats.ctaPostProcessing * 5)} Slot`);
     }
 
     if (dDemand > 0) {
