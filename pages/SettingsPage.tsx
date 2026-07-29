@@ -141,10 +141,10 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
   });
   const [selectedSyncTasks, setSelectedSyncTasks] = useState<number[]>([1]);
 
+  const hasSettingsPermission = currentUser.permissions?.includes(PERMISSIONS.EDIT_SETTINGS);
   const isSupervisorOrAdmin =
     currentUser.role === UserRole.SUPERVISOR ||
-    currentUser.role === UserRole.SYSTEM_ADMIN ||
-    currentUser.permissions?.includes(PERMISSIONS.EDIT_SETTINGS);
+    currentUser.role === UserRole.SYSTEM_ADMIN;
   const canManageHealthMgmt =
     currentUser.role === UserRole.SYSTEM_ADMIN ||
     currentUser.permissions?.includes(PERMISSIONS.EDIT_HEALTH_MGMT);
@@ -152,7 +152,8 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
     isSupervisorOrAdmin ||
     currentUser.role === UserRole.SCHEDULER ||
     currentUser.role === UserRole.PHYSICIAN_ADMIN ||
-    canManageHealthMgmt;
+    canManageHealthMgmt ||
+    hasSettingsPermission;
   const isSystemAdmin = currentUser.role === UserRole.SYSTEM_ADMIN;
   const isSimplifiedSettings = currentUser.role === UserRole.FINANCE || currentUser.role === UserRole.VIEWER;
   const isHR =
@@ -167,11 +168,11 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
       setActiveTab("personal");
     } else if (
       activeTab === "system" &&
-      !(isSupervisorOrAdmin || canManageHealthMgmt)
+      !(isSupervisorOrAdmin || canManageHealthMgmt || hasSettingsPermission)
     ) {
       setActiveTab("personal");
     }
-  }, [activeTab, isSupervisorOrAdmin, canManageHealthMgmt]);
+  }, [activeTab, isSupervisorOrAdmin, canManageHealthMgmt, hasSettingsPermission]);
 
   const [logFilterDateStart, setLogFilterDateStart] = useState<string>("");
   const [logFilterDateEnd, setLogFilterDateEnd] = useState<string>("");
@@ -1017,7 +1018,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
             <Calendar size={18} /> 健管設定
           </button>
         )}
-        {(isSupervisorOrAdmin || canManageHealthMgmt) && (
+        {(isSupervisorOrAdmin || canManageHealthMgmt || hasSettingsPermission) && (
           <button
             onClick={() => setActiveTab("system")}
             className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-2 ${
