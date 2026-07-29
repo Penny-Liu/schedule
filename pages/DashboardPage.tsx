@@ -15,6 +15,7 @@ import {
   LeaveType,
   StationDefault,
   DateEventType,
+  PERMISSIONS,
 } from "../types";
 import { db } from "../services/store";
 import { supabase } from "../services/supabaseClient";
