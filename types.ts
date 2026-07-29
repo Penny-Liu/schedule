@@ -43,6 +43,9 @@ export const PERMISSIONS = {
   VIEW_GENE_SCHEDULE: "gene_schedule_view",
   EDIT_GENE_SCHEDULE: "gene_schedule_edit",
   EDIT_PASSWORD: "edit_password",
+  VIEW_DASHBOARD_STAFF: "dashboard_staff_view",
+  VIEW_DASHBOARD_STATION: "dashboard_station_view",
+  VIEW_DASHBOARD_TODAY: "dashboard_today_view",
 };
 
 export const PERMISSION_LABELS: Record<string, string> = {
@@ -69,6 +72,9 @@ export const PERMISSION_LABELS: Record<string, string> = {
   [PERMISSIONS.VIEW_GENE_SCHEDULE]: "查看基因排班",
   [PERMISSIONS.EDIT_GENE_SCHEDULE]: "編輯基因排班",
   [PERMISSIONS.EDIT_PASSWORD]: "修改個人密碼",
+  [PERMISSIONS.VIEW_DASHBOARD_STAFF]: "查看放射師排班(人員視角)",
+  [PERMISSIONS.VIEW_DASHBOARD_STATION]: "查看放射師排班(崗位視角)",
+  [PERMISSIONS.VIEW_DASHBOARD_TODAY]: "查看放射師排班(今日視角)",
 };
 
 export type HMDesignation =

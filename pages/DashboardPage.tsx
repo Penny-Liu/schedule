@@ -227,6 +227,10 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
     return activeCycle ? activeCycle.id : "rolling";
   });
 
+  const canViewStaff = isSupervisorOrHigher || currentUser.permissions?.includes(PERMISSIONS.VIEW_DASHBOARD_STAFF);
+  const canViewStation = isSupervisorOrHigher || currentUser.permissions?.includes(PERMISSIONS.VIEW_DASHBOARD_STATION);
+  const canViewToday = isSupervisorOrHigher || currentUser.permissions?.includes(PERMISSIONS.VIEW_DASHBOARD_TODAY);
+
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     // If HM user, default to 'daily' (Today's Stations) even on desktop
     if (
@@ -234,10 +238,21 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
       currentUser.role === UserRole.HM_SUPERVISOR ||
       currentUser.role === UserRole.HM_STAFF
     ) {
-      return "daily";
+      if (canViewToday) return "daily";
     }
+    
     // Default to 'daily' for mobile, 'user' for radiographer desktop
-    return window.innerWidth < 768 ? "daily" : "user";
+    if (window.innerWidth < 768) {
+      if (canViewToday) return "daily";
+      if (canViewStaff) return "user";
+      if (canViewStation) return "station";
+      return "personal";
+    } else {
+      if (canViewStaff) return "user";
+      if (canViewStation) return "station";
+      if (canViewToday) return "daily";
+      return "personal";
+    }
   });
   // Daily View Date State
   const [dailyDate, setDailyDate] = useState(new Date());
@@ -807,7 +822,9 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
       // const exportDate = today.toLocaleDateString('zh-TW');
 
       // --- Sheet 1: User View (人員視角) ---
-      const userSheet = workbook.addWorksheet("人員視角", {
+      let userSheet;
+      if (canViewStaff) {
+        userSheet = workbook.addWorksheet("人員視角", {
         pageSetup: {
           orientation: "landscape",
           fitToPage: true,
@@ -1071,14 +1088,19 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
       });
 
       // Set Column Widths
-      userSheet.columns = [
-        { width: 15 }, // Name
-        ...dateRange.map(() => ({ width: 10 })), // Dates (Previously auto or standard, now fixed wider for visibility)
-        { width: 10 }, // Count
-      ];
+      if (userSheet) {
+        userSheet.columns = [
+          { width: 15 }, // Name
+          ...dateRange.map(() => ({ width: 10 })), // Dates (Previously auto or standard, now fixed wider for visibility)
+          { width: 10 }, // Count
+        ];
+      }
+      } // end canViewStaff
 
       // --- Sheet 2: Station View (崗位視角) ---
-      const stationSheet = workbook.addWorksheet("崗位視角", {
+      let stationSheet;
+      if (canViewStation) {
+        stationSheet = workbook.addWorksheet("崗位視角", {
         pageSetup: {
           orientation: "landscape",
           fitToPage: true,
@@ -1272,11 +1294,18 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
       });
 
       // Adjust Column Widths
-      if (stationSheet.columns) {
+      if (stationSheet && stationSheet.columns) {
         stationSheet.columns.forEach((col, index) => {
           if (index === 0) col.width = 15;
           else col.width = 15;
         });
+      }
+      } // end canViewStation
+
+      if (workbook.worksheets.length === 0) {
+        showToast("您沒有權限匯出人員或崗位視角的資料", "error");
+        setIsExporting(false);
+        return;
       }
 
       // Generate & Download
@@ -3106,34 +3135,40 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
             {/* View Toggles (Restored here) */}
             <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
               <div className="flex bg-slate-100 p-0.5 rounded-lg border border-slate-200 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setViewMode("user")}
-                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold transition-all ${viewMode === "user" ? "bg-white text-teal-700 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
-                >
-                  {!isMobile && <Users size={14} />}{" "}
-                  <span>{isMobile ? "人員" : "人員視角"}</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setViewMode("station")}
-                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold transition-all ${viewMode === "station" ? "bg-white text-teal-700 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
-                >
-                  {!isMobile && <LayoutList size={14} />}{" "}
-                  <span>{isMobile ? "崗位" : "崗位視角"}</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setViewMode("daily");
-                    setDailyDate(new Date());
-                    if (isMobile) db.initializeAuthData(true); if (db.currentUser) db.initializeDataForUser(db.currentUser, true);
-                  }}
-                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold transition-all ${viewMode === "daily" ? "bg-white text-teal-700 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
-                >
-                  {!isMobile && <Activity size={14} />}{" "}
-                  <span>{isMobile ? "今日" : "今日崗位"}</span>
-                </button>
+                {canViewStaff && (
+                  <button
+                    type="button"
+                    onClick={() => setViewMode("user")}
+                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold transition-all ${viewMode === "user" ? "bg-white text-teal-700 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+                  >
+                    {!isMobile && <Users size={14} />}{" "}
+                    <span>{isMobile ? "人員" : "人員視角"}</span>
+                  </button>
+                )}
+                {canViewStation && (
+                  <button
+                    type="button"
+                    onClick={() => setViewMode("station")}
+                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold transition-all ${viewMode === "station" ? "bg-white text-teal-700 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+                  >
+                    {!isMobile && <LayoutList size={14} />}{" "}
+                    <span>{isMobile ? "崗位" : "崗位視角"}</span>
+                  </button>
+                )}
+                {canViewToday && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setViewMode("daily");
+                      setDailyDate(new Date());
+                      if (isMobile) db.initializeAuthData(true); if (db.currentUser) db.initializeDataForUser(db.currentUser, true);
+                    }}
+                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold transition-all ${viewMode === "daily" ? "bg-white text-teal-700 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+                  >
+                    {!isMobile && <Activity size={14} />}{" "}
+                    <span>{isMobile ? "今日" : "今日崗位"}</span>
+                  </button>
+                )}
                 {isMobile && (
                   <button
                     type="button"

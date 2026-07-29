@@ -52,6 +52,9 @@ export const getPermissionsByRole = (role: UserRole): string[] => {
         PERMISSIONS.EDIT_SETTINGS,
         PERMISSIONS.VIEW_HEALTH_MGMT,
         PERMISSIONS.VIEW_ANESTHESIA,
+        PERMISSIONS.VIEW_DASHBOARD_STAFF,
+        PERMISSIONS.VIEW_DASHBOARD_STATION,
+        PERMISSIONS.VIEW_DASHBOARD_TODAY,
       ];
     case UserRole.PHYSICIAN_ADMIN:
     case UserRole.SCHEDULER:
@@ -62,6 +65,9 @@ export const getPermissionsByRole = (role: UserRole): string[] => {
         PERMISSIONS.MANAGE_DOCTORS,
         PERMISSIONS.VIEW_DOCTOR_STATS,
         PERMISSIONS.EDIT_DOCTOR_STATS,
+        PERMISSIONS.VIEW_DASHBOARD_STAFF,
+        PERMISSIONS.VIEW_DASHBOARD_STATION,
+        PERMISSIONS.VIEW_DASHBOARD_TODAY,
       ];
     case UserRole.HM_SUPERVISOR:
       return [
@@ -80,7 +86,13 @@ export const getPermissionsByRole = (role: UserRole): string[] => {
     case UserRole.VIEWER:
       return [PERMISSIONS.VIEW_CLOUD_SCHEDULE, PERMISSIONS.VIEW_PHYSICIAN];
     default: // RADIOGRAPHER_STAFF
-      return [PERMISSIONS.VIEW_CLOUD_SCHEDULE, PERMISSIONS.VIEW_PHYSICIAN];
+      return [
+        PERMISSIONS.VIEW_CLOUD_SCHEDULE, 
+        PERMISSIONS.VIEW_PHYSICIAN,
+        PERMISSIONS.VIEW_DASHBOARD_STAFF,
+        PERMISSIONS.VIEW_DASHBOARD_STATION,
+        PERMISSIONS.VIEW_DASHBOARD_TODAY,
+      ];
   }
 };
 
@@ -606,6 +618,19 @@ class Store {
             if (mappedUser.isRadiographer && !permissions.includes("edit_cloud_schedule")) permissions.push("edit_cloud_schedule");
           }
           if (mappedUser.isHealthMgmt && !permissions.includes("health_mgmt_view")) permissions.push("health_mgmt_view");
+          
+          // Legacy mapping: automatically grant new dashboard permissions to existing users who should have them
+          const hasAnyNewDashPerm = permissions.includes(PERMISSIONS.VIEW_DASHBOARD_STAFF) || 
+                                    permissions.includes(PERMISSIONS.VIEW_DASHBOARD_STATION) || 
+                                    permissions.includes(PERMISSIONS.VIEW_DASHBOARD_TODAY);
+          
+          if (!hasAnyNewDashPerm) {
+            if (mappedUser.role === UserRole.SUPERVISOR || mappedUser.role === UserRole.SYSTEM_ADMIN || mappedUser.role === UserRole.SCHEDULER || mappedUser.role === UserRole.RADIOGRAPHER_STAFF) {
+              permissions.push(PERMISSIONS.VIEW_DASHBOARD_STAFF);
+              permissions.push(PERMISSIONS.VIEW_DASHBOARD_STATION);
+              permissions.push(PERMISSIONS.VIEW_DASHBOARD_TODAY);
+            }
+          }
           if (mappedUser.isRadiographer && !permissions.includes("physician_view")) permissions.push("physician_view");
 
           return { ...mappedUser, permissions: Array.from(new Set(permissions)) };

@@ -51,8 +51,11 @@ const Sidebar: React.FC<SidebarProps> = ({
           id: "dashboard",
           label: "總覽",
           icon: LayoutDashboard,
-          permission: null,
-          isRadiographerOnly: true,
+          permission: [
+            PERMISSIONS.VIEW_DASHBOARD_STAFF,
+            PERMISSIONS.VIEW_DASHBOARD_STATION,
+            PERMISSIONS.VIEW_DASHBOARD_TODAY,
+          ],
         },
         {
           id: "statistics",
@@ -258,7 +261,10 @@ const Sidebar: React.FC<SidebarProps> = ({
               }
             }
             if (!item.permission) return true;
-            return currentUser.permissions?.includes(item.permission);
+            if (Array.isArray(item.permission)) {
+              return item.permission.some(p => currentUser.permissions?.includes(p));
+            }
+            return currentUser.permissions?.includes(item.permission as string);
           });
 
           if (visibleItems.length === 0) return null;
