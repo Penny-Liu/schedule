@@ -390,7 +390,11 @@ class Store {
         docShiftsReq = Promise.resolve({ data: null }), hmShiftsReq = Promise.resolve({ data: null }), aneShiftsReq = Promise.resolve({ data: null }),
         meetingRoomsReq = Promise.resolve({ data: null });
         
-    const canViewCloud = perms.includes(PERMISSIONS.VIEW_CLOUD_SCHEDULE) || user?.isRadiographer || isAdmin;
+    const canViewCloud = perms.includes(PERMISSIONS.VIEW_CLOUD_SCHEDULE) || 
+      perms.includes(PERMISSIONS.VIEW_DASHBOARD_STAFF) ||
+      perms.includes(PERMISSIONS.VIEW_DASHBOARD_STATION) ||
+      perms.includes(PERMISSIONS.VIEW_DASHBOARD_TODAY) ||
+      user?.isRadiographer || isAdmin;
     const canViewPhysician = perms.includes(PERMISSIONS.VIEW_PHYSICIAN);
     const canViewHM = perms.includes(PERMISSIONS.VIEW_HEALTH_MGMT) || isAdmin;
 
