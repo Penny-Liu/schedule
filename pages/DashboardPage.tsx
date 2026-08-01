@@ -6688,7 +6688,15 @@ BMD :{{bmd}}
     const beitouLoad = calculateDailyLoadRate(date, 'beitou', shifts, users, stats);
     const dazhiLoad = calculateDailyLoadRate(date, 'dazhi', shifts, users, stats);
     const names = {
-      beitou: { leader: [] as string[], mr: [] as string[], us: [] as string[], ct: [] as string[], bmd: [] as string[], dx: [] as string[], mg: [] as string[], learning: [] as string[] },
+      beitou: {
+        leader: [] as string[],
+        mr: { regular: [] as string[], learning: [] as string[] },
+        us: { regular: [] as string[], learning: [] as string[] },
+        ct: { regular: [] as string[], learning: [] as string[] },
+        bmd: { regular: [] as string[], learning: [] as string[] },
+        dx: { regular: [] as string[], learning: [] as string[] },
+        mg: { regular: [] as string[], learning: [] as string[] }
+      },
       dazhi: { leader: [] as string[], us: [] as string[], bmd: [] as string[], dx: [] as string[], mg: [] as string[] }
     };
 
@@ -6732,9 +6740,17 @@ BMD :{{bmd}}
         }
       } else {
         if (isLearning) {
-            names.beitou.learning.push(alias + "學習");
+            const destGroup = groupName && (names.beitou as any)[groupName];
+            if (destGroup && destGroup.learning) {
+                destGroup.learning.push(alias);
+            }
         } else if (groupName && (names.beitou as any)[groupName]) {
-            (names.beitou as any)[groupName].push(alias);
+            const destGroup = (names.beitou as any)[groupName];
+            if (destGroup.regular) {
+                destGroup.regular.push(alias);
+            } else {
+                destGroup.push(alias); // For leader which is a flat array
+            }
         }
       }
     });
@@ -6855,7 +6871,14 @@ BMD :{{bmd}}
     const bCustomers = r(rawDailyStats.beitou_clients || 0);
     const dCustomers = r(rawDailyStats.dazhi_clients || 0);
 
-    const formatNameParen = (arr: string[]) => arr.length > 0 ? ` (${arr.join("/")})` : "";
+    const formatNameParen = (group: { regular: string[], learning: string[] }) => {
+      let str = group.regular.join("/");
+      if (group.learning.length > 0) {
+        if (str) str += "+";
+        str += group.learning.map(n => n + "學習").join("/");
+      }
+      return str ? ` (${str})` : "";
+    };
     const padStation = (name: string) => {
       if (name === "後處理") return "後處理 ";
       return name.padEnd(3, " ");
@@ -6883,12 +6906,9 @@ BMD :{{bmd}}
       out.push(`・${prefix}：${bMrCount}MR${mrDetails ? ` (${mrDetails})` : ""} ｜ ${calcMrSlots(beitouStats)} Slot`);
     }
 
-    const usAllNames = names.beitou.us.length > 0 ? names.beitou.us.join("/") : "";
-    const usLearningNames = names.beitou.learning.length > 0 ? "+" + names.beitou.learning.join("/") : "";
-    const usNameStr = (usAllNames || usLearningNames) ? ` (${usAllNames}${usLearningNames})` : "";
-    
     if (calcUsSlots(beitouStats) > 0) {
-      const prefix = usNameStr ? `US${usNameStr}` : padStation("US");
+      const pName = formatNameParen(names.beitou.us);
+      const prefix = pName ? `US${pName}` : padStation("US");
       out.push(`・${prefix}：${r(beitouStats.us)}醫令 ｜ ${r(beitouStats.usHeart)}心超 ｜ ${calcUsSlots(beitouStats)} Slot`);
     }
 
