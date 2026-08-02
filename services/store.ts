@@ -968,35 +968,49 @@ class Store {
   async saveDailyWorkloads(records: Partial<RadiographerDailyWorkload>[]) {
     if (!this.currentUser || records.length === 0) return;
     try {
-      const payloads = records.map(w => ({
-        date: w.date,
-        radiographer_name: w.radiographerName,
-        mr: w.mr || 0,
-        mr_large_male: w.mrLargeMale || 0,
-        mr_large_female: w.mrLargeFemale || 0,
-        mr_medium: w.mrMedium || 0,
-        mr_small: w.mrSmall || 0,
-        us: w.us || 0,
-        us_a: w.usA || 0,
-        us_breast: w.usBreast || 0,
-        us_heart: w.usHeart || 0,
-        us_thy: w.usThy || 0,
-        us_cca: w.usCCA || 0,
-        us_neck: w.usNeck || 0,
-        us_pelvis_female: w.usPelvisFemale || 0,
-        us_pelvis_male: w.usPelvisMale || 0,
-        us_fibrosis: w.usFibrosis || 0,
-        ct: w.ct || 0,
-        cta: w.cta || 0,
-        dx: w.dx || 0,
-        mg: w.mg || 0,
-        bmd: w.bmd || 0,
-        cta_post_processing: w.ctaPostProcessing || 0,
-        report_entry: w.reportTyping || 0,
-        image_proofing: w.proofreader || 0,
-        tsmc_report: w.tsmcReport || 0,
-        total: w.total || 0,
-      }));
+      const payloads = records.map(w => {
+        const payload: any = {
+          date: w.date,
+          radiographer_name: w.radiographerName,
+        };
+
+        const fieldMapping: Record<string, string> = {
+          mr: "mr",
+          mrLargeMale: "mr_large_male",
+          mrLargeFemale: "mr_large_female",
+          mrMedium: "mr_medium",
+          mrSmall: "mr_small",
+          us: "us",
+          usA: "us_a",
+          usBreast: "us_breast",
+          usHeart: "us_heart",
+          usThy: "us_thy",
+          usCCA: "us_cca",
+          usNeck: "us_neck",
+          usPelvisFemale: "us_pelvis_female",
+          usPelvisMale: "us_pelvis_male",
+          usFibrosis: "us_fibrosis",
+          ct: "ct",
+          cta: "cta",
+          dx: "dx",
+          mg: "mg",
+          bmd: "bmd",
+          ctaPostProcessing: "cta_post_processing",
+          reportTyping: "report_entry",
+          proofreader: "image_proofing",
+          tsmcReport: "tsmc_report",
+          total: "total"
+        };
+
+        Object.keys(fieldMapping).forEach(key => {
+          const wKey = key as keyof RadiographerDailyWorkload;
+          if (w[wKey] !== undefined) {
+            payload[fieldMapping[key]] = w[wKey];
+          }
+        });
+
+        return payload;
+      });
 
       // upsert in batches of 100 to avoid payload limits
       for (let i = 0; i < payloads.length; i += 100) {

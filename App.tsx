@@ -237,7 +237,7 @@ const App: React.FC = () => {
         return (
           <AdministrativeSchedulePage
             currentUser={currentUser}
-            categories={[AdministrativeCategory.GENE]}
+            categories={[AdministrativeCategory.GENE, AdministrativeCategory.GENE_H]}
             title="基因排班管理"
           />
         );

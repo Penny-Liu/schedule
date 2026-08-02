@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useCallback } from "react";
 import {
   User,
   StationDefault,
@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import ExcelJS from "exceljs";
 import { isUserOnEmploymentPause, generateUUID } from "../services/utils";
+import { DailyDetailsModal } from "../components/dashboard/DailyDetailsModal";
 
 type WorkloadFieldKey =
   | "mr"
@@ -84,11 +85,11 @@ const workloadFieldMeta: { key: WorkloadFieldKey; label: string }[] = [
   { key: "floorControlOrders", label: "場控醫令" },
   { key: "assist", label: "輔控" },
   { key: "scheduler", label: "排班" },
-  { key: "mr", label: "MR" },
-  { key: "mrLargeMale", label: "MR大男" },
-  { key: "mrLargeFemale", label: "MR大女" },
-  { key: "mrMedium", label: "MR中" },
-  { key: "mrSmall", label: "MR小" },
+  { key: "mr", label: "MR醫令數(mr)" },
+  { key: "mrLargeMale", label: "mr大男" },
+  { key: "mrLargeFemale", label: "mr大女" },
+  { key: "mrMedium", label: "mr中" },
+  { key: "mrSmall", label: "mr小" },
   { key: "us", label: "US" },
   { key: "usA", label: "腹" },
   { key: "usBreast", label: "乳" },
@@ -253,6 +254,8 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
   const [selectedDate, setSelectedDate] = useState<string>("");
   const [cycleDailyData, setCycleDailyData] = useState<any[]>([]);
   const [cycleDailyDataDebug, setCycleDailyDataDebug] = useState<string>("");
+  const [refreshCycleDailyDataTrigger, setRefreshCycleDailyDataTrigger] = useState<number>(0);
+  const [selectedRadiographerForDetails, setSelectedRadiographerForDetails] = useState<string | null>(null);
 
   useEffect(() => {
     if (!hasInitializedLineExcluded && radiographers.length > 0) {
@@ -512,7 +515,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
           console.error(e);
         });
     }
-  }, [generalDates, radiographers, currentMonth, selectedDate]);
+  }, [generalDates, radiographers, currentMonth, selectedDate, refreshCycleDailyDataTrigger]);
 
   useEffect(() => {
     const refreshData = () => {
@@ -538,25 +541,25 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
     return db.subscribe(refreshData);
   }, [generalDates]);
 
-  const workloadData = useMemo(() => {
-    const computeDailyTotalWeightedOrders = (date: string) => {
-      const dStats = (db.settings as any).dailyStats?.[date];
-      if (dStats && typeof dStats.total_weighted_orders === "number" && dStats.total_weighted_orders > 0) {
-        return dStats.total_weighted_orders;
-      }
-      let total = 0;
-      cycleDailyData.filter(d => d.date === date).forEach(d => {
-        total += (d.mr || 0);
-        total += (d.us || 0);
-        total += (d.ct || 0);
-        total += (d.dx || 0);
-        total += (d.mg || 0);
-        total += (d.bmd || 0);
-        total += (d.cta || 0) * 3; // CTA is weighted 3
-      });
-      return total;
-    };
+  const computeDailyTotalWeightedOrders = useCallback((date: string) => {
+    const dStats = (db.settings as any).dailyStats?.[date];
+    if (dStats && typeof dStats.total_weighted_orders === "number" && dStats.total_weighted_orders > 0) {
+      return dStats.total_weighted_orders;
+    }
+    let total = 0;
+    cycleDailyData.filter(d => d.date === date).forEach(d => {
+      total += (d.mr || 0);
+      total += (d.us || 0);
+      total += (d.ct || 0);
+      total += (d.dx || 0);
+      total += (d.mg || 0);
+      total += (d.bmd || 0);
+      total += (d.cta || 0) * 3; // CTA is weighted 3
+    });
+    return total;
+  }, [db.settings, cycleDailyData]);
 
+  const workloadData = useMemo(() => {
     // 1. 自動分配教學點數：根據學生的排班與老師的搭班情況，按比例把學生的業績分配給指導老師
     const teachingAllocations: Record<string, Record<string, number>> = {};
     const learningDates: Record<string, Record<string, Set<string>>> = {};
@@ -906,8 +909,16 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
         }
       } else {
         // Aggregate daily workloads within the user's personal cycle dates
+        // For 'proofreader', we include the 5 days prior to the cycle start date
+        let proofreaderStartDate = personalCycle?.startDate;
+        if (proofreaderStartDate) {
+          const pd = new Date(proofreaderStartDate);
+          pd.setDate(pd.getDate() - 5);
+          proofreaderStartDate = `${pd.getFullYear()}-${String(pd.getMonth() + 1).padStart(2, "0")}-${String(pd.getDate()).padStart(2, "0")}`;
+        }
+
         const userDailyData = cycleDailyData.filter(
-          (d) => d.radiographerName === user.name && userDates.includes(d.date)
+          (d) => d.radiographerName === user.name
         );
 
         if (userDailyData.length > 0) {
@@ -915,9 +926,17 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
             "mr", "mrLargeMale", "mrLargeFemale", "mrMedium", "mrSmall",
             "us", "usA", "usBreast", "usHeart", "usThy", "usCCA", "usNeck",
             "usPelvisFemale", "usPelvisMale", "usFibrosis", "ct", "cta", "ctaPostProcessing",
-            "dx", "mg", "bmd"
+            "dx", "mg", "bmd", "reportTyping", "proofreader", "tsmcReport"
           ].forEach((k) => {
-            wToUse[k] = userDailyData.reduce((sum, d) => sum + (d[k] || 0), 0);
+            wToUse[k] = userDailyData.reduce((sum, d) => {
+              const isStrictCycle = userDates.includes(d.date);
+              if (k === "proofreader") {
+                const isProofreaderCycle = (!proofreaderStartDate || !personalCycle?.endDate) || (d.date >= proofreaderStartDate && d.date <= personalCycle.endDate);
+                return sum + (isProofreaderCycle ? (d[k] || 0) : 0);
+              } else {
+                return sum + (isStrictCycle ? (d[k] || 0) : 0);
+              }
+            }, 0);
           });
         }
       }
@@ -1857,16 +1876,25 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
         // Sum into monthly data
         if (!newData[nameStr]) newData[nameStr] = {};
 
+        const existingDData = cycleDailyData.find(
+          (d) => d.date === formattedDate && d.radiographerName === nameStr
+        );
+
         Object.keys(colIndices).forEach((field) => {
           const valStr = String(row[colIndices[field]] || "0").replace(
             /,/g,
-            "",
+            ""
           );
           const val = parseFloat(valStr) || 0;
-          if (val > 0) {
-            record[field as keyof RadiographerDailyWorkload] = val;
-            // Aggregate
-            newData[nameStr][field] = (newData[nameStr][field] || 0) + val;
+          
+          // 無論是 0 還是大於 0，只要欄位在 Excel 有出現就寫入 record，讓後端能正確覆蓋/清空
+          record[field as keyof RadiographerDailyWorkload] = val;
+          
+          // 計算差異值 (Delta) 加到 UI 的 newData 上，避免重複匯入時數字疊加
+          const oldVal = existingDData ? (existingDData[field] || 0) : 0;
+          const delta = val - oldVal;
+          if (delta !== 0) {
+            newData[nameStr][field] = (newData[nameStr][field] || 0) + delta;
           }
         });
 
@@ -1881,6 +1909,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
 
       try {
         await db.saveDailyWorkloads(dailyRecords);
+        setRefreshCycleDailyDataTrigger(prev => prev + 1);
         setEditingData(newData);
         setIsEditing(true);
         alert(
@@ -3420,8 +3449,17 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
                         key={row.name}
                         className="hover:bg-slate-50/50 transition-colors"
                       >
-                        <td className="px-4 py-2.5 font-bold text-slate-800 sticky left-0 bg-white border-r border-slate-100">
-                          {row.name}
+                        <td className="px-4 py-2.5 font-bold text-slate-800 sticky left-0 bg-white border-r border-slate-100 whitespace-nowrap">
+                          <div className="flex items-center gap-2">
+                            <span>{row.name}</span>
+                            <button
+                              onClick={() => setSelectedRadiographerForDetails(row.name)}
+                              className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-bold rounded bg-teal-50 text-teal-600 border border-teal-200 hover:bg-teal-100 hover:text-teal-700 transition-colors"
+                              title="檢視/編輯單日明細"
+                            >
+                              📅 明細
+                            </button>
+                          </div>
                         </td>
                         {showGroupPanel && groups.length > 0 && (
                           <td className="px-2 py-2.5 text-center">
@@ -3711,6 +3749,53 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
           </pre>
         </div>
       </div>
+
+      <DailyDetailsModal
+        isOpen={!!selectedRadiographerForDetails}
+        onClose={() => setSelectedRadiographerForDetails(null)}
+        radiographerName={selectedRadiographerForDetails || ""}
+        cycleStartDate={(() => {
+          if (!selectedRadiographerForDetails) return undefined;
+          const user = radiographers.find(r => r.name === selectedRadiographerForDetails);
+          return user?.personalCycles?.[currentMonth]?.startDate;
+        })()}
+        cycleEndDate={(() => {
+          if (!selectedRadiographerForDetails) return undefined;
+          const user = radiographers.find(r => r.name === selectedRadiographerForDetails);
+          return user?.personalCycles?.[currentMonth]?.endDate;
+        })()}
+        dates={(() => {
+          if (selectedDate) return [selectedDate];
+          if (!selectedRadiographerForDetails) return generalDates;
+          const user = radiographers.find(r => r.name === selectedRadiographerForDetails);
+          if (!user) return generalDates;
+          const uCycle = user.personalCycles?.[currentMonth];
+          if (!uCycle) return generalDates;
+          
+          const expandedDates = [];
+          const current = new Date(uCycle.startDate);
+          current.setDate(current.getDate() - 5);
+          const end = new Date(uCycle.endDate);
+          while (current <= end) {
+            expandedDates.push(`${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, "0")}-${String(current.getDate()).padStart(2, "0")}`);
+            current.setDate(current.getDate() + 1);
+          }
+          return expandedDates;
+        })()}
+        initialData={cycleDailyData.filter(d => d.radiographerName === selectedRadiographerForDetails)}
+        userShifts={(() => {
+          if (!selectedRadiographerForDetails) return [];
+          const user = radiographers.find(r => r.name === selectedRadiographerForDetails);
+          if (!user) return [];
+          return shifts.filter(s => s.userId === user.id);
+        })()}
+        weights={weights}
+        getDailyTotalOrders={computeDailyTotalWeightedOrders}
+        onSave={async (records) => {
+          await db.saveDailyWorkloads(records);
+          setRefreshCycleDailyDataTrigger(prev => prev + 1);
+        }}
+      />
     </div>
   );
 };

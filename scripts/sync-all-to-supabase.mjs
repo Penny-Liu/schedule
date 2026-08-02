@@ -344,7 +344,7 @@ export async function syncRadiographerWorkload(
 
   const { data: usersData } = await supabase
     .from("users")
-    .select("id, name, alias, learning_capabilities")
+    .select("id, name, alias, learning_capabilities, personal_cycles")
     .eq("is_radiographer", true);
   
   const validNamesMap = {};
@@ -372,8 +372,52 @@ export async function syncRadiographerWorkload(
   }
 
   const [year, month] = (targetMonthOverride || startDate).split("-");
+  const targetMonthStr = `${year}-${month.padStart(2, '0')}`;
   const yearNum = parseInt(year, 10);
   const monthNum = parseInt(month, 10);
+
+  const userCycleMap = {};
+  let soqlStartDate = startDate;
+  let soqlEndDate = endDate;
+  let soqlReportStartDate = reportStartDate;
+  let soqlReportEndDate = reportEndDate;
+
+  usersData.forEach(u => {
+    const cleanName = validNamesMap[u.name.trim()] || u.name.trim();
+    let uStart = startDate;
+    let uEnd = endDate;
+    if (u.personal_cycles && u.personal_cycles[targetMonthStr]) {
+       const cy = u.personal_cycles[targetMonthStr];
+       if (cy.startDate) uStart = cy.startDate;
+       if (cy.endDate) uEnd = cy.endDate;
+    }
+    const rsDate = new Date(uStart);
+    rsDate.setDate(rsDate.getDate() - 5);
+    const uReportStart = `${rsDate.getFullYear()}-${String(rsDate.getMonth() + 1).padStart(2, "0")}-${String(rsDate.getDate()).padStart(2, "0")}`;
+    
+    const reDate = new Date(uEnd);
+    reDate.setDate(reDate.getDate() - 5);
+    const uReportEnd = `${reDate.getFullYear()}-${String(reDate.getMonth() + 1).padStart(2, "0")}-${String(reDate.getDate()).padStart(2, "0")}`;
+    
+    userCycleMap[cleanName] = { start: uStart, end: uEnd, reportStart: uReportStart, reportEnd: uReportEnd };
+
+    if (uStart < soqlStartDate) soqlStartDate = uStart;
+    if (uEnd > soqlEndDate) soqlEndDate = uEnd;
+    if (uReportStart < soqlReportStartDate) soqlReportStartDate = uReportStart;
+    if (uReportEnd > soqlReportEndDate) soqlReportEndDate = uReportEnd;
+  });
+
+  const isDateInCycle = (name, date, mode = "normal") => {
+    if (!date) return true;
+    const cy = userCycleMap[name];
+    if (!cy) return true;
+    const dateStr = date.split("T")[0];
+    if (mode === "proofing") {
+       return dateStr >= cy.reportStart && dateStr <= cy.reportEnd;
+    } else {
+       return dateStr >= cy.start && dateStr <= cy.end;
+    }
+  };
 
 
 
@@ -541,7 +585,7 @@ export async function syncRadiographerWorkload(
   );
   const ctDxSoql = `SELECT Radiologist__r.Name, ResourceCategory__c, Order__r.ReserveDate__c 
                     FROM CheckupReservation__c 
-                    WHERE (Order__r.ReserveDate__c >= ${startDate} AND Order__r.ReserveDate__c <= ${endDate}) 
+                    WHERE (Order__r.ReserveDate__c >= ${soqlStartDate} AND Order__r.ReserveDate__c <= ${soqlEndDate}) 
                     AND Radiologist__c != null 
                     AND ResourceCategory__c IN ('CT','BMD','MG','DX') 
                     AND (NOT Name LIKE '%報到%') 
@@ -558,6 +602,7 @@ export async function syncRadiographerWorkload(
     const cleanName = findNameInPath([rawName], validNamesMap);
     
     if (cleanName === "Unknown") return;
+    if (!isDateInCycle(cleanName, date, false)) return;
     ensureUser(cleanName);
     const dWorkload = ensureDailyUser(date, cleanName);
 
@@ -601,7 +646,7 @@ export async function syncRadiographerWorkload(
   );
   const usSoql = `SELECT Radiologist__r.Name, CheckupName__c, Order__r.ReserveDate__c 
                   FROM CheckupReservation__c 
-                  WHERE (Order__r.ReserveDate__c >= ${startDate} AND Order__r.ReserveDate__c <= ${endDate}) 
+                  WHERE (Order__r.ReserveDate__c >= ${soqlStartDate} AND Order__r.ReserveDate__c <= ${soqlEndDate}) 
                   AND Radiologist__c != null 
                   AND ResourceCategory__c = 'US' 
                   AND (NOT Name LIKE '%報到%') 
@@ -618,6 +663,7 @@ export async function syncRadiographerWorkload(
     const cleanName = findNameInPath([rawName], validNamesMap);
     
     if (cleanName === "Unknown") return;
+    if (!isDateInCycle(cleanName, date, false)) return;
     ensureUser(cleanName);
     const dWorkload = ensureDailyUser(date, cleanName);
 
@@ -646,7 +692,7 @@ export async function syncRadiographerWorkload(
   );
   const mrSoql = `SELECT Radiologist__r.Name, Order__c, Order__r.Gender__c, Order__r.ReserveDate__c 
                   FROM CheckupReservation__c 
-                  WHERE (Order__r.ReserveDate__c >= ${startDate} AND Order__r.ReserveDate__c <= ${endDate}) 
+                  WHERE (Order__r.ReserveDate__c >= ${soqlStartDate} AND Order__r.ReserveDate__c <= ${soqlEndDate}) 
                   AND Radiologist__c != null 
                   AND ResourceCategory__c = 'MR' 
                   AND (NOT Name LIKE '%報到%') 
@@ -682,6 +728,7 @@ export async function syncRadiographerWorkload(
       const cleanName = findNameInPath([rawName], validNamesMap);
     
       if (cleanName === "Unknown") return;
+      if (!isDateInCycle(cleanName, date, "normal")) return;
       ensureUser(cleanName);
       const dWorkload = ensureDailyUser(date, cleanName);
 
@@ -709,7 +756,7 @@ export async function syncRadiographerWorkload(
   );
   const ctaSoql = `SELECT Radiologist__r.Name, Order__c, Order__r.ReserveDate__c 
                    FROM CheckupReservation__c 
-                   WHERE (Order__r.ReserveDate__c >= ${startDate} AND Order__r.ReserveDate__c <= ${endDate}) 
+                   WHERE (Order__r.ReserveDate__c >= ${soqlStartDate} AND Order__r.ReserveDate__c <= ${soqlEndDate}) 
                    AND Radiologist__c != null 
                    AND Checkup_Status__c != '90'
                    AND CTAUseTime__c != null`;
@@ -727,8 +774,8 @@ export async function syncRadiographerWorkload(
     const date = rec.Order__r?.ReserveDate__c;
     const cleanName = findNameInPath([rawName], validNamesMap);
     
-    
     if (cleanName === "Unknown" || !workloadMap[cleanName] || !orderId) return;
+    if (!isDateInCycle(cleanName, date, "normal")) return;
     
     // We want COUNT_DISTINCT(Order__c) per person
     const key = `${cleanName}_${orderId}`;
@@ -756,7 +803,7 @@ export async function syncRadiographerWorkload(
   );
   const ctaPostSoql = `SELECT CTA_Further_Rad__r.Name, Order__c, Order__r.ReserveDate__c 
                    FROM CheckupReservation__c 
-                   WHERE (Order__r.ReserveDate__c >= ${startDate} AND Order__r.ReserveDate__c <= ${endDate}) 
+                   WHERE (Order__r.ReserveDate__c >= ${soqlStartDate} AND Order__r.ReserveDate__c <= ${soqlEndDate}) 
                    AND CTA_Further_Rad__c != null 
                    AND Checkup_Status__c != '90'`;
   const ctaPostData = await runSoqlQuery({
@@ -771,8 +818,8 @@ export async function syncRadiographerWorkload(
     const orderId = rec.Order__c;
     const date = rec.Order__r?.ReserveDate__c;
     const cleanName = findNameInPath([rawName], validNamesMap);
-    
     if (cleanName === "Unknown" || !workloadMap[cleanName] || !orderId) return;
+    if (!isDateInCycle(cleanName, date, "normal")) return;
     
     // We want COUNT_DISTINCT(Order__c) per person
     const key = `${cleanName}_${orderId}`;
@@ -789,7 +836,7 @@ export async function syncRadiographerWorkload(
   console.log(`[sync-stats]   - [SOQL] 正在查詢 '影像校對' (Order__c)...`);
   const proofingSoql = `SELECT ReserveDate__c date, Image_Proofreader__r.Name person, COUNT(Id) cnt 
                         FROM Order__c 
-                        WHERE (ReserveDate__c >= ${reportStartDate} AND ReserveDate__c <= ${reportEndDate}) 
+                        WHERE (ReserveDate__c >= ${soqlReportStartDate} AND ReserveDate__c <= ${soqlReportEndDate}) 
                         AND Image_Proofreader__c != null 
                         GROUP BY ReserveDate__c, Image_Proofreader__r.Name`;
   const proofingData = await runSoqlQuery({
@@ -804,6 +851,7 @@ export async function syncRadiographerWorkload(
     const cleanName = findNameInPath([rawName], validNamesMap);
     
     if (cleanName !== "Unknown" && workloadMap[cleanName]) {
+      if (!isDateInCycle(cleanName, date, "proofing")) return;
       workloadMap[cleanName].imageProofing += value;
       const dWorkload = ensureDailyUser(date, cleanName);
       if (dWorkload) dWorkload.image_proofing += value;
@@ -814,7 +862,7 @@ export async function syncRadiographerWorkload(
   console.log(`[sync-stats]   - [SOQL] 正在查詢 '報告登打' (Order__c)...`);
   const assistantSoql = `SELECT ReserveDate__c date, Image_Assistant__r.Name person, COUNT(Id) cnt 
                         FROM Order__c 
-                        WHERE (ReserveDate__c >= ${reportStartDate} AND ReserveDate__c <= ${reportEndDate}) 
+                        WHERE (ReserveDate__c >= ${soqlStartDate} AND ReserveDate__c <= ${soqlEndDate}) 
                         AND Image_Assistant__c != null 
                         GROUP BY ReserveDate__c, Image_Assistant__r.Name`;
   const assistantData = await runSoqlQuery({
@@ -829,8 +877,8 @@ export async function syncRadiographerWorkload(
     const date = rec.date || rec.ReserveDate__c;
     const cleanName = findNameInPath([rawName], validNamesMap);
     
-    
     if (cleanName !== "Unknown") {
+      if (!isDateInCycle(cleanName, date, "normal")) return;
       ensureUser(cleanName);
       workloadMap[cleanName].report_entry += value;
       const dWorkload = ensureDailyUser(date, cleanName);
@@ -885,8 +933,8 @@ export async function syncRadiographerWorkload(
   if (error) throw error;
   
   // 寫入每日明細
-  const minDate = startDate < reportStartDate ? startDate : reportStartDate;
-  const maxDate = endDate > reportEndDate ? endDate : reportEndDate;
+  const minDate = soqlStartDate < soqlReportStartDate ? soqlStartDate : soqlReportStartDate;
+  const maxDate = soqlEndDate > soqlReportEndDate ? soqlEndDate : soqlReportEndDate;
   console.log(`[sync-stats] [SF API] 正在清理每日明細舊資料 (${minDate} ~ ${maxDate})...`);
   await supabase
     .from("radiographer_daily_workload")

@@ -155,6 +155,34 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
   );
   const [holidays, setHolidays] = useState(db.getHolidays());
 
+  const [geneHShifts, setGeneHShifts] = useState<any[]>([]);
+
+  useEffect(() => {
+    const fetchGeneHShifts = async () => {
+      const year = currentDate.getFullYear();
+      const month = currentDate.getMonth() + 1;
+      const startDate = `${year}-${String(month).padStart(2, "0")}-01`;
+      const lastDay = new Date(year, month, 0).getDate();
+      const endDate = `${year}-${String(month).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+
+      try {
+        const { data, error } = await supabase
+          .from("administrative_shifts")
+          .select("*")
+          .eq("category", "H班")
+          .gte("date", startDate)
+          .lte("date", endDate);
+        
+        if (!error && data) {
+          setGeneHShifts(data);
+        }
+      } catch (err) {
+        console.error("Failed to fetch Gene H shifts", err);
+      }
+    };
+    fetchGeneHShifts();
+  }, [currentDate]);
+
   const [newStaffName, setNewStaffName] = useState(""); // For adding new staff
   const [newStaffAlias, setNewStaffAlias] = useState(""); // For adding new staff alias
   const [newStaffHireDate, setNewStaffHireDate] = useState(""); // For adding new staff hire date
@@ -3406,6 +3434,44 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                         })}
                       </tr>
                     ))}
+                    {/* 基因支援 (H班) 顯示區塊 */}
+                    {geneHShifts.length > 0 && (
+                      <tr className="bg-pink-50/50 hover:bg-pink-100/50 transition-colors">
+                        <td className="p-0 border-r border-slate-200 sticky left-0 z-30 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] bg-pink-50">
+                          <div className="p-1 md:p-2 font-bold text-pink-700 flex items-center justify-between min-w-[72px] md:min-w-[112px]">
+                            <span>基因支援 (H班)</span>
+                          </div>
+                        </td>
+                        {dateRange.map((date) => {
+                          const dailyShifts = geneHShifts.filter((s) => s.date === date && (currentUserLocation === "全部" || s.location === currentUserLocation));
+                          return (
+                            <td
+                              key={`gene-h-${date}`}
+                              className="p-1 border-r border-gray-100 h-16 text-center bg-pink-50/30"
+                            >
+                              {dailyShifts.length > 0 ? (
+                                <div className="h-full w-full flex flex-col items-center justify-center space-y-1">
+                                  {dailyShifts.map((shift, idx) => (
+                                    <div key={idx} className="flex flex-col items-center" style={{ transform: "scale(0.95)" }}>
+                                      <span className="font-bold text-sm text-pink-800 leading-tight">
+                                        {shift.staffNames}
+                                      </span>
+                                      {shift.location && (
+                                        <span className={`text-[10px] font-bold px-1 rounded whitespace-nowrap mt-0.5 ${shift.location === '大直' ? 'bg-red-500 text-white' : 'bg-slate-600 text-white'}`}>
+                                          {shift.location}
+                                        </span>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <div className="h-full min-h-[44px]"></div>
+                              )}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    )}
                     {activeHealthMgmtStaff.length === 0 && (
                       <tr>
                         <td

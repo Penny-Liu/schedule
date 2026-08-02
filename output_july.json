@@ -1,0 +1,24 @@
+[dotenv@17.3.1] injecting env (7) from .env -- tip: 🔐 prevent committing .env to code: https://dotenvx.com/precommit
+{
+  "shiftsErr": {
+    "code": "42703",
+    "details": null,
+    "hint": "Perhaps you meant to reference the column \"shifts.userId\".",
+    "message": "column shifts.user_id does not exist"
+  },
+  "dailyStatsErr": {
+    "code": "PGRST205",
+    "details": null,
+    "hint": "Perhaps you meant the table 'public.physician_workload_daily'",
+    "message": "Could not find the table 'public.daily_workload_details' in the schema cache"
+  },
+  "workloadsErr": {
+    "code": "42703",
+    "details": null,
+    "hint": "Perhaps you meant to reference the column \"radiographer_workload.radiographerName\".",
+    "message": "column radiographer_workload.radiographer_name does not exist"
+  },
+  "shifts": null,
+  "dailyStats": null,
+  "workloads": null
+}

@@ -53,6 +53,7 @@ export enum AdministrativeCategory {
   REPORTING = "報告",
   ADMIN = "行政",
   GENE = "基因",
+  GENE_H = "H班",
 }
 
 // 行政建檔人員接口
@@ -101,6 +102,7 @@ const CATEGORY_COLORS: Record<AdministrativeCategory, string> = {
   [AdministrativeCategory.REPORTING]: "bg-orange-500 border-orange-600",
   [AdministrativeCategory.ADMIN]: "bg-gray-500 border-gray-600",
   [AdministrativeCategory.GENE]: "bg-pink-500 border-pink-600",
+  [AdministrativeCategory.GENE_H]: "bg-rose-500 border-rose-600",
 };
 
 const AdministrativeSchedulePage: React.FC<AdministrativeSchedulePageProps> = ({
@@ -160,7 +162,7 @@ const AdministrativeSchedulePage: React.FC<AdministrativeSchedulePageProps> = ({
 
   // 自動偵測當前是否為純「基因排班」頁面，使用專屬權限
   const isGeneOnly =
-    categories?.length === 1 && categories[0] === AdministrativeCategory.GENE;
+    categories?.length > 0 && categories.every(c => c === AdministrativeCategory.GENE || c === AdministrativeCategory.GENE_H);
   const requiredPermission = isGeneOnly
     ? PERMISSIONS.EDIT_GENE_SCHEDULE
     : PERMISSIONS.EDIT_ADMINISTRATIVE;

@@ -152,6 +152,10 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncModalOpen, setSyncModalOpen] = useState(false);
+  const [extremeMonth, setExtremeMonth] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  });
   const [syncTasks, setSyncTasks] = useState(() => {
     const today = new Date();
     const y = today.getFullYear();
@@ -775,6 +779,105 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
                           }
                           className="text-sm border border-slate-300 rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-indigo-500"
                         />
+                      </div>
+                      
+                      <div className="flex items-center gap-2 mt-1 ml-[92px] flex-wrap">
+                        <button
+                          onClick={() => {
+                            const d = new Date();
+                            d.setDate(d.getDate() - 1);
+                            const str = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+                            updateSyncTask(task.id, "start", str);
+                            updateSyncTask(task.id, "end", str);
+                          }}
+                          className="text-xs bg-slate-100 hover:bg-slate-200 text-slate-600 px-2 py-1 rounded transition-colors"
+                        >
+                          昨日
+                        </button>
+                        <button
+                          onClick={() => {
+                            const d = new Date();
+                            const str = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+                            updateSyncTask(task.id, "start", str);
+                            updateSyncTask(task.id, "end", str);
+                          }}
+                          className="text-xs bg-slate-100 hover:bg-slate-200 text-slate-600 px-2 py-1 rounded transition-colors"
+                        >
+                          今日
+                        </button>
+                        <button
+                          onClick={() => {
+                            const today = new Date();
+                            const y = today.getFullYear();
+                            const m = today.getMonth();
+                            const firstDay = `${y}-${String(m + 1).padStart(2, "0")}-01`;
+                            const endDay = new Date(y, m + 1, 0);
+                            const lastDay = `${endDay.getFullYear()}-${String(endDay.getMonth() + 1).padStart(2, "0")}-${String(endDay.getDate()).padStart(2, "0")}`;
+                            updateSyncTask(task.id, "start", firstDay);
+                            updateSyncTask(task.id, "end", lastDay);
+                          }}
+                          className="text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-2 py-1 rounded transition-colors"
+                        >
+                          本月
+                        </button>
+                        <div className="flex items-center gap-1 bg-indigo-50 rounded px-2 py-0.5 border border-indigo-100">
+                          <input
+                            type="month"
+                            value={extremeMonth}
+                            onChange={e => setExtremeMonth(e.target.value)}
+                            className="text-xs bg-transparent outline-none text-indigo-700"
+                          />
+                          <button
+                            onClick={() => {
+                              if (!extremeMonth) return;
+                              const [yStr, mStr] = extremeMonth.split("-");
+                              const y = parseInt(yStr, 10);
+                              const m = parseInt(mStr, 10);
+                              
+                              let minDate = "";
+                              let maxDate = "";
+                              let foundAny = false;
+                              
+                              db.users.forEach(u => {
+                                if (u.role === "RADIOGRAPHER" && u.personalCycles?.[extremeMonth]) {
+                                  const cy = u.personalCycles[extremeMonth];
+                                  if (cy.startDate) {
+                                    if (!foundAny || cy.startDate < minDate) minDate = cy.startDate;
+                                  }
+                                  if (cy.endDate) {
+                                    if (!foundAny || cy.endDate > maxDate) maxDate = cy.endDate;
+                                  }
+                                  foundAny = true;
+                                }
+                              });
+
+                              if (!foundAny) {
+                                let prevY = y, prevM = m - 1;
+                                if (prevM === 0) { prevM = 12; prevY--; }
+                                minDate = `${prevY}-${String(prevM).padStart(2, "0")}-26`;
+                                maxDate = `${y}-${String(m).padStart(2, "0")}-25`;
+                              }
+                              updateSyncTask(task.id, "start", minDate);
+                              updateSyncTask(task.id, "end", maxDate);
+
+                              if (task.id === 2) {
+                                const rs = new Date(minDate);
+                                rs.setDate(rs.getDate() - 5);
+                                const rsStr = `${rs.getFullYear()}-${String(rs.getMonth() + 1).padStart(2, "0")}-${String(rs.getDate()).padStart(2, "0")}`;
+                                
+                                const re = new Date(maxDate);
+                                re.setDate(re.getDate() - 5);
+                                const reStr = `${re.getFullYear()}-${String(re.getMonth() + 1).padStart(2, "0")}-${String(re.getDate()).padStart(2, "0")}`;
+                                
+                                updateSyncTask(task.id, "reportStart", rsStr);
+                                updateSyncTask(task.id, "reportEnd", reStr);
+                              }
+                            }}
+                            className="text-xs text-indigo-700 hover:text-indigo-900 font-medium ml-1 border-l border-indigo-200 pl-1 transition-colors"
+                          >
+                            自動偵測極端值
+                          </button>
+                        </div>
                       </div>
                       {task.id === 2 && (
                         <div className="flex items-center gap-3">
