@@ -6609,7 +6609,7 @@ BMD :{{bmd}}
       if (s.station === SYSTEM_OFF || s.station === StationDefault.UNASSIGNED)
         return false;
       const u = users.find((user) => user.id === s.userId);
-      return !!u && !u.isPartTime && !isUserOnEmploymentPause(u, date);
+      return !!u && !u.isPartTime && u.role !== UserRole.RADIOGRAPHER_ASSISTANT && !isUserOnEmploymentPause(u, date);
     });
 
     const sortedBeitou = nonPartTimeShifts
