@@ -3455,7 +3455,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                                   {dailyShifts.map((shift, idx) => (
                                     <div key={idx} className="flex flex-col items-center" style={{ transform: "scale(0.95)" }}>
                                       <span className="font-bold text-sm text-pink-800 leading-tight">
-                                        {shift.staffNames}
+                                        {shift.staff_names}
                                       </span>
                                       {shift.location && (
                                         <span className={`text-[10px] font-bold px-1 rounded whitespace-nowrap mt-0.5 ${shift.location === '大直' ? 'bg-red-500 text-white' : 'bg-slate-600 text-white'}`}>
@@ -4448,7 +4448,7 @@ const HMTodayView: React.FC<{
       );
 
       hShiftsForDay.forEach((hs: any) => {
-        const names = (hs.staffNames || "").split(",").map((n: string) => n.trim()).filter(Boolean);
+        const names = (hs.staff_names || "").split(",").map((n: string) => n.trim()).filter(Boolean);
         names.forEach((n: string) => {
           assignments.push({
             name: `${n}(H)`,
