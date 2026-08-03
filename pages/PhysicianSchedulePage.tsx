@@ -622,6 +622,10 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
     dayShifts.forEach((shift) => {
       if (shift.category && grouped[shift.category]) {
         grouped[shift.category].push(shift.staff_names);
+      } else if (shift.category === "H班") {
+        grouped["基因"].push(
+          shift.staff_names.split(",").map(n => `${n.trim()}(H)`).filter(Boolean).join(",")
+        );
       }
     });
 
@@ -4615,14 +4619,17 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
                                       className="p-1 border-r border-emerald-50 text-center min-w-[44px] md:min-w-[46px]"
                                     >
                                       {displayList.length > 0
-                                        ? displayList.map((name, i) => (
-                                            <div
-                                              key={`${name}-${i}`}
-                                              className="text-[12px] md:text-[13px] font-bold leading-tight whitespace-nowrap tracking-tight py-0.5 text-emerald-800"
-                                            >
-                                              {name}
-                                            </div>
-                                          ))
+                                        ? displayList.map((name, i) => {
+                                            const isH = name.endsWith("(H)");
+                                            return (
+                                              <div
+                                                key={`${name}-${i}`}
+                                                className={`text-[12px] md:text-[13px] font-bold leading-tight whitespace-nowrap tracking-tight py-0.5 ${isH ? "text-slate-900" : "text-emerald-800"}`}
+                                              >
+                                                {name}
+                                              </div>
+                                            );
+                                          })
                                         : "-"}
                                     </td>
                                   );
