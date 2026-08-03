@@ -2520,6 +2520,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
               location={currentUserLocation}
               shifts={shifts}
               staff={healthMgmtStaff}
+              geneHShifts={geneHShifts}
               canEdit={!isHmReadOnly}
               onSaveShift={async (userId, date, time) => {
                 const existing = shifts.find(
@@ -4228,6 +4229,7 @@ const HMTodayView: React.FC<{
   location: string;
   shifts: HealthMgmtShift[];
   staff: HealthMgmtStaff[];
+  geneHShifts?: any[];
   canEdit?: boolean;
   onSaveShift?: (userId: string, date: string, time: string) => Promise<void>;
 }> = ({
@@ -4236,6 +4238,7 @@ const HMTodayView: React.FC<{
   location,
   shifts,
   staff,
+  geneHShifts = [],
   canEdit = false,
   onSaveShift,
 }) => {
@@ -4437,6 +4440,26 @@ const HMTodayView: React.FC<{
             displayOrder: u?.displayOrder ?? 999,
           };
         });
+
+    if (group.id === "H" && geneHShifts && geneHShifts.length > 0) {
+      const hShiftsForDay = geneHShifts.filter((s: any) => 
+        s.date === dateStr && 
+        (location === "全部" || s.location === location)
+      );
+
+      hShiftsForDay.forEach((hs: any) => {
+        const names = (hs.staffNames || "").split(",").map((n: string) => n.trim()).filter(Boolean);
+        names.forEach((n: string) => {
+          assignments.push({
+            name: `${n}(H)`,
+            task: "",
+            time: "",
+            raw: { userId: `gene-h-${n}`, date: dateStr, station: "H", location: hs.location },
+            displayOrder: 9999,
+          });
+        });
+      });
+    }
 
     // Apply Sorting
     assignments.sort((a, b) => {
