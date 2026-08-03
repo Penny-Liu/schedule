@@ -1979,17 +1979,21 @@ class Store {
 
   // Users
   getUsers() {
-    if (
-      !this.settings.userDisplayOrder ||
-      this.settings.userDisplayOrder.length === 0
-    ) {
-      return [...this.users];
-    }
     const orderMap = new Map(
-      this.settings.userDisplayOrder.map((id, index) => [id, index]),
+      (this.settings.userDisplayOrder || []).map((id, index) => [id, index])
     );
-    // Sort users: ordered ones first, then others
+
+    // Sort users: 
+    // 1. Regular users by display order (ordered first, then new users at 9999)
+    // 2. RADIOGRAPHER_ASSISTANT always at the very bottom
     return [...this.users].sort((a, b) => {
+      const isAssistantA = a.role === "RADIOGRAPHER_ASSISTANT";
+      const isAssistantB = b.role === "RADIOGRAPHER_ASSISTANT";
+
+      // Assistants always go last
+      if (isAssistantA && !isAssistantB) return 1;
+      if (!isAssistantA && isAssistantB) return -1;
+
       const orderA = orderMap.has(a.id) ? orderMap.get(a.id)! : 9999;
       const orderB = orderMap.has(b.id) ? orderMap.get(b.id)! : 9999;
       return orderA - orderB;
