@@ -6918,7 +6918,7 @@ BMD :{{bmd}}
     }
 
     if (calcBmdSlots(beitouStats) > 0) {
-      out.push(buildLine("BD", formatNameStr(names.beitou.bmd), `${r(beitouStats.bmd)}位`, calcBmdSlots(beitouStats)));
+      out.push(buildLine("BMD", formatNameStr(names.beitou.bmd), `${r(beitouStats.bmd)}位`, calcBmdSlots(beitouStats)));
     }
     
     if (calcDxSlots(beitouStats) > 0) {
@@ -6930,7 +6930,7 @@ BMD :{{bmd}}
     }
     
     if (beitouStats.ctaPostProcessing > 0) {
-      out.push(buildLine("後處理", "", `${r(beitouStats.ctaPostProcessing)}位`, r(beitouStats.ctaPostProcessing * 5)));
+      out.push(buildLine("CTA後處理", "", `${r(beitouStats.ctaPostProcessing)}位`, r(beitouStats.ctaPostProcessing * 5)));
     }
 
     if (dDemand > 0) {
