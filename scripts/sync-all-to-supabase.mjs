@@ -897,52 +897,6 @@ export async function syncRadiographerWorkload(
     }
   });
 
-  // 5. 備份手動填寫的欄位（tsmc_report），同步後恢復
-  console.log(`[sync-stats] [SF API] 備份手動欄位 (tsmc_report)...`);
-  const { data: existingRows } = await supabase
-    .from("radiographer_workload")
-    .select("radiographerName, tsmc_report")
-    .eq("year", yearNum)
-    .eq("month", monthNum);
-  const manualFieldsMap = {};
-  (existingRows || []).forEach((r) => {
-    manualFieldsMap[r.radiographerName] = {
-      tsmc_report: r.tsmc_report ?? null,
-    };
-  });
-
-  console.log(
-    `[sync-stats] [SF API] 正在清理 Supabase 舊資料 (${yearNum}/${monthNum})...`,
-  );
-  await supabase
-    .from("radiographer_workload")
-    .delete()
-    .eq("year", yearNum)
-    .eq("month", monthNum);
-
-  // round2 MR 相關欄位，並恢復手動欄位
-  const updates = Object.values(workloadMap).map((w) => ({
-    ...w,
-    mr: Math.round(w.mr),
-    mr_large_male: round2(w.mr_large_male),
-    mr_large_female: round2(w.mr_large_female),
-    mr_medium: round2(w.mr_medium),
-    mr_small: round2(w.mr_small),
-    mr_teaching: Math.round(w.mr_teaching),
-    mr_large_male_teaching: round2(w.mr_large_male_teaching),
-    mr_large_female_teaching: round2(w.mr_large_female_teaching),
-    mr_medium_teaching: round2(w.mr_medium_teaching),
-    mr_small_teaching: round2(w.mr_small_teaching),
-    // 恢復手動填寫的值，不讓同步覆蓋
-    tsmc_report: manualFieldsMap[w.radiographerName]?.tsmc_report ?? null,
-  }));
-
-  console.log(`[sync-stats] [SF API] 正在寫入 ${updates.length} 筆最新資料...`);
-  const { error } = await supabase
-    .from("radiographer_workload")
-    .insert(updates);
-  if (error) throw error;
-  
   // 寫入每日明細
   const minDate = soqlStartDate < soqlReportStartDate ? soqlStartDate : soqlReportStartDate;
   const maxDate = soqlEndDate > soqlReportEndDate ? soqlEndDate : soqlReportEndDate;
