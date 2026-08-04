@@ -2252,7 +2252,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
           };
 
           const isBlockEnd = [
-            1, 9, 12, 16, 23, 29, 32, 33, 35, 36, 37,
+            1, 9, 12, 16, 24, 30, 33, 34, 35, 36, 37, 38,
           ].includes(colNumber);
           cell.border = {
             top: { style: "thin", color: { argb: "FFEEEEEE" } },
@@ -2265,19 +2265,19 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
           };
 
           // 資料列最後三欄顏色
-          if (colNumber === 33) {
+          if (colNumber === 34) {
             cell.fill = {
               type: "pattern",
               pattern: "solid",
               fgColor: { argb: "FFFFF9E6" },
             }; // 極淡黃
-          } else if (colNumber === 34) {
+          } else if (colNumber === 35) {
             cell.fill = {
               type: "pattern",
               pattern: "solid",
               fgColor: { argb: "FFF0F6FA" },
             }; // 極淡藍
-          } else if (colNumber === 35) {
+          } else if (colNumber === 36) {
             cell.fill = {
               type: "pattern",
               pattern: "solid",
@@ -2317,15 +2317,16 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
         { width: 8 },
         { width: 8 },
         { width: 8 },
-        { width: 8 }, // J-AC: 現場工作量
-        { width: 10 },
-        { width: 10 },
-        { width: 12 }, // AD-AF: 遠班工作量
-        { width: 12 },
-        { width: 12 },
-        { width: 12 },
-        { width: 30 },
-        { width: 20 }, // AG-AK: 加權, 教學與學習, 預估日期
+        { width: 8 }, // 29: MG
+        { width: 8 }, // 30: BMD (J-AD: 現場工作量)
+        { width: 10 }, // 31: 報告登打
+        { width: 10 }, // 32: 影像校對
+        { width: 12 }, // 33: 台積電報告 (AE-AG: 遠班工作量)
+        { width: 12 }, // 34: 現場加權
+        { width: 12 }, // 35: 遠班加權
+        { width: 12 }, // 36: 總加權
+        { width: 30 }, // 37: 教學與學習
+        { width: 20 }, // 38: 預估日期 (AH-AL: 加權, 教學與學習, 預估日期)
       ];
 
       // --- 第二個工作表：排序 ---
