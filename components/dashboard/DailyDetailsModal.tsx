@@ -188,7 +188,7 @@ export const DailyDetailsModal: React.FC<DailyDetailsModalProps> = ({
                       </td>
                       {FIELDS.map(f => {
                         const inCycle = !cycleStartDate || !cycleEndDate || (date >= cycleStartDate && date <= cycleEndDate);
-                        const isReportField = f.key === "proofreader" || f.key === "reportTyping" || f.key === "tsmcReport";
+                        const isReportField = f.key === "proofreader" || f.key === "tsmcReport";
                         const isApplicable = inCycle || isReportField;
                         const val = isApplicable ? (editingData[date]?.[f.key] || 0) : 0;
                         return (
@@ -214,7 +214,7 @@ export const DailyDetailsModal: React.FC<DailyDetailsModalProps> = ({
                           const inCycle = !cycleStartDate || !cycleEndDate || (date >= cycleStartDate && date <= cycleEndDate);
                           let sum = 0;
                           FIELDS.forEach(f => {
-                            const isReportField = f.key === "proofreader" || f.key === "reportTyping" || f.key === "tsmcReport";
+                            const isReportField = f.key === "proofreader" || f.key === "tsmcReport";
                             if (!inCycle && !isReportField) return;
                             sum += (editingData[date]?.[f.key] || 0) * (weights[f.key] || 0);
                           });
@@ -251,7 +251,7 @@ export const DailyDetailsModal: React.FC<DailyDetailsModalProps> = ({
                   {FIELDS.map(f => {
                     const total = dates.reduce((sum, d) => {
                       const inCycle = !cycleStartDate || !cycleEndDate || (d >= cycleStartDate && d <= cycleEndDate);
-                      const isReportField = f.key === "proofreader" || f.key === "reportTyping" || f.key === "tsmcReport";
+                      const isReportField = f.key === "proofreader" || f.key === "tsmcReport";
                       if (!inCycle && !isReportField) return sum;
                       return sum + (editingData[d]?.[f.key] || 0);
                     }, 0);
@@ -267,7 +267,7 @@ export const DailyDetailsModal: React.FC<DailyDetailsModalProps> = ({
                       dates.forEach(date => {
                         const inCycle = !cycleStartDate || !cycleEndDate || (date >= cycleStartDate && date <= cycleEndDate);
                         FIELDS.forEach(f => {
-                          const isReportField = f.key === "proofreader" || f.key === "reportTyping" || f.key === "tsmcReport";
+                          const isReportField = f.key === "proofreader" || f.key === "tsmcReport";
                           if (!inCycle && !isReportField) return;
                           grandTotal += (editingData[date]?.[f.key] || 0) * (weights[f.key] || 0);
                         });
