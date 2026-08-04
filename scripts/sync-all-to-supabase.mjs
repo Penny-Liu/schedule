@@ -549,6 +549,35 @@ export async function syncRadiographerWorkload(
     return null;
   };
 
+  const minDate = soqlStartDate < soqlReportStartDate ? soqlStartDate : soqlReportStartDate;
+  const maxDate = soqlEndDate > soqlReportEndDate ? soqlEndDate : soqlReportEndDate;
+
+  const { data: existingDaily } = await supabase
+    .from("radiographer_daily_workload")
+    .select("*")
+    .gte("date", minDate)
+    .lte("date", maxDate);
+
+  if (existingDaily) {
+    existingDaily.forEach(rec => {
+      const dWorkload = ensureDailyUser(rec.date, rec.radiographer_name);
+      Object.assign(dWorkload, rec);
+      
+      // Zero out fields if the date falls IN the current sync cycle for this user
+      if (isDateInCycle(rec.radiographer_name, rec.date, "normal")) {
+        [
+          "mr", "mr_large_male", "mr_large_female", "mr_medium", "mr_small",
+          "us", "us_a", "us_breast", "us_heart", "us_thy", "us_cca", "us_neck", 
+          "us_pelvis_female", "us_pelvis_male", "us_fibrosis",
+          "ct", "cta", "cta_post_processing", "dx", "mg", "bmd", "report_entry", "tsmc_report"
+        ].forEach(k => dWorkload[k] = 0);
+      }
+      if (isDateInCycle(rec.radiographer_name, rec.date, "proofing")) {
+        dWorkload.image_proofing = 0;
+      }
+    });
+  }
+
   const { data: shiftsData } = await supabase
     .from("shifts")
     .select("date, station, specialRoles, userId")
@@ -911,8 +940,6 @@ export async function syncRadiographerWorkload(
   });
 
   // 寫入每日明細
-  const minDate = soqlStartDate < soqlReportStartDate ? soqlStartDate : soqlReportStartDate;
-  const maxDate = soqlEndDate > soqlReportEndDate ? soqlEndDate : soqlReportEndDate;
   console.log(`[sync-stats] [SF API] 正在清理每日明細舊資料 (${minDate} ~ ${maxDate})...`);
   await supabase
     .from("radiographer_daily_workload")
