@@ -616,7 +616,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
       const studentShifts = shifts.filter(
         (s) =>
           s.userId === student.id &&
-          studentDates.includes(s.date) &&
+          generalDates.includes(s.date) &&
           (!estimationStartDate || s.date <= estimationStartDate || includeEstimation) &&
           s.station !== StationDefault.UNASSIGNED &&
           s.station !== StationDefault.OFF &&
@@ -641,11 +641,14 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
             const isLearning = isLearningCat(student, cat, shift.date);
 
             if (isLearning) {
-              if (!selectedDate || shift.date === selectedDate) {
-                if (!learningDates[student.id]) learningDates[student.id] = {};
-                if (!learningDates[student.id][cat])
-                  learningDates[student.id][cat] = new Set();
-                learningDates[student.id][cat].add(shift.date);
+              const inStudentCycle = studentDates.includes(shift.date);
+              if (inStudentCycle) {
+                if (!selectedDate || shift.date === selectedDate) {
+                  if (!learningDates[student.id]) learningDates[student.id] = {};
+                  if (!learningDates[student.id][cat])
+                    learningDates[student.id][cat] = new Set();
+                  learningDates[student.id][cat].add(shift.date);
+                }
               }
 
               const studentStations = studentShifts
@@ -660,6 +663,11 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
                   (s) => s.userId === r.id && s.date === shift.date,
                 );
                 if (teacherShiftsForDate.length === 0) return false;
+
+                // 老師的這天必須在老師「當前查詢月份的個人週期」內
+                const teacherCycle = r.personalCycles?.[currentMonth];
+                const teacherDates = teacherCycle ? buildDateRange(teacherCycle.startDate, teacherCycle.endDate) : generalDates;
+                if (!teacherDates.includes(shift.date)) return false;
 
                 // 老師必須跟學生在至少一個「完全相同」的崗位上
                 const hasMatchingStation = teacherShiftsForDate.some((ts) =>
