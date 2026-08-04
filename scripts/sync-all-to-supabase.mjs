@@ -907,6 +907,8 @@ export async function syncRadiographerWorkload(session, startDate, endDate) {
   Object.values(dailyWorkloadMap).forEach(usersMap => {
     Object.values(usersMap).forEach(w => {
         const cleanW = { ...w };
+        delete cleanW.id; // 移除原有的 id，避免 bulk insert 時部分有 id 部分無 id 導致 Supabase 填入 null 違反 constraint
+
         // Remove teaching columns as they don't exist in radiographer_daily_workload
         Object.keys(cleanW).forEach(k => {
           if (k.endsWith('_teaching')) {
