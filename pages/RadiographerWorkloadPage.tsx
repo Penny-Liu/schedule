@@ -2890,44 +2890,44 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
         // 3. 專案推動
         addSubHeader("【專案推動】");
         addTextRow("• 一森專案：排程、流程優化、月報彙整、ARIA手寫單");
+        addTextRow("• 關渡代檢專案");
         addTextRow("• 智慧醫療合作（醫師 / 報告組 / 放射）:");
         addTextRow(">> 遠健(遠距報告)、一森專案、報告系統優化", true);
         addTextRow(">> 大直超音波初步登打及校對", true);
         addTextRow(">> 台積電報告登打及校對", true);
         addTextRow(">> 一森檢查前SOAP確認", true);
         addTextRow(">> 一森報告校對", true);
-        addTextRow(
-          ">> 影像醫學部排班系統 + 全院排班系統(含醫師、基因、大直健管)",
-          true,
-        );
+        addTextRow(">> 影像醫學部排班系統 + 全院排班系統(含醫師、基因、大直健管)", true);
         addTextRow(">> Vibe coding：排班系統 / 報告登打片語庫", true);
 
         // 4. 人員管理與行政支援
         addSubHeader("【人員管理與行政支援】");
-        addTextRow("放射科部門科務管理:");
-        addTextRow(
-          "• 放射師人員成長儀表版 (技能/配合度/公事務參與/潛能)",
-          true,
-        );
-        addTextRow("• 放射師整月工作量單位u 統計 (現場/遠班/總)", true);
+        addTextRow("放射科部門科務管理");
+        addTextRow("• 放射師人員成長儀表版(技能/配合度/公事務參與/潛能)", true);
+        addTextRow("• 放射師整月工作量單位u 統計(現場/遠班/總)", true);
         addTextRow("• 放射師每日工作量", true);
         addTextRow("• 放射師每週期崗位安排", true);
         addTextRow("• 協助工讀生排班與任務分配", true);
         addTextRow("• 處理衛材耗材清點與請購", true);
         addTextRow("• Neupid 系統放射數據統計與月報統整", true);
-        addTextRow("• 放射師評核、受訓安排、人力搜尋、招募", true);
+        addTextRow("• 放射師評核、受訓安排(親自指導)", true);
         addTextRow("• 光碟燒錄流程優化", true);
         addTextRow("• 膠片配章管理", true);
         addTextRow("• 科會安排", true);
+        addTextRow("• 颱風班排班、工作安排", true);
+        addTextRow("院務協助");
+        addTextRow("• 現場流程優化", true);
+        addTextRow("• 醫政督考", true);
 
         // 5. 職責內容總覽
         addSubHeader("【職責內容總覽】");
         addTextRow("• 遠健公司：與醫師工作、智慧醫療數據、AI工具");
-        addTextRow("• 現場流程：協助支援北投/大直現場作業、人力招募與環境優化");
+        addTextRow("• 現場流程(協助支援北投／大直現場作業)、人力招募與環境優化");
         addTextRow("• 培育放射師多專才、提供臨床技術指導");
         addTextRow("• 儀器保養維護管理");
         addTextRow("• 協助醫師報告、影像校對、現場崗位支援");
-        addTextRow("• 影像相關資訊系統 / 硬體問題排除");
+        addTextRow("• 影像相關資訊系統/硬體問題排除");
+        addTextRow("• 院務協助，如督考、評鑑…");
       }
 
       const buffer = await workbook.xlsx.writeBuffer();
