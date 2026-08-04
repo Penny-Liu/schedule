@@ -505,7 +505,12 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
       if (selectedDate && selectedDate > maxDate) maxDate = selectedDate;
       if (selectedDate && selectedDate < minDate) minDate = selectedDate;
 
-      db.fetchDailyWorkloadsByRange(minDate, maxDate)
+      // 擴展 minDate 往前 5 天，以包含影像校對的週期
+      const fetchMinDateObj = new Date(minDate);
+      fetchMinDateObj.setDate(fetchMinDateObj.getDate() - 5);
+      const fetchMinDateStr = `${fetchMinDateObj.getFullYear()}-${String(fetchMinDateObj.getMonth() + 1).padStart(2, "0")}-${String(fetchMinDateObj.getDate()).padStart(2, "0")}`;
+
+      db.fetchDailyWorkloadsByRange(fetchMinDateStr, maxDate)
         .then((data) => {
           setCycleDailyDataDebug(`Success: fetched ${data.length} rows, range: ${minDate} to ${maxDate}`);
           setCycleDailyData(data);
@@ -910,11 +915,18 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
       } else {
         // Aggregate daily workloads within the user's personal cycle dates
         // For 'proofreader', we include the 5 days prior to the cycle start date
-        let proofreaderStartDate = personalCycle?.startDate;
+        let proofreaderStartDate = personalCycle?.startDate || (generalDates.length > 0 ? generalDates[0] : undefined);
+        let proofreaderEndDate = personalCycle?.endDate || (generalDates.length > 0 ? generalDates[generalDates.length - 1] : undefined);
+        
         if (proofreaderStartDate) {
           const pd = new Date(proofreaderStartDate);
           pd.setDate(pd.getDate() - 5);
           proofreaderStartDate = `${pd.getFullYear()}-${String(pd.getMonth() + 1).padStart(2, "0")}-${String(pd.getDate()).padStart(2, "0")}`;
+        }
+        if (proofreaderEndDate) {
+          const pd = new Date(proofreaderEndDate);
+          pd.setDate(pd.getDate() - 5);
+          proofreaderEndDate = `${pd.getFullYear()}-${String(pd.getMonth() + 1).padStart(2, "0")}-${String(pd.getDate()).padStart(2, "0")}`;
         }
 
         const userDailyData = cycleDailyData.filter(
@@ -931,7 +943,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
             wToUse[k] = userDailyData.reduce((sum, d) => {
               const isStrictCycle = userDates.includes(d.date);
               if (k === "proofreader") {
-                const isProofreaderCycle = (!proofreaderStartDate || !personalCycle?.endDate) || (d.date >= proofreaderStartDate && d.date <= personalCycle.endDate);
+                const isProofreaderCycle = (!proofreaderStartDate || !proofreaderEndDate) || (d.date >= proofreaderStartDate && d.date <= proofreaderEndDate);
                 return sum + (isProofreaderCycle ? (d[k] || 0) : 0);
               } else {
                 return sum + (isStrictCycle ? (d[k] || 0) : 0);
@@ -3771,12 +3783,16 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
           const user = radiographers.find(r => r.name === selectedRadiographerForDetails);
           if (!user) return generalDates;
           const uCycle = user.personalCycles?.[currentMonth];
-          if (!uCycle) return generalDates;
+          
+          let cycleStart = uCycle ? uCycle.startDate : (generalDates.length > 0 ? generalDates[0] : null);
+          let cycleEnd = uCycle ? uCycle.endDate : (generalDates.length > 0 ? generalDates[generalDates.length - 1] : null);
+          
+          if (!cycleStart || !cycleEnd) return generalDates;
           
           const expandedDates = [];
-          const current = new Date(uCycle.startDate);
+          const current = new Date(cycleStart);
           current.setDate(current.getDate() - 5);
-          const end = new Date(uCycle.endDate);
+          const end = new Date(cycleEnd);
           while (current <= end) {
             expandedDates.push(`${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, "0")}-${String(current.getDate()).padStart(2, "0")}`);
             current.setDate(current.getDate() + 1);
