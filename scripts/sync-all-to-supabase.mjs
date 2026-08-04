@@ -376,10 +376,23 @@ export async function syncRadiographerWorkload(
   const yearNum = parseInt(year, 10);
   const monthNum = parseInt(month, 10);
 
+  const { data: cyclesData } = await supabase
+    .from("cycles")
+    .select("name, startDate, endDate");
+  
+  const cycleName1 = `${year}/${String(monthNum).padStart(2, "0")}`;
+  const cycleName2 = `${year}/${monthNum}`;
+  const targetCycle = (cyclesData || []).find(c => c.name === cycleName1 || c.name === cycleName2);
+
   // Compute full month defaults for radiographer monthly totals
-  const defaultFirstDay = `${year}-${month.padStart(2, "0")}-01`;
-  const endDayDate = new Date(yearNum, monthNum, 0);
-  const defaultLastDay = `${endDayDate.getFullYear()}-${String(endDayDate.getMonth() + 1).padStart(2, "0")}-${String(endDayDate.getDate()).padStart(2, "0")}`;
+  let defaultFirstDay = `${year}-${month.padStart(2, "0")}-01`;
+  let endDayDate = new Date(yearNum, monthNum, 0);
+  let defaultLastDay = `${endDayDate.getFullYear()}-${String(endDayDate.getMonth() + 1).padStart(2, "0")}-${String(endDayDate.getDate()).padStart(2, "0")}`;
+
+  if (targetCycle) {
+    defaultFirstDay = targetCycle.startDate;
+    defaultLastDay = targetCycle.endDate;
+  }
 
   const userCycleMap = {};
   let soqlStartDate = defaultFirstDay;
