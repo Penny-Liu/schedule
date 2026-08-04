@@ -187,18 +187,24 @@ export const DailyDetailsModal: React.FC<DailyDetailsModalProps> = ({
                         {stationStr}
                       </td>
                       {FIELDS.map(f => {
-                        const val = editingData[date]?.[f.key] || 0;
+                        const inCycle = !cycleStartDate || !cycleEndDate || (date >= cycleStartDate && date <= cycleEndDate);
+                        const isApplicable = inCycle || f.key === "proofreader";
+                        const val = isApplicable ? (editingData[date]?.[f.key] || 0) : 0;
                         return (
                           <td key={f.key} className="px-1 py-1 whitespace-nowrap text-center">
-                            <input
-                              type="number"
-                              min="0"
-                              step="any"
-                              value={val === 0 ? '' : val}
-                              onChange={(e) => handleValueChange(date, f.key, e.target.value)}
-                              placeholder="0"
-                              className="w-full max-w-[60px] text-center text-sm border-b border-transparent focus:border-teal-500 focus:outline-none focus:ring-0 bg-transparent hover:bg-gray-100 py-1 transition-colors mx-auto block rounded-sm"
-                            />
+                            {isApplicable ? (
+                              <input
+                                type="number"
+                                min="0"
+                                step="any"
+                                value={val === 0 ? '' : val}
+                                onChange={(e) => handleValueChange(date, f.key, e.target.value)}
+                                placeholder="0"
+                                className="w-full max-w-[60px] text-center text-sm border-b border-transparent focus:border-teal-500 focus:outline-none focus:ring-0 bg-transparent hover:bg-gray-100 py-1 transition-colors mx-auto block rounded-sm"
+                              />
+                            ) : (
+                              <span className="text-gray-300">-</span>
+                            )}
                           </td>
                         );
                       })}
@@ -241,7 +247,11 @@ export const DailyDetailsModal: React.FC<DailyDetailsModalProps> = ({
                     -
                   </td>
                   {FIELDS.map(f => {
-                    const total = dates.reduce((sum, d) => sum + (editingData[d]?.[f.key] || 0), 0);
+                    const total = dates.reduce((sum, d) => {
+                      const inCycle = !cycleStartDate || !cycleEndDate || (d >= cycleStartDate && d <= cycleEndDate);
+                      if (!inCycle && f.key !== "proofreader") return sum;
+                      return sum + (editingData[d]?.[f.key] || 0);
+                    }, 0);
                     return (
                       <td key={f.key} className="px-1 py-3 whitespace-nowrap text-center text-sm font-bold text-gray-700">
                         {total > 0 ? Math.round(total * 10) / 10 : '-'}
