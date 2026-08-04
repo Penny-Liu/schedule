@@ -514,20 +514,7 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
 
   // ── Trigger Backend Sync ──
   const executeSync = async () => {
-    const selectedTasks = syncTasks.filter((t) => t.selected).map(t => {
-      // 確保將 UI 上的同步區間注入到 payload 中，避免使用舊的預設值
-      if (t.id === 2) {
-        return {
-          ...t,
-          start: syncDateRange.start,
-          end: syncDateRange.end,
-          reportStart: syncDateRange.start, // 相容舊版參數，以防 GitHub 上的腳本需要
-          reportEnd: syncDateRange.end
-        };
-      }
-      return t;
-    });
-
+    const selectedTasks = syncTasks.filter((t) => t.selected);
     if (selectedTasks.length === 0) {
       alert("請至少選擇一個要同步的區塊！");
       return;
