@@ -376,16 +376,27 @@ export async function syncRadiographerWorkload(
   const yearNum = parseInt(year, 10);
   const monthNum = parseInt(month, 10);
 
+  // Compute full month defaults for radiographer monthly totals
+  const defaultFirstDay = `${year}-${month.padStart(2, "0")}-01`;
+  const endDayDate = new Date(yearNum, monthNum, 0);
+  const defaultLastDay = `${endDayDate.getFullYear()}-${String(endDayDate.getMonth() + 1).padStart(2, "0")}-${String(endDayDate.getDate()).padStart(2, "0")}`;
+
   const userCycleMap = {};
-  let soqlStartDate = startDate;
-  let soqlEndDate = endDate;
-  let soqlReportStartDate = reportStartDate;
-  let soqlReportEndDate = reportEndDate;
+  let soqlStartDate = defaultFirstDay;
+  let soqlEndDate = defaultLastDay;
+  
+  const defaultRsDate = new Date(defaultFirstDay);
+  defaultRsDate.setDate(defaultRsDate.getDate() - 5);
+  let soqlReportStartDate = `${defaultRsDate.getFullYear()}-${String(defaultRsDate.getMonth() + 1).padStart(2, "0")}-${String(defaultRsDate.getDate()).padStart(2, "0")}`;
+  
+  const defaultReDate = new Date(defaultLastDay);
+  defaultReDate.setDate(defaultReDate.getDate() - 5);
+  let soqlReportEndDate = `${defaultReDate.getFullYear()}-${String(defaultReDate.getMonth() + 1).padStart(2, "0")}-${String(defaultReDate.getDate()).padStart(2, "0")}`;
 
   usersData.forEach(u => {
     const cleanName = validNamesMap[u.name.trim()] || u.name.trim();
-    let uStart = startDate;
-    let uEnd = endDate;
+    let uStart = defaultFirstDay;
+    let uEnd = defaultLastDay;
     if (u.personal_cycles && u.personal_cycles[targetMonthStr]) {
        const cy = u.personal_cycles[targetMonthStr];
        if (cy.startDate) uStart = cy.startDate;
