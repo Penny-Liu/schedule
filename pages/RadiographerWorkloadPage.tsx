@@ -2006,8 +2006,8 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
           : "";
       const titleText = `${y}年 ${mm}月放射師工作量統計（排班週期：${cycleText} (${dateRangeText})）`;
 
-      // 1. 新增第一列 Title (合併 A 到 AK) 37 欄
-      worksheet.mergeCells("A1:AK1");
+      // 1. 新增第一列 Title (合併 A 到 AL) 38 欄
+      worksheet.mergeCells("A1:AL1");
       const titleCell = worksheet.getCell("A1");
       titleCell.value = titleText;
       titleCell.font = { size: 16, bold: true, name: "微軟正黑體" };
@@ -2021,26 +2021,26 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
       worksheet.mergeCells("B2:I2");
       worksheet.getCell("B2").value = "上班天數";
 
-      worksheet.mergeCells("J2:AC2");
+      worksheet.mergeCells("J2:AD2");
       worksheet.getCell("J2").value = "現場工作量";
 
-      worksheet.mergeCells("AD2:AF2");
-      worksheet.getCell("AD2").value = "遠班工作量";
-
-      worksheet.mergeCells("AG2:AG3");
-      worksheet.getCell("AG2").value = "現場加權";
+      worksheet.mergeCells("AE2:AG2");
+      worksheet.getCell("AE2").value = "遠班工作量";
 
       worksheet.mergeCells("AH2:AH3");
-      worksheet.getCell("AH2").value = "遠班加權";
+      worksheet.getCell("AH2").value = "現場加權";
 
       worksheet.mergeCells("AI2:AI3");
-      worksheet.getCell("AI2").value = "總加權";
+      worksheet.getCell("AI2").value = "遠班加權";
 
       worksheet.mergeCells("AJ2:AJ3");
-      worksheet.getCell("AJ2").value = "教學與學習";
+      worksheet.getCell("AJ2").value = "總加權";
 
       worksheet.mergeCells("AK2:AK3");
-      worksheet.getCell("AK2").value = "預估日期";
+      worksheet.getCell("AK2").value = "教學與學習";
+
+      worksheet.mergeCells("AL2:AL3");
+      worksheet.getCell("AL2").value = "預估日期";
 
       // 欄位標題 (Row 3)
       const headersRow3 = [
@@ -2077,11 +2077,11 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
         "報告登打",
         "影像校對",
         "台積電報告",
-        "",
-        "",
-        "",
-        "",
-        "", // AG3, AH3, AI3, AJ3, AK3 (merged)
+        "", // AH3
+        "", // AI3
+        "", // AJ3
+        "", // AK3
+        "", // AL3 (merged)
       ];
       worksheet.getRow(3).values = headersRow3;
 
@@ -2089,7 +2089,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
       [2, 3].forEach((r) => {
         const row = worksheet.getRow(r);
         row.height = r === 3 ? 35 : 25;
-        for (let i = 1; i <= 37; i++) {
+        for (let i = 1; i <= 38; i++) {
           const cell = row.getCell(i);
           cell.font = {
             bold: true,
@@ -2105,7 +2105,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
 
           // 區塊最後一欄使用粗線劃分
           const isBlockEnd = [
-            1, 9, 12, 16, 23, 29, 32, 33, 35, 36, 37,
+            1, 9, 12, 16, 24, 30, 33, 34, 35, 36, 37, 38,
           ].includes(i);
           cell.border = {
             top: { style: "thin", color: { argb: "FFCCCCCC" } },
@@ -2137,24 +2137,24 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
         pattern: "solid",
         fgColor: { argb: "FFFFF2CC" },
       }; // 淡黃色 - 現場工作量
-      worksheet.getCell("AD2").fill = {
+      worksheet.getCell("AE2").fill = {
         type: "pattern",
         pattern: "solid",
         fgColor: { argb: "FFDDEBF7" },
       }; // 淡藍色 - 遠班工作量
 
-      // 覆寫最後三欄 (Row 2, AG, AH, AI) 的加權顏色
-      worksheet.getCell("AG2").fill = {
+      // 覆寫最後三欄 (Row 2, AH, AI, AJ) 的加權顏色
+      worksheet.getCell("AH2").fill = {
         type: "pattern",
         pattern: "solid",
         fgColor: { argb: "FFFFF2CC" },
       }; // 現場加權 (黃色系)
-      worksheet.getCell("AH2").fill = {
+      worksheet.getCell("AI2").fill = {
         type: "pattern",
         pattern: "solid",
         fgColor: { argb: "FFDDEBF7" },
       }; // 遠班加權 (藍色系)
-      worksheet.getCell("AI2").fill = {
+      worksheet.getCell("AJ2").fill = {
         type: "pattern",
         pattern: "solid",
         fgColor: { argb: "FFFCE4D6" },
