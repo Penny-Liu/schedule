@@ -514,7 +514,20 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
 
   // ── Trigger Backend Sync ──
   const executeSync = async () => {
-    const selectedTasks = syncTasks.filter((t) => t.selected);
+    const selectedTasks = syncTasks.filter((t) => t.selected).map(t => {
+      // 確保將 UI 上的同步區間注入到 payload 中，避免使用舊的預設值
+      if (t.id === 2) {
+        return {
+          ...t,
+          start: syncDateRange.start,
+          end: syncDateRange.end,
+          reportStart: syncDateRange.start, // 相容舊版參數，以防 GitHub 上的腳本需要
+          reportEnd: syncDateRange.end
+        };
+      }
+      return t;
+    });
+
     if (selectedTasks.length === 0) {
       alert("請至少選擇一個要同步的區塊！");
       return;
@@ -726,38 +739,7 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
                   </label>
                   {task.selected && (
                     <div className="mt-4 pl-8 flex flex-col gap-3">
-                      {task.id === 2 && (
-                        <div className="flex items-center gap-3">
-                          <span className="text-sm font-medium text-slate-600 w-20">
-                            快速選週期
-                          </span>
-                          <select
-                            className="text-sm border border-slate-300 rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-indigo-500 bg-slate-50"
-                            defaultValue=""
-                            onChange={(e) => {
-                              const c = cycles.find(cy => cy.id === e.target.value);
-                              if (c) {
-                                updateSyncTask(task.id, "start", c.startDate);
-                                updateSyncTask(task.id, "end", c.endDate);
-                                
-                                const rs = new Date(c.startDate);
-                                rs.setDate(rs.getDate() - 5);
-                                const rsStr = `${rs.getFullYear()}-${String(rs.getMonth() + 1).padStart(2, "0")}-${String(rs.getDate()).padStart(2, "0")}`;
-                                
-                                const re = new Date(c.endDate);
-                                re.setDate(re.getDate() - 5);
-                                const reStr = `${re.getFullYear()}-${String(re.getMonth() + 1).padStart(2, "0")}-${String(re.getDate()).padStart(2, "0")}`;
-                                
-                                updateSyncTask(task.id, "reportStart", rsStr);
-                                updateSyncTask(task.id, "reportEnd", reStr);
-                              }
-                            }}
-                          >
-                            <option value="" disabled>請選擇週期自動帶入日期</option>
-                            {cycles.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                          </select>
-                        </div>
-                      )}
+
                       <div className="flex items-center gap-3">
                         <span className="text-sm font-medium text-slate-600 w-20">
                           同步區間
@@ -820,119 +802,8 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
                         >
                           本月
                         </button>
-                        <div className="flex items-center gap-1 bg-indigo-50 rounded px-2 py-0.5 border border-indigo-100">
-                          <input
-                            type="month"
-                            value={extremeMonth}
-                            onChange={e => setExtremeMonth(e.target.value)}
-                            className="text-xs bg-transparent outline-none text-indigo-700"
-                          />
-                          <button
-                            onClick={() => {
-                              if (!extremeMonth) return;
-                              const [yStr, mStr] = extremeMonth.split("-");
-                              const y = parseInt(yStr, 10);
-                              const m = parseInt(mStr, 10);
-                              
-                              let minDate = "";
-                              let maxDate = "";
-                              let foundAny = false;
-                              
-                              db.users.forEach(u => {
-                                if (u.role === "RADIOGRAPHER" && u.personalCycles?.[extremeMonth]) {
-                                  const cy = u.personalCycles[extremeMonth];
-                                  if (cy.startDate) {
-                                    if (!foundAny || cy.startDate < minDate) minDate = cy.startDate;
-                                  }
-                                  if (cy.endDate) {
-                                    if (!foundAny || cy.endDate > maxDate) maxDate = cy.endDate;
-                                  }
-                                  foundAny = true;
-                                }
-                              });
 
-                              if (!foundAny) {
-                                let prevY = y, prevM = m - 1;
-                                if (prevM === 0) { prevM = 12; prevY--; }
-                                minDate = `${prevY}-${String(prevM).padStart(2, "0")}-26`;
-                                maxDate = `${y}-${String(m).padStart(2, "0")}-25`;
-                              }
-                              updateSyncTask(task.id, "start", minDate);
-                              updateSyncTask(task.id, "end", maxDate);
-
-                              if (task.id === 2) {
-                                const rs = new Date(minDate);
-                                rs.setDate(rs.getDate() - 5);
-                                const rsStr = `${rs.getFullYear()}-${String(rs.getMonth() + 1).padStart(2, "0")}-${String(rs.getDate()).padStart(2, "0")}`;
-                                
-                                const re = new Date(maxDate);
-                                re.setDate(re.getDate() - 5);
-                                const reStr = `${re.getFullYear()}-${String(re.getMonth() + 1).padStart(2, "0")}-${String(re.getDate()).padStart(2, "0")}`;
-                                
-                                updateSyncTask(task.id, "reportStart", rsStr);
-                                updateSyncTask(task.id, "reportEnd", reStr);
-                              }
-                            }}
-                            className="text-xs text-indigo-700 hover:text-indigo-900 font-medium ml-1 border-l border-indigo-200 pl-1 transition-colors"
-                          >
-                            自動偵測極端值
-                          </button>
-                        </div>
                       </div>
-                      {task.id === 2 && (
-                        <div className="flex items-center gap-3">
-                          <span className="text-sm font-medium text-slate-600 w-20">
-                            報告/校對
-                          </span>
-                          <input
-                            type="date"
-                            value={task.reportStart}
-                            onChange={(e) =>
-                              updateSyncTask(
-                                task.id,
-                                "reportStart",
-                                e.target.value,
-                              )
-                            }
-                            className="text-sm border border-slate-300 rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-indigo-500"
-                          />
-                          <span className="text-slate-400">~</span>
-                          <input
-                            type="date"
-                            value={task.reportEnd}
-                            onChange={(e) =>
-                              updateSyncTask(
-                                task.id,
-                                "reportEnd",
-                                e.target.value,
-                              )
-                            }
-                            className="text-sm border border-slate-300 rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-indigo-500"
-                          />
-                        </div>
-                      )}
-                      {task.id === 2 && (
-                        <div className="flex items-center gap-3">
-                          <span className="text-sm font-medium text-slate-600 w-20">
-                            寫入月份
-                          </span>
-                          <input
-                            type="month"
-                            value={task.targetMonth || ""}
-                            onChange={(e) =>
-                              updateSyncTask(
-                                task.id,
-                                "targetMonth",
-                                e.target.value,
-                              )
-                            }
-                            className="text-sm border border-slate-300 rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-indigo-500"
-                          />
-                          <span className="text-xs text-slate-400 ml-2">
-                            (若未填寫，系統會自動寫入上方「檢查量」的開始月份)
-                          </span>
-                        </div>
-                      )}
                     </div>
                   )}
                 </div>

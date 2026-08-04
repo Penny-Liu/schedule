@@ -326,25 +326,15 @@ async function syncDailyStats(session, startDate, endDate) {
 }
 
 // --- [2/3] 放射師工作量統計 ---
-// --- 放射師工作量統計 ---
-// --- 放射師工作量統計 ---
-export async function syncRadiographerWorkload(
-  session,
-  startDate,
-  endDate,
-  reportStartDate,
-  reportEndDate,
-  targetMonthOverride,
-) {
+export async function syncRadiographerWorkload(session, startDate, endDate) {
   console.log(
-    `\n[sync-stats] [2/2] 同步放射師工作量：檢查量 ${startDate} ~ ${endDate}；報告/校對 ${reportStartDate} ~ ${reportEndDate}`,
-    `\n[sync-stats] 同步放射師工作量：檢查量 ${startDate} ~ ${endDate}；報告/校對 ${reportStartDate} ~ ${reportEndDate}`,
+    `\n[sync-stats] [2/3] 同步放射師工作量：檢查量/報告/校對 ${startDate} ~ ${endDate}`
   );
   console.log(`[sync-stats] [SF API] 開始同步 (API 模式)...`);
 
   const { data: usersData } = await supabase
     .from("users")
-    .select("id, name, alias, learning_capabilities, personal_cycles")
+    .select("id, name, alias, learning_capabilities")
     .eq("is_radiographer", true);
   
   const validNamesMap = {};
@@ -371,87 +361,20 @@ export async function syncRadiographerWorkload(
     return "Unknown";
   }
 
-  const [year, month] = (targetMonthOverride || startDate).split("-");
-  const targetMonthStr = `${year}-${month.padStart(2, '0')}`;
-  const yearNum = parseInt(year, 10);
-  const monthNum = parseInt(month, 10);
-
-  const { data: cyclesData } = await supabase
-    .from("cycles")
-    .select("name, startDate, endDate");
-  
-  const cycleName1 = `${year}/${String(monthNum).padStart(2, "0")}`;
-  const cycleName2 = `${year}/${monthNum}`;
-  const targetCycle = (cyclesData || []).find(c => c.name === cycleName1 || c.name === cycleName2);
-
-  // Compute full month defaults for radiographer monthly totals
-  let defaultFirstDay = `${year}-${month.padStart(2, "0")}-01`;
-  let endDayDate = new Date(yearNum, monthNum, 0);
-  let defaultLastDay = `${endDayDate.getFullYear()}-${String(endDayDate.getMonth() + 1).padStart(2, "0")}-${String(endDayDate.getDate()).padStart(2, "0")}`;
-
-  if (targetCycle) {
-    defaultFirstDay = targetCycle.startDate;
-    defaultLastDay = targetCycle.endDate;
-  }
-
-  const userCycleMap = {};
-  let soqlStartDate = defaultFirstDay;
-  let soqlEndDate = defaultLastDay;
-  
-  const defaultRsDate = new Date(defaultFirstDay);
-  defaultRsDate.setDate(defaultRsDate.getDate() - 5);
-  let soqlReportStartDate = `${defaultRsDate.getFullYear()}-${String(defaultRsDate.getMonth() + 1).padStart(2, "0")}-${String(defaultRsDate.getDate()).padStart(2, "0")}`;
-  
-  const defaultReDate = new Date(defaultLastDay);
-  defaultReDate.setDate(defaultReDate.getDate() - 5);
-  let soqlReportEndDate = `${defaultReDate.getFullYear()}-${String(defaultReDate.getMonth() + 1).padStart(2, "0")}-${String(defaultReDate.getDate()).padStart(2, "0")}`;
-
-  usersData.forEach(u => {
-    const cleanName = validNamesMap[u.name.trim()] || u.name.trim();
-    let uStart = defaultFirstDay;
-    let uEnd = defaultLastDay;
-    if (u.personal_cycles && u.personal_cycles[targetMonthStr]) {
-       const cy = u.personal_cycles[targetMonthStr];
-       if (cy.startDate) uStart = cy.startDate;
-       if (cy.endDate) uEnd = cy.endDate;
-    }
-    const rsDate = new Date(uStart);
-    rsDate.setDate(rsDate.getDate() - 5);
-    const uReportStart = `${rsDate.getFullYear()}-${String(rsDate.getMonth() + 1).padStart(2, "0")}-${String(rsDate.getDate()).padStart(2, "0")}`;
-    
-    const reDate = new Date(uEnd);
-    reDate.setDate(reDate.getDate() - 5);
-    const uReportEnd = `${reDate.getFullYear()}-${String(reDate.getMonth() + 1).padStart(2, "0")}-${String(reDate.getDate()).padStart(2, "0")}`;
-    
-    userCycleMap[cleanName] = { start: uStart, end: uEnd, reportStart: uReportStart, reportEnd: uReportEnd };
-
-    if (uStart < soqlStartDate) soqlStartDate = uStart;
-    if (uEnd > soqlEndDate) soqlEndDate = uEnd;
-    if (uReportStart < soqlReportStartDate) soqlReportStartDate = uReportStart;
-    if (uReportEnd > soqlReportEndDate) soqlReportEndDate = uReportEnd;
-  });
+  const soqlStartDate = startDate;
+  const soqlEndDate = endDate;
+  const soqlReportStartDate = startDate;
+  const soqlReportEndDate = endDate;
 
   const isDateInCycle = (name, date, mode = "normal") => {
-    if (!date) return true;
-    const cy = userCycleMap[name];
-    if (!cy) return true;
-    const dateStr = date.split("T")[0];
-    if (mode === "proofing") {
-       return dateStr >= cy.reportStart && dateStr <= cy.reportEnd;
-    } else {
-       return dateStr >= cy.start && dateStr <= cy.end;
-    }
+    return true;
   };
-
-
 
   const workloadMap = {};
   const ensureUser = (name) => {
     if (!workloadMap[name]) {
       workloadMap[name] = {
         radiographerName: name,
-        year: yearNum,
-        month: monthNum,
         mr: 0,
         mr_large_male: 0,
         mr_large_female: 0,
@@ -939,7 +862,40 @@ export async function syncRadiographerWorkload(
     }
   });
 
-  // 寫入每日明細
+  console.log(`[sync-stats] [SF API] 正在準備每日明細資料 (${minDate} ~ ${maxDate})...`);
+  
+  // 為了避免「當天沒有 SF 排檢，但有人工輸入其它欄位」的人被清掉，我們必須先去 DB 撈出舊資料墊底
+  const { data: existingData, error: fetchErr } = await supabase
+    .from("radiographer_daily_workload")
+    .select("*")
+    .gte("date", minDate)
+    .lte("date", maxDate);
+    
+  if (!fetchErr && existingData) {
+    existingData.forEach(row => {
+      if (!dailyWorkloadMap[row.date]) dailyWorkloadMap[row.date] = {};
+      // 如果這個人這天原本就有資料，但剛才 SF 沒抓到他，就把他原封不動塞進去
+      // 如果 SF 有抓到他，剛才已經建立物件了，就把原本 DB 的值（例如教學欄位）補上去
+      if (!dailyWorkloadMap[row.date][row.radiographer_name]) {
+        // 如果這個人這天原本就有資料，但剛才 SF 沒抓到他，我們保留他的人工欄位，但把 SF 欄位「歸零」
+        dailyWorkloadMap[row.date][row.radiographer_name] = { 
+          ...row,
+          mr: 0, mr_large_male: 0, mr_large_female: 0, mr_medium: 0, mr_small: 0,
+          us: 0, us_a: 0, us_breast: 0, us_heart: 0, us_thy: 0, us_cca: 0, us_neck: 0,
+          us_pelvis_female: 0, us_pelvis_male: 0, us_fibrosis: 0,
+          ct: 0, cta: 0, dx: 0, mg: 0, bmd: 0, report_entry: 0, tsmc_report: 0, image_proofing: 0
+        };
+      } else {
+        const sfData = dailyWorkloadMap[row.date][row.radiographer_name];
+        // 把舊的教學、或其它手動欄位合併進來
+        dailyWorkloadMap[row.date][row.radiographer_name] = {
+          ...row, // 先把 DB 的全放進去
+          ...sfData, // 讓剛才 SF 算出來的數字覆蓋上去
+        };
+      }
+    });
+  }
+
   console.log(`[sync-stats] [SF API] 正在清理每日明細舊資料 (${minDate} ~ ${maxDate})...`);
   await supabase
     .from("radiographer_daily_workload")
@@ -1211,21 +1167,10 @@ async function syncPhysicianWorkload(session, startDate, endDate) {
 }
 
 // --- 主函式：供 Web 與 CLI 共同呼叫 ---
-export async function syncWorkloadForWeb(
-  startDate,
-  endDate,
-  reportStartDate,
-  reportEndDate,
-) {
+export async function syncWorkloadForWeb(startDate, endDate) {
   const session = await getSalesforceSession();
   await syncDailyStats(session, startDate, endDate);
-  await syncRadiographerWorkload(
-    session,
-    startDate,
-    endDate,
-    reportStartDate,
-    reportEndDate,
-  );
+  await syncRadiographerWorkload(session, startDate, endDate);
   await syncPhysicianWorkload(session, startDate, endDate);
 }
 
@@ -1311,26 +1256,10 @@ if (process.argv[1] === __filename) {
             );
           }
           if (task.id === 2) {
-            const y = today.getFullYear();
-            const mo = today.getMonth() + 1;
-            const firstDay = `${y}-${String(mo).padStart(2, "0")}-01`;
-            const lastDay = formatDate(new Date(y, mo, 0));
-            let prevY = y;
-            let prevMo = mo - 1;
-            if (prevMo === 0) {
-              prevMo = 12;
-              prevY--;
-            }
-            const rs = `${prevY}-${String(prevMo).padStart(2, "0")}-26`;
-            const re = `${y}-${String(mo).padStart(2, "0")}-25`;
-
             await syncRadiographerWorkload(
               session,
-              task.start || firstDay,
-              task.end || lastDay,
-              task.reportStart || rs,
-              task.reportEnd || re,
-              task.targetMonth || null
+              task.start,
+              task.end,
             );
           }
           if (task.id === 3) {
@@ -1384,28 +1313,12 @@ if (process.argv[1] === __filename) {
       const firstDay = `${y}-${String(mo).padStart(2, "0")}-01`;
       const lastDay = formatDate(new Date(y, mo, 0)); // month 0-indexed trick
 
-      // 報告校對預設：上個月26號 ~ 本月25號
-      let prevY = y;
-      let prevMo = mo - 1;
-      if (prevMo === 0) {
-        prevMo = 12;
-        prevY--;
-      }
-      const defaultReportStart = `${prevY}-${String(prevMo).padStart(2, "0")}-26`;
-      const defaultReportEnd = `${y}-${String(mo).padStart(2, "0")}-25`;
-
-      console.log(`  (各檢查量預設：本月 ${firstDay} ~ ${lastDay})`);
-      console.log(
-        `  (影像報告校對預設：${defaultReportStart} ~ ${defaultReportEnd})`,
-      );
-
-      const s2 = await askDate("各檢查量開始日期", firstDay);
-      const e2 = await askDate("各檢查量結束日期", lastDay);
-      const rs2 = await askDate("影像報告校對開始日期", defaultReportStart);
-      const re2 = await askDate("影像報告校對結束日期", defaultReportEnd);
+      console.log(`  (預設：本月 ${firstDay} ~ ${lastDay})`);
+            const s2 = await askDate("開始日期", firstDay);
+      const e2 = await askDate("結束日期", lastDay);
 
       try {
-        await syncRadiographerWorkload(session, s2, e2, rs2, re2, s2);
+        await syncRadiographerWorkload(session, s2, e2);
       } catch (err) {
         console.error("\n❌ [2/3] 執行失敗:", err);
       }

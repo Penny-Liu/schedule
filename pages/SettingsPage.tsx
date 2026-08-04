@@ -2653,66 +2653,6 @@ BMD :{{bmd}}
                       >
                         本月 (結算)
                       </button>
-                      <button
-                        onClick={() => {
-                          const today = new Date();
-                          const y = today.getFullYear();
-                          const m = today.getMonth();
-                          const firstDay = `${y}-${String(m + 1).padStart(2, "0")}-01`;
-                          const endDay = new Date(y, m + 1, 0);
-                          const lastDay = `${endDay.getFullYear()}-${String(endDay.getMonth() + 1).padStart(2, "0")}-${String(endDay.getDate()).padStart(2, "0")}`;
-                          setSyncStart(firstDay);
-                          setSyncEnd(lastDay);
-                        }}
-                        className="text-xs bg-teal-50 hover:bg-teal-100 text-teal-700 px-2 py-1 rounded transition-colors"
-                      >
-                        本月 (結算)
-                      </button>
-                      <div className="flex items-center gap-1 bg-teal-50 rounded px-2 py-0.5 border border-teal-100">
-                        <input
-                          type="month"
-                          value={extremeMonth}
-                          onChange={e => setExtremeMonth(e.target.value)}
-                          className="text-xs bg-transparent outline-none text-teal-700"
-                        />
-                        <button
-                          onClick={() => {
-                            if (!extremeMonth) return;
-                            const [yStr, mStr] = extremeMonth.split("-");
-                            const y = parseInt(yStr, 10);
-                            const m = parseInt(mStr, 10);
-                            
-                            let minDate = "";
-                            let maxDate = "";
-                            let foundAny = false;
-                            
-                            db.users.forEach(u => {
-                              if (u.role === "RADIOGRAPHER" && u.personalCycles?.[extremeMonth]) {
-                                const cy = u.personalCycles[extremeMonth];
-                                if (cy.startDate) {
-                                  if (!foundAny || cy.startDate < minDate) minDate = cy.startDate;
-                                }
-                                if (cy.endDate) {
-                                  if (!foundAny || cy.endDate > maxDate) maxDate = cy.endDate;
-                                }
-                                foundAny = true;
-                              }
-                            });
-
-                            if (!foundAny) {
-                              let prevY = y, prevM = m - 1;
-                              if (prevM === 0) { prevM = 12; prevY--; }
-                              minDate = `${prevY}-${String(prevM).padStart(2, "0")}-26`;
-                              maxDate = `${y}-${String(m).padStart(2, "0")}-25`;
-                            }
-                            setSyncStart(minDate);
-                            setSyncEnd(maxDate);
-                          }}
-                          className="text-xs text-teal-700 hover:text-teal-900 font-medium ml-1 border-l border-teal-200 pl-1 transition-colors"
-                        >
-                          自動偵測極端值
-                        </button>
-                      </div>
                     </div>
                     <button
                       onClick={handleSync}
