@@ -6857,12 +6857,14 @@ BMD :{{bmd}}
 
     // Load Rate Calculation Function
     const getLoadRateStr = (demand: number, supply: number) => {
-      if (supply === 0) return demand > 0 ? { emoji: "🔴", text: "負載 100%" } : { emoji: "🟢", text: "負載 0%" };
+      const formatStr = (rStr: string) => `負載 ${rStr} ｜ T值 ${r(supply)} ｜ Slot ${r(demand)}`;
+      if (supply === 0) return demand > 0 ? { emoji: "🔴", text: formatStr("100%") } : { emoji: "🟢", text: formatStr("0%") };
       const rate = (demand / supply) * 100;
       const rateStr = rate.toFixed(1) + "%";
-      if (rate < 75) return { emoji: "🟢", text: `負載 ${rateStr}` };
-      if (rate <= 90) return { emoji: "🟡", text: `負載 ${rateStr}` };
-      return { emoji: "🔴", text: `負載 ${rateStr}` };
+      const text = formatStr(rateStr);
+      if (rate < 75) return { emoji: "🟢", text };
+      if (rate <= 90) return { emoji: "🟡", text };
+      return { emoji: "🔴", text };
     };
 
     const bDemand = calcMrSlots(beitouStats) + calcUsSlots(beitouStats) + calcCtSlots(beitouStats) + beitouStats.ctaPostProcessing * 5 + calcBmdSlots(beitouStats) + calcDxSlots(beitouStats) + calcMgSlots(beitouStats) + beitouDemandExtra;
