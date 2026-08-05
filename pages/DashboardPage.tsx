@@ -4643,6 +4643,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                           {dateRange.map((date) => {
                             const { station, specialRoles, isOff, isNotHired } =
                               getDayShift(user.id, date);
+                            const existingShift = shiftMap.get(`${user.id}-${date}`);
                             const isToday =
                               toLocalISOString(new Date()) === date;
                             const pendingReq = getPendingRequest(user.id, date);
