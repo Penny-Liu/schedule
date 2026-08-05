@@ -6857,7 +6857,7 @@ BMD :{{bmd}}
 
     // Load Rate Calculation Function
     const getLoadRateStr = (demand: number, supply: number) => {
-      const formatStr = (rStr: string) => `負載 ${rStr} ｜ T值 ${r(supply)} ｜ Slot ${r(demand)}`;
+      const formatStr = (rStr: string) => `負載 ${rStr} ｜ Slot ${r(demand)} ｜ T值 ${r(supply)}`;
       if (supply === 0) return demand > 0 ? { emoji: "🔴", text: formatStr("100%") } : { emoji: "🟢", text: formatStr("0%") };
       const rate = (demand / supply) * 100;
       const rateStr = rate.toFixed(1) + "%";
