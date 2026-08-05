@@ -634,7 +634,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
         const processedDates = new Set<string>();
 
         studentShifts.forEach((shift) => {
-          if (isStationCat(shift.station, cat)) {
+          if (isStationCat(shift.station, cat) || (shift.learningStation && isStationCat(shift.learningStation, cat))) {
             if (processedDates.has(shift.date)) return;
             processedDates.add(shift.date);
 
