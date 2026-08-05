@@ -73,6 +73,22 @@ export const DailyDetailsModal: React.FC<DailyDetailsModalProps> = ({
     }
   }, [isOpen, dates, initialData]);
 
+  const proofreaderStartDate = React.useMemo(() => {
+    const baseDate = cycleStartDate || (dates.length > 0 ? dates[0] : undefined);
+    if (!baseDate) return undefined;
+    const pd = new Date(baseDate);
+    pd.setDate(pd.getDate() - 5);
+    return `${pd.getFullYear()}-${String(pd.getMonth() + 1).padStart(2, "0")}-${String(pd.getDate()).padStart(2, "0")}`;
+  }, [cycleStartDate, dates]);
+
+  const proofreaderEndDate = React.useMemo(() => {
+    const baseDate = cycleEndDate || (dates.length > 0 ? dates[dates.length - 1] : undefined);
+    if (!baseDate) return undefined;
+    const pd = new Date(baseDate);
+    pd.setDate(pd.getDate() - 5);
+    return `${pd.getFullYear()}-${String(pd.getMonth() + 1).padStart(2, "0")}-${String(pd.getDate()).padStart(2, "0")}`;
+  }, [cycleEndDate, dates]);
+
   if (!isOpen) return null;
 
   const handleValueChange = (date: string, fieldKey: string, valueStr: string) => {
@@ -122,22 +138,6 @@ export const DailyDetailsModal: React.FC<DailyDetailsModalProps> = ({
       setIsSaving(false);
     }
   };
-
-  const proofreaderStartDate = React.useMemo(() => {
-    const baseDate = cycleStartDate || (dates.length > 0 ? dates[0] : undefined);
-    if (!baseDate) return undefined;
-    const pd = new Date(baseDate);
-    pd.setDate(pd.getDate() - 5);
-    return `${pd.getFullYear()}-${String(pd.getMonth() + 1).padStart(2, "0")}-${String(pd.getDate()).padStart(2, "0")}`;
-  }, [cycleStartDate, dates]);
-
-  const proofreaderEndDate = React.useMemo(() => {
-    const baseDate = cycleEndDate || (dates.length > 0 ? dates[dates.length - 1] : undefined);
-    if (!baseDate) return undefined;
-    const pd = new Date(baseDate);
-    pd.setDate(pd.getDate() - 5);
-    return `${pd.getFullYear()}-${String(pd.getMonth() + 1).padStart(2, "0")}-${String(pd.getDate()).padStart(2, "0")}`;
-  }, [cycleEndDate, dates]);
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4">
