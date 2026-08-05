@@ -291,7 +291,9 @@ export const DailyDetailsModal: React.FC<DailyDetailsModalProps> = ({
                         const inCycle = !cycleStartDate || !cycleEndDate || (date >= cycleStartDate && date <= cycleEndDate);
                         FIELDS.forEach(f => {
                           const isReportField = f.key === "proofreader" || f.key === "tsmcReport";
-                          if (!inCycle && !isReportField) return;
+                          const isProofreaderCycle = (!proofreaderStartDate || !proofreaderEndDate) || (date >= proofreaderStartDate && date <= proofreaderEndDate);
+                          const isApplicable = isReportField ? isProofreaderCycle : inCycle;
+                          if (!isApplicable) return;
                           grandTotal += (editingData[date]?.[f.key] || 0) * (weights[f.key] || 0);
                         });
                         const shiftsOfDay = userShifts.filter(s => s.date === date);
