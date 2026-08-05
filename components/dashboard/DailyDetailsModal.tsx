@@ -123,6 +123,22 @@ export const DailyDetailsModal: React.FC<DailyDetailsModalProps> = ({
     }
   };
 
+  const proofreaderStartDate = React.useMemo(() => {
+    const baseDate = cycleStartDate || (dates.length > 0 ? dates[0] : undefined);
+    if (!baseDate) return undefined;
+    const pd = new Date(baseDate);
+    pd.setDate(pd.getDate() - 5);
+    return `${pd.getFullYear()}-${String(pd.getMonth() + 1).padStart(2, "0")}-${String(pd.getDate()).padStart(2, "0")}`;
+  }, [cycleStartDate, dates]);
+
+  const proofreaderEndDate = React.useMemo(() => {
+    const baseDate = cycleEndDate || (dates.length > 0 ? dates[dates.length - 1] : undefined);
+    if (!baseDate) return undefined;
+    const pd = new Date(baseDate);
+    pd.setDate(pd.getDate() - 5);
+    return `${pd.getFullYear()}-${String(pd.getMonth() + 1).padStart(2, "0")}-${String(pd.getDate()).padStart(2, "0")}`;
+  }, [cycleEndDate, dates]);
+
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4">
       <div className="bg-white rounded-xl shadow-xl w-full max-w-[95vw] flex flex-col max-h-[90vh] overflow-hidden">
@@ -193,7 +209,8 @@ export const DailyDetailsModal: React.FC<DailyDetailsModalProps> = ({
                       {FIELDS.map(f => {
                         const isReportField = f.key === "proofreader" || f.key === "tsmcReport";
                         const inCycle = !cycleStartDate || !cycleEndDate || (date >= cycleStartDate && date <= cycleEndDate);
-                        const isApplicable = inCycle || isReportField;
+                        const isProofreaderCycle = (!proofreaderStartDate || !proofreaderEndDate) || (date >= proofreaderStartDate && date <= proofreaderEndDate);
+                        const isApplicable = isReportField ? isProofreaderCycle : inCycle;
                         // Always show the value in the input so the user can see/edit the full daily record
                         const val = editingData[date]?.[f.key] || 0;
                         return (
@@ -217,7 +234,9 @@ export const DailyDetailsModal: React.FC<DailyDetailsModalProps> = ({
                           let sum = 0;
                           FIELDS.forEach(f => {
                             const isReportField = f.key === "proofreader" || f.key === "tsmcReport";
-                            if (!inCycle && !isReportField) return;
+                            const isProofreaderCycle = (!proofreaderStartDate || !proofreaderEndDate) || (date >= proofreaderStartDate && date <= proofreaderEndDate);
+                            const isApplicable = isReportField ? isProofreaderCycle : inCycle;
+                            if (!isApplicable) return;
                             sum += (editingData[date]?.[f.key] || 0) * (weights[f.key] || 0);
                           });
                           const shiftsOfDay = userShifts.filter(s => s.date === date);
@@ -254,7 +273,9 @@ export const DailyDetailsModal: React.FC<DailyDetailsModalProps> = ({
                     const total = dates.reduce((sum, d) => {
                       const inCycle = !cycleStartDate || !cycleEndDate || (d >= cycleStartDate && d <= cycleEndDate);
                       const isReportField = f.key === "proofreader" || f.key === "tsmcReport";
-                      if (!inCycle && !isReportField) return sum;
+                      const isProofreaderCycle = (!proofreaderStartDate || !proofreaderEndDate) || (d >= proofreaderStartDate && d <= proofreaderEndDate);
+                      const isApplicable = isReportField ? isProofreaderCycle : inCycle;
+                      if (!isApplicable) return sum;
                       return sum + (editingData[d]?.[f.key] || 0);
                     }, 0);
                     return (
