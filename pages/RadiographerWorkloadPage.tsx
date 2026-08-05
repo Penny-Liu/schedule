@@ -638,7 +638,8 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
             if (processedDates.has(shift.date)) return;
             processedDates.add(shift.date);
 
-            const isLearning = isLearningCat(student, cat, shift.date);
+            const explicitLearning = shift.learningStation && isStationCat(shift.learningStation, cat);
+            const isLearning = explicitLearning || isLearningCat(student, cat, shift.date);
 
             if (isLearning) {
               const inStudentCycle = studentDates.includes(shift.date);
@@ -651,36 +652,56 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
                 }
               }
 
-              const studentStations = studentShifts
-                .filter(
-                  (s) => s.date === shift.date && isStationCat(s.station, cat),
-                )
-                .map((s) => s.station);
+              let teachersOnSameDay: any[] = [];
+              let weightPerTeacher = 0;
 
-              const teachersOnSameDay = radiographers.filter((r) => {
-                if (r.id === student.id) return false;
-                const teacherShiftsForDate = shifts.filter(
-                  (s) => s.userId === r.id && s.date === shift.date,
-                );
-                if (teacherShiftsForDate.length === 0) return false;
+              if (explicitLearning && shift.learningTeacherId) {
+                // 有明確指定指導老師，直接灌給該老師
+                const explicitTeacher = radiographers.find(r => r.id === shift.learningTeacherId);
+                if (explicitTeacher) {
+                  // 確認該老師在這天有在老師的個人週期內
+                  const teacherCycle = explicitTeacher.personalCycles?.[currentMonth];
+                  const teacherDates = teacherCycle ? buildDateRange(teacherCycle.startDate, teacherCycle.endDate) : generalDates;
+                  if (teacherDates.includes(shift.date)) {
+                    teachersOnSameDay = [explicitTeacher];
+                    weightPerTeacher = 1; // 100% 點數給這位老師
+                  }
+                }
+              } else {
+                // 傳統邏輯：根據當天的崗位去找老師
+                const studentStations = studentShifts
+                  .filter(
+                    (s) => (s.date === shift.date && isStationCat(s.station, cat)) || (s.date === shift.date && s.learningStation && isStationCat(s.learningStation, cat)),
+                  )
+                  .map((s) => s.learningStation && isStationCat(s.learningStation, cat) ? s.learningStation : s.station);
 
-                // 老師的這天必須在老師「當前查詢月份的個人週期」內
-                const teacherCycle = r.personalCycles?.[currentMonth];
-                const teacherDates = teacherCycle ? buildDateRange(teacherCycle.startDate, teacherCycle.endDate) : generalDates;
-                if (!teacherDates.includes(shift.date)) return false;
+                teachersOnSameDay = radiographers.filter((r) => {
+                  if (r.id === student.id) return false;
+                  const teacherShiftsForDate = shifts.filter(
+                    (s) => s.userId === r.id && s.date === shift.date,
+                  );
+                  if (teacherShiftsForDate.length === 0) return false;
 
-                // 老師必須跟學生在至少一個「完全相同」的崗位上
-                const hasMatchingStation = teacherShiftsForDate.some((ts) =>
-                  studentStations.includes(ts.station),
-                );
-                if (!hasMatchingStation) return false;
+                  // 老師的這天必須在老師「當前查詢月份的個人週期」內
+                  const teacherCycle = r.personalCycles?.[currentMonth];
+                  const teacherDates = teacherCycle ? buildDateRange(teacherCycle.startDate, teacherCycle.endDate) : generalDates;
+                  if (!teacherDates.includes(shift.date)) return false;
 
-                const teacherIsLearning = isLearningCat(r, cat, shift.date);
-                return !teacherIsLearning;
-              });
+                  // 老師必須跟學生在至少一個「完全相同」的崗位上
+                  const hasMatchingStation = teacherShiftsForDate.some((ts) =>
+                    studentStations.includes(ts.station),
+                  );
+                  if (!hasMatchingStation) return false;
+
+                  const teacherIsLearning = isLearningCat(r, cat, shift.date);
+                  return !teacherIsLearning;
+                });
+                if (teachersOnSameDay.length > 0) {
+                  weightPerTeacher = 1 / teachersOnSameDay.length;
+                }
+              }
 
               if (teachersOnSameDay.length > 0) {
-                const weightPerTeacher = 1 / teachersOnSameDay.length;
 
                 // 從 cycleDailyData 中抓取該名學生「這一天」實際產出的工作量
                 const dData = cycleDailyData.find(
