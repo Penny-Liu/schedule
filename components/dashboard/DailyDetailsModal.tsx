@@ -180,32 +180,34 @@ export const DailyDetailsModal: React.FC<DailyDetailsModalProps> = ({
                   return (
                     <tr key={date} className={`hover:bg-teal-50 transition-colors ${isModified ? 'bg-orange-50/30' : ''}`}>
                       <td className={`px-3 py-2 whitespace-nowrap text-sm font-medium text-gray-900 sticky left-0 border-r border-gray-100 z-10 shadow-[1px_0_0_0_#f3f4f6] ${isModified ? 'bg-orange-50' : 'bg-white group-hover:bg-teal-50'}`}>
-                        {date}
+                        {(() => {
+                          const dateObj = new Date(date);
+                          const dayNames = ["日", "一", "二", "三", "四", "五", "六"];
+                          return `${dateObj.getMonth() + 1}/${dateObj.getDate()}(${dayNames[dateObj.getDay()]})`;
+                        })()}
                         {isModified && <span className="ml-2 w-2 h-2 rounded-full bg-orange-400 inline-block" title="已修改" />}
                       </td>
                       <td className={`px-2 py-2 whitespace-nowrap text-xs text-center font-medium text-slate-500 sticky left-[100px] border-r border-gray-100 z-10 shadow-[1px_0_0_0_#f3f4f6] ${isModified ? 'bg-orange-50/50' : 'bg-slate-50 group-hover:bg-teal-50/50'}`}>
                         {stationStr}
                       </td>
                       {FIELDS.map(f => {
-                        const inCycle = !cycleStartDate || !cycleEndDate || (date >= cycleStartDate && date <= cycleEndDate);
                         const isReportField = f.key === "proofreader" || f.key === "tsmcReport";
+                        const inCycle = !cycleStartDate || !cycleEndDate || (date >= cycleStartDate && date <= cycleEndDate);
                         const isApplicable = inCycle || isReportField;
-                        const val = isApplicable ? (editingData[date]?.[f.key] || 0) : 0;
+                        // Always show the value in the input so the user can see/edit the full daily record
+                        const val = editingData[date]?.[f.key] || 0;
                         return (
-                          <td key={f.key} className="px-1 py-1 whitespace-nowrap text-center">
-                            {isApplicable ? (
-                              <input
-                                type="number"
-                                min="0"
-                                step="any"
-                                value={val === 0 ? '' : val}
-                                onChange={(e) => handleValueChange(date, f.key, e.target.value)}
-                                placeholder="0"
-                                className="w-full max-w-[60px] text-center text-sm border-b border-transparent focus:border-teal-500 focus:outline-none focus:ring-0 bg-transparent hover:bg-gray-100 py-1 transition-colors mx-auto block rounded-sm"
-                              />
-                            ) : (
-                              <span className="text-gray-300">-</span>
-                            )}
+                          <td key={f.key} className={`px-1 py-1 whitespace-nowrap text-center ${!isApplicable ? 'opacity-50 bg-gray-50/50' : ''}`}>
+                            <input
+                              type="number"
+                              min="0"
+                              step="any"
+                              value={val === 0 ? '' : val}
+                              onChange={(e) => handleValueChange(date, f.key, e.target.value)}
+                              placeholder="0"
+                              title={!isApplicable ? "此項目不計入本週期加權總和" : ""}
+                              className="w-full max-w-[60px] text-center text-sm border-b border-transparent focus:border-teal-500 focus:outline-none focus:ring-0 bg-transparent hover:bg-gray-100 py-1 transition-colors mx-auto block rounded-sm"
+                            />
                           </td>
                         );
                       })}
