@@ -967,11 +967,11 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
             "mr", "mrLargeMale", "mrLargeFemale", "mrMedium", "mrSmall",
             "us", "usA", "usBreast", "usHeart", "usThy", "usCCA", "usNeck",
             "usPelvisFemale", "usPelvisMale", "usFibrosis", "ct", "cta", "ctaPostProcessing",
-            "dx", "mg", "bmd", "reportTyping", "proofreader"
+            "dx", "mg", "bmd", "reportTyping", "proofreader", "tsmcReport"
           ].forEach((k) => {
             wToUse[k] = userDailyData.reduce((sum, d) => {
               const isStrictCycle = userDates.includes(d.date);
-              if (k === "proofreader") {
+              if (k === "proofreader" || k === "tsmcReport") {
                 const isProofreaderCycle = (!proofreaderStartDate || !proofreaderEndDate) || (d.date >= proofreaderStartDate && d.date <= proofreaderEndDate);
                 return sum + (isProofreaderCycle ? (d[k] || 0) : 0);
               } else {
