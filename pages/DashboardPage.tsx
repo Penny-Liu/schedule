@@ -5,6 +5,7 @@ import type {
   DoctorShift,
   HealthMgmtStaff,
   HealthMgmtShift,
+  DailyManpowerStats,
 } from "../types";
 import {
   UserRole,
@@ -16,6 +17,7 @@ import {
   StationDefault,
   DateEventType,
   PERMISSIONS,
+  StaffGroup,
 } from "../types";
 import { db } from "../services/store";
 import { supabase } from "../services/supabaseClient";
@@ -48,7 +50,6 @@ import {
   CheckCircle,
   Loader2,
   User as UserIcon,
-  Key,
   Settings,
   Trash2,
   Check,
@@ -57,10 +58,10 @@ import {
   FileSpreadsheet,
   Heart,
 } from "lucide-react";
-import html2canvas from "html2canvas";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
-import ExcelJS from "exceljs";
+import {
+  loadExcelJS,
+  loadPdfLibraries,
+} from "../services/exportLibraries";
 import ConfirmModal from "../components/ConfirmModal";
 import {
   AutoScheduleModal,
@@ -341,7 +342,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
   useEffect(() => {
     // Only fetch for the current active date for "Today view", or dateRange for full cycle?
     // Let's just fetch for the current dailyDate in daily view, and dateRange in other views.
-    const start = scheduleRange.start || new Date().toISOString().split("T")[0];
+    const start = scheduleRange.start || toLocalISOString(new Date());
     const end = scheduleRange.end || start;
     if (start && end) {
       db.fetchDailyWorkloadsByRange(start, end).then(setDailyWorkloads);
@@ -392,17 +393,6 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
   // Track 7-day offset for mobile view
   const [mobileOffset, setMobileOffset] = useState(0);
 
-  // Force Password Change State
-  const [showForcePwdModal, setShowForcePwdModal] = useState(false);
-  const [forcePwdData, setForcePwdData] = useState({ new: "", confirm: "" });
-
-  // Initial check for password change requirement
-  useEffect(() => {
-    if (currentUser.mustChangePassword) {
-      setShowForcePwdModal(true);
-    }
-  }, [currentUser]);
-
   // Mobile: Auto refresh data on mount to ensure latest schedule
   useEffect(() => {
     if (window.innerWidth < 768) {
@@ -413,26 +403,6 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
       refresh();
     }
   }, []);
-
-  const handleForcePasswordSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      if (forcePwdData.new !== forcePwdData.confirm) {
-        alert("新密碼與確認密碼不符");
-        return;
-      }
-      if (forcePwdData.new.length < 4) {
-        alert("密碼長度至少需 4 碼");
-        return;
-      }
-      await db.changePassword(currentUser!.id, forcePwdData.new);
-      setShowForcePwdModal(false);
-      setForcePwdData({ new: "", confirm: "" });
-      alert("密碼修改成功！請繼續使用。");
-    } catch (err) {
-      alert("密碼更新失敗");
-    }
-  };
 
   // Subscribe to Store updates to ensure UI reflects data changes
   useEffect(() => {
@@ -818,6 +788,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
   const handleExportExcel = async () => {
     setIsExporting(true);
     try {
+      const ExcelJS = await loadExcelJS();
       const workbook = new ExcelJS.Workbook();
       const today = new Date();
       // const exportDate = today.toLocaleDateString('zh-TW');
@@ -1332,6 +1303,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
     if (e) e.preventDefault();
     setIsExporting(true);
     try {
+      const { jsPDF, autoTable } = await loadPdfLibraries();
       const doc = new jsPDF("l", "mm", "a4");
       const fontName = await loadChineseFontToDoc(doc);
 
@@ -2759,8 +2731,22 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
             if (item === StationDefault.ASSISTANT) {
               const googleNames = db.assistantShifts[date] || [];
               const googleStaff = googleNames.map((name) => ({
-                user: { name, id: `google-${name}`, isRadiographer: false, isActive: true },
-                shift: { specialRoles: [], station: item, date },
+                user: {
+                  name,
+                  id: `google-${name}`,
+                  username: `google-${name}`,
+                  role: UserRole.RADIOGRAPHER_ASSISTANT,
+                  groupId: StaffGroup.GROUP_A,
+                  isRadiographer: false,
+                  isActive: true,
+                } satisfies User,
+                shift: {
+                  id: `google-${name}-${date}`,
+                  userId: `google-${name}`,
+                  specialRoles: [],
+                  station: item,
+                  date,
+                } satisfies Shift,
               }));
               const existingNames = new Set(staff.map((s) => s.user?.name));
               const uniqueGoogleStaff = googleStaff.filter((s) => !existingNames.has(s.user.name));
@@ -5517,7 +5503,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                               });
 
                               const isToday =
-                                date === new Date().toISOString().split("T")[0];
+                                date === toLocalISOString(new Date());
                               const isReadOnlyRow = rowLabel === "上班醫師";
 
                               // Sort shifts by doctor display order
@@ -5795,69 +5781,6 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
           </div>
         )}
       </div>
-      {/* Force Password Change Modal */}
-      {showForcePwdModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6 border-2 border-red-100 animate-in fade-in zoom-in-95">
-            <div className="flex flex-col items-center gap-3 text-center mb-6">
-              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center text-red-600">
-                <Key size={24} />
-              </div>
-              <div>
-                <h3 className="text-xl font-bold text-gray-800">
-                  請修改您的密碼
-                </h3>
-                <p className="text-sm text-gray-500 mt-1">
-                  為了確保帳戶安全，首次登入或密碼重置後必須修改密碼。
-                </p>
-              </div>
-            </div>
-
-            <form onSubmit={handleForcePasswordSubmit} className="space-y-4">
-              <div>
-                <label className="text-xs font-bold text-gray-600 mb-1 block">
-                  新密碼
-                </label>
-                <input
-                  type="password"
-                  value={forcePwdData.new}
-                  onChange={(e) =>
-                    setForcePwdData({ ...forcePwdData, new: e.target.value })
-                  }
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-red-500"
-                  placeholder="請輸入新密碼"
-                  required
-                />
-              </div>
-              <div>
-                <label className="text-xs font-bold text-gray-600 mb-1 block">
-                  確認新密碼
-                </label>
-                <input
-                  type="password"
-                  value={forcePwdData.confirm}
-                  onChange={(e) =>
-                    setForcePwdData({
-                      ...forcePwdData,
-                      confirm: e.target.value,
-                    })
-                  }
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-red-500"
-                  placeholder="請再次輸入新密碼"
-                  required
-                />
-              </div>
-              <button
-                type="submit"
-                className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-xl shadow-lg shadow-red-200 transition-all mt-2"
-              >
-                確認修改並登入
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
-
       {/* Station Note Modal */}
       {stationNoteModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
@@ -6016,10 +5939,9 @@ const DailyManpowerSummary: React.FC<{
   shifts: Shift[];
   doctorShifts: DoctorShift[];
   currentUser: User;
-  dailyWorkloads: any[];
-}> = ({ date, users, shifts, doctorShifts, currentUser, dailyWorkloads }) => {
-  // Fetch Stats directly from Store (Read-Only here)
-  const stats = db.getDailyStats(date) || {
+  stats?: DailyManpowerStats;
+}> = ({ date, users, shifts, doctorShifts, currentUser, stats: suppliedStats }) => {
+  const stats: DailyManpowerStats = suppliedStats || {
     beitou_clients: 0,
     beitou_cta: 0,
     dazhi_clients: 0,
@@ -6840,7 +6762,7 @@ BMD :{{bmd}}
     const calcMgSlots = (st: any) => r(st.mg * 1);
 
     // --- Section 5 Calculation ---
-    const rawDailyStats = stats || {};
+    const rawDailyStats: DailyManpowerStats = stats;
     
     const beitouStats = {
       mrLargeMale: rawDailyStats.beitou_mr_large_male || 0,
@@ -7043,7 +6965,7 @@ BMD :{{bmd}}
     const section5 = out.join("\n");
 
     return { full: finalText, section1, section2, section3, section4, section5 };
-  }, [date, shifts, manpower, users, stats, doctorShifts, physicianWorkload, dailyWorkloads]);
+  }, [date, shifts, manpower, users, stats, doctorShifts, physicianWorkload]);
 
   const handleCopy = (text: string) => {
     navigator.clipboard.writeText(text).catch((err) => {

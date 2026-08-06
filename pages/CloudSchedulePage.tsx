@@ -1,10 +1,8 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { User, UserRole, ReportAssistant, CloudScheduleEntry, Doctor, PERMISSIONS } from '../types';
-import { generateUUID } from '../services/utils';
+import { generateUUID, toLocalISOString } from '../services/utils';
 import { db } from '../services/store';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
-import ExcelJS from 'exceljs';
+import { loadExcelJS, loadPdfLibraries } from '../services/exportLibraries';
 import { Cloud, ChevronLeft, ChevronRight, Plus, Pencil, Trash2, Check, X, UserCheck, Save, AlertCircle, Loader2, Eye, EyeOff, Filter } from 'lucide-react';
 import ConfirmModal from '../components/ConfirmModal';
 import { loadChineseFontToDoc } from '../services/pdfUtils';
@@ -112,7 +110,7 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
             const days: string[] = [];
             const temp = new Date(currentDate);
             for (let i = 0; i < 7; i++) {
-                days.push(temp.toISOString().split('T')[0]);
+                days.push(toLocalISOString(temp));
                 temp.setDate(temp.getDate() + 1);
             }
             return days;
@@ -302,12 +300,13 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
         ? currentDate.toLocaleDateString('zh-TW', { year: 'numeric', month: 'long' })
         : `${visibleDates[0]?.split('-')[2]}日 - ${visibleDates[visibleDates.length-1]?.split('-')[2]}日 (${currentDate.toLocaleDateString('zh-TW', { month: 'short' })})`;
 
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = toLocalISOString(new Date());
 
     // --- PDF Export Implementation ---
     const exportToPDF = async () => {
         try {
             showToast('正在產生 PDF...');
+            const { jsPDF, autoTable } = await loadPdfLibraries();
 
             // ---- Build month date array (always full month for PDF) ----
             const year = currentDate.getFullYear();
@@ -512,7 +511,7 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
             showToast('已完成匯出 PDF');
         } catch (e: any) {
             console.error('PDF Export Error:', e);
-            showToast('匹出失敗：' + (e.message || e));
+            showToast('匯出失敗：' + (e.message || e));
         }
     };
 
@@ -520,6 +519,7 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
     const exportToExcel = async () => {
         try {
             showToast('正在產生 Excel...');
+            const ExcelJS = await loadExcelJS();
 
             const year = currentDate.getFullYear();
             const month = currentDate.getMonth();
@@ -639,7 +639,7 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
             showToast('已完成匯出 Excel');
         } catch (e: any) {
             console.error('Excel Export Error:', e);
-            showToast('Excel 匹出失敗：' + (e.message || e));
+            showToast('Excel 匯出失敗：' + (e.message || e));
         }
     };
 

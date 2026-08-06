@@ -34,6 +34,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   onLogout,
   hasPendingLeaves,
 }) => {
+  const publicViewerAllowedPages = new Set(["physician_schedule", "cloud_schedule"]);
   // Define permissions based on requirements:
   // Supervisor & System Admin: Full Access (Dashboard, Stats, Leave, Staff, Settings(Admin only/Shared))
   const categories = [
@@ -243,6 +244,12 @@ const Sidebar: React.FC<SidebarProps> = ({
       <div className="flex items-center gap-2 md:gap-4 flex-1 overflow-x-auto no-scrollbar mx-2 py-1">
         {categories.map((cat, idx) => {
           const visibleItems = cat.items.filter((item) => {
+            if (
+              currentUser.role === UserRole.VIEWER &&
+              !publicViewerAllowedPages.has(item.id)
+            ) {
+              return false;
+            }
             if (
               "isRadiographerOnly" in item &&
               item.isRadiographerOnly &&

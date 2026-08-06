@@ -23,7 +23,7 @@ import {
   Info,
   Copy,
 } from "lucide-react";
-import ExcelJS from "exceljs";
+import { loadExcelJS } from "../services/exportLibraries";
 import { isUserOnEmploymentPause, generateUUID } from "../services/utils";
 import { DailyDetailsModal } from "../components/dashboard/DailyDetailsModal";
 
@@ -1723,6 +1723,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
         );
       } else {
         // 真實的 Excel 檔案 (用 exceljs)
+        const ExcelJS = await loadExcelJS();
         const workbook = new ExcelJS.Workbook();
         await workbook.xlsx.load(buffer);
         const worksheet = workbook.worksheets[0];
@@ -1813,6 +1814,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
       let rows: any[][] = [];
 
       try {
+        const ExcelJS = await loadExcelJS();
         const workbook = new ExcelJS.Workbook();
         await workbook.xlsx.load(buffer);
         const worksheet = workbook.worksheets[0];
@@ -1929,7 +1931,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
           const val = parseFloat(valStr) || 0;
           
           // 無論是 0 還是大於 0，只要欄位在 Excel 有出現就寫入 record，讓後端能正確覆蓋/清空
-          record[field as keyof RadiographerDailyWorkload] = val;
+          (record as Record<string, number | string | undefined>)[field] = val;
           
           // 計算差異值 (Delta) 加到 UI 的 newData 上，避免重複匯入時數字疊加
           const oldVal = existingDData ? (existingDData[field] || 0) : 0;
@@ -1976,6 +1978,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
         return;
       }
 
+      const ExcelJS = await loadExcelJS();
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet("每日工作量明細");
 
@@ -2021,6 +2024,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
 
   const handleExport = async () => {
     try {
+      const ExcelJS = await loadExcelJS();
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet("工作量統計");
 

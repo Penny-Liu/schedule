@@ -44,8 +44,8 @@ import {
   User as UserIcon,
   Clock,
 } from "lucide-react";
-import ExcelJS from "exceljs";
-import { getEmploymentPause, isUserOnEmploymentPause } from "../services/utils";
+import { loadExcelJS } from "../services/exportLibraries";
+import { getEmploymentPause, isUserOnEmploymentPause, toLocalISOString } from "../services/utils";
 import RadiographerWorkloadPage from "../pages/RadiographerWorkloadPage";
 import PhysicianWorkloadAnalysis from "../components/dashboard/PhysicianWorkloadAnalysis";
 
@@ -129,7 +129,7 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
 
   // Default to the current cycle (based on today) if found, otherwise first cycle (latest), otherwise 'rolling'
   const [selectedCycleId, setSelectedCycleId] = useState<string>(() => {
-    const today = new Date().toISOString().split("T")[0];
+    const today = toLocalISOString(new Date());
     const activeCycle = cycles.find(
       (c) => today >= c.startDate && today <= c.endDate,
     );
@@ -603,6 +603,7 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
   // ── Export Excel ──
   const handleExport = async () => {
     try {
+      const ExcelJS = await loadExcelJS();
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet("工作統計");
       // 欄位標題

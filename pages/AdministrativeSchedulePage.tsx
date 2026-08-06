@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from "react";
 import { supabase } from "../services/supabaseClient";
-import { PERMISSIONS, UserRole, DateEventType } from "../types";
+import { AdministrativeCategory, PERMISSIONS, UserRole, DateEventType } from "../types";
 import { db } from "../services/store";
 import {
   ChevronLeft,
@@ -27,10 +27,10 @@ import {
   Check,
   AlertCircle,
 } from "lucide-react";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
+import { loadPdfLibraries } from "../services/exportLibraries";
 import ConfirmModal from "../components/ConfirmModal";
 import { toLocalISOString, generateUUID } from "../services/utils";
+import { loadChineseFontToDoc } from "../services/pdfUtils";
 
 interface AdministrativeSchedulePageProps {
   currentUser: any;
@@ -44,17 +44,6 @@ const formatDateLocal = (date: Date) => {
   const d = String(date.getDate()).padStart(2, "0");
   return `${y}-${m}-${d}`;
 };
-
-// 行政人員分類
-export enum AdministrativeCategory {
-  CUSTOMER_SERVICE = "客服",
-  GENERAL_AFFAIRS = "智基",
-  IT = "資訊",
-  REPORTING = "報告",
-  ADMIN = "行政",
-  GENE = "基因",
-  GENE_H = "H班",
-}
 
 // 行政建檔人員接口
 export interface AdministrativeStaff {
@@ -118,6 +107,7 @@ const AdministrativeSchedulePage: React.FC<AdministrativeSchedulePageProps> = ({
   }, [currentDate]);
   const [shifts, setShifts] = useState<AdministrativeShift[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [confirmAction, setConfirmAction] = useState<() => void>(() => {});
   const [isDirty, setIsDirty] = useState(false);
@@ -318,15 +308,21 @@ const AdministrativeSchedulePage: React.FC<AdministrativeSchedulePageProps> = ({
   };
 
   // 匯出為 PDF
-  const exportToPDF = () => {
-    const pdf = new jsPDF();
-    const monthName = currentDate.toLocaleDateString("zh-TW", {
-      year: "numeric",
-      month: "long",
-    });
+  const exportToPDF = async () => {
+    if (isExportingPdf) return;
+    setIsExportingPdf(true);
+    try {
+      const { jsPDF, autoTable } = await loadPdfLibraries();
+      const pdf = new jsPDF("l", "mm", "a4");
+      const fontName = await loadChineseFontToDoc(pdf);
+      const monthName = currentDate.toLocaleDateString("zh-TW", {
+        year: "numeric",
+        month: "long",
+      });
 
-    pdf.setFontSize(16);
-    pdf.text(`${title} - ${monthName}`, 20, 20);
+      pdf.setFont(fontName, "bold");
+      pdf.setFontSize(16);
+      pdf.text(`${title} - ${monthName}`, 14, 15);
 
     const tableData =
       viewMode === "department"
@@ -394,7 +390,7 @@ const AdministrativeSchedulePage: React.FC<AdministrativeSchedulePageProps> = ({
               return row;
             });
 
-    autoTable(pdf, {
+      autoTable(pdf, {
       head: [
         [
           viewMode === "department" ? "部門" : "人員",
@@ -402,7 +398,25 @@ const AdministrativeSchedulePage: React.FC<AdministrativeSchedulePageProps> = ({
         ],
       ],
       body: tableData,
-      startY: 30,
+      startY: 21,
+      margin: { left: 5, right: 5 },
+      styles: {
+        font: fontName,
+        fontSize: 7,
+        cellPadding: 0.7,
+        halign: "center",
+        valign: "middle",
+        overflow: "linebreak",
+      },
+      headStyles: {
+        font: fontName,
+        fontStyle: "bold",
+        fillColor: [51, 65, 85],
+        textColor: [255, 255, 255],
+      },
+      columnStyles: {
+        0: { cellWidth: 22, fontStyle: "bold" },
+      },
       didParseCell: (data: any) => {
         if (data.column.index >= 1) {
           const day = data.column.index;
@@ -429,9 +443,15 @@ const AdministrativeSchedulePage: React.FC<AdministrativeSchedulePageProps> = ({
           }
         }
       },
-    });
+      });
 
-    pdf.save(`${title}_${monthName}.pdf`);
+      pdf.save(`${title}_${monthName}.pdf`);
+    } catch (error) {
+      console.error("PDF export failed:", error);
+      alert(error instanceof Error ? error.message : "PDF 匯出失敗，請稍後再試");
+    } finally {
+      setIsExportingPdf(false);
+    }
   };
 
   // 處理人員視角下的格子點擊（快速排班切換）
@@ -722,10 +742,11 @@ const AdministrativeSchedulePage: React.FC<AdministrativeSchedulePageProps> = ({
                 )}
                 <button
                   onClick={exportToPDF}
-                  className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors shadow-sm"
+                  disabled={isExportingPdf}
+                  className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:cursor-wait disabled:opacity-60 transition-colors shadow-sm"
                 >
                   <Download className="w-4 h-4" />
-                  匯出PDF
+                  {isExportingPdf ? "產生中..." : "匯出 PDF"}
                 </button>
               </div>
             </div>

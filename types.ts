@@ -18,6 +18,16 @@ export enum StaffGroup {
   GROUP_D = "D", // Rolling rotation: Sun always off, Mon-Sat rotate by index
 }
 
+export enum AdministrativeCategory {
+  CUSTOMER_SERVICE = "客服",
+  GENERAL_AFFAIRS = "智基",
+  IT = "資訊",
+  REPORTING = "報告",
+  ADMIN = "行政",
+  GENE = "基因",
+  GENE_H = "H班",
+}
+
 // ── 權限常量 ──────────────────────────
 export const PERMISSIONS = {
   VIEW_CLOUD_SCHEDULE: "view_cloud_schedule",
@@ -118,6 +128,7 @@ export interface User {
   id: string;
   name: string;
   username: string; // New: Replaces email for login
+  authUserId?: string; // Supabase Auth identity link, populated during staged migration
   role: UserRole;
   groupId: StaffGroup;
   color?: string; // Specific color for the user avatar
@@ -134,6 +145,7 @@ export interface User {
   primaryStation?: string; // New: Identifies the user's "Home" station (e.g., '遠距')
   isActive?: boolean; // New: Soft delete flag (true = active, false = resigned)
   resignationDate?: string; // New: Date of resignation YYYY-MM-DD
+  hireDate?: string; // Employment start date YYYY-MM-DD
   isRadiographer?: boolean; // New: Flag to indicate if user should appear in Radiographer Schedule
   isPartTime?: boolean; // New: Flag for part-time radiographers (hidden in main view)
   isHealthMgmt?: boolean; // New: Flag for health management staff
@@ -200,6 +212,7 @@ export interface Shift {
   date: string; // ISO Date string YYYY-MM-DD
   station: string;
   location?: string; // New: Work location (北投/大直)
+  supportLocation?: string; // Temporary support location used by scheduling flows
   specialRoles: string[];
   learningStation?: string; // e.g. "MR"
   learningTeacherId?: string; // UUID of the teacher
@@ -297,6 +310,14 @@ export interface CycleAnchor {
 export interface DailyManpowerStats {
   beitou_clients: number;
   beitou_cta: number;
+  beitou_mr_large_male?: number;
+  beitou_mr_large_female?: number;
+  beitou_mr_medium?: number;
+  beitou_mr_small?: number;
+  beitou_ct?: number;
+  beitou_bmd?: number;
+  beitou_dx?: number;
+  beitou_mg?: number;
   beitou_ultrasound?: number; // Total ultrasound count for Beitou
   beitou_ultrasound_heart?: number;
   beitou_ultrasound_fibrosis?: number;
@@ -315,6 +336,9 @@ export interface DailyManpowerStats {
   dazhi_ultrasound_abdomen?: number;
   dazhi_ultrasound_breast?: number;
   dazhi_ultrasound_pelvic?: number;
+  dazhi_bmd?: number;
+  dazhi_dx?: number;
+  dazhi_mg?: number;
   beitou_gi?: number; // New: Manual GI cases count
   beitou_mr?: number; // Unique MR clients
   beitou_mr_orders?: number; // New: Total MR order items count
@@ -428,7 +452,8 @@ export interface OperationLog {
     | "health_mgmt"
     | "anesthesia"
     | "cloud_schedule"
-    | "meeting_room";
+    | "meeting_room"
+    | "gene";
   details: {
     date?: string;
     dateRange?: { start: string; end: string };

@@ -1,27 +1,27 @@
-import React, { useState, useEffect } from "react";
-import { User, LeaveStatus, UserRole } from "./types";
+import React, { lazy, Suspense, useState, useEffect } from "react";
+import { AdministrativeCategory, User, LeaveStatus, UserRole } from "./types";
 import Sidebar from "./components/Sidebar";
 import LoginPage from "./pages/LoginPage";
-import DashboardPage from "./pages/DashboardPage";
-import LeavePage from "./pages/LeavePage";
-import StaffPage from "./pages/StaffPage";
-import SettingsPage from "./pages/SettingsPage";
-import StatisticsPage from "./pages/StatisticsPage";
-import DoctorManagerPage from "./pages/DoctorManagerPage";
 import { db } from "./services/store";
-import { Loader2 } from "lucide-react";
+import { AlertTriangle, Loader2 } from "lucide-react";
 import ChangePasswordPage from "./pages/ChangePasswordPage";
-import PhysicianSchedulePage from "./pages/PhysicianSchedulePage";
-import PhysicianSettingsPage from "./pages/PhysicianSettingsPage";
-import DoctorStatisticsPage from "./pages/DoctorStatisticsPage";
-import CloudSchedulePage from "./pages/CloudSchedulePage";
-import HealthMgmtPage from "./pages/HealthMgmtPage";
-import AdministrativeSchedulePage, {
-  AdministrativeCategory,
-} from "./pages/AdministrativeSchedulePage";
-import MeetingRoomPage from "./pages/MeetingRoomPage";
-import GenePage from "./pages/GenePage";
-import SkillDashboardPage from "./pages/SkillDashboardPage";
+import { isPasswordMigrationReadyForRole } from "./services/passwordPolicy.mjs";
+
+const DashboardPage = lazy(() => import("./pages/DashboardPage"));
+const LeavePage = lazy(() => import("./pages/LeavePage"));
+const StaffPage = lazy(() => import("./pages/StaffPage"));
+const SettingsPage = lazy(() => import("./pages/SettingsPage"));
+const StatisticsPage = lazy(() => import("./pages/StatisticsPage"));
+const DoctorManagerPage = lazy(() => import("./pages/DoctorManagerPage"));
+const PhysicianSchedulePage = lazy(() => import("./pages/PhysicianSchedulePage"));
+const PhysicianSettingsPage = lazy(() => import("./pages/PhysicianSettingsPage"));
+const DoctorStatisticsPage = lazy(() => import("./pages/DoctorStatisticsPage"));
+const CloudSchedulePage = lazy(() => import("./pages/CloudSchedulePage"));
+const HealthMgmtPage = lazy(() => import("./pages/HealthMgmtPage"));
+const AdministrativeSchedulePage = lazy(() => import("./pages/AdministrativeSchedulePage"));
+const MeetingRoomPage = lazy(() => import("./pages/MeetingRoomPage"));
+const GenePage = lazy(() => import("./pages/GenePage"));
+const SkillDashboardPage = lazy(() => import("./pages/SkillDashboardPage"));
 // Error Boundary Component
 class ErrorBoundary extends React.Component<
   { children: React.ReactNode },
@@ -68,12 +68,19 @@ const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [currentPage, setCurrentPage] = useState("dashboard");
   const [isLoading, setIsLoading] = useState(true);
+  const [authError, setAuthError] = useState<string | null>(null);
 
   // Init Data from Supabase & Auto-Refresh Setup
   useEffect(() => {
     const init = async () => {
-      await db.initializeAuthData();
-      setIsLoading(false);
+      try {
+        await db.initializeAuthData();
+        setAuthError(db.authLoadError);
+      } catch (error) {
+        setAuthError(error instanceof Error ? error.message : "無法載入登入資料");
+      } finally {
+        setIsLoading(false);
+      }
     };
     init();
 
@@ -92,6 +99,13 @@ const App: React.FC = () => {
     setIsLoading(true);
     setCurrentUser(user);
     db.currentUser = user;
+
+    // During the legacy-to-Auth transition, weak-password users may authenticate
+    // only far enough to replace their password. Do not load application data yet.
+    if (user.mustChangePassword || !isPasswordMigrationReadyForRole(user.password, user.role)) {
+      setIsLoading(false);
+      return;
+    }
     
     try {
       await db.initializeDataForUser(user);
@@ -180,16 +194,36 @@ const App: React.FC = () => {
     );
   }
 
+  if (authError) {
+    return (
+      <div className="h-screen w-full flex flex-col items-center justify-center bg-red-50 px-6 text-center">
+        <AlertTriangle size={48} className="text-red-600 mb-4" />
+        <h1 className="text-xl font-bold text-red-900 mb-2">無法載入登入資料</h1>
+        <p className="text-sm text-red-700 max-w-xl mb-6">{authError}</p>
+        <button
+          type="button"
+          className="rounded-lg bg-red-700 px-4 py-2 text-white hover:bg-red-800"
+          onClick={() => window.location.reload()}
+        >
+          重新載入
+        </button>
+      </div>
+    );
+  }
+
   if (!currentUser) {
     return <LoginPage onLogin={handleLogin} />;
   }
 
   // FORCE PASSWORD CHANGE CHECK
-  if (currentUser.mustChangePassword || currentUser.password === "1234") {
+  if (
+    currentUser.mustChangePassword ||
+    !isPasswordMigrationReadyForRole(currentUser.password, currentUser.role)
+  ) {
     return (
       <ChangePasswordPage
         currentUser={currentUser}
-        onPasswordChanged={(updatedUser) => setCurrentUser(updatedUser)}
+        onPasswordChanged={handleLogin}
         onLogout={handleLogout}
       />
     );
@@ -265,7 +299,17 @@ const App: React.FC = () => {
         />
 
         {/* Main Content Area */}
-        <main className="flex-1 overflow-hidden relative">{renderPage()}</main>
+        <main className="flex-1 overflow-hidden relative">
+          <Suspense
+            fallback={
+              <div className="h-full w-full flex items-center justify-center bg-gray-50 text-gray-500">
+                <Loader2 size={36} className="animate-spin text-teal-600" />
+              </div>
+            }
+          >
+            {renderPage()}
+          </Suspense>
+        </main>
       </div>
     </ErrorBoundary>
   );

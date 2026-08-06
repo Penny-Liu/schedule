@@ -118,7 +118,7 @@ export const DailyDetailsModal: React.FC<DailyDetailsModalProps> = ({
         FIELDS.forEach(f => {
           const val = rowData[f.key] || 0;
           if (val > 0) hasNonZero = true;
-          record[f.key as keyof RadiographerDailyWorkload] = val;
+          (record as Record<string, number | string | undefined>)[f.key] = val;
         });
 
         // Save if any field is > 0 OR if there was existing data for this date

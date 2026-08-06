@@ -45,10 +45,10 @@ import {
   Eye,
   EyeOff,
 } from "lucide-react";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
+import { loadPdfLibraries } from "../services/exportLibraries";
 import ConfirmModal from "../components/ConfirmModal";
 import { supabase } from "../services/supabaseClient";
+import { loadChineseFontToDoc } from "../services/pdfUtils";
 
 interface PhysicianSchedulePageProps {
   currentUser: any;
@@ -1143,71 +1143,9 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
     if (e) e.preventDefault();
 
     try {
+      const { jsPDF, autoTable } = await loadPdfLibraries();
       const doc = new jsPDF("l", "mm", "a4");
-      let fontName = "helvetica"; // Default fallback
-
-      // Load Open Huninn font for Chinese support (matches DashboardPage logic)
-      try {
-        const pathsToTry = [
-          "/schedule/fonts/jf-openhuninn-2.1.ttf",
-          "/fonts/jf-openhuninn-2.1.ttf",
-        ];
-
-        let response: Response | null = null;
-
-        const isValidFontResponse = (res: Response) => {
-          const type = res.headers.get("content-type");
-          // Must be OK and NOT text/html
-          return res.ok && (!type || !type.includes("text/html"));
-        };
-
-        for (const path of pathsToTry) {
-          try {
-            const res = await fetch(path);
-            if (isValidFontResponse(res)) {
-              response = res;
-              console.log("Font found at:", path);
-              break;
-            }
-          } catch (e) {
-            /* continue */
-          }
-        }
-
-        if (response) {
-          const blob = await response.blob();
-          const reader = new FileReader();
-
-          await new Promise((resolve, reject) => {
-            reader.onloadend = () => {
-              const base64data = reader.result as string;
-              if (base64data && base64data.includes("base64,")) {
-                const content = base64data.split("base64,")[1];
-                if (content) {
-                  doc.addFileToVFS("jf-openhuninn-2.1.ttf", content);
-                  doc.addFont("jf-openhuninn-2.1.ttf", "OpenHuninn", "normal");
-                  doc.addFont("jf-openhuninn-2.1.ttf", "OpenHuninn", "bold");
-                  doc.addFont("jf-openhuninn-2.1.ttf", "OpenHuninn", "italic");
-                  doc.setFont("OpenHuninn");
-                  fontName = "OpenHuninn";
-                  resolve(true);
-                } else {
-                  reject("Invalid font content");
-                }
-              } else {
-                reject("Invalid base64 data");
-              }
-            };
-            reader.onerror = reject;
-            reader.readAsDataURL(blob);
-          });
-        } else {
-          console.warn("Font file not found, using default font.");
-        }
-      } catch (error) {
-        console.error("Failed to load font:", error);
-        alert("字體載入失敗，將使用預設字體（中文可能會顯示為亂碼）。");
-      }
+      const fontName = await loadChineseFontToDoc(doc);
 
       const title = "醫師排班表";
       const subtitle = `${dateRange[0]} ~ ${dateRange[dateRange.length - 1]}`;
@@ -3546,7 +3484,7 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
 
                     const isHoliday = !!holiday;
                     const isToday =
-                      date === new Date().toISOString().split("T")[0];
+                      date === toLocalISOString(new Date());
 
                     return (
                       <th

@@ -1,9 +1,12 @@
 import express from "express";
-import cron from "node-cron";
 import { spawn } from "child_process";
+import { validateSyncPayload } from "./syncValidation.js";
 
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: "32kb" }));
+
+const SYNC_TIMEOUT_MS = 10 * 60 * 1000;
+let isSyncRunning = false;
 
 // 執行同步腳本的 Helper
 const runSyncBlocks = (payloadStr) => {
@@ -20,13 +23,28 @@ const runSyncBlocks = (payloadStr) => {
       stdio: "inherit", // 將輸出導向目前的終端機介面
     });
 
-    child.on("close", (code) => {
+    let settled = false;
+    const finish = (callback, value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      callback(value);
+    };
+
+    const timeout = setTimeout(() => {
+      child.kill("SIGTERM");
+      finish(reject, new Error("同步任務逾時"));
+    }, SYNC_TIMEOUT_MS);
+
+    child.once("error", (error) => finish(reject, error));
+
+    child.once("close", (code) => {
       if (code === 0) {
         console.log(`\n[Sync] 執行完成`);
-        resolve();
+        finish(resolve);
       } else {
         console.error(`\n[Sync] 執行失敗，離開碼: ${code}`);
-        reject(new Error(`執行失敗，離開碼: ${code}`));
+        finish(reject, new Error(`執行失敗，離開碼: ${code}`));
       }
     });
   });
@@ -34,18 +52,33 @@ const runSyncBlocks = (payloadStr) => {
 
 // 1. 給前端呼叫的 API 端點
 app.post("/api/sync-stats", async (req, res) => {
-  try {
-    const { syncPayload } = req.body;
-    if (!syncPayload) {
-      return res.status(400).json({ error: "無效的同步參數" });
-    }
+  if (isSyncRunning) {
+    return res.status(409).json({ success: false, error: "已有同步任務執行中" });
+  }
 
-    // 改為 await 等待腳本確實執行完畢，再回應給前端
-    await runSyncBlocks(syncPayload);
+  try {
+    const { syncPayload } = req.body || {};
+    const validatedPayload = validateSyncPayload(syncPayload);
+
+    isSyncRunning = true;
+    await runSyncBlocks(validatedPayload);
 
     res.json({ success: true, message: "同步任務已完成！" });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    const isValidationError = err instanceof Error && err.message.startsWith("syncPayload") ||
+      err instanceof Error && err.message.startsWith("Task") ||
+      err instanceof Error && err.message.startsWith("Each") ||
+      err instanceof Error && err.message.startsWith("At least") ||
+      err instanceof Error && err.message.startsWith("start") ||
+      err instanceof Error && err.message.startsWith("end");
+    const status = isValidationError ? 400 : 500;
+    console.error("[Sync] Request failed:", err);
+    res.status(status).json({
+      success: false,
+      error: status === 400 ? err.message : "同步任務執行失敗",
+    });
+  } finally {
+    isSyncRunning = false;
   }
 });
 
@@ -58,7 +91,8 @@ app.post("/api/sync-stats", async (req, res) => {
 
 
 const PORT = 3001;
-app.listen(PORT, () => {
+const HOST = "127.0.0.1";
+app.listen(PORT, HOST, () => {
   console.log(`🚀 排程伺服器已啟動，正在監聽 http://localhost:${PORT}`);
 });
 
