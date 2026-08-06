@@ -2563,11 +2563,11 @@ class Store {
         // Important: Ensure we don't accidentally change the ID
         const dbUpdate = { ...shift, id: targetId } as any;
         if (dbUpdate.learningStation !== undefined) {
-          dbUpdate.learning_station = dbUpdate.learningStation;
+          dbUpdate.learning_station = dbUpdate.learningStation === "" ? null : dbUpdate.learningStation;
           delete dbUpdate.learningStation;
         }
         if (dbUpdate.learningTeacherId !== undefined) {
-          dbUpdate.learning_teacher_id = dbUpdate.learningTeacherId;
+          dbUpdate.learning_teacher_id = dbUpdate.learningTeacherId === "" ? null : dbUpdate.learningTeacherId;
           delete dbUpdate.learningTeacherId;
         }
 
@@ -2585,11 +2585,11 @@ class Store {
 
         const dbInsert = { ...shift, id: newId } as any;
         if (dbInsert.learningStation !== undefined) {
-          dbInsert.learning_station = dbInsert.learningStation;
+          dbInsert.learning_station = dbInsert.learningStation === "" ? null : dbInsert.learningStation;
           delete dbInsert.learningStation;
         }
         if (dbInsert.learningTeacherId !== undefined) {
-          dbInsert.learning_teacher_id = dbInsert.learningTeacherId;
+          dbInsert.learning_teacher_id = dbInsert.learningTeacherId === "" ? null : dbInsert.learningTeacherId;
           delete dbInsert.learningTeacherId;
         }
 
@@ -3690,11 +3690,11 @@ class Store {
     const dbUpserts = shiftsToUpsert.map(shift => {
       const dbShift = { ...shift } as any;
       if (dbShift.learningStation !== undefined) {
-        dbShift.learning_station = dbShift.learningStation;
+        dbShift.learning_station = dbShift.learningStation === "" ? null : dbShift.learningStation;
         delete dbShift.learningStation;
       }
       if (dbShift.learningTeacherId !== undefined) {
-        dbShift.learning_teacher_id = dbShift.learningTeacherId;
+        dbShift.learning_teacher_id = dbShift.learningTeacherId === "" ? null : dbShift.learningTeacherId;
         delete dbShift.learningTeacherId;
       }
       return dbShift;
