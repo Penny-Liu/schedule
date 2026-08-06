@@ -3799,12 +3799,12 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
         cycleStartDate={(() => {
           if (!selectedRadiographerForDetails) return undefined;
           const user = radiographers.find(r => r.name === selectedRadiographerForDetails);
-          return user?.personalCycles?.[currentMonth]?.startDate;
+          return user?.personalCycles?.[currentMonth]?.startDate || (generalDates.length > 0 ? generalDates[0] : undefined);
         })()}
         cycleEndDate={(() => {
           if (!selectedRadiographerForDetails) return undefined;
           const user = radiographers.find(r => r.name === selectedRadiographerForDetails);
-          return user?.personalCycles?.[currentMonth]?.endDate;
+          return user?.personalCycles?.[currentMonth]?.endDate || (generalDates.length > 0 ? generalDates[generalDates.length - 1] : undefined);
         })()}
         dates={(() => {
           if (selectedDate) return [selectedDate];
