@@ -2561,9 +2561,19 @@ class Store {
 
         // Perform Update
         // Important: Ensure we don't accidentally change the ID
+        const dbUpdate = { ...shift, id: targetId } as any;
+        if (dbUpdate.learningStation !== undefined) {
+          dbUpdate.learning_station = dbUpdate.learningStation;
+          delete dbUpdate.learningStation;
+        }
+        if (dbUpdate.learningTeacherId !== undefined) {
+          dbUpdate.learning_teacher_id = dbUpdate.learningTeacherId;
+          delete dbUpdate.learningTeacherId;
+        }
+
         const { error: updateError } = await supabase
           .from("shifts")
-          .update({ ...shift, id: targetId })
+          .update(dbUpdate)
           .eq("id", targetId);
 
         if (updateError) throw updateError;
@@ -2573,9 +2583,19 @@ class Store {
         const newId = generateUUID();
         targetId = newId;
 
+        const dbInsert = { ...shift, id: newId } as any;
+        if (dbInsert.learningStation !== undefined) {
+          dbInsert.learning_station = dbInsert.learningStation;
+          delete dbInsert.learningStation;
+        }
+        if (dbInsert.learningTeacherId !== undefined) {
+          dbInsert.learning_teacher_id = dbInsert.learningTeacherId;
+          delete dbInsert.learningTeacherId;
+        }
+
         const { error: insertError } = await supabase
           .from("shifts")
-          .insert({ ...shift, id: newId });
+          .insert(dbInsert);
 
         if (insertError) throw insertError;
       }
@@ -3667,7 +3687,20 @@ class Store {
     });
 
     // Remote batch update
-    const { error } = await supabase.from("shifts").upsert(shiftsToUpsert);
+    const dbUpserts = shiftsToUpsert.map(shift => {
+      const dbShift = { ...shift } as any;
+      if (dbShift.learningStation !== undefined) {
+        dbShift.learning_station = dbShift.learningStation;
+        delete dbShift.learningStation;
+      }
+      if (dbShift.learningTeacherId !== undefined) {
+        dbShift.learning_teacher_id = dbShift.learningTeacherId;
+        delete dbShift.learningTeacherId;
+      }
+      return dbShift;
+    });
+    
+    const { error } = await supabase.from("shifts").upsert(dbUpserts);
     if (error) console.error("Batch upsert error:", error);
   }
 
