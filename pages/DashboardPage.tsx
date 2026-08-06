@@ -2175,7 +2175,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
 
   const getStationStaff = (stationName: string, dateStr: string) => {
     return shifts
-      .filter((s) => s.date === dateStr && s.station === stationName)
+      .filter((s) => s.date === dateStr && (s.station === stationName || (s.learningStation && stationName.includes(s.learningStation))))
       .map((s) => ({ user: users.find((u) => u.id === s.userId), shift: s }))
       .filter((item) => item.user !== undefined);
   };
@@ -4936,9 +4936,9 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                               const sortedStaff = [...staff].sort((a, b) => {
                                 if (!a.user || !b.user) return 0;
                                 const isALearner =
-                                  isUserLearningOnDate(a.user, row.label, date);
+                                  isUserLearningOnDate(a.user, row.label, date) || (a.shift?.learningStation && row.label.includes(a.shift.learningStation));
                                 const isBLearner =
-                                  isUserLearningOnDate(b.user, row.label, date);
+                                  isUserLearningOnDate(b.user, row.label, date) || (b.shift?.learningStation && row.label.includes(b.shift.learningStation));
 
                                 // Primary Sort: Learners go to bottom
                                 if (isALearner && !isBLearner) return 1;
@@ -5197,7 +5197,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
 
                                         // Check if this user is a Learner for this specific station
                                         const isLearner =
-                                          isUserLearningOnDate(item.user, row.label, date);
+                                          isUserLearningOnDate(item.user, row.label, date) || (item.shift?.learningStation && row.label.includes(item.shift.learningStation));
                                         // Revert: White override logic for learners in Station View
                                         if (isLearner) {
                                           chipClass =
@@ -6105,14 +6105,16 @@ const DailyManpowerSummary: React.FC<{
       // Check for Learning status (Station Match or Capability Match)
       const isLearning =
         s.station.includes("學習") ||
-        isUserLearningStationOnDate(u, s.station, s.date);
+        isUserLearningStationOnDate(u, s.station, s.date) ||
+        !!s.learningStation;
 
       // Modality Detection (regardless of Learning status, useful for tagging)
       let modality = "";
-      if (s.station.includes("MR")) modality = "MR";
-      else if (s.station.includes("US")) modality = "US";
-      else if (s.station.includes("CT")) modality = "CT";
-      else if (s.station.includes("BMD") || s.station.includes("DX"))
+      const relevantStation = s.learningStation || s.station;
+      if (relevantStation.includes("MR")) modality = "MR";
+      else if (relevantStation.includes("US") || relevantStation.includes("超音波")) modality = "US";
+      else if (relevantStation.includes("CT")) modality = "CT";
+      else if (relevantStation.includes("BMD") || relevantStation.includes("DX") || relevantStation.includes("MG"))
         modality = "BMD";
 
       // Counts
