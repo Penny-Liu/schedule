@@ -6713,7 +6713,8 @@ BMD :{{bmd}}
           !!u &&
           !u.isPartTime &&
           (s.station.includes("學習") ||
-            isUserLearningStationOnDate(u, s.station, s.date))
+            isUserLearningStationOnDate(u, s.station, s.date) ||
+            !!s.learningStation)
         );
       })
       .map(
@@ -6787,15 +6788,16 @@ BMD :{{bmd}}
 
 
       let groupName = "";
-      if (s.station.toLowerCase().includes("mr")) groupName = "mr";
-      else if (s.station.toLowerCase().includes("us") || s.station.includes("超音波")) groupName = "us";
-      else if (s.station.toLowerCase().includes("ct")) groupName = "ct";
-      else if (s.station.toLowerCase().includes("bmd") || s.station.includes("骨質") || s.station.includes("骨密") || (s.specialRoles || []).includes(SPECIAL_ROLES.DUAL_BMD)) groupName = "bmd";
-      else if (s.station.toLowerCase().includes("x光") || s.station.toLowerCase().includes("dx")) groupName = "dx";
-      else if (s.station.toLowerCase().includes("mg") || s.station.includes("乳房攝影")) groupName = "mg";
-      else if (s.station.includes("場控")) groupName = "leader";
+      const st = s.learningStation || s.station;
+      if (st.toLowerCase().includes("mr")) groupName = "mr";
+      else if (st.toLowerCase().includes("us") || st.includes("超音波")) groupName = "us";
+      else if (st.toLowerCase().includes("ct")) groupName = "ct";
+      else if (st.toLowerCase().includes("bmd") || st.includes("骨質") || st.includes("骨密") || (s.specialRoles || []).includes(SPECIAL_ROLES.DUAL_BMD)) groupName = "bmd";
+      else if (st.toLowerCase().includes("x光") || st.toLowerCase().includes("dx")) groupName = "dx";
+      else if (st.toLowerCase().includes("mg") || st.includes("乳房攝影")) groupName = "mg";
+      else if (st.includes("場控")) groupName = "leader";
 
-      const isLearning = s.station.includes("學習") || isUserLearningStationOnDate(user, s.station, s.date);
+      const isLearning = s.station.includes("學習") || isUserLearningStationOnDate(user, s.station, s.date) || !!s.learningStation;
 
       if (isDazhi) {
         if (groupName && (names.dazhi as any)[groupName]) {
