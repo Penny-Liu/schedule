@@ -2175,7 +2175,22 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
 
   const getStationStaff = (stationName: string, dateStr: string) => {
     return shifts
-      .filter((s) => s.date === dateStr && (s.station === stationName || (s.learningStation && stationName.includes(s.learningStation))))
+      .filter((s) => {
+        if (s.date !== dateStr) return false;
+        if (s.station === stationName) return true;
+        if (s.learningStation && stationName.includes(s.learningStation)) {
+           // If they have a teacher selected, they should ONLY appear in the teacher's station
+           if (s.learningTeacherId) {
+             const teacherShift = shifts.find(ts => ts.userId === s.learningTeacherId && ts.date === dateStr);
+             if (teacherShift && teacherShift.station === stationName) return true;
+             if (teacherShift) return false; // Teacher found but at a different station
+           }
+           // If NO teacher is selected, show them in the first matching station (alphabetically) to avoid duplicating across all
+           const allMatching = db.getStations().filter(st => st.includes(s.learningStation!)).sort();
+           if (allMatching.length > 0 && stationName === allMatching[0]) return true;
+        }
+        return false;
+      })
       .map((s) => ({ user: users.find((u) => u.id === s.userId), shift: s }))
       .filter((item) => item.user !== undefined);
   };
