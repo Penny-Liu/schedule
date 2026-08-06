@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { User, UserRole } from '../types';
 import { db } from '../services/store';
 import { LogIn, User as UserIcon, Lock, ChevronLeft, Shield, Calendar, Activity, Eye, ChevronDown } from 'lucide-react';
-import { getRoleLabel, isUserOnEmploymentPause } from '../services/utils';
+import { getRoleLabel, isUserOnEmploymentPause, toLocalISOString } from '../services/utils';
 
 interface LoginPageProps {
     onLogin: (user: User) => void;
@@ -15,7 +15,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
     const [selectedUser, setSelectedUser] = useState<User | null>(null);
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = toLocalISOString(new Date());
     const activeUsers = users.filter(u => {
         // If they are on employment pause, block them
         if (isUserOnEmploymentPause(u, todayStr)) return false;

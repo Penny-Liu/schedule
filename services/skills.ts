@@ -16,7 +16,7 @@ export const RADIOGRAPHER_SKILLS: SkillDefinition[] = [
     id: "R1",
     name: "X ray BMD",
     category: "Routine",
-    autoStations: [StationDefault.DX, StationDefault.BMD_DX],
+    autoStations: ["DX", StationDefault.BMD_DX],
   },
   // CT
   {
@@ -86,7 +86,7 @@ export const RADIOGRAPHER_SKILLS: SkillDefinition[] = [
     id: "MG",
     name: "MG",
     category: "Mammo",
-    autoStations: [StationDefault.MG],
+    autoStations: ["MG"],
   },
 ];
 

@@ -46,9 +46,7 @@ import {
 } from "lucide-react";
 import { toLocalISOString, generateUUID } from "../services/utils";
 import ConfirmModal from "../components/ConfirmModal";
-import ExcelJS from "exceljs";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
+import { loadExcelJS, loadPdfLibraries } from "../services/exportLibraries";
 import { loadChineseFontToDoc } from "../services/pdfUtils";
 
 // 統一且精準的站點分類器：保證「統計區」與「卡片區」分類絕對一致
@@ -763,6 +761,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
   };
 
   const handleExportStats = async () => {
+    const ExcelJS = await loadExcelJS();
     const label =
       selectedCycleId === "month"
         ? toLocalISOString(currentDate).substring(0, 7)
@@ -884,6 +883,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
 
   const handleExportScheduleExcel = async () => {
     try {
+      const ExcelJS = await loadExcelJS();
       const workbook = new ExcelJS.Workbook();
       const sheet = workbook.addWorksheet("健管排班表");
 
@@ -970,6 +970,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
 
   const handleExportSchedulePDF = async () => {
     try {
+      const { jsPDF, autoTable } = await loadPdfLibraries();
       const doc = new jsPDF("l", "mm", "a4");
       const fontName = await loadChineseFontToDoc(doc);
 
@@ -1048,7 +1049,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
       doc.save(`${locPrefixFile}健管排班表_${label}.pdf`);
     } catch (error) {
       console.error("PDF export failed:", error);
-      alert("匯出 PDF 失敗");
+      alert(error instanceof Error ? error.message : "匯出 PDF 失敗");
     }
   };
 
@@ -1462,6 +1463,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
 
   const handleExportAnesthesiaPDF = async () => {
     try {
+      const { jsPDF, autoTable } = await loadPdfLibraries();
       const doc = new jsPDF("l", "mm", "a4");
       const fontName = await loadChineseFontToDoc(doc);
 
@@ -1652,7 +1654,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
       doc.save(`麻護排班表_${subtitle.replace(/ /g, "")}.pdf`);
     } catch (error) {
       console.error("PDF Export Error:", error);
-      alert("匯出 PDF 失敗");
+      alert(error instanceof Error ? error.message : "匯出 PDF 失敗");
     }
   };
 
@@ -2130,13 +2132,13 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                     onClick={handleExportAnesthesiaPDF}
                     className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded text-xs font-bold flex items-center gap-1.5 shadow-sm transition-colors"
                   >
-                    <Download size={14} /> 匙出 PDF
+                    <Download size={14} /> 匯出 PDF
                   </button>
                   <button
                     onClick={handleExportStats}
                     className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded text-xs font-bold flex items-center gap-1.5 shadow-sm transition-colors"
                   >
-                    <FileSpreadsheet size={14} /> 匙出 Excel
+                    <FileSpreadsheet size={14} /> 匯出 Excel
                   </button>
                 </div>
               </div>

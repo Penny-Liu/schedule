@@ -27,12 +27,21 @@ import {
   AnesthesiaShift,
   OperationLog,
   RadiographerWorkload,
+  RadiographerDailyWorkload,
   MeetingRoomBooking,
   GeneAppointment,
 } from "../types";
-import { MOCK_USERS, MOCK_LEAVES } from "./mockData";
 import { supabase } from "./supabaseClient";
-import { generateUUID, isUserOnEmploymentPause } from "./utils";
+import {
+  assertPasswordMigrationReady,
+  assertPasswordMigrationReadyForRole,
+} from "./passwordPolicy.mjs";
+import {
+  countNonSundayDays,
+  generateUUID,
+  isUserOnEmploymentPause,
+  toLocalISOString,
+} from "./utils";
 
 const SCHEDULE_STORAGE_KEY = "radiology_schedule_data";
 
@@ -96,7 +105,6 @@ export const getPermissionsByRole = (role: UserRole): string[] => {
   }
 };
 
-import { toLocalISOString, countNonSundayDays } from "./utils";
 import { fetchAssistantData, AssistantData } from "./assistantService";
 
 const isUserCertifiedOnDate = (user: User | undefined | null, cap: string, date: string): boolean => {
@@ -146,6 +154,7 @@ class Store {
   meetingRoomBookings: MeetingRoomBooking[] = [];
   geneAppointments: GeneAppointment[] = [];
   isLoaded: boolean = false;
+  authLoadError: string | null = null;
   connectionStatus: { type: "Supabase" | "Mock"; details?: string } = {
     type: "Supabase",
   }; // Default assumption
@@ -547,6 +556,7 @@ class Store {
   
   async initializeAuthData(force: boolean = false) {
     if (this.isLoaded && !force) return;
+    this.authLoadError = null;
 
     try {
       const logsData = localStorage.getItem("operation_logs");
@@ -573,7 +583,7 @@ class Store {
 
           // Auto-graduation logic
           if (mappedUser.learningSchedules) {
-            const today = new Date().toISOString().split("T")[0];
+            const today = toLocalISOString(new Date());
             let needsUpdate = false;
             
             const updatedSchedules = { ...mappedUser.learningSchedules };
@@ -637,12 +647,19 @@ class Store {
           }
           if (mappedUser.isRadiographer && !permissions.includes("physician_view")) permissions.push("physician_view");
 
+          // The announced VIEWER credential is public. Never honor custom or
+          // legacy permissions that could expand it beyond the approved views.
+          if (mappedUser.role === UserRole.VIEWER) {
+            permissions = getPermissionsByRole(UserRole.VIEWER);
+          }
+
           return { ...mappedUser, permissions: Array.from(new Set(permissions)) };
         });
         this.connectionStatus = { type: "Supabase", details: `Loaded ${this.users.length} users` };
       } else {
-        this.users = MOCK_USERS;
-        this.connectionStatus = { type: "Mock", details: `Fallback triggered.` };
+        this.users = [];
+        this.authLoadError = usersRes.error?.message || "Supabase did not return any users.";
+        this.connectionStatus = { type: "Supabase", details: this.authLoadError };
       }
 
       let finalSettingsData = null;
@@ -665,7 +682,9 @@ class Store {
       this.isLoaded = true;
     } catch (e: any) {
       console.error("Failed to fetch auth data", e);
-      this.users = MOCK_USERS;
+      this.users = [];
+      this.authLoadError = e?.message || "Unable to load authentication data from Supabase.";
+      this.connectionStatus = { type: "Supabase", details: this.authLoadError };
       this.isLoaded = true;
     }
   }
@@ -1603,7 +1622,10 @@ class Store {
       if (error) throw error;
       
       
-      await this.logOperation("gene_appointment_create", `新增基因預約 ${appointments.length} 筆`);
+      this.logOperation("assign", "gene", {
+        affectedCount: appointments.length,
+        note: `新增基因預約 ${appointments.length} 筆`,
+      });
     } catch (e) {
       console.error("Failed to add gene appointments:", e);
       const ids = appointments.map((b) => b.id);
@@ -1622,7 +1644,10 @@ class Store {
       const { error } = await supabase.from("gene_appointments").delete().eq("id", id);
       if (error) throw error;
       if (bookingToDel) {
-        await this.logOperation("gene_appointment_delete", `刪除基因預約 ${bookingToDel.date} ${bookingToDel.startTime}`);
+        this.logOperation("delete", "gene", {
+          date: bookingToDel.date,
+          note: `刪除基因預約 ${bookingToDel.date} ${bookingToDel.startTime}`,
+        });
       }
     } catch (e) {
       console.error("Failed to delete gene appointment:", e);
@@ -1941,40 +1966,49 @@ class Store {
 
   async changePassword(userId: string, newPass: string) {
     const u = this.users.find((u) => u.id === userId);
-    if (u) {
-      u.password = newPass;
-      u.mustChangePassword = false; // Clear flag
-      // Sync DB
-      await supabase
-        .from("users")
-        .update({ password: newPass, must_change_password: false })
-        .eq("id", userId);
-    }
+    if (!u) throw new Error("User not found");
+    assertPasswordMigrationReadyForRole(newPass, u.role);
+
+    const { error } = await supabase
+      .from("users")
+      .update({ password: newPass, must_change_password: false })
+      .eq("id", userId);
+    if (error) throw error;
+
+    u.password = newPass;
+    u.mustChangePassword = false;
+    this.notifyListeners();
   }
 
   async resetPassword(userId: string) {
     const u = this.users.find((u) => u.id === userId);
-    if (u) {
-      u.password = "1234";
-      u.mustChangePassword = true; // Force change on next login
-      // Sync DB
-      await supabase
-        .from("users")
-        .update({ password: "1234", must_change_password: true })
-        .eq("id", userId);
-    }
+    if (!u) throw new Error("User not found");
+
+    const { error } = await supabase
+      .from("users")
+      .update({ password: "1234", must_change_password: true })
+      .eq("id", userId);
+    if (error) throw error;
+
+    u.password = "1234";
+    u.mustChangePassword = true;
+    this.notifyListeners();
   }
 
   async updateUserPassword(userId: string, newPass: string) {
     const u = this.users.find((u) => u.id === userId);
-    if (u) {
-      u.password = newPass;
-      u.mustChangePassword = false;
-      await supabase
-        .from("users")
-        .update({ password: newPass, must_change_password: false })
-        .eq("id", userId);
-    }
+    if (!u) throw new Error("User not found");
+    assertPasswordMigrationReadyForRole(newPass, u.role);
+
+    const { error } = await supabase
+      .from("users")
+      .update({ password: newPass, must_change_password: false })
+      .eq("id", userId);
+    if (error) throw error;
+
+    u.password = newPass;
+    u.mustChangePassword = false;
+    this.notifyListeners();
   }
 
   // Users
@@ -2032,6 +2066,7 @@ class Store {
       isRadiographer: "is_radiographer",
       isPartTime: "is_part_time",
       isHealthMgmt: "is_health_mgmt",
+      authUserId: "auth_user_id",
       healthMgmtLocation: "health_mgmt_location",
       isActive: "is_active",
       resignationDate: "resignation_date",
@@ -2110,6 +2145,7 @@ class Store {
       is_radiographer: "isRadiographer",
       is_part_time: "isPartTime",
       is_health_mgmt: "isHealthMgmt",
+      auth_user_id: "authUserId",
       health_mgmt_location: "healthMgmtLocation",
       is_active: "isActive",
       resignation_date: "resignationDate",
@@ -2191,9 +2227,16 @@ class Store {
   }
 
   async updateUser(id: string, updates: Partial<User>) {
-    this.users = this.users.map((u) =>
-      u.id === id ? { ...u, ...updates } : u,
-    );
+    const existingUser = this.users.find((u) => u.id === id);
+    if (!existingUser) throw new Error("User not found");
+
+    if (
+      existingUser.role === UserRole.VIEWER &&
+      updates.role !== undefined &&
+      updates.role !== UserRole.VIEWER
+    ) {
+      assertPasswordMigrationReady(updates.password ?? existingUser.password);
+    }
 
     const dbUpdates: any = { ...updates };
     this.mapToDbFields(dbUpdates);
@@ -2207,6 +2250,9 @@ class Store {
       throw error;
     }
 
+    this.users = this.users.map((u) =>
+      u.id === id ? { ...u, ...updates } : u,
+    );
     this.notifyListeners();
   }
 

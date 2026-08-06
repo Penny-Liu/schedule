@@ -10,6 +10,7 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+/tmp/
 *.local
 
 # Editor directories and files
@@ -23,4 +24,6 @@ dist-ssr
 *.sln
 *.sw?
 .env
+.env.*
+!.env.example
 salesforce-daily-stats.config.json

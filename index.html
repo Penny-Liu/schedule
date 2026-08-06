@@ -10,26 +10,33 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
     <script>
-      // Global Error Handler to catch "White Screen" issues before React loads
-      window.onerror = function(message, source, lineno, colno, error) {
-        document.body.innerHTML += `
-          <div style="position:fixed; top:0; left:0; width:100%; padding:20px; background:red; color:white; z-index:99999; font-family:monospace; white-space:pre-wrap;">
-            <strong>CRITICAL ERROR (OnLoad):</strong><br>
-            ${message}<br>
-            Source: ${source}:${lineno}:${colno}<br>
-            Stack: ${error ? error.stack : 'N/A'}
-          </div>
-        `;
-        return false; 
+      const appendDiagnostic = (title, detail, position) => {
+        const panel = document.createElement("div");
+        panel.style.cssText = `position:fixed;${position}:0;left:0;width:100%;padding:20px;background:#991b1b;color:white;z-index:99999;font-family:monospace;white-space:pre-wrap;`;
+
+        const heading = document.createElement("strong");
+        heading.textContent = title;
+        panel.appendChild(heading);
+        panel.appendChild(document.createElement("br"));
+        panel.appendChild(document.createTextNode(detail));
+        document.body.appendChild(panel);
       };
-      
+
+      const canShowDiagnostics = ["localhost", "127.0.0.1"].includes(window.location.hostname);
+
+      window.onerror = function(message, source, lineno, colno, error) {
+        const detail = canShowDiagnostics
+          ? `${String(message)}\nSource: ${String(source)}:${lineno}:${colno}\nStack: ${error?.stack || "N/A"}`
+          : "系統載入失敗，請重新整理頁面；若問題持續發生，請聯絡系統管理員。";
+        appendDiagnostic("CRITICAL ERROR (OnLoad):", detail, "top");
+        return false;
+      };
+
       window.onunhandledrejection = function(event) {
-        document.body.innerHTML += `
-          <div style="position:fixed; bottom:0; left:0; width:100%; padding:20px; background:darkred; color:white; z-index:99999; font-family:monospace; white-space:pre-wrap;">
-             <strong>UNHANDLED PROMISE:</strong><br>
-             ${event.reason}
-          </div>
-        `;
+        const detail = canShowDiagnostics
+          ? String(event.reason?.stack || event.reason || "Unknown rejection")
+          : "系統發生未預期錯誤，請稍後重試。";
+        appendDiagnostic("UNHANDLED PROMISE:", detail, "bottom");
       };
     </script>
     <style>

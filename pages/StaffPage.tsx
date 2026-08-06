@@ -334,11 +334,15 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
     if (editingId) setResetTargetId(editingId);
   };
 
-  const confirmResetPassword = () => {
+  const confirmResetPassword = async () => {
     if (resetTargetId) {
-      db.resetPassword(resetTargetId);
-      // alert('密碼已重置為 1234。'); // 用 custom toast 或直接靜默處理，這裡先依靠 UI 刷新
-      setResetTargetId(null);
+      try {
+        await db.resetPassword(resetTargetId);
+        setResetTargetId(null);
+      } catch (error) {
+        console.error("Password reset failed:", error);
+        alert("密碼重設失敗，請檢查網路後再試。");
+      }
     }
   };
 
@@ -1452,7 +1456,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
               if (user.isActive === false) {
                 if (!user.resignationDate) return false;
                 return (
-                  new Date().toISOString().slice(0, 10) <= user.resignationDate
+                  toLocalISOString(new Date()) <= user.resignationDate
                 );
               }
               return true;

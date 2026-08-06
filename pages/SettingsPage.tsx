@@ -11,7 +11,8 @@ import {
   PERMISSIONS,
 } from "../types";
 import { db } from "../services/store";
-import { generateUUID } from "../services/utils";
+import { generateUUID, toLocalISOString } from "../services/utils";
+import { getPasswordPolicyErrorsForRole } from "../services/passwordPolicy.mjs";
 import {
   Plus,
   Trash2,
@@ -223,7 +224,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
   const [archiveDate, setArchiveDate] = useState<string>(() => {
     const d = new Date();
     d.setFullYear(d.getFullYear() - 1);
-    return d.toISOString().slice(0, 10); // Default to 1 year ago
+    return toLocalISOString(d); // Default to 1 year ago
   });
 
   // Helper to parse template into blocks
@@ -727,10 +728,15 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
   };
 
   // Password Handler
-  const handleChangePassword = (e: React.FormEvent) => {
+  const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     if (passwordData.new !== passwordData.confirm) {
       alert("新密碼與確認密碼不符");
+      return;
+    }
+    const passwordErrors = getPasswordPolicyErrorsForRole(passwordData.new, currentUser.role);
+    if (passwordErrors.length > 0) {
+      alert(passwordErrors[0]);
       return;
     }
     const currentStoredPass = currentUser.password || "1234";
@@ -739,9 +745,14 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
       return;
     }
 
-    db.changePassword(currentUser.id, passwordData.new);
-    alert("密碼已成功修改，下次請使用新密碼登入。");
-    setPasswordData({ old: "", new: "", confirm: "" });
+    try {
+      await db.changePassword(currentUser.id, passwordData.new);
+      alert("密碼已成功修改，下次請使用新密碼登入。");
+      setPasswordData({ old: "", new: "", confirm: "" });
+    } catch (error) {
+      console.error("Password update failed:", error);
+      alert(error instanceof Error ? error.message : "密碼更新失敗，請檢查網路後再試。");
+    }
   };
 
   // Format cycle name for display in list
@@ -2336,7 +2347,7 @@ BMD :{{bmd}}
                           });
                           const link = document.createElement("a");
                           link.href = URL.createObjectURL(blob);
-                          link.download = `operation_logs_${new Date().toISOString().slice(0, 10)}.csv`;
+                          link.download = `operation_logs_${toLocalISOString(new Date())}.csv`;
                           link.click();
                         }}
                         className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 px-4 rounded-lg transition-colors text-sm flex items-center justify-center gap-2"

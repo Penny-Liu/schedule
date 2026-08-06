@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { db } from '../services/store';
 import { UserRole, Doctor } from '../types';
 import { BarChart3, Calendar, Save, AlertCircle, ChevronLeft, ChevronRight, FileText, FileSpreadsheet } from 'lucide-react';
-import ExcelJS from 'exceljs';
+import { loadExcelJS } from '../services/exportLibraries';
 
 interface DoctorStatisticsPageProps {
   currentUser: any;
@@ -197,6 +197,7 @@ const DoctorStatisticsPage: React.FC<DoctorStatisticsPageProps> = ({ currentUser
   }
 
   const handleExportExcel = async () => {
+    const ExcelJS = await loadExcelJS();
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet(`醫師工作統計_${selectedMonth}`);
 

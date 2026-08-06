@@ -1,48 +1,90 @@
-import jsPDF from 'jspdf';
+import type jsPDF from 'jspdf';
 
-/**
- * Attempts to load the JF OpenHuninn Chinese font into a jsPDF document.
- * Tries multiple path variants for compatibility with different deployment bases.
- *
- * @returns The font name to use: 'OpenHuninn' if loaded, 'helvetica' as fallback.
- */
-export async function loadChineseFontToDoc(doc: jsPDF): Promise<string> {
+const FONT_FILE_NAME = 'jf-openhuninn-2.1.ttf';
+const FONT_FAMILY = 'OpenHuninn';
+let cachedFontBase64: Promise<string> | null = null;
+
+const arrayBufferToBase64 = (buffer: ArrayBuffer): Promise<string> =>
+    new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            const result = reader.result;
+            if (typeof result !== 'string' || !result.includes('base64,')) {
+                reject(new Error('中文字型無法轉換為 PDF 可用格式'));
+                return;
+            }
+            resolve(result.slice(result.indexOf('base64,') + 7));
+        };
+        reader.onerror = () => reject(reader.error ?? new Error('中文字型讀取失敗'));
+        reader.readAsDataURL(new Blob([buffer], { type: 'font/ttf' }));
+    });
+
+const isTrueTypeOrOpenType = (buffer: ArrayBuffer) => {
+    if (buffer.byteLength < 4) return false;
+    const bytes = new Uint8Array(buffer, 0, 4);
+    const signature = String.fromCharCode(...bytes);
+    return (
+        (bytes[0] === 0x00 && bytes[1] === 0x01 && bytes[2] === 0x00 && bytes[3] === 0x00) ||
+        signature === 'OTTO' ||
+        signature === 'true'
+    );
+};
+
+const fetchChineseFont = async (): Promise<string> => {
     const baseUrl = (import.meta as any).env?.BASE_URL || '/';
-    const pathsToTry = [
-        `${baseUrl}fonts/jf-openhuninn-2.1.ttf`.replace(/\/+/g, '/'),
-        '/schedule/fonts/jf-openhuninn-2.1.ttf',
-        '/fonts/jf-openhuninn-2.1.ttf',
-    ];
+    const pathsToTry = Array.from(new Set([
+        `${baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`}fonts/${FONT_FILE_NAME}`,
+        `/schedule/fonts/${FONT_FILE_NAME}`,
+        `/fonts/${FONT_FILE_NAME}`,
+    ]));
 
+    const failures: string[] = [];
     for (const path of pathsToTry) {
         try {
-            const res = await fetch(path);
-            const contentType = res.headers.get('content-type');
-            // Reject HTML responses (e.g. 404 pages served as HTML)
-            if (!res.ok || (contentType && contentType.includes('text/html'))) continue;
+            const response = await fetch(path, { cache: 'force-cache' });
+            if (!response.ok) {
+                failures.push(`${path} (${response.status})`);
+                continue;
+            }
 
-            const blob = await res.blob();
-            const base64data = await new Promise<string>((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onloadend = () => resolve(reader.result as string);
-                reader.onerror = reject;
-                reader.readAsDataURL(blob);
-            });
-
-            if (!base64data.includes('base64,')) continue;
-
-            const content = base64data.split('base64,')[1];
-            doc.addFileToVFS('jf-openhuninn-2.1.ttf', content);
-            doc.addFont('jf-openhuninn-2.1.ttf', 'OpenHuninn', 'normal');
-            doc.addFont('jf-openhuninn-2.1.ttf', 'OpenHuninn', 'bold');
-            doc.addFont('jf-openhuninn-2.1.ttf', 'OpenHuninn', 'italic');
-            doc.setFont('OpenHuninn');
-            return 'OpenHuninn';
-        } catch (e) {
-            // Try next path
+            const buffer = await response.arrayBuffer();
+            if (!isTrueTypeOrOpenType(buffer)) {
+                failures.push(`${path} (不是有效字型)`);
+                continue;
+            }
+            return await arrayBufferToBase64(buffer);
+        } catch (error) {
+            failures.push(`${path} (${error instanceof Error ? error.message : '載入失敗'})`);
         }
     }
 
-    // Fallback to built-in font
-    return 'helvetica';
+    throw new Error(`無法載入 PDF 中文字型：${failures.join('、')}`);
+};
+
+/**
+ * Loads and embeds the Chinese font required by every PDF export.
+ * It deliberately throws instead of falling back to Helvetica, because jsPDF's
+ * built-in fonts cannot render Chinese and would create a corrupted-looking PDF.
+ */
+export async function loadChineseFontToDoc(doc: jsPDF): Promise<string> {
+    if (!cachedFontBase64) {
+        cachedFontBase64 = fetchChineseFont().catch((error) => {
+            cachedFontBase64 = null;
+            throw error;
+        });
+    }
+
+    const content = await cachedFontBase64;
+    doc.addFileToVFS(FONT_FILE_NAME, content);
+    doc.addFont(FONT_FILE_NAME, FONT_FAMILY, 'normal');
+    doc.addFont(FONT_FILE_NAME, FONT_FAMILY, 'bold');
+    doc.addFont(FONT_FILE_NAME, FONT_FAMILY, 'italic');
+    doc.addFont(FONT_FILE_NAME, FONT_FAMILY, 'bolditalic');
+    doc.setFont(FONT_FAMILY, 'normal');
+
+    if (!doc.getFontList()[FONT_FAMILY]?.includes('normal')) {
+        throw new Error('PDF 中文字型註冊失敗，已停止匯出以避免亂碼');
+    }
+
+    return FONT_FAMILY;
 }

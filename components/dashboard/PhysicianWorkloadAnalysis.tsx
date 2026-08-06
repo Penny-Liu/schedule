@@ -7,7 +7,7 @@ import {
   AlertCircle,
   Loader2,
 } from "lucide-react";
-import ExcelJS from "exceljs";
+import { loadExcelJS } from "../../services/exportLibraries";
 
 interface PhysicianWorkloadData {
   date: string;
@@ -146,6 +146,7 @@ const PhysicianWorkloadAnalysis: React.FC<PhysicianWorkloadAnalysisProps> = ({
     }
 
     try {
+      const ExcelJS = await loadExcelJS();
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet("醫師工作量統計");
 
