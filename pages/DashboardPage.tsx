@@ -6108,8 +6108,8 @@ const DailyManpowerSummary: React.FC<{
     const scheduler: string[] = [];
 
     shiftsOnDate.forEach((s) => {
-      if (s.station === SYSTEM_OFF || s.station === StationDefault.UNASSIGNED)
-        return;
+      if (s.station === SYSTEM_OFF) return;
+      if (!s.learningStation && s.station === StationDefault.UNASSIGNED) return;
 
       const u = users.find((user) => user.id === s.userId);
       if (isUserOnEmploymentPause(u, date)) return;
@@ -6673,8 +6673,8 @@ BMD :{{bmd}}
 
     const nonPartTimeShifts = shifts.filter((s) => {
       if (s.date !== date) return false;
-      if (s.station === SYSTEM_OFF || s.station === StationDefault.UNASSIGNED)
-        return false;
+      if (s.station === SYSTEM_OFF) return false;
+      if (!s.learningStation && s.station === StationDefault.UNASSIGNED) return false;
       const u = users.find((user) => user.id === s.userId);
       return !!u && !u.isPartTime && u.role !== UserRole.RADIOGRAPHER_ASSISTANT && !isUserOnEmploymentPause(u, date);
     });
@@ -6706,8 +6706,8 @@ BMD :{{bmd}}
     const learningWorkloadLines = shifts
       .filter((s) => {
         if (s.date !== date) return false;
-        if (s.station === SYSTEM_OFF || s.station === StationDefault.UNASSIGNED)
-          return false;
+        if (s.station === SYSTEM_OFF) return false;
+        if (!s.learningStation && s.station === StationDefault.UNASSIGNED) return false;
         const u = users.find((user) => user.id === s.userId);
         return (
           !!u &&
@@ -6770,7 +6770,8 @@ BMD :{{bmd}}
 
     const todayShifts = shifts.filter(s => s.date === date);
     todayShifts.forEach(s => {
-      if (s.station === SYSTEM_OFF || s.station === StationDefault.UNASSIGNED || s.station === "行政") return;
+      if (s.station === SYSTEM_OFF) return;
+      if (!s.learningStation && (s.station === StationDefault.UNASSIGNED || s.station === "行政")) return;
       
       const user = users.find(u => u.id === s.userId);
       if (!user) return;
@@ -6887,7 +6888,8 @@ BMD :{{bmd}}
 
     shifts.forEach((s) => {
       if (s.date !== date) return;
-      if (s.station === SYSTEM_OFF || s.station === StationDefault.UNASSIGNED) return;
+      if (s.station === SYSTEM_OFF) return;
+      if (!s.learningStation && s.station === StationDefault.UNASSIGNED) return;
       
       const u = users.find((user) => user.id === s.userId);
       if (!u || isUserOnEmploymentPause(u, date)) return;
