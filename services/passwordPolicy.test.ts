@@ -1,22 +1,33 @@
 import { describe, expect, it } from "vitest";
 import {
+  DEFAULT_PASSWORD,
   assertPasswordMigrationReady,
   getPasswordPolicyErrors,
   getPasswordPolicyErrorsForRole,
   isPasswordMigrationReady,
   isPasswordMigrationReadyForRole,
+  isDefaultOrMissingPassword,
   passwordForSupabaseAuth,
 } from "./passwordPolicy.mjs";
 
 describe("password migration policy", () => {
-  it("accepts a password with at least eight characters, letters, and numbers", () => {
+  it("accepts a simple six-character password with letters and numbers", () => {
     expect(isPasswordMigrationReady("排班Safe2026")).toBe(true);
+    expect(isPasswordMigrationReady("safe26")).toBe(true);
     expect(getPasswordPolicyErrors("排班Safe2026")).toEqual([]);
   });
 
   it("rejects short passwords before Auth migration", () => {
     expect(isPasswordMigrationReady("1234")).toBe(false);
-    expect(getPasswordPolicyErrors("1234")[0]).toContain("8");
+    expect(getPasswordPolicyErrors("1234")[0]).toContain("6");
+  });
+
+  it("recognizes missing and default passwords that require an update", () => {
+    expect(DEFAULT_PASSWORD).toBe("1234");
+    expect(isDefaultOrMissingPassword(undefined)).toBe(true);
+    expect(isDefaultOrMissingPassword("")).toBe(true);
+    expect(isDefaultOrMissingPassword("1234")).toBe(true);
+    expect(isDefaultOrMissingPassword("safe26")).toBe(false);
   });
 
   it("rejects passwords without both text and a number", () => {
@@ -29,6 +40,8 @@ describe("password migration policy", () => {
   });
 
   it("allows the announced public password only for VIEWER accounts", () => {
+    expect(isPasswordMigrationReadyForRole(DEFAULT_PASSWORD, "VIEWER")).toBe(true);
+    expect(isPasswordMigrationReadyForRole(DEFAULT_PASSWORD, "SYSTEM_ADMIN")).toBe(false);
     expect(isPasswordMigrationReadyForRole("12345", "VIEWER")).toBe(true);
     expect(isPasswordMigrationReadyForRole("12345", "SYSTEM_ADMIN")).toBe(false);
     expect(getPasswordPolicyErrorsForRole("123", "VIEWER")[0]).toContain("4");

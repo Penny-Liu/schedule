@@ -1,6 +1,11 @@
-export const MIN_PASSWORD_LENGTH = 8;
+export const DEFAULT_PASSWORD = "1234";
+export const MIN_PASSWORD_LENGTH = 6;
 export const MIN_PUBLIC_VIEWER_PASSWORD_LENGTH = 4;
 export const PUBLIC_VIEWER_ROLE = "VIEWER";
+
+/** @param {string | undefined | null} password */
+export const isDefaultOrMissingPassword = (password) =>
+  typeof password !== "string" || password.length === 0 || password === DEFAULT_PASSWORD;
 
 const COMMON_PASSWORDS = new Set([
   "12345678",

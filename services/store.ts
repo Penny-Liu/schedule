@@ -33,6 +33,7 @@ import {
 } from "../types";
 import { supabase } from "./supabaseClient";
 import {
+  DEFAULT_PASSWORD,
   assertPasswordMigrationReady,
   assertPasswordMigrationReadyForRole,
 } from "./passwordPolicy.mjs";
@@ -1986,11 +1987,11 @@ class Store {
 
     const { error } = await supabase
       .from("users")
-      .update({ password: "1234", must_change_password: true })
+      .update({ password: DEFAULT_PASSWORD, must_change_password: true })
       .eq("id", userId);
     if (error) throw error;
 
-    u.password = "1234";
+    u.password = DEFAULT_PASSWORD;
     u.mustChangePassword = true;
     this.notifyListeners();
   }

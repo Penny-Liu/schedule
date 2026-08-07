@@ -12,7 +12,13 @@ import {
 } from "../types";
 import { db } from "../services/store";
 import { generateUUID, toLocalISOString } from "../services/utils";
-import { getPasswordPolicyErrorsForRole } from "../services/passwordPolicy.mjs";
+import {
+  DEFAULT_PASSWORD,
+  getPasswordPolicyErrorsForRole,
+  MIN_PASSWORD_LENGTH,
+  MIN_PUBLIC_VIEWER_PASSWORD_LENGTH,
+  PUBLIC_VIEWER_ROLE,
+} from "../services/passwordPolicy.mjs";
 import {
   Plus,
   Trash2,
@@ -739,7 +745,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
       alert(passwordErrors[0]);
       return;
     }
-    const currentStoredPass = currentUser.password || "1234";
+    const currentStoredPass = currentUser.password || DEFAULT_PASSWORD;
     if (passwordData.old !== currentStoredPass) {
       alert("舊密碼錯誤");
       return;
@@ -754,6 +760,16 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
       alert(error instanceof Error ? error.message : "密碼更新失敗，請檢查網路後再試。");
     }
   };
+
+  const passwordGuidance = (
+    <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
+      若尚未設定過個人密碼，舊密碼請輸入預設密碼 <strong>{DEFAULT_PASSWORD}</strong>。
+      新密碼
+      {currentUser.role === PUBLIC_VIEWER_ROLE
+        ? `至少 ${MIN_PUBLIC_VIEWER_PASSWORD_LENGTH} 個字元。`
+        : `至少 ${MIN_PASSWORD_LENGTH} 個字元，並包含文字與數字。`}
+    </div>
+  );
 
   // Format cycle name for display in list
   const formatCycleName = (name: string) => {
@@ -831,6 +847,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
           </div>
           <div className="p-6">
             <form onSubmit={handleChangePassword} className="space-y-4">
+              {passwordGuidance}
               <div>
                 <label className="text-xs font-semibold text-gray-500 mb-1 block">
                   舊密碼
@@ -1060,6 +1077,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
               </div>
               <div className="p-6">
                 <form onSubmit={handleChangePassword} className="space-y-4">
+                  {passwordGuidance}
                   <div>
                     <label className="text-xs font-semibold text-gray-500 mb-1 block">
                       舊密碼
