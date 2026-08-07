@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from "react";
-import { User, UserRole, DateEventType, MeetingRoomBooking } from "../types";
+import { User, UserRole, DateEventType, MeetingRoomBooking, PERMISSIONS } from "../types";
 import { db } from "../services/store";
 import {
   Calendar as CalendarIcon,
@@ -133,6 +133,9 @@ const getUnitColorTheme = (unit: string) => {
 };
 
 const MeetingRoomPage: React.FC<MeetingRoomPageProps> = ({ currentUser }) => {
+  const canEditMeetingRoom = currentUser.permissions?.includes(
+    PERMISSIONS.EDIT_MEETING_ROOM,
+  ) ?? false;
   const [currentDate, setCurrentDate] = useState(new Date());
 
   useEffect(() => {
@@ -251,6 +254,11 @@ const MeetingRoomPage: React.FC<MeetingRoomPageProps> = ({ currentUser }) => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!canEditMeetingRoom) {
+      showToast("瀏覽者只能查看會議室時段與租借紀錄", "error");
+      return;
+    }
 
     if (formData.startTime >= formData.endTime) {
       showToast("結束時間必須晚於開始時間", "error");
@@ -385,6 +393,10 @@ const MeetingRoomPage: React.FC<MeetingRoomPageProps> = ({ currentUser }) => {
   };
 
   const handleDelete = (id: string) => {
+    if (!canEditMeetingRoom) {
+      showToast("瀏覽者不能取消會議室預約", "error");
+      return;
+    }
     const booking = bookings.find((b) => b.id === id);
     if (!booking) return;
     if (
@@ -445,6 +457,7 @@ const MeetingRoomPage: React.FC<MeetingRoomPageProps> = ({ currentUser }) => {
   };
 
   const handleOpenModalForSlot = (date: string, time: string) => {
+    if (!canEditMeetingRoom) return;
     // 自動帶入結束時間 (加半小時)
     const idx = TIME_SLOTS.indexOf(time);
     const endTime = idx < TIME_SLOTS.length - 1 ? TIME_SLOTS[idx + 1] : time;
@@ -467,7 +480,9 @@ const MeetingRoomPage: React.FC<MeetingRoomPageProps> = ({ currentUser }) => {
             會議室租借系統
           </h1>
           <p className="text-sm text-slate-500 mt-1">
-            預約時間為 08:00 ~ 17:00，以半小時為單位
+            {canEditMeetingRoom
+              ? "預約時間為 08:00 ~ 17:00，以半小時為單位"
+              : "瀏覽者可查看時段與租借紀錄，新增及取消預約需由具權限帳號操作"}
           </p>
         </div>
 
@@ -533,7 +548,7 @@ const MeetingRoomPage: React.FC<MeetingRoomPageProps> = ({ currentUser }) => {
             本週
           </button>
 
-          <button
+          {canEditMeetingRoom && <button
             onClick={() => {
               setFormData({
                 date: toLocalISOString(currentDate),
@@ -552,7 +567,7 @@ const MeetingRoomPage: React.FC<MeetingRoomPageProps> = ({ currentUser }) => {
             className="bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 shadow-sm transition-all"
           >
             <Plus size={16} /> 新增預約
-          </button>
+          </button>}
         </div>
       </div>
 
@@ -668,13 +683,13 @@ const MeetingRoomPage: React.FC<MeetingRoomPageProps> = ({ currentUser }) => {
                   {TIME_SLOTS.slice(0, -1).map((slot, idx) => (
                     <div
                       key={slot}
-                      onClick={() => handleOpenModalForSlot(dateStr, slot)}
-                      className={`absolute w-full h-[60px] border-t border-slate-100 hover:bg-teal-50/80 hover:border-teal-300 cursor-pointer transition-all group/slot z-0 ${slotBgClass}`}
+                      onClick={canEditMeetingRoom ? () => handleOpenModalForSlot(dateStr, slot) : undefined}
+                      className={`absolute w-full h-[60px] border-t border-slate-100 transition-all group/slot z-0 ${canEditMeetingRoom ? "hover:bg-teal-50/80 hover:border-teal-300 cursor-pointer" : "cursor-default"} ${slotBgClass}`}
                       style={{ top: `${idx * 60}px` }}
                     >
-                      <div className="opacity-0 group-hover/slot:opacity-100 flex items-center justify-center h-full text-teal-700 font-bold text-xs">
+                      {canEditMeetingRoom && <div className="opacity-0 group-hover/slot:opacity-100 flex items-center justify-center h-full text-teal-700 font-bold text-xs">
                         <Plus size={14} className="mr-1" /> {slot}
-                      </div>
+                      </div>}
                     </div>
                   ))}
 
@@ -691,8 +706,9 @@ const MeetingRoomPage: React.FC<MeetingRoomPageProps> = ({ currentUser }) => {
                     const top = startIdx * 60;
                     const height = (endIdx - startIdx) * 60;
                     const canDelete =
-                      b.userId === currentUser.id ||
-                      currentUser.role === UserRole.SYSTEM_ADMIN;
+                      canEditMeetingRoom &&
+                      (b.userId === currentUser.id ||
+                        currentUser.role === UserRole.SYSTEM_ADMIN);
 
                     const theme = getUnitColorTheme(b.unit);
 
@@ -806,7 +822,7 @@ const MeetingRoomPage: React.FC<MeetingRoomPageProps> = ({ currentUser }) => {
       </div>
 
       {/* Booking Modal */}
-      {isModalOpen && (
+      {isModalOpen && canEditMeetingRoom && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-in zoom-in-95">
             <div className="px-6 py-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">

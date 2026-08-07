@@ -1,5 +1,5 @@
 import React, { lazy, Suspense, useState, useEffect } from "react";
-import { AdministrativeCategory, User, LeaveStatus, UserRole } from "./types";
+import { AdministrativeCategory, User, LeaveStatus, PERMISSIONS, UserRole } from "./types";
 import Sidebar from "./components/Sidebar";
 import LoginPage from "./pages/LoginPage";
 import { db } from "./services/store";
@@ -250,6 +250,9 @@ const App: React.FC = () => {
       case "physician_schedule":
         return <PhysicianSchedulePage currentUser={currentUser} />;
       case "cloud_schedule":
+        if (!currentUser.permissions?.includes(PERMISSIONS.VIEW_CLOUD_SCHEDULE)) {
+          return <PhysicianSchedulePage currentUser={currentUser} />;
+        }
         return <CloudSchedulePage currentUser={currentUser} />;
       case "health_mgmt":
         return <HealthMgmtPage currentUser={currentUser} />;
@@ -276,6 +279,9 @@ const App: React.FC = () => {
           />
         );
       case "meeting_room":
+        if (!currentUser.permissions?.includes(PERMISSIONS.VIEW_MEETING_ROOM)) {
+          return <PhysicianSchedulePage currentUser={currentUser} />;
+        }
         return <MeetingRoomPage currentUser={currentUser} />;
       case "gene":
         return <GenePage currentUser={currentUser} />;

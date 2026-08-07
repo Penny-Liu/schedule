@@ -34,7 +34,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   onLogout,
   hasPendingLeaves,
 }) => {
-  const publicViewerAllowedPages = new Set(["physician_schedule", "cloud_schedule"]);
+  const publicViewerAllowedPages = new Set(["physician_schedule", "meeting_room"]);
   // Define permissions based on requirements:
   // Supervisor & System Admin: Full Access (Dashboard, Stats, Leave, Staff, Settings(Admin only/Shared))
   const categories = [
@@ -161,7 +161,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           id: "meeting_room",
           label: "會議室",
           icon: Building2,
-          permission: null, // 權限設為 null，代表開放給所有人使用
+          permission: PERMISSIONS.VIEW_MEETING_ROOM,
         },
         {
           id: "gene",
