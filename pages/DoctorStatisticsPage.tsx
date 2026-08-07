@@ -3,6 +3,7 @@ import { db } from '../services/store';
 import { UserRole, Doctor } from '../types';
 import { BarChart3, Calendar, Save, AlertCircle, ChevronLeft, ChevronRight, FileText, FileSpreadsheet } from 'lucide-react';
 import { loadExcelJS } from '../services/exportLibraries';
+import { downloadExcelBuffer, finalizeExcelWorksheet, initializeExcelWorkbook, styleExcelTitle } from '../services/excelReportUtils';
 
 interface DoctorStatisticsPageProps {
   currentUser: any;
@@ -203,6 +204,7 @@ const DoctorStatisticsPage: React.FC<DoctorStatisticsPageProps> = ({ currentUser
 
     const [titleYear, titleMonthNum] = selectedMonth.split('-');
     const titleText = `${titleYear}年 ${parseInt(titleMonthNum, 10)}月 醫師工作統計`;
+    initializeExcelWorkbook(workbook, titleText);
 
     // Define columns first (needed before inserting rows)
     sheet.columns = [
@@ -218,12 +220,7 @@ const DoctorStatisticsPage: React.FC<DoctorStatisticsPageProps> = ({ currentUser
     ];
 
     // Row 1: Title
-    const titleRow = sheet.getRow(1);
-    titleRow.getCell(1).value = titleText;
-    titleRow.getCell(1).font = { bold: true, size: 18 };
-    titleRow.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
-    titleRow.height = 36;
-    sheet.mergeCells('A1:I1');
+    styleExcelTitle(sheet, titleText, 9);
 
     // Row 2: Column headers
     const colHeaders = ['醫師姓名', '科別', '週期開始', '週期結束', '當期天數', '總排班', '平日班', '假日班', '備註'];
@@ -316,12 +313,9 @@ const DoctorStatisticsPage: React.FC<DoctorStatisticsPageProps> = ({ currentUser
       row.height = 20;
     });
 
+    finalizeExcelWorksheet(sheet, { headerRows: [2], dataStartRow: 3, lastColumn: 9, autoFilter: true });
     const buffer = await workbook.xlsx.writeBuffer();
-    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `醫師工作統計_${selectedMonth}.xlsx`;
-    link.click();
+    downloadExcelBuffer(buffer, `醫師工作統計_${selectedMonth}.xlsx`);
   };
 
   // Determine if it's view only

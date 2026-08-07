@@ -49,6 +49,7 @@ import { loadPdfLibraries } from "../services/exportLibraries";
 import ConfirmModal from "../components/ConfirmModal";
 import { supabase } from "../services/supabaseClient";
 import { loadChineseFontToDoc } from "../services/pdfUtils";
+import { downloadExcelBuffer, finalizeExcelWorksheet, initializeExcelWorkbook, styleExcelTitle } from "../services/excelReportUtils";
 
 interface PhysicianSchedulePageProps {
   currentUser: any;
@@ -2307,6 +2308,7 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
     try {
       const ExcelJS = (await import("exceljs")).default;
       const workbook = new ExcelJS.Workbook();
+      initializeExcelWorkbook(workbook, `醫師排班表 ${dateRange[0]} ~ ${dateRange[dateRange.length - 1]}`);
 
       // Shared Styles & Config
       const borderStyle: any = {
@@ -2892,17 +2894,16 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
         sheet2RowIndex++;
       });
 
+      styleExcelTitle(sheet1, `醫師排班表 ${dateRange[0]} ~ ${dateRange[dateRange.length - 1]}`, dateRange.length + 1);
+      styleExcelTitle(sheet2, `醫師排班表 ${dateRange[0]} ~ ${dateRange[dateRange.length - 1]}`, dateRange.length + 1);
+      finalizeExcelWorksheet(sheet1, { headerRows: [2], dataStartRow: 3, lastColumn: dateRange.length + 1, autoFilter: false, alternatingRows: false });
+      finalizeExcelWorksheet(sheet2, { headerRows: [2], dataStartRow: 3, lastColumn: dateRange.length + 1, autoFilter: false, alternatingRows: false });
+
       // 4. Save
       const buffer = await workbook.xlsx.writeBuffer();
-      const blob = new Blob([buffer], {
-        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      });
-      const link = document.createElement("a");
-      link.href = URL.createObjectURL(blob);
       const year = currentDate.getFullYear();
       const month = String(currentDate.getMonth() + 1).padStart(2, "0");
-      link.download = `${year}${month} 醫師排班表.xlsx`;
-      link.click();
+      downloadExcelBuffer(buffer, `${year}${month} 醫師排班表.xlsx`);
     } catch (error: any) {
       console.error("Excel Export Failed:", error);
       alert(`匯出 Excel 失敗: ${error.message || error}`);
