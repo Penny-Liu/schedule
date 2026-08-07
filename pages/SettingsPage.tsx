@@ -13,7 +13,8 @@ import {
 import { db } from "../services/store";
 import { generateUUID, toLocalISOString } from "../services/utils";
 import {
-  DEFAULT_PASSWORD,
+  getDefaultPasswordForRole,
+  getTemporaryPasswordHint,
   getPasswordPolicyErrorsForRole,
   MIN_PASSWORD_LENGTH,
   MIN_PUBLIC_VIEWER_PASSWORD_LENGTH,
@@ -745,7 +746,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
       alert(passwordErrors[0]);
       return;
     }
-    const currentStoredPass = currentUser.password || DEFAULT_PASSWORD;
+    const currentStoredPass = currentUser.password || getDefaultPasswordForRole(currentUser.role);
     if (passwordData.old !== currentStoredPass) {
       alert("舊密碼錯誤");
       return;
@@ -763,7 +764,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
 
   const passwordGuidance = (
     <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
-      若尚未設定過個人密碼，舊密碼請輸入預設密碼 <strong>{DEFAULT_PASSWORD}</strong>。
+      若尚未設定過個人密碼，舊密碼請輸入臨時密碼 <strong>{getTemporaryPasswordHint(currentUser.password, currentUser.role) ?? getDefaultPasswordForRole(currentUser.role)}</strong>。
       新密碼
       {currentUser.role === PUBLIC_VIEWER_ROLE
         ? `至少 ${MIN_PUBLIC_VIEWER_PASSWORD_LENGTH} 個字元。`
