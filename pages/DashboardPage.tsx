@@ -62,7 +62,7 @@ import {
   loadExcelJS,
   loadPdfLibraries,
 } from "../services/exportLibraries";
-import { downloadExcelBuffer, finalizeExcelWorksheet, initializeExcelWorkbook, styleExcelTitle } from "../services/excelReportUtils";
+import { downloadExcelBuffer, finalizeExcelWorksheet, formatExcelScheduleLabel, getExcelColumnName, getExcelTextLineCount, initializeExcelWorkbook, styleExcelSubtitle, styleExcelTitle } from "../services/excelReportUtils";
 import ConfirmModal from "../components/ConfirmModal";
 import {
   AutoScheduleModal,
@@ -834,7 +834,11 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
       userTitleCell.alignment = { vertical: "middle", horizontal: "center" };
       userSheet.getRow(1).height = 35;
 
+      // 第二列保留給週末、休診與特殊角色圖例，讓列印後仍能快速辨識。
+      userSheet.addRow([]);
+
       const userHeaderRow = userSheet.addRow(userHeaders);
+      userHeaderRow.height = 34;
       userHeaderRow.eachCell((cell, colNumber) => {
         cell.fill = {
           type: "pattern",
@@ -870,6 +874,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
       users.forEach((user, idx) => {
         const rowData: any[] = [user.name];
         let workDaysCount = 0;
+        let maxContentLines = 1;
 
         dateRange.forEach((date) => {
           const { station, specialRoles, isOff, isNotHired } = getDayShift(user.id, date);
@@ -892,7 +897,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
             let cellText = "";
             let specialText = "";
             if (station && station !== StationDefault.UNASSIGNED)
-              cellText += station;
+              cellText += formatExcelScheduleLabel(station);
             if (specialRoles.length > 0) {
               const roleMap: Record<string, string> = {
                 [SPECIAL_ROLES.OPENING]: "開",
@@ -907,10 +912,14 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                 .join("");
               specialText = (cellText ? "\n" : "") + rolesShort;
             }
+            maxContentLines = Math.max(
+              maxContentLines,
+              getExcelTextLineCount(`${cellText}${specialText}`),
+            );
             if (specialText) {
               const rtf = [];
-              if (cellText) rtf.push({ font: { name: "微軟正黑體" }, text: cellText });
-              if (specialText) rtf.push({ font: { name: "微軟正黑體", color: { argb: "FFEA580C" } }, text: specialText });
+              if (cellText) rtf.push({ font: { name: "微軟正黑體", size: 10 }, text: cellText });
+              if (specialText) rtf.push({ font: { name: "微軟正黑體", size: 10, bold: true, color: { argb: "FFEA580C" } }, text: specialText });
               rowData.push(rtf.length > 0 ? { richText: rtf } : "");
             } else {
               rowData.push(cellText || "");
@@ -929,7 +938,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
         rowData.push(workDaysCount);
 
         const row = userSheet.addRow(rowData);
-        row.height = 35; // 增加行高讓版面更不擁擠
+        row.height = Math.min(64, Math.max(38, maxContentLines * 17 + 8));
         row.eachCell((cell, colNumber) => {
           cell.border = {
             top: { style: "thin" },
@@ -941,18 +950,24 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
             vertical: "middle",
             horizontal: "center",
             wrapText: true,
+            shrinkToFit: false,
           };
           if (!(cell.value && typeof cell.value === "object" && (cell.value as any).richText)) {
             cell.font = { name: "微軟正黑體" };
           }
 
           if (colNumber === 1) {
-            cell.font = { bold: true, name: "微軟正黑體", size: 14 };
+            cell.font = { bold: true, name: "微軟正黑體", size: 12, color: { argb: "FF17365D" } };
             cell.fill = {
               type: "pattern",
               pattern: "solid",
-              fgColor: { argb: "FFF8F9FA" },
+              fgColor: { argb: "FFEAF2F8" },
             };
+          }
+
+          if (colNumber === userHeaders.length) {
+            cell.font = { bold: true, name: "微軟正黑體", size: 11, color: { argb: "FF365314" } };
+            cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE2F0D9" } };
           }
 
           // Styling Logic
@@ -974,83 +989,84 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
             } else {
               cellValue = cell.value?.toString() || "";
             }
+            const styleValue = cellValue.replace(/\s/g, "");
 
             if (cellValue === "休") {
               // White or keep weekend pink
             } else {
-              if (cellValue.includes("銷"))
+              if (styleValue.includes("銷"))
                 cell.fill = {
                   type: "pattern",
                   pattern: "solid",
                   fgColor: { argb: "FFF87171" }, // Red-400 for Coord/Cancel Leave
                 };
-              else if (cellValue.includes("MR"))
+              else if (styleValue.includes("MR"))
                 cell.fill = {
                   type: "pattern",
                   pattern: "solid",
                   fgColor: { argb: "FFFFEDD5" },
                 };
-              else if (cellValue.includes("US"))
+              else if (styleValue.includes("US"))
                 cell.fill = {
                   type: "pattern",
                   pattern: "solid",
                   fgColor: { argb: "FFCEFFCE" },
                 };
-              else if (cellValue.includes("CT"))
+              else if (styleValue.includes("CT"))
                 cell.fill = {
                   type: "pattern",
                   pattern: "solid",
                   fgColor: { argb: "FFF0F9FF" },
                 };
-              else if (cellValue.includes("場控"))
+              else if (styleValue.includes("場控"))
                 cell.fill = {
                   type: "pattern",
                   pattern: "solid",
                   fgColor: { argb: "FFFFFF" },
                 };
-              else if (cellValue.includes("遠"))
+              else if (styleValue.includes("遠"))
                 cell.fill = {
                   type: "pattern",
                   pattern: "solid",
                   fgColor: { argb: "FFFAE8FF" },
                 };
-              else if (cellValue.includes("BMD") || cellValue.includes("DX"))
+              else if (styleValue.includes("BMD") || styleValue.includes("DX"))
                 cell.fill = {
                   type: "pattern",
                   pattern: "solid",
                   fgColor: { argb: "FFEFF6FF" },
                 };
-              else if (cellValue.includes("大直"))
+              else if (styleValue.includes("大直"))
                 cell.fill = {
                   type: "pattern",
                   pattern: "solid",
                   fgColor: { argb: "FFDDD6FF" },
                 };
-              else if (cellValue.includes("技術支援"))
+              else if (styleValue.includes("技術支援"))
                 cell.fill = {
                   type: "pattern",
                   pattern: "solid",
                   fgColor: { argb: "FFFFED97" },
                 };
-              else if (cellValue.includes("行政"))
+              else if (styleValue.includes("行政"))
                 cell.fill = {
                   type: "pattern",
                   pattern: "solid",
                   fgColor: { argb: "FFF0FDF4" },
                 };
-              else if (cellValue.includes("閱片"))
+              else if (styleValue.includes("閱片"))
                 cell.fill = {
                   type: "pattern",
                   pattern: "solid",
                   fgColor: { argb: "FFECFEFF" },
                 };
-              else if (cellValue.includes("放腫"))
+              else if (styleValue.includes("放腫"))
                 cell.fill = {
                   type: "pattern",
                   pattern: "solid",
                   fgColor: { argb: "FFFDF2F8" },
                 };
-              else if (cellValue.includes("體檢"))
+              else if (styleValue.includes("體檢"))
                 cell.fill = {
                   type: "pattern",
                   pattern: "solid",
@@ -1064,9 +1080,9 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
       // Set Column Widths
       if (userSheet) {
         userSheet.columns = [
-          { width: 15 }, // Name
-          ...dateRange.map(() => ({ width: 10 })), // Dates (Previously auto or standard, now fixed wider for visibility)
-          { width: 10 }, // Count
+          { width: 14 },
+          ...dateRange.map(() => ({ width: 9.5 })),
+          { width: 9 },
         ];
       }
       } // end canViewStaff
@@ -1109,7 +1125,10 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
       stationTitleCell.alignment = { vertical: "middle", horizontal: "center" };
       stationSheet.getRow(1).height = 35;
 
+      stationSheet.addRow([]);
+
       const stationHeaderRow = stationSheet.addRow(stationHeaders);
+      stationHeaderRow.height = 34;
       stationHeaderRow.eachCell((cell, colNumber) => {
         cell.fill = {
           type: "pattern",
@@ -1211,7 +1230,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
         });
 
         const row = stationSheet.addRow(rowData);
-        row.height = Math.max(isOffRow ? 30 : 42, maxLines * (isOffRow ? 16 : 24));
+        row.height = Math.max(isOffRow ? 30 : 42, maxLines * (isOffRow ? 15 : 21));
         row.eachCell((cell, colNumber) => {
           cell.border = {
             top: { style: "thin" },
@@ -1270,8 +1289,8 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
       // Adjust Column Widths
       if (stationSheet && stationSheet.columns) {
         stationSheet.columns.forEach((col, index) => {
-          if (index === 0) col.width = 15;
-          else col.width = 15;
+          if (index === 0) col.width = 14;
+          else col.width = 11;
         });
       }
       } // end canViewStation
@@ -1285,12 +1304,40 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
       if (userSheet) {
         const userColumnCount = dateRange.length + 2;
         styleExcelTitle(userSheet, `影像醫學部-人員排班表 (${getCycleTitle()})`, userColumnCount);
-        finalizeExcelWorksheet(userSheet, { headerRows: [2], dataStartRow: 3, lastColumn: userColumnCount, autoFilter: false, alternatingRows: false });
+        userSheet.getCell(1, 1).font = { name: "微軟正黑體", size: 18, bold: true, color: { argb: "FFFFFFFF" } };
+        userSheet.properties.tabColor = { argb: "FF0F4C81" };
+        styleExcelSubtitle(userSheet, "橘字＝特殊角色　｜　粉紅底＝週末／休診　｜　紅底＝配合銷假", userColumnCount);
+        finalizeExcelWorksheet(userSheet, {
+          headerRows: [3],
+          dataStartRow: 4,
+          lastColumn: userColumnCount,
+          freezeRows: 3,
+          autoFilter: false,
+          alternatingRows: false,
+          paperSize: 8,
+          fitToHeight: 1,
+          zoomScale: 75,
+          printArea: `A1:${getExcelColumnName(userColumnCount)}${userSheet.rowCount}`,
+        });
       }
       if (stationSheet) {
         const stationColumnCount = dateRange.length + 1;
         styleExcelTitle(stationSheet, `影像醫學部-崗位分配表 (${getCycleTitle()})`, stationColumnCount);
-        finalizeExcelWorksheet(stationSheet, { headerRows: [2], dataStartRow: 3, lastColumn: stationColumnCount, autoFilter: false, alternatingRows: false });
+        stationSheet.getCell(1, 1).font = { name: "微軟正黑體", size: 18, bold: true, color: { argb: "FFFFFFFF" } };
+        stationSheet.properties.tabColor = { argb: "FF5B9BD5" };
+        styleExcelSubtitle(stationSheet, "姓名置中排列　｜　橘字＝開機、晚班、輔班、排班或配合銷假　｜　粉紅底＝週末／休診", stationColumnCount);
+        finalizeExcelWorksheet(stationSheet, {
+          headerRows: [3],
+          dataStartRow: 4,
+          lastColumn: stationColumnCount,
+          freezeRows: 3,
+          autoFilter: false,
+          alternatingRows: false,
+          paperSize: 8,
+          fitToHeight: 1,
+          zoomScale: 75,
+          printArea: `A1:${getExcelColumnName(stationColumnCount)}${stationSheet.rowCount}`,
+        });
       }
 
       // Generate & Download

@@ -27,6 +27,10 @@ type FinalizeWorksheetOptions = {
   alternatingRows?: boolean;
   preserveFills?: boolean;
   printTitleRows?: string;
+  fitToHeight?: number;
+  paperSize?: number;
+  zoomScale?: number;
+  printArea?: string;
 };
 
 const thinBorder = {
@@ -38,6 +42,49 @@ const thinBorder = {
 
 const hasSolidFill = (cell: any) =>
   cell.fill?.type === "pattern" && cell.fill?.pattern === "solid";
+
+export const getExcelColumnName = (columnNumber: number) => {
+  let value = columnNumber;
+  let name = "";
+  while (value > 0) {
+    const remainder = (value - 1) % 26;
+    name = String.fromCharCode(65 + remainder) + name;
+    value = Math.floor((value - 1) / 26);
+  }
+  return name;
+};
+
+const getExcelTextVisualWidth = (value: string) =>
+  Array.from(value).reduce(
+    (width, character) => width + (/[^\u0000-\u00ff]/.test(character) ? 2 : 1),
+    0,
+  );
+
+/**
+ * 將超過日期欄可讀寬度的崗位名稱分成兩行。
+ * 中文以兩個半形字寬計算，避免只靠 Excel 自動換行而切掉最後一字。
+ */
+export const formatExcelScheduleLabel = (value: string, maxVisualWidth = 7) => {
+  if (!value || value.includes("\n") || getExcelTextVisualWidth(value) <= maxVisualWidth) {
+    return value;
+  }
+
+  const characters = Array.from(value);
+  const targetWidth = Math.ceil(getExcelTextVisualWidth(value) / 2);
+  let currentWidth = 0;
+  let splitIndex = 1;
+
+  for (let index = 0; index < characters.length - 1; index += 1) {
+    currentWidth += /[^\u0000-\u00ff]/.test(characters[index]) ? 2 : 1;
+    splitIndex = index + 1;
+    if (currentWidth >= targetWidth) break;
+  }
+
+  return `${characters.slice(0, splitIndex).join("")}\n${characters.slice(splitIndex).join("")}`;
+};
+
+export const getExcelTextLineCount = (value: string) =>
+  Math.max(1, value.split("\n").length);
 
 export const initializeExcelWorkbook = (workbook: any, subject: string) => {
   const now = new Date();
@@ -77,6 +124,33 @@ export const styleExcelTitle = (
   return row;
 };
 
+export const styleExcelSubtitle = (
+  worksheet: any,
+  subtitle: string,
+  lastColumn: number,
+  rowNumber = 2,
+) => {
+  if (lastColumn > 1 && !worksheet.getCell(rowNumber, lastColumn).isMerged) {
+    worksheet.mergeCells(rowNumber, 1, rowNumber, lastColumn);
+  }
+  const row = worksheet.getRow(rowNumber);
+  const cell = row.getCell(1);
+  cell.value = subtitle;
+  cell.font = {
+    name: "微軟正黑體",
+    size: 10,
+    color: { argb: "FF475569" },
+  };
+  cell.fill = {
+    type: "pattern",
+    pattern: "solid",
+    fgColor: { argb: "FFEAF2F8" },
+  };
+  cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+  row.height = 24;
+  return row;
+};
+
 export const finalizeExcelWorksheet = (
   worksheet: any,
   options: FinalizeWorksheetOptions = {},
@@ -93,6 +167,10 @@ export const finalizeExcelWorksheet = (
     alternatingRows = true,
     preserveFills = true,
     printTitleRows = `1:${freezeRows}`,
+    fitToHeight = 0,
+    paperSize = 9,
+    zoomScale = 85,
+    printArea,
   } = options;
 
   const finalRow = worksheet.rowCount;
@@ -156,17 +234,19 @@ export const finalizeExcelWorksheet = (
       xSplit: freezeColumns,
       ySplit: freezeRows,
       showGridLines: false,
+      zoomScale,
     },
   ];
   worksheet.pageSetup = {
     ...worksheet.pageSetup,
-    paperSize: 9,
+    paperSize,
     orientation: landscape ? "landscape" : "portrait",
     fitToPage: true,
     fitToWidth: 1,
-    fitToHeight: 0,
+    fitToHeight,
     horizontalCentered: true,
     printTitlesRow: printTitleRows,
+    ...(printArea ? { printArea } : {}),
     margins: {
       left: 0.25,
       right: 0.25,

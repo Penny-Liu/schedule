@@ -49,7 +49,7 @@ import { loadPdfLibraries } from "../services/exportLibraries";
 import ConfirmModal from "../components/ConfirmModal";
 import { supabase } from "../services/supabaseClient";
 import { loadChineseFontToDoc } from "../services/pdfUtils";
-import { downloadExcelBuffer, finalizeExcelWorksheet, initializeExcelWorkbook, styleExcelTitle } from "../services/excelReportUtils";
+import { downloadExcelBuffer, finalizeExcelWorksheet, getExcelColumnName, initializeExcelWorkbook, styleExcelSubtitle, styleExcelTitle } from "../services/excelReportUtils";
 
 interface PhysicianSchedulePageProps {
   currentUser: any;
@@ -77,6 +77,15 @@ const LOCATION_COLORS: Record<string, string> = {
   台中: "bg-orange-500 border-orange-600",
   外部: "bg-purple-500 border-purple-600",
 };
+
+const PHYSICIAN_EXCEL_LOCATION_FILLS: Record<string, string> = {
+  北投: "FFDCEBFF",
+  大直: "FFF0DCC8",
+  台中: "FFFFF8BA",
+};
+
+const PHYSICIAN_EXCEL_LATE_TEXT = "FFDC0000";
+const PHYSICIAN_EXCEL_TASK_TEXT = "FF0050C8";
 
 const ASSIGNMENT_STATION_ORDER = [
   "解說",
@@ -2312,12 +2321,12 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
 
       // Shared Styles & Config
       const borderStyle: any = {
-        top: { style: "thin" },
-        left: { style: "thin" },
-        bottom: { style: "thin" },
-        right: { style: "thin" },
+        top: { style: "thin", color: { argb: "FFD6DEE8" } },
+        left: { style: "thin", color: { argb: "FFD6DEE8" } },
+        bottom: { style: "thin", color: { argb: "FFD6DEE8" } },
+        right: { style: "thin", color: { argb: "FFD6DEE8" } },
       };
-      const fontBase = { name: "Arial", size: 10 };
+      const fontBase = { name: "微軟正黑體", size: 10 };
       const alignCenter = {
         vertical: "middle",
         horizontal: "center",
@@ -2336,6 +2345,7 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
       const applyPageSetup = (ws: any) => {
         ws.pageSetup = {
           orientation: "landscape",
+          paperSize: 8,
           fitToPage: true,
           fitToWidth: 1,
           fitToHeight: 1,
@@ -2350,8 +2360,113 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
         };
       };
 
+      const getCellLineCount = (cell: any) => {
+        const value = cell.value;
+        if (value && typeof value === "object" && value.richText) {
+          return Math.max(
+            1,
+            value.richText.map((part: any) => part.text || "").join("").split("\n").length,
+          );
+        }
+        return Math.max(1, String(value ?? "").split("\n").length);
+      };
+
+      const fitScheduleRows = (sheet: any, dataStartRow = 4) => {
+        for (let rowNumber = dataStartRow; rowNumber <= sheet.rowCount; rowNumber += 1) {
+          const row = sheet.getRow(rowNumber);
+          const isSectionRow = row.getCell(2).isMerged;
+          if (isSectionRow) {
+            row.height = 28;
+            continue;
+          }
+          let maxLines = 1;
+          row.eachCell({ includeEmpty: false }, (cell: any) => {
+            maxLines = Math.max(maxLines, getCellLineCount(cell));
+          });
+          row.height = Math.min(92, Math.max(34, maxLines * 14 + 10));
+        }
+      };
+
+      const polishDoctorScheduleSheet = (sheet: any, tabColor: string) => {
+        const lastColumn = dateRange.length + 1;
+        sheet.properties.tabColor = { argb: tabColor };
+        sheet.getCell(1, 1).font = {
+          name: "微軟正黑體",
+          size: 18,
+          bold: true,
+          color: { argb: "FFFFFFFF" },
+        };
+
+        for (let rowNumber = 4; rowNumber <= sheet.rowCount; rowNumber += 1) {
+          const firstCell = sheet.getCell(rowNumber, 1);
+          const hasSemanticFill = firstCell.fill?.type === "pattern";
+          if (!firstCell.isMerged && !hasSemanticFill) {
+            firstCell.fill = {
+              type: "pattern",
+              pattern: "solid",
+              fgColor: { argb: "FFEAF2F8" },
+            };
+            firstCell.font = {
+              ...fontBase,
+              size: 11,
+              bold: true,
+              color: { argb: "FF17365D" },
+            };
+          }
+        }
+
+        dateRange.forEach((dateStr, index) => {
+          const date = new Date(dateStr);
+          const columnNumber = index + 2;
+          const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+          const isHoliday = holidays.some(
+            (holiday) =>
+              holiday.date === dateStr &&
+              (holiday.type === DateEventType.NATIONAL || holiday.type === DateEventType.CLOSED),
+          );
+          if (!isWeekend && !isHoliday) return;
+
+          const headerCell = sheet.getCell(3, columnNumber);
+          headerCell.fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: { argb: "FFFFF0F5" },
+          };
+          headerCell.font = {
+            ...fontBase,
+            bold: true,
+            color: { argb: "FFDC2626" },
+          };
+
+          for (let rowNumber = 4; rowNumber <= sheet.rowCount; rowNumber += 1) {
+            const cell = sheet.getCell(rowNumber, columnNumber);
+            if (!cell.isMerged && cell.fill?.type !== "pattern") {
+              cell.fill = {
+                type: "pattern",
+                pattern: "solid",
+                fgColor: { argb: "FFFFF7FA" },
+              };
+            }
+          }
+        });
+
+        fitScheduleRows(sheet);
+        finalizeExcelWorksheet(sheet, {
+          headerRows: [3],
+          dataStartRow: 4,
+          lastColumn,
+          freezeRows: 3,
+          autoFilter: false,
+          alternatingRows: false,
+          paperSize: 8,
+          fitToHeight: 1,
+          zoomScale: 75,
+          printArea: `A1:${getExcelColumnName(lastColumn)}${sheet.rowCount}`,
+        });
+      };
+
       // --- Helper: Generate Header ---
-      const generateHeader = (sheet: any) => {
+      const generateHeader = (sheet: any, subtitle: string) => {
         // Row 1: Title
         const titleRow = sheet.getRow(1);
         titleRow.getCell(1).value =
@@ -2361,12 +2476,14 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
         titleRow.getCell(1).alignment = alignCenter;
         titleRow.height = 30;
 
-        // Row 2: Date
-        const headerRow2 = sheet.getRow(2);
-        headerRow2.getCell(1).value = "項目 / 日期";
-        headerRow2.getCell(1).font = { ...fontBase, bold: true };
-        headerRow2.getCell(1).alignment = alignCenter;
-        headerRow2.getCell(1).border = borderStyle;
+        styleExcelSubtitle(sheet, subtitle, dateRange.length + 1, 2);
+
+        // Row 3: Date
+        const headerRow = sheet.getRow(3);
+        headerRow.getCell(1).value = "項目／日期";
+        headerRow.getCell(1).font = { ...fontBase, bold: true };
+        headerRow.getCell(1).alignment = alignCenter;
+        headerRow.getCell(1).border = borderStyle;
         sheet.getColumn(1).width = 15; // Name column width
 
         // Fill Dates
@@ -2374,7 +2491,7 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
         dateRange.forEach((dateStr, index) => {
           const date = new Date(dateStr);
           const colIndex = index + 2;
-          const cell = headerRow2.getCell(colIndex);
+          const cell = headerRow.getCell(colIndex);
           const dayOfWeek = date.getDay();
 
           cell.value = `${date.getMonth() + 1}/${date.getDate()}\n${weekDays[dayOfWeek]}`;
@@ -2389,10 +2506,9 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
                 : undefined,
           };
 
-          // User requested column width 7.2
-          sheet.getColumn(colIndex).width = 7.2;
+          sheet.getColumn(colIndex).width = 8.5;
         });
-        headerRow2.height = 35;
+        headerRow.height = 38;
       };
 
       // ==========================================
@@ -2400,9 +2516,9 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
       // ==========================================
       const sheet1 = workbook.addWorksheet("崗位視角");
       applyPageSetup(sheet1);
-      generateHeader(sheet1);
+      generateHeader(sheet1, "依院區與崗位排列　｜　內容順序：姓名、時段、任務　｜　橘字＝模擬排班");
 
-      let currentRowIndex = 3;
+      let currentRowIndex = 4;
 
       const addLocationSection = (locationName: string, colorHex: string) => {
         const locShifts = shifts.filter((s) => s.location === locationName);
@@ -2774,9 +2890,9 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
       // ==========================================
       const sheet2 = workbook.addWorksheet("人員視角");
       applyPageSetup(sheet2);
-      generateHeader(sheet2);
+      generateHeader(sheet2, "藍底＝北投　｜　棕底＝大直　｜　黃底＝台中　｜　紅字＝晚班　｜　灰底／X＝休假或不排班");
 
-      let sheet2RowIndex = 3;
+      let sheet2RowIndex = 4;
 
       // Iterate all doctors (state order)
       doctors.forEach((doc) => {
@@ -2833,10 +2949,24 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
             const taskVal =
               shift.task && !shift.task.includes("固定") ? shift.task : "";
 
+            const locationFill = PHYSICIAN_EXCEL_LOCATION_FILLS[loc];
+            if (locationFill) {
+              cell.fill = {
+                type: "pattern",
+                pattern: "solid",
+                fgColor: { argb: locationFill },
+              };
+            }
+
             // Order: Station -> Location -> Time -> Task
-            const lines = [stationVal, loc, time, taskVal].filter(
+            const detailLines = [loc, time].filter(
               (line) => line && line.trim() !== "",
             );
+            const taskTokens = taskVal
+              .split(/[,，]/)
+              .map((task) => task.trim())
+              .filter(Boolean);
+            const lines = [stationVal, ...detailLines, ...taskTokens];
 
             // User Request: Can Station be larger? YES -> Use Rich Text
             // Logic: First line is Station (if present), make it Big. Rest Small.
@@ -2850,11 +2980,20 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
 
               lines.forEach((line, idx) => {
                 const isStation = idx === 0 && isFirstLineStation;
+                const isTask = taskTokens.includes(line);
+                const isLateTask = isTask && line === "晚班";
                 richTextParts.push({
                   text: line + (idx < lines.length - 1 ? "\n" : ""), // Add newline to all except last
                   font: isStation
                     ? { ...fontBase, size: 14, bold: true } // Big Station
-                    : { ...fontBase, size: 9, bold: false }, // Small details
+                    : {
+                        ...fontBase,
+                        size: 9,
+                        bold: isLateTask,
+                        color: isTask
+                          ? { argb: isLateTask ? PHYSICIAN_EXCEL_LATE_TEXT : PHYSICIAN_EXCEL_TASK_TEXT }
+                          : undefined,
+                      },
                 });
               });
 
@@ -2873,7 +3012,9 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
               const val = cell.value as any; // Cast to any to access richText safely
               if (val && val.richText) {
                 val.richText.forEach((part: any) => {
-                  part.font.color = { argb: "FFD97706" };
+                  if (part.text.trim() !== "晚班") {
+                    part.font.color = { argb: "FFD97706" };
+                  }
                 });
               }
             }
@@ -2896,8 +3037,8 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
 
       styleExcelTitle(sheet1, `醫師排班表 ${dateRange[0]} ~ ${dateRange[dateRange.length - 1]}`, dateRange.length + 1);
       styleExcelTitle(sheet2, `醫師排班表 ${dateRange[0]} ~ ${dateRange[dateRange.length - 1]}`, dateRange.length + 1);
-      finalizeExcelWorksheet(sheet1, { headerRows: [2], dataStartRow: 3, lastColumn: dateRange.length + 1, autoFilter: false, alternatingRows: false });
-      finalizeExcelWorksheet(sheet2, { headerRows: [2], dataStartRow: 3, lastColumn: dateRange.length + 1, autoFilter: false, alternatingRows: false });
+      polishDoctorScheduleSheet(sheet1, "FF0F4C81");
+      polishDoctorScheduleSheet(sheet2, "FF5B9BD5");
 
       // 4. Save
       const buffer = await workbook.xlsx.writeBuffer();
