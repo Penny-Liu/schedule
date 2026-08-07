@@ -45,6 +45,10 @@ import {
 } from "./utils";
 
 const SCHEDULE_STORAGE_KEY = "radiology_schedule_data";
+const MEETING_ROOM_FULL_ACCESS = [
+  PERMISSIONS.VIEW_MEETING_ROOM,
+  PERMISSIONS.EDIT_MEETING_ROOM,
+];
 
 // Helper: Get permissions by role for backward compatibility
 export const getPermissionsByRole = (role: UserRole): string[] => {
@@ -65,6 +69,7 @@ export const getPermissionsByRole = (role: UserRole): string[] => {
         PERMISSIONS.VIEW_DASHBOARD_STAFF,
         PERMISSIONS.VIEW_DASHBOARD_STATION,
         PERMISSIONS.VIEW_DASHBOARD_TODAY,
+        ...MEETING_ROOM_FULL_ACCESS,
       ];
     case UserRole.PHYSICIAN_ADMIN:
     case UserRole.SCHEDULER:
@@ -78,6 +83,7 @@ export const getPermissionsByRole = (role: UserRole): string[] => {
         PERMISSIONS.VIEW_DASHBOARD_STAFF,
         PERMISSIONS.VIEW_DASHBOARD_STATION,
         PERMISSIONS.VIEW_DASHBOARD_TODAY,
+        ...MEETING_ROOM_FULL_ACCESS,
       ];
     case UserRole.HM_SUPERVISOR:
       return [
@@ -88,13 +94,14 @@ export const getPermissionsByRole = (role: UserRole): string[] => {
         PERMISSIONS.EDIT_ANESTHESIA,
         PERMISSIONS.VIEW_STAFF, // Allow HM Supervisor to view staff list
         PERMISSIONS.EDIT_SETTINGS,
+        ...MEETING_ROOM_FULL_ACCESS,
       ];
     case UserRole.HM_STAFF:
-      return [PERMISSIONS.VIEW_CLOUD_SCHEDULE, PERMISSIONS.VIEW_HEALTH_MGMT];
+      return [PERMISSIONS.VIEW_CLOUD_SCHEDULE, PERMISSIONS.VIEW_HEALTH_MGMT, ...MEETING_ROOM_FULL_ACCESS];
     case UserRole.FINANCE:
-      return [PERMISSIONS.VIEW_PHYSICIAN, PERMISSIONS.VIEW_DOCTOR_STATS];
+      return [PERMISSIONS.VIEW_PHYSICIAN, PERMISSIONS.VIEW_DOCTOR_STATS, ...MEETING_ROOM_FULL_ACCESS];
     case UserRole.VIEWER:
-      return [PERMISSIONS.VIEW_CLOUD_SCHEDULE, PERMISSIONS.VIEW_PHYSICIAN];
+      return [PERMISSIONS.VIEW_PHYSICIAN, PERMISSIONS.VIEW_MEETING_ROOM];
     default: // RADIOGRAPHER_STAFF
       return [
         PERMISSIONS.VIEW_CLOUD_SCHEDULE, 
@@ -102,9 +109,18 @@ export const getPermissionsByRole = (role: UserRole): string[] => {
         PERMISSIONS.VIEW_DASHBOARD_STAFF,
         PERMISSIONS.VIEW_DASHBOARD_STATION,
         PERMISSIONS.VIEW_DASHBOARD_TODAY,
+        ...MEETING_ROOM_FULL_ACCESS,
       ];
   }
 };
+
+export const normalizeUserPermissions = (
+  role: UserRole,
+  permissions?: string[] | null,
+): string[] =>
+  role === UserRole.VIEWER
+    ? getPermissionsByRole(UserRole.VIEWER)
+    : permissions || getPermissionsByRole(role);
 
 import { fetchAssistantData, AssistantData } from "./assistantService";
 
@@ -428,8 +444,9 @@ class Store {
     if (perms.includes(PERMISSIONS.VIEW_ANESTHESIA) || isAdmin) {
       aneShiftsReq = this.fetchAnesthesiaShiftsByRange(startDate, endDate);
     }
-    // 所有人皆可查看會議室租借情況
-    meetingRoomsReq = this.fetchMeetingRoomsByRange(startDate, endDate);
+    if (perms.includes(PERMISSIONS.VIEW_MEETING_ROOM) || isAdmin) {
+      meetingRoomsReq = this.fetchMeetingRoomsByRange(startDate, endDate);
+    }
 
     let assistantReq = Promise.resolve({});
     if (canViewCloud || canViewPhysician) {
@@ -648,6 +665,17 @@ class Store {
           }
           if (mappedUser.isRadiographer && !permissions.includes("physician_view")) permissions.push("physician_view");
 
+          // Meeting-room access used to be open to every signed-in role.
+          // Preserve that behavior for existing non-viewer accounts while the
+          // public VIEWER remains intentionally read-only.
+          if (
+            mappedUser.role !== UserRole.VIEWER &&
+            !permissions.includes(PERMISSIONS.VIEW_MEETING_ROOM) &&
+            !permissions.includes(PERMISSIONS.EDIT_MEETING_ROOM)
+          ) {
+            permissions.push(...MEETING_ROOM_FULL_ACCESS);
+          }
+
           // The announced VIEWER credential is public. Never honor custom or
           // legacy permissions that could expand it beyond the approved views.
           if (mappedUser.role === UserRole.VIEWER) {
@@ -737,8 +765,9 @@ class Store {
       aneStaffReq = this.fetchPaginated("anesthesia_staff");
       aneShiftsReq = this.fetchAnesthesiaShiftsByRange(startDate, endDate);
     }
-    // 所有人皆可查看會議室租借情況
-    meetingRoomsReq = this.fetchMeetingRoomsByRange(startDate, endDate);
+    if (perms.includes(PERMISSIONS.VIEW_MEETING_ROOM) || isAdmin) {
+      meetingRoomsReq = this.fetchMeetingRoomsByRange(startDate, endDate);
+    }
 
     let assistantReq = Promise.resolve({});
     if (canViewCloud || canViewPhysician) {
@@ -873,7 +902,11 @@ class Store {
         this.meetingRoomBookings = meetingRoomsRes.data.map((b: any) => { const m = {...b}; this.mapFromDbFields(m); return m; });
       }
 
-      await this.loadCloudScheduleData();
+      if (canViewCloud) {
+        await this.loadCloudScheduleData();
+      } else {
+        this.cloudScheduleEntries = [];
+      }
 
       console.log("[Store] User specific data loaded successfully.");
     } catch(e) {
@@ -1431,16 +1464,20 @@ class Store {
     if (record.id) this.mapFromDbFields(record);
 
     if (eventType === "INSERT" || eventType === "UPDATE") {
+      const permissions = normalizeUserPermissions(
+        record.role as UserRole,
+        record.permissions,
+      );
       const index = this.users.findIndex((u) => u.id === record.id);
       if (index !== -1) {
         this.users[index] = {
           ...(record as User),
-          permissions: record.permissions || getPermissionsByRole(record.role),
+          permissions,
         };
       } else {
         this.users.push({
           ...(record as User),
-          permissions: record.permissions || getPermissionsByRole(record.role),
+          permissions,
         });
       }
       this.notifyListeners();
@@ -1666,6 +1703,9 @@ class Store {
   }
 
   async addMeetingRoomBookings(bookings: MeetingRoomBooking[]) {
+    if (!this.currentUser?.permissions?.includes(PERMISSIONS.EDIT_MEETING_ROOM)) {
+      throw new Error("您只有查看會議室時段的權限");
+    }
     this.meetingRoomBookings.push(...bookings);
     this.notifyListeners();
 
@@ -1706,6 +1746,9 @@ class Store {
   }
 
   async deleteMeetingRoomBooking(id: string) {
+    if (!this.currentUser?.permissions?.includes(PERMISSIONS.EDIT_MEETING_ROOM)) {
+      throw new Error("您只有查看會議室時段的權限");
+    }
     const bookingToDel = this.meetingRoomBookings.find((b) => b.id === id);
     this.meetingRoomBookings = this.meetingRoomBookings.filter(
       (b) => b.id !== id,
