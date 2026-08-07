@@ -62,6 +62,7 @@ import {
   loadExcelJS,
   loadPdfLibraries,
 } from "../services/exportLibraries";
+import { downloadExcelBuffer, finalizeExcelWorksheet, initializeExcelWorkbook, styleExcelTitle } from "../services/excelReportUtils";
 import ConfirmModal from "../components/ConfirmModal";
 import {
   AutoScheduleModal,
@@ -791,6 +792,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
       const ExcelJS = await loadExcelJS();
       const workbook = new ExcelJS.Workbook();
       const today = new Date();
+      initializeExcelWorkbook(workbook, `影像醫學部排班表 ${getCycleTitle()}`);
       // const exportDate = today.toLocaleDateString('zh-TW');
 
       // --- Sheet 1: User View (人員視角) ---
@@ -1280,17 +1282,21 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
         return;
       }
 
+      if (userSheet) {
+        const userColumnCount = dateRange.length + 2;
+        styleExcelTitle(userSheet, `影像醫學部-人員排班表 (${getCycleTitle()})`, userColumnCount);
+        finalizeExcelWorksheet(userSheet, { headerRows: [2], dataStartRow: 3, lastColumn: userColumnCount, autoFilter: false, alternatingRows: false });
+      }
+      if (stationSheet) {
+        const stationColumnCount = dateRange.length + 1;
+        styleExcelTitle(stationSheet, `影像醫學部-崗位分配表 (${getCycleTitle()})`, stationColumnCount);
+        finalizeExcelWorksheet(stationSheet, { headerRows: [2], dataStartRow: 3, lastColumn: stationColumnCount, autoFilter: false, alternatingRows: false });
+      }
+
       // Generate & Download
       const buffer = await workbook.xlsx.writeBuffer();
-      const blob = new Blob([buffer], {
-        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      });
-      const link = document.createElement("a");
-      link.href = URL.createObjectURL(blob);
       const cycleTitle = getCycleTitle().replace(/[/\\?%*:|"<>\s]/g, "_");
-      link.download = `${cycleTitle}_排班表.xlsx`;
-      link.click();
-      URL.revokeObjectURL(link.href);
+      downloadExcelBuffer(buffer, `${cycleTitle}_排班表.xlsx`);
     } catch (error: any) {
       console.error("Excel Export Error:", error);
       showToast(`Excel 匯出失敗: ${error.message || error}`, "error");

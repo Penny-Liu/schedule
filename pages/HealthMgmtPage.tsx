@@ -48,6 +48,7 @@ import { toLocalISOString, generateUUID } from "../services/utils";
 import ConfirmModal from "../components/ConfirmModal";
 import { loadExcelJS, loadPdfLibraries } from "../services/exportLibraries";
 import { loadChineseFontToDoc } from "../services/pdfUtils";
+import { downloadExcelBuffer, finalizeExcelWorksheet, initializeExcelWorkbook, styleExcelTitle } from "../services/excelReportUtils";
 
 // 統一且精準的站點分類器：保證「統計區」與「卡片區」分類絕對一致
 export const getMatchedGroupId = (sText: string) => {
@@ -771,10 +772,12 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
 
     const workbook = new ExcelJS.Workbook();
     const ws = workbook.addWorksheet("健管排班統計");
+    initializeExcelWorkbook(workbook, `健管排班統計 ${rangeStr}`);
 
-    // Title row
-    const titleRow = ws.addRow([`統計區間: ${rangeStr}`]);
-    titleRow.font = { bold: true };
+    styleExcelTitle(ws, "健管排班統計", 9 + hmStations.length);
+    const titleRow = ws.addRow([`統計區間：${rangeStr}`]);
+    titleRow.font = { name: "微軟正黑體", italic: true, color: { argb: "FF475569" } };
+    ws.mergeCells(2, 1, 2, 9 + hmStations.length);
 
     // Header row
     const headers = [
@@ -868,17 +871,11 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
     ws.getColumn(1).width = 14;
     for (let i = 2; i <= headers.length; i++) ws.getColumn(i).width = 10;
 
-    const buffer = await workbook.xlsx.writeBuffer();
-    const blob = new Blob([buffer], {
-      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
     const locPrefix =
       currentUserLocation !== "全部" ? `${currentUserLocation}_` : "";
-    link.download = `${locPrefix}健管排班統計_${label}.xlsx`;
-    link.click();
-    URL.revokeObjectURL(link.href);
+    finalizeExcelWorksheet(ws, { headerRows: [3], dataStartRow: 4, lastColumn: headers.length, freezeRows: 3, autoFilter: true });
+    const buffer = await workbook.xlsx.writeBuffer();
+    downloadExcelBuffer(buffer, `${locPrefix}健管排班統計_${label}.xlsx`);
   };
 
   const handleExportScheduleExcel = async () => {
@@ -891,6 +888,8 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
         selectedCycleId === "month"
           ? `${currentDate.getFullYear()}年${currentDate.getMonth() + 1}月`
           : currentCycle?.name || "週期排班";
+      initializeExcelWorkbook(workbook, `健管排班表 ${label}`);
+      styleExcelTitle(sheet, `健管排班表（${label}）`, dateRange.length + 1);
 
       // Header row
       const headerRow = [
@@ -901,7 +900,8 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
         }),
       ];
 
-      const firstRow = sheet.addRow(headerRow);
+      const firstRow = sheet.getRow(2);
+      firstRow.values = headerRow;
       firstRow.font = { bold: true };
       firstRow.alignment = { horizontal: "center" };
 
@@ -952,16 +952,11 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
         col.width = i === 0 ? 15 : 12;
       });
 
-      const buffer = await workbook.xlsx.writeBuffer();
-      const blob = new Blob([buffer], {
-        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      });
-      const link = document.createElement("a");
-      link.href = URL.createObjectURL(blob);
       const locPrefix =
         currentUserLocation !== "全部" ? `${currentUserLocation}_` : "";
-      link.download = `${locPrefix}健管排班表_${label}.xlsx`;
-      link.click();
+      finalizeExcelWorksheet(sheet, { headerRows: [2], dataStartRow: 3, lastColumn: headerRow.length, autoFilter: false, alternatingRows: false });
+      const buffer = await workbook.xlsx.writeBuffer();
+      downloadExcelBuffer(buffer, `${locPrefix}健管排班表_${label}.xlsx`);
     } catch (error) {
       console.error("Excel export failed:", error);
       alert("匯出 Excel 失敗");

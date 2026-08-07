@@ -8,6 +8,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { loadExcelJS } from "../../services/exportLibraries";
+import { downloadExcelBuffer, finalizeExcelWorksheet, initializeExcelWorkbook, styleExcelTitle } from "../../services/excelReportUtils";
 
 interface PhysicianWorkloadData {
   date: string;
@@ -149,13 +150,10 @@ const PhysicianWorkloadAnalysis: React.FC<PhysicianWorkloadAnalysisProps> = ({
       const ExcelJS = await loadExcelJS();
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet("醫師工作量統計");
+      initializeExcelWorkbook(workbook, `醫師工作量統計 ${startDate} ~ ${endDate}`);
 
       // 設定標題
-      worksheet.mergeCells("A1:K1");
-      const titleCell = worksheet.getCell("A1");
-      titleCell.value = `醫師工作量統計 (${startDate} ~ ${endDate})`;
-      titleCell.font = { bold: true, size: 14 };
-      titleCell.alignment = { horizontal: "center", vertical: "middle" };
+      styleExcelTitle(worksheet, `醫師工作量統計 (${startDate} ~ ${endDate})`, 11);
 
       // 設定列頭
       const headers = [
@@ -197,13 +195,13 @@ const PhysicianWorkloadAnalysis: React.FC<PhysicianWorkloadAnalysisProps> = ({
             : 0;
         const row = worksheet.addRow([
           doctor.doctor_name,
-          doctor.total_da_tao_5.toFixed(1),
-          doctor.total_xiao_tao_4.toFixed(1),
-          doctor.total_xiao_tao_3.toFixed(1),
-          doctor.total_wu_2.toFixed(1),
-          doctor.total_wu_1.toFixed(1),
-          doctor.total_dazhi_1.toFixed(1),
-          doctor.total_mr.toFixed(1),
+          Number(doctor.total_da_tao_5.toFixed(1)),
+          Number(doctor.total_xiao_tao_4.toFixed(1)),
+          Number(doctor.total_xiao_tao_3.toFixed(1)),
+          Number(doctor.total_wu_2.toFixed(1)),
+          Number(doctor.total_wu_1.toFixed(1)),
+          Number(doctor.total_dazhi_1.toFixed(1)),
+          Number(doctor.total_mr.toFixed(1)),
           doctor.total_units,
           doctor.dates_count,
           unitPerDay,
@@ -258,16 +256,9 @@ const PhysicianWorkloadAnalysis: React.FC<PhysicianWorkloadAnalysisProps> = ({
       ];
 
       // 下載
+      finalizeExcelWorksheet(worksheet, { headerRows: [2], dataStartRow: 3, lastColumn: 11, autoFilter: true });
       const buffer = await workbook.xlsx.writeBuffer();
-      const blob = new Blob([buffer], {
-        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `醫師工作量統計_${startDate}_to_${endDate}.xlsx`;
-      link.click();
-      URL.revokeObjectURL(url);
+      downloadExcelBuffer(buffer, `醫師工作量統計_${startDate}_to_${endDate}.xlsx`);
     } catch (err) {
       alert("匯出失敗");
       console.error(err);

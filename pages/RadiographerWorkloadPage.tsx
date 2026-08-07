@@ -24,6 +24,7 @@ import {
   Copy,
 } from "lucide-react";
 import { loadExcelJS } from "../services/exportLibraries";
+import { downloadExcelBuffer, finalizeExcelWorksheet, initializeExcelWorkbook, styleExcelTitle } from "../services/excelReportUtils";
 import { isUserOnEmploymentPause, generateUUID } from "../services/utils";
 import { DailyDetailsModal } from "../components/dashboard/DailyDetailsModal";
 
@@ -1981,6 +1982,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
       const ExcelJS = await loadExcelJS();
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet("每日工作量明細");
+      initializeExcelWorkbook(workbook, `每日放射師工作量明細 ${startDate} ~ ${endDate}`);
 
       worksheet.columns = [
         { header: "日期", key: "date", width: 15 },
@@ -2006,16 +2008,16 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
 
       dailyData.forEach((d) => worksheet.addRow(d));
 
+      worksheet.spliceRows(1, 0, [], []);
+      styleExcelTitle(worksheet, "每日放射師工作量明細", 13);
+      worksheet.mergeCells(2, 1, 2, 13);
+      worksheet.getCell(2, 1).value = `統計區間：${startDate} ~ ${endDate}`;
+      worksheet.getCell(2, 1).font = { name: "微軟正黑體", italic: true, color: { argb: "FF475569" } };
+      worksheet.getCell(2, 1).alignment = { horizontal: "center", vertical: "middle" };
+      finalizeExcelWorksheet(worksheet, { headerRows: [3], dataStartRow: 4, lastColumn: 13, freezeRows: 3, autoFilter: true });
+
       const buffer = await workbook.xlsx.writeBuffer();
-      const blob = new Blob([buffer], {
-        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      });
-      const link = document.createElement("a");
-      link.href = URL.createObjectURL(blob);
-      link.download = `每日放射師工作量明細_${startDate}_${endDate}.xlsx`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      downloadExcelBuffer(buffer, `每日放射師工作量明細_${startDate}_${endDate}.xlsx`);
     } catch (e: any) {
       console.error("Export daily Excel failed", e);
       alert(`匯出每日 Excel 失敗: ${e.message}`);
@@ -2027,6 +2029,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
       const ExcelJS = await loadExcelJS();
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet("工作量統計");
+      initializeExcelWorkbook(workbook, `放射師工作量統計 ${currentMonth}`);
 
       const assistants = radiographers
         .filter((r) => r.role === "RADIOGRAPHER_ASSISTANT")
@@ -2975,18 +2978,13 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
         addTextRow("• 院務協助，如督考、評鑑…");
       }
 
+      finalizeExcelWorksheet(worksheet, { headerRows: [2, 3], dataStartRow: 4, lastColumn: 38, freezeRows: 3, autoFilter: false, alternatingRows: false });
+      finalizeExcelWorksheet(worksheet2, { headerRows: [], dataStartRow: 1, lastColumn: 6, freezeRows: 0, freezeColumns: 0, autoFilter: false, alternatingRows: false });
+      finalizeExcelWorksheet(worksheet3, { headerRows: [], dataStartRow: 1, lastColumn: 14, freezeRows: 0, freezeColumns: 0, autoFilter: false, alternatingRows: false });
+      const ws4 = workbook.getWorksheet("劉雅萍");
+      if (ws4) finalizeExcelWorksheet(ws4, { headerRows: [], dataStartRow: 1, lastColumn: 6, freezeRows: 0, freezeColumns: 0, autoFilter: false, alternatingRows: false });
       const buffer = await workbook.xlsx.writeBuffer();
-      const blob = new Blob([buffer], {
-        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `放射師工作量統計_${currentMonth}.xlsx`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
+      downloadExcelBuffer(buffer, `放射師工作量統計_${currentMonth}.xlsx`);
     } catch (e: any) {
       console.error("Excel export failed", e);
       alert(`匯出 Excel 失敗: ${e.message}`);

@@ -8,6 +8,7 @@ import {
   PERMISSIONS,
 } from "../types";
 import { db } from "../services/store";
+import { downloadExcelBuffer, finalizeExcelWorksheet, initializeExcelWorkbook, styleExcelTitle } from "../services/excelReportUtils";
 import {
   BarChart3,
   Calendar,
@@ -606,6 +607,8 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
       const ExcelJS = await loadExcelJS();
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet("工作統計");
+      const reportLabel = selectedCycleId === "rolling" ? currentDate.toISOString().slice(0, 7) : "週期報表";
+      initializeExcelWorkbook(workbook, `放射師工作統計 ${reportLabel}`);
       // 欄位標題
       const headers = [
         "姓名",
@@ -655,15 +658,13 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
         ]);
       });
 
-      const fileName = `工作統計_${selectedCycleId === "rolling" ? currentDate.toISOString().slice(0, 7) : "週期報表"}.xlsx`;
+      worksheet.spliceRows(1, 0, []);
+      styleExcelTitle(worksheet, `放射師工作統計（${reportLabel}）`, headers.length);
+      finalizeExcelWorksheet(worksheet, { headerRows: [2], dataStartRow: 3, lastColumn: headers.length, autoFilter: true });
+
+      const fileName = `工作統計_${reportLabel}.xlsx`;
       const buffer = await workbook.xlsx.writeBuffer();
-      const blob = new Blob([buffer], {
-        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      });
-      const link = document.createElement("a");
-      link.href = URL.createObjectURL(blob);
-      link.download = fileName;
-      link.click();
+      downloadExcelBuffer(buffer, fileName);
     } catch (e) {
       console.error("Excel export failed", e);
       alert("匯出 Excel 失敗，請稍後再試");

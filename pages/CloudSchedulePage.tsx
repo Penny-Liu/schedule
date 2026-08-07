@@ -6,6 +6,7 @@ import { loadExcelJS, loadPdfLibraries } from '../services/exportLibraries';
 import { Cloud, ChevronLeft, ChevronRight, Plus, Pencil, Trash2, Check, X, UserCheck, Save, AlertCircle, Loader2, Eye, EyeOff, Filter } from 'lucide-react';
 import ConfirmModal from '../components/ConfirmModal';
 import { loadChineseFontToDoc } from '../services/pdfUtils';
+import { downloadExcelBuffer, finalizeExcelWorksheet, initializeExcelWorkbook, styleExcelTitle } from '../services/excelReportUtils';
 
 interface CloudSchedulePageProps {
     currentUser: User;
@@ -569,6 +570,7 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
             const ws = wb.addWorksheet('影像雲班表');
 
             const titleText = `${year}${String(month + 1).padStart(2, '0')}影像雲班表`;
+            initializeExcelWorkbook(wb, titleText);
             const firstHalf = monthDates.slice(0, 15);
             const secondHalf = monthDates.slice(15);
 
@@ -615,12 +617,7 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
             };
 
             // Title
-            ws.mergeCells(1, 1, 1, firstHalf.length + 1);
-            const titleCell = ws.getCell(1, 1);
-            titleCell.value = titleText;
-            titleCell.font = { bold: true, size: 14 };
-            titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
-            ws.getRow(1).height = 22;
+            styleExcelTitle(ws, titleText, firstHalf.length + 1);
 
             writeHalf(firstHalf, 2);
             // Blank row between halves
@@ -628,14 +625,9 @@ const CloudSchedulePage: React.FC<CloudSchedulePageProps> = ({ currentUser }) =>
             ws.getRow(blankRowIdx).height = 4;
             writeHalf(secondHalf, blankRowIdx + 1);
 
+            finalizeExcelWorksheet(ws, { headerRows: [2, blankRowIdx + 1], dataStartRow: 3, lastColumn: firstHalf.length + 1, freezeRows: 2, autoFilter: false, alternatingRows: false });
             const buffer = await wb.xlsx.writeBuffer();
-            const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `${titleText}.xlsx`;
-            a.click();
-            URL.revokeObjectURL(url);
+            downloadExcelBuffer(buffer, `${titleText}.xlsx`);
             showToast('已完成匯出 Excel');
         } catch (e: any) {
             console.error('Excel Export Error:', e);
