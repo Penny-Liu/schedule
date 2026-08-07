@@ -36,6 +36,7 @@ import {
 
 import { RADIOGRAPHER_SKILLS, SKILL_CATEGORIES, getSkillById } from "../services/skills";
 import ConfirmModal from "../components/ConfirmModal";
+import { DEFAULT_PASSWORD } from "../services/passwordPolicy.mjs";
 import {
   EMPLOYMENT_PAUSE_KEY,
   generateUUID,
@@ -262,7 +263,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
               ? formData.groupIndex
               : undefined,
           groupHistory: formData.groupHistory,
-          password: "1234",
+          password: DEFAULT_PASSWORD,
           mustChangePassword: true,
           permissions: formData.permissions,
         };
@@ -491,7 +492,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
         onClose={() => setResetTargetId(null)}
         onConfirm={confirmResetPassword}
         title="重置密碼確認"
-        message="確定要將此使用者的密碼重置為預設值 (1234) 嗎？"
+        message={`確定要將此使用者的密碼重置為預設值 (${DEFAULT_PASSWORD}) 嗎？`}
         confirmText="確認重置"
         confirmColor="red"
       />
@@ -544,7 +545,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                         type="button"
                         onClick={handleResetPasswordClick}
                         className="text-gray-400 hover:text-amber-600 p-1 rounded-full hover:bg-amber-50 transition-colors"
-                        title="重置密碼為預設值 (1234)"
+                        title={`重置密碼為預設值 (${DEFAULT_PASSWORD})`}
                       >
                         <Key size={15} />
                       </button>
@@ -1416,7 +1417,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                       onClick={handleResetPasswordClick}
                       className="w-full mt-2 border border-amber-200 hover:bg-amber-50 text-amber-700 font-medium py-2 rounded-lg transition-colors text-xs flex items-center justify-center gap-1.5"
                     >
-                      <Key size={13} /> 重置密碼為預設值 (1234)
+                      <Key size={13} /> 重置密碼為預設值 ({DEFAULT_PASSWORD})
                     </button>
                   )}
 

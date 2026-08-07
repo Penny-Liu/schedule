@@ -74,7 +74,7 @@ Before authoring policies, export the actual schema, constraints, indexes, grant
 - The apply command requires `public.users.auth_user_id` to exist, auto-confirms the internal email, creates missing Auth users with the existing password, and links each profile row.
 - The script is resumable: already linked identities are verified and skipped; a conflicting identity stops the run.
 - Non-compliant existing passwords are counted without being printed. The apply command stops while any remain, preventing those users from being locked out after cutover. The approved `VIEWER` exception is evaluated separately by role.
-- Align the Supabase Auth password settings with `services/passwordPolicy.mjs` before staging. The application baseline is at least eight characters containing text and a number, with common passwords rejected.
+- Align the Supabase Auth password settings with `services/passwordPolicy.mjs` before staging. The transition baseline is at least six characters containing text and a number, with common passwords rejected.
 - Do not pass passwords through command-line arguments, logs, exported JSON, or generated files.
 - Verify disabled/resigned accounts remain unable to sign in.
 - Revoke or destroy migration credentials and generated password files afterward.

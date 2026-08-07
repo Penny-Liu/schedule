@@ -3,6 +3,7 @@ import { User, UserRole } from '../types';
 import { db } from '../services/store';
 import { LogIn, User as UserIcon, Lock, ChevronLeft, Shield, Calendar, Activity, Eye, ChevronDown } from 'lucide-react';
 import { getRoleLabel, isUserOnEmploymentPause, toLocalISOString } from '../services/utils';
+import { DEFAULT_PASSWORD, isDefaultOrMissingPassword } from '../services/passwordPolicy.mjs';
 
 interface LoginPageProps {
     onLogin: (user: User) => void;
@@ -93,7 +94,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
                 setError('此帳號目前為留職停薪期間，暫不開放登入');
                 return;
             }
-            const targetPassword = selectedUser.password || '1234';
+            const targetPassword = selectedUser.password || DEFAULT_PASSWORD;
             if (password === targetPassword) {
                 onLogin(selectedUser);
                 localStorage.setItem('last_user_id', selectedUser.id);
@@ -269,6 +270,11 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
                                             autoFocus
                                         />
                                     </div>
+                                    {isDefaultOrMissingPassword(selectedUser.password) && (
+                                        <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                                            尚未設定個人密碼時，預設密碼為 <strong>{DEFAULT_PASSWORD}</strong>；登入後請依畫面引導修改。
+                                        </p>
+                                    )}
                                 </div>
 
                                 {error && (

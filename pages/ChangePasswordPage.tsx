@@ -3,6 +3,7 @@ import { User } from '../types';
 import { db } from '../services/store';
 import { Lock, Check, AlertTriangle, LogOut, CheckCircle2 } from 'lucide-react';
 import {
+    DEFAULT_PASSWORD,
     getPasswordPolicyErrorsForRole,
     MIN_PASSWORD_LENGTH,
     MIN_PUBLIC_VIEWER_PASSWORD_LENGTH,
@@ -39,7 +40,7 @@ const ChangePasswordPage: React.FC<ChangePasswordPageProps> = ({ currentUser, on
             return;
         }
 
-        if (newPassword === '1234') {
+        if (newPassword === DEFAULT_PASSWORD && !isPublicViewer) {
             setError('新密碼不能與預設密碼相同');
             return;
         }
@@ -94,7 +95,10 @@ const ChangePasswordPage: React.FC<ChangePasswordPageProps> = ({ currentUser, on
 
                             <div className="bg-blue-50 p-4 rounded-xl flex gap-3 text-sm text-blue-700">
                                 <AlertTriangle size={20} className="shrink-0" />
-                                <p>親愛的 {currentUser.name}，目前密碼尚未符合新的安全規則。修改完成後即可繼續使用系統。</p>
+                                <p>
+                                    親愛的 {currentUser.name}，目前使用空白或預設密碼 <strong>{DEFAULT_PASSWORD}</strong>。
+                                    請設定個人密碼，修改完成後即可繼續使用系統。
+                                </p>
                             </div>
 
                             <div className="space-y-4">
