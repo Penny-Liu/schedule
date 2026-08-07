@@ -15,6 +15,8 @@ This migration must be rehearsed against a staging project before changing produ
 ### Public VIEWER account exception
 
 - The hospital-wide public account may retain its announced legacy password only while its application role is exactly `VIEWER`.
+- During the transition, the public `VIEWER` temporary password is `1234`; non-viewer accounts use the six-character temporary password `1234ab` and must replace it after sign-in.
+- When an administrator promotes a legacy account whose password is still blank or `1234`, the application atomically assigns the non-viewer temporary password and marks `must_change_password` so the permission update is not blocked by stale credentials.
 - `services/passwordPolicy.mjs` permits a minimum of four characters for `VIEWER`; every other role keeps the strong migration policy.
 - Supabase Auth password strength is configured project-wide, not per application role. Keep the project-wide strong policy: `passwordForSupabaseAuth` deterministically transforms the public password into an Auth-compatible value before migration and sign-in, while the operator continues entering the announced password.
 - The transformation only satisfies Auth formatting and does not add real secrecy or entropy. Anyone who knows the announced password should still be considered able to use the public account.

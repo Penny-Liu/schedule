@@ -33,9 +33,9 @@ import {
 } from "../types";
 import { supabase } from "./supabaseClient";
 import {
-  DEFAULT_PASSWORD,
-  assertPasswordMigrationReady,
   assertPasswordMigrationReadyForRole,
+  getDefaultPasswordForRole,
+  getPasswordTransitionForAccessUpdate,
 } from "./passwordPolicy.mjs";
 import {
   countNonSundayDays,
@@ -1984,16 +1984,18 @@ class Store {
   async resetPassword(userId: string) {
     const u = this.users.find((u) => u.id === userId);
     if (!u) throw new Error("User not found");
+    const temporaryPassword = getDefaultPasswordForRole(u.role);
 
     const { error } = await supabase
       .from("users")
-      .update({ password: DEFAULT_PASSWORD, must_change_password: true })
+      .update({ password: temporaryPassword, must_change_password: true })
       .eq("id", userId);
     if (error) throw error;
 
-    u.password = DEFAULT_PASSWORD;
+    u.password = temporaryPassword;
     u.mustChangePassword = true;
     this.notifyListeners();
+    return temporaryPassword;
   }
 
   async updateUserPassword(userId: string, newPass: string) {
@@ -2231,15 +2233,17 @@ class Store {
     const existingUser = this.users.find((u) => u.id === id);
     if (!existingUser) throw new Error("User not found");
 
-    if (
-      existingUser.role === UserRole.VIEWER &&
-      updates.role !== undefined &&
-      updates.role !== UserRole.VIEWER
-    ) {
-      assertPasswordMigrationReady(updates.password ?? existingUser.password);
-    }
+    const nextRole = updates.role ?? existingUser.role;
+    const touchesAccess = updates.role !== undefined || updates.permissions !== undefined;
+    const transition = getPasswordTransitionForAccessUpdate(
+      updates.password ?? existingUser.password,
+      nextRole,
+      touchesAccess,
+    );
+    const temporaryPassword = transition.temporaryPassword;
+    const normalizedUpdates: Partial<User> = { ...updates, ...transition.updates };
 
-    const dbUpdates: any = { ...updates };
+    const dbUpdates: any = { ...normalizedUpdates };
     this.mapToDbFields(dbUpdates);
 
     const { error } = await supabase
@@ -2252,9 +2256,10 @@ class Store {
     }
 
     this.users = this.users.map((u) =>
-      u.id === id ? { ...u, ...updates } : u,
+      u.id === id ? { ...u, ...normalizedUpdates } : u,
     );
     this.notifyListeners();
+    return { temporaryPassword };
   }
 
   async deleteUser(id: string) {

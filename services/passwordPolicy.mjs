@@ -1,11 +1,40 @@
-export const DEFAULT_PASSWORD = "1234";
+export const PUBLIC_VIEWER_DEFAULT_PASSWORD = "1234";
+export const DEFAULT_PASSWORD = "1234ab";
 export const MIN_PASSWORD_LENGTH = 6;
 export const MIN_PUBLIC_VIEWER_PASSWORD_LENGTH = 4;
 export const PUBLIC_VIEWER_ROLE = "VIEWER";
 
-/** @param {string | undefined | null} password */
-export const isDefaultOrMissingPassword = (password) =>
-  typeof password !== "string" || password.length === 0 || password === DEFAULT_PASSWORD;
+/** @param {string | undefined | null} role */
+export const getDefaultPasswordForRole = (role) =>
+  role === PUBLIC_VIEWER_ROLE ? PUBLIC_VIEWER_DEFAULT_PASSWORD : DEFAULT_PASSWORD;
+
+/**
+ * Returns a password only for known transition values. It never exposes a
+ * user-chosen password.
+ * @param {string | undefined | null} password
+ * @param {string | undefined | null} role
+ */
+export const getTemporaryPasswordHint = (password, role) => {
+  if (typeof password !== "string" || password.length === 0) {
+    return getDefaultPasswordForRole(role);
+  }
+  if (
+    password === PUBLIC_VIEWER_DEFAULT_PASSWORD ||
+    password === getDefaultPasswordForRole(role)
+  ) {
+    return password;
+  }
+  return undefined;
+};
+
+/**
+ * Also recognizes the legacy 1234 value on non-viewer accounts so those users
+ * are guided to the compatible temporary password during the transition.
+ * @param {string | undefined | null} password
+ * @param {string | undefined | null} role
+ */
+export const isDefaultOrMissingPassword = (password, role) =>
+  getTemporaryPasswordHint(password, role) !== undefined;
 
 const COMMON_PASSWORDS = new Set([
   "12345678",
@@ -76,6 +105,24 @@ export const isPasswordMigrationReady = (password) => getPasswordPolicyErrors(pa
  */
 export const isPasswordMigrationReadyForRole = (password, role) =>
   getPasswordPolicyErrorsForRole(password, role).length === 0;
+
+/**
+ * Produces an explicit, role-compatible temporary credential only when an
+ * access edit would otherwise be blocked by a legacy password.
+ * @param {string | undefined | null} password
+ * @param {string | undefined | null} nextRole
+ * @param {boolean} touchesAccess
+ */
+export const getPasswordTransitionForAccessUpdate = (password, nextRole, touchesAccess) => {
+  if (!touchesAccess || nextRole === PUBLIC_VIEWER_ROLE || isPasswordMigrationReady(password)) {
+    return { temporaryPassword: undefined, updates: {} };
+  }
+  const temporaryPassword = getDefaultPasswordForRole(nextRole);
+  return {
+    temporaryPassword,
+    updates: { password: temporaryPassword, mustChangePassword: true },
+  };
+};
 
 /** @param {string | undefined | null} password */
 export const assertPasswordMigrationReady = (password) => {

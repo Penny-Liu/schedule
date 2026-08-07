@@ -36,7 +36,7 @@ import {
 
 import { RADIOGRAPHER_SKILLS, SKILL_CATEGORIES, getSkillById } from "../services/skills";
 import ConfirmModal from "../components/ConfirmModal";
-import { DEFAULT_PASSWORD } from "../services/passwordPolicy.mjs";
+import { getDefaultPasswordForRole } from "../services/passwordPolicy.mjs";
 import {
   EMPLOYMENT_PAUSE_KEY,
   generateUUID,
@@ -207,7 +207,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
     try {
       if (editingId) {
         // Update existing user
-        await db.updateUser(editingId, {
+        const result = await db.updateUser(editingId, {
           name: formData.name,
           alias: finalAlias,
           username: formData.username,
@@ -235,6 +235,11 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
           groupHistory: formData.groupHistory,
           permissions: formData.permissions,
         });
+        if (result.temporaryPassword) {
+          alert(
+            `人員資料與權限已儲存。\n\n此帳號原密碼不符合新規則，已改用臨時密碼：${result.temporaryPassword}\n請通知本人登入後設定個人密碼。`,
+          );
+        }
       } else {
         const u: User = {
           id: generateUUID(),
@@ -263,7 +268,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
               ? formData.groupIndex
               : undefined,
           groupHistory: formData.groupHistory,
-          password: DEFAULT_PASSWORD,
+          password: getDefaultPasswordForRole(formData.role),
           mustChangePassword: true,
           permissions: formData.permissions,
         };
@@ -330,6 +335,8 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
 
   // Reset Password Modal State
   const [resetTargetId, setResetTargetId] = useState<string | null>(null);
+  const resetTargetUser = users.find((user) => user.id === resetTargetId);
+  const resetTargetPassword = getDefaultPasswordForRole(resetTargetUser?.role);
 
   const handleResetPasswordClick = () => {
     if (editingId) setResetTargetId(editingId);
@@ -338,8 +345,11 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
   const confirmResetPassword = async () => {
     if (resetTargetId) {
       try {
-        await db.resetPassword(resetTargetId);
+        const temporaryPassword = await db.resetPassword(resetTargetId);
         setResetTargetId(null);
+        alert(
+          `密碼已重設。\n\n臨時密碼：${temporaryPassword}\n請通知本人使用此密碼登入，並依畫面提示設定個人密碼。`,
+        );
       } catch (error) {
         console.error("Password reset failed:", error);
         alert("密碼重設失敗，請檢查網路後再試。");
@@ -492,7 +502,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
         onClose={() => setResetTargetId(null)}
         onConfirm={confirmResetPassword}
         title="重置密碼確認"
-        message={`確定要將此使用者的密碼重置為預設值 (${DEFAULT_PASSWORD}) 嗎？`}
+        message={`確定要將此使用者的密碼重置為臨時密碼 (${resetTargetPassword}) 嗎？重設後系統也會再次顯示實際密碼。`}
         confirmText="確認重置"
         confirmColor="red"
       />
@@ -545,7 +555,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                         type="button"
                         onClick={handleResetPasswordClick}
                         className="text-gray-400 hover:text-amber-600 p-1 rounded-full hover:bg-amber-50 transition-colors"
-                        title={`重置密碼為預設值 (${DEFAULT_PASSWORD})`}
+                        title={`重置密碼為臨時值 (${getDefaultPasswordForRole(formData.role)})`}
                       >
                         <Key size={15} />
                       </button>
@@ -1417,7 +1427,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                       onClick={handleResetPasswordClick}
                       className="w-full mt-2 border border-amber-200 hover:bg-amber-50 text-amber-700 font-medium py-2 rounded-lg transition-colors text-xs flex items-center justify-center gap-1.5"
                     >
-                      <Key size={13} /> 重置密碼為預設值 ({DEFAULT_PASSWORD})
+                      <Key size={13} /> 重置密碼為臨時值 ({getDefaultPasswordForRole(formData.role)})
                     </button>
                   )}
 
