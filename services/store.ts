@@ -2597,6 +2597,7 @@ class Store {
     if (shift.station === "休假" || shift.station === "OFF" || shift.station === "SYSTEM_OFF") {
       shift.specialRoles = [];
       shift.supportLocation = undefined;
+      shift.workTime = "";
     }
 
     // 1. Update Local State: Optimistic Update
@@ -2665,6 +2666,10 @@ class Store {
           dbUpdate.learning_teacher_id = dbUpdate.learningTeacherId === "" ? null : dbUpdate.learningTeacherId;
           delete dbUpdate.learningTeacherId;
         }
+        if (dbUpdate.workTime !== undefined) {
+          dbUpdate.work_time = dbUpdate.workTime || null;
+          delete dbUpdate.workTime;
+        }
 
         const { error: updateError } = await supabase
           .from("shifts")
@@ -2686,6 +2691,10 @@ class Store {
         if (dbInsert.learningTeacherId !== undefined) {
           dbInsert.learning_teacher_id = dbInsert.learningTeacherId === "" ? null : dbInsert.learningTeacherId;
           delete dbInsert.learningTeacherId;
+        }
+        if (dbInsert.workTime !== undefined) {
+          dbInsert.work_time = dbInsert.workTime || null;
+          delete dbInsert.workTime;
         }
 
         const { error: insertError } = await supabase
@@ -2740,6 +2749,19 @@ class Store {
         removedTasks: removedRoles.join(", "),
         currentTasks: newRoles.join(", "),
         note: `任務調整：${addedRoles.length > 0 ? `新增 ${addedRoles.join(", ")}` : ""}${addedRoles.length > 0 && removedRoles.length > 0 ? "，" : ""}${removedRoles.length > 0 ? `移除 ${removedRoles.join(", ")}` : ""}`,
+      });
+    }
+
+    if ((oldShift?.workTime || "") !== (shift.workTime || "")) {
+      this.logOperation("update", "radiographer", {
+        date: shift.date,
+        personId: shift.userId,
+        personName: user?.name || shift.userId,
+        oldValue: oldShift?.workTime || "未設定",
+        newValue: shift.workTime || "已清除",
+        note: shift.workTime
+          ? `設定上班時間 ${shift.workTime}`
+          : "清除上班時間",
       });
     }
 
@@ -3766,6 +3788,7 @@ class Store {
       if (shift.station === "休假" || shift.station === "OFF" || shift.station === "SYSTEM_OFF") {
         shift.specialRoles = [];
         shift.supportLocation = undefined;
+        shift.workTime = "";
       }
     });
 
@@ -3791,6 +3814,10 @@ class Store {
       if (dbShift.learningTeacherId !== undefined) {
         dbShift.learning_teacher_id = dbShift.learningTeacherId === "" ? null : dbShift.learningTeacherId;
         delete dbShift.learningTeacherId;
+      }
+      if (dbShift.workTime !== undefined) {
+        dbShift.work_time = dbShift.workTime || null;
+        delete dbShift.workTime;
       }
       return dbShift;
     });
