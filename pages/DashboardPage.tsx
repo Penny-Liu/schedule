@@ -4022,7 +4022,6 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                       item: (typeof timeOrderedRadiographers)[number],
                     ) =>
                       item.station.includes("大直") ||
-                      item.station.includes("遠") ||
                       item.specialRoles.includes(SPECIAL_ROLES.DAZHI_SUPPORT);
                     const beitouRadiographers = timeOrderedRadiographers.filter(
                       (item) => !isDazhiAssignment(item),
