@@ -72,6 +72,10 @@ import {
 import { DailyStatsRows } from "../components/dashboard/DailyStatsRows";
 import { isUserOnEmploymentPause, toLocalISOString } from "../services/utils";
 import { loadChineseFontToDoc } from "../services/pdfUtils";
+import {
+  getAutomaticRadiographerWorkTime,
+  isWeekendOrRadiographerHoliday,
+} from "../services/radiographerWorkTime";
 
 const isUserLearningOnDate = (user: User | undefined | null, cap: string, date: string): boolean => {
   if (!user || !user.learningCapabilities?.includes(cap)) return false;
@@ -106,6 +110,7 @@ const RADIOGRAPHER_WORK_TIME_OPTIONS = [
   "08:00-16:00",
   "08:30-16:30",
   "09:00-17:00",
+  "09:30-17:30",
   "10:00-18:00",
   "11:00-19:00",
 ];
@@ -282,6 +287,11 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
   const [radiographerTimeInput, setRadiographerTimeInput] = useState("");
   const [isSavingRadiographerTime, setIsSavingRadiographerTime] =
     useState(false);
+  const [isAutoAssigningWorkTime, setIsAutoAssigningWorkTime] =
+    useState(false);
+  const [dailyDisplayMode, setDailyDisplayMode] = useState<"station" | "time">(
+    "station",
+  );
 
   // Auto Schedule Modal State (Stations)
   const [isAutoScheduleOpen, setIsAutoScheduleOpen] = useState(false);
@@ -2118,6 +2128,60 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
     }
   };
 
+  const handleAutoAssignDailyWorkTimes = async () => {
+    if (isAutoAssigningWorkTime) return;
+
+    const date = toLocalISOString(dailyDate);
+    const shiftsForDate = shifts.filter(
+      (shift) =>
+        shift.date === date &&
+        shift.station !== SYSTEM_OFF &&
+        shift.station !== StationDefault.OFF &&
+        !shift.station.includes("休"),
+    );
+    const isWeekendOrHoliday = isWeekendOrRadiographerHoliday(date, holidays);
+    const updates = shiftsForDate.flatMap((shift) => {
+      const workTime = getAutomaticRadiographerWorkTime(
+        shift,
+        shiftsForDate,
+        isWeekendOrHoliday,
+        users.find((user) => user.id === shift.userId)?.role ===
+          UserRole.RADIOGRAPHER_ASSISTANT,
+      );
+      return workTime && workTime !== shift.workTime
+        ? [{ ...shift, workTime }]
+        : [];
+    });
+
+    if (updates.length === 0) {
+      showToast("目前沒有需要自動調整的上班時間", "success");
+      return;
+    }
+
+    const specialDayNote = isWeekendOrHoliday
+      ? "\n此日期為週末或假日，09:00 班別將調整為 08:30。"
+      : "";
+    if (
+      !window.confirm(
+        `將依目前崗位與特殊任務，自動更新 ${updates.length} 位放射師的上班時間。${specialDayNote}\n\n確定繼續嗎？`,
+      )
+    )
+      return;
+
+    setIsAutoAssigningWorkTime(true);
+    try {
+      const result = await db.upsertShifts(updates);
+      if (result?.error) {
+        showToast(`自動給時間失敗：${result.error.message}`, "error");
+        return;
+      }
+      setShifts([...db.getShifts("", "")]);
+      showToast(`已自動更新 ${updates.length} 位放射師的上班時間`, "success");
+    } finally {
+      setIsAutoAssigningWorkTime(false);
+    }
+  };
+
   const onAutoScheduleClick = () => setIsAutoScheduleOpen(true);
   // Special Roles Selection State
   const [specialRolesToSchedule, setSpecialRolesToSchedule] = useState<
@@ -3637,13 +3701,32 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                 </button>
               </div>
 
-              <button
-                type="button"
-                onClick={() => setDailyDate(new Date())}
-                className="px-3 py-1.5 text-sm bg-teal-50 text-teal-700 font-bold rounded-lg border border-teal-100 hover:bg-teal-100 transition-colors"
-              >
-                回到今天
-              </button>
+              <div className="flex items-center gap-2">
+                {canEditRadiographerWorkTime && (
+                  <button
+                    type="button"
+                    disabled={isAutoAssigningWorkTime}
+                    onClick={handleAutoAssignDailyWorkTimes}
+                    className="px-3 py-1.5 text-sm bg-indigo-600 text-white font-bold rounded-lg border border-indigo-600 hover:bg-indigo-700 transition-colors disabled:opacity-50 flex items-center gap-1.5 shadow-sm"
+                    title="依崗位、特殊任務及假日規則自動設定上班時間"
+                  >
+                    {isAutoAssigningWorkTime ? (
+                      <Loader2 size={14} className="animate-spin" />
+                    ) : (
+                      <Wand2 size={14} />
+                    )}
+                    <span className="hidden sm:inline">自動給時間</span>
+                    <span className="sm:hidden">自動</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setDailyDate(new Date())}
+                  className="px-3 py-1.5 text-sm bg-teal-50 text-teal-700 font-bold rounded-lg border border-teal-100 hover:bg-teal-100 transition-colors"
+                >
+                  回到今天
+                </button>
+              </div>
             </div>
 
             {/* My Assignment Card */}
@@ -3760,6 +3843,30 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                 <h3 className="font-bold text-slate-800 flex items-center gap-2">
                   <Users size={18} className="text-slate-500" /> 全員崗位概況
                 </h3>
+                <div className="flex items-center rounded-lg border border-slate-200 bg-slate-50 p-1">
+                  <button
+                    type="button"
+                    onClick={() => setDailyDisplayMode("station")}
+                    className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-bold transition-colors ${
+                      dailyDisplayMode === "station"
+                        ? "bg-white text-teal-700 shadow-sm"
+                        : "text-slate-500 hover:text-slate-700"
+                    }`}
+                  >
+                    <LayoutList size={13} /> 崗位排序
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDailyDisplayMode("time")}
+                    className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-bold transition-colors ${
+                      dailyDisplayMode === "time"
+                        ? "bg-white text-indigo-700 shadow-sm"
+                        : "text-slate-500 hover:text-slate-700"
+                    }`}
+                  >
+                    <Clock size={13} /> 上班時間
+                  </button>
+                </div>
               </div>
 
               {/* Main/Assistant Shift Display */}
@@ -3768,11 +3875,8 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                 {(() => {
                   const dateStr = toLocalISOString(dailyDate);
 
-                  // Unified Shift Getter for Daily View
-                  const getAllAssignments = (
-                    stationName: string,
-                    isHmType: boolean = false,
-                  ) => {
+                  // Radiographer-only shift getter for the daily view.
+                  const getAllAssignments = (stationName: string) => {
                     const assignments: {
                       id: string;
                       name: string;
@@ -3783,27 +3887,14 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                       note?: string;
                     }[] = [];
 
-                    if (stationName === StationDefault.ASSISTANT) {
-                      const assistants = db.assistantShifts[dateStr] || [];
-                      assistants.forEach((name) => {
-                        assignments.push({
-                          id: `google-${name}`,
-                          name: name,
-                          specialRoles: [],
-                        });
-                      });
-                    }
-
-                    if (!isHmType) {
-                      // 1. Look in Radiographers
-                      allRadiographers.forEach((u) => {
+                    allRadiographers.forEach((u) => {
                         const s = getDayShift(u.id, dateStr);
                         const storedShift = shifts.find(
                           (shift) =>
                             shift.userId === u.id && shift.date === dateStr,
                         );
                         let match = false;
-                        if (stationName === "遠距" && s.station?.includes("遠"))
+                        if (stationName === "遠班" && s.station?.includes("遠"))
                           match = true;
                         else if (
                           stationName === StationDefault.BMD_DX &&
@@ -3816,7 +3907,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                         )
                           match = true;
                         else if (
-                          stationName === "輔班" &&
+                          stationName === "輔控" &&
                           s.specialRoles.includes(SPECIAL_ROLES.ASSIST)
                         )
                           match = true;
@@ -3844,44 +3935,23 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                             alias: u.alias,
                             color: u.color,
                             workTime: storedShift?.workTime,
-                            specialRoles: s.specialRoles.filter(
-                              (r) =>
-                                r !== SPECIAL_ROLES.ASSIST &&
-                                r !== SPECIAL_ROLES.SCHEDULER &&
-                                r !== SPECIAL_ROLES.DUAL_BMD,
-                            ),
+                            specialRoles: s.specialRoles,
                             note: isRemoteDualBmd ? "(遠班兼職)" : undefined,
                           });
                         }
                       });
-                    } else {
-                      // 2. Look in Health Mgmt Staff
-                      healthMgmtStaff
-                        .filter((s) => s.isActive !== false)
-                        .forEach((staff) => {
-                          const shift = healthMgmtShifts.find(
-                            (s) => s.userId === staff.id && s.date === dateStr,
-                          );
-                          if (shift && shift.station === stationName) {
-                            assignments.push({
-                              id: staff.id,
-                              name: staff.name,
-                              alias: staff.alias,
-                              color: "#10b981", // Emerald for HM
-                              specialRoles: shift.task ? [shift.task] : [],
-                            });
-                          }
-                        });
-                    }
 
                     return assignments;
                   };
 
                   const categories = [
                     {
-                      title: "放射師排班",
+                      title: "北投",
                       icon: <Activity size={16} className="text-blue-500" />,
                       stations: [
+                        "場控",
+                        "輔控",
+                        "排班",
                         StationDefault.MR3T,
                         StationDefault.MR1_5T,
                         StationDefault.US1,
@@ -3892,48 +3962,218 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                         StationDefault.BMD_DX,
                         "技術支援",
                         "行政",
-                        StationDefault.ASSISTANT,
                       ],
                     },
                     {
-                      title: "醫師/遠距支援",
+                      title: "大直",
                       icon: <Users size={16} className="text-purple-500" />,
-                      stations: ["遠距", "場控", "輔班", "排班", "大直"],
-                    },
-                    {
-                      title: "健管排班",
-                      icon: <Sparkles size={16} className="text-emerald-500" />,
-                      stations: [
-                        "主控",
-                        "輔控",
-                        "晚班",
-                        "H",
-                        "G",
-                        "櫃1",
-                        "櫃2",
-                        "櫃3",
-                        "櫃助",
-                        "營1",
-                        "營2",
-                        "行政班",
-                      ],
+                      stations: ["遠班", "大直"],
                     },
                   ];
 
-                  return categories.map((cat) => {
-                    // User Request: Radiographers should not see HM shifts in their "Today View" context
-                    if (
-                      cat.title === "健管排班" &&
-                      !currentUser.isHealthMgmt &&
-                      currentUser.role !== UserRole.HM_SUPERVISOR &&
-                      currentUser.role !== UserRole.SYSTEM_ADMIN
+                  const timeOrderedRadiographers = allRadiographers
+                    .map((u) => {
+                      const dayShift = getDayShift(u.id, dateStr);
+                      const storedShift = shifts.find(
+                        (shift) =>
+                          shift.userId === u.id && shift.date === dateStr,
+                      );
+                      return {
+                        id: u.id,
+                        name: u.name,
+                        alias: u.alias,
+                        color: u.color,
+                        station: dayShift.station,
+                        specialRoles: dayShift.specialRoles,
+                        workTime: storedShift?.workTime,
+                        isOff: dayShift.isOff,
+                      };
+                    })
+                    .filter(
+                      (item) =>
+                        !item.isOff &&
+                        item.station !== SYSTEM_OFF &&
+                        item.station !== StationDefault.UNASSIGNED &&
+                        Boolean(item.station || item.specialRoles.length),
                     )
-                      return null;
+                    .sort((a, b) => {
+                      const getStartMinutes = (workTime?: string) => {
+                        const match = workTime?.match(/^(\d{1,2}):(\d{2})/);
+                        return match
+                          ? Number(match[1]) * 60 + Number(match[2])
+                          : Number.MAX_SAFE_INTEGER;
+                      };
+                      const timeDifference =
+                        getStartMinutes(a.workTime) - getStartMinutes(b.workTime);
+                      if (timeDifference) return timeDifference;
 
+                      const aIsLate =
+                        a.specialRoles.includes(SPECIAL_ROLES.LATE) ||
+                        a.station.includes(SPECIAL_ROLES.LATE);
+                      const bIsLate =
+                        b.specialRoles.includes(SPECIAL_ROLES.LATE) ||
+                        b.station.includes(SPECIAL_ROLES.LATE);
+                      if (aIsLate !== bIsLate) return aIsLate ? 1 : -1;
+                      return a.name.localeCompare(b.name, "zh-Hant");
+                    });
+
+                  if (dailyDisplayMode === "time") {
+                    const isDazhiAssignment = (
+                      item: (typeof timeOrderedRadiographers)[number],
+                    ) =>
+                      item.station.includes("大直") ||
+                      item.station.includes("遠") ||
+                      item.specialRoles.includes(SPECIAL_ROLES.DAZHI_SUPPORT);
+                    const beitouRadiographers = timeOrderedRadiographers.filter(
+                      (item) => !isDazhiAssignment(item),
+                    );
+                    const dazhiRadiographers = timeOrderedRadiographers.filter(
+                      isDazhiAssignment,
+                    );
+
+                    const renderTimeSection = (
+                      title: string,
+                      peopleForLocation: typeof timeOrderedRadiographers,
+                      accentClass: string,
+                    ) => {
+                      const timeGroups = peopleForLocation.reduce<
+                        Record<string, typeof timeOrderedRadiographers>
+                      >((groups, item) => {
+                        const groupName = item.workTime || "未設定時間";
+                        (groups[groupName] ||= []).push(item);
+                        return groups;
+                      }, {});
+
+                      return (
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-2 px-1">
+                          <Clock size={16} className={accentClass} />
+                          <span className="text-sm font-black tracking-wide text-slate-700">
+                            {title}上班時間
+                          </span>
+                          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500">
+                            {peopleForLocation.length} 人
+                          </span>
+                          <div className="h-px flex-1 bg-gradient-to-r from-slate-200 to-transparent" />
+                        </div>
+                        {Object.entries(timeGroups).map(([time, people]) => (
+                          <div
+                            key={time}
+                            className={`rounded-xl border p-3 ${
+                              time === "未設定時間"
+                                  ? "border-dashed border-slate-300 bg-slate-50"
+                                  : "border-indigo-100 bg-indigo-50/50"
+                            }`}
+                          >
+                            <div className="mb-2 flex items-center gap-2 text-sm font-black text-slate-700">
+                              <Clock
+                                size={15}
+                                className="text-indigo-600"
+                              />
+                              {time}
+                              <span className="rounded-full bg-white px-1.5 py-0.5 text-[10px] text-slate-500 ring-1 ring-slate-200">
+                                {people.length} 人
+                              </span>
+                            </div>
+                            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                              {people.map((person) => (
+                                <div
+                                  key={person.id}
+                                  className={`flex items-center gap-2 rounded-lg border bg-white px-2.5 py-2 shadow-sm ${
+                                    person.id === currentUser.id
+                                      ? "border-teal-300 ring-1 ring-teal-100"
+                                      : "border-slate-100"
+                                  }`}
+                                >
+                                  <div
+                                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white shadow-inner"
+                                    style={{
+                                      backgroundColor: person.color || "#94a3b8",
+                                    }}
+                                  >
+                                    {person.alias || person.name[0]}
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                                      <span className="truncate text-sm font-bold text-slate-700">
+                                        {person.name}
+                                      </span>
+                                      <span
+                                        className={`rounded px-1 py-0.5 text-[9px] font-bold ${getStationChipStyle(person.station)}`}
+                                      >
+                                        {person.station.includes("遠")
+                                          ? "遠班"
+                                          : person.station}
+                                      </span>
+                                    </div>
+                                    {person.specialRoles.length > 0 && (
+                                      <div className="mt-1 flex flex-wrap gap-1">
+                                        {person.specialRoles.map((role) => (
+                                          <span
+                                            key={role}
+                                            className={`rounded px-1 py-0.5 text-[9px] font-bold ${
+                                              role === SPECIAL_ROLES.LATE
+                                                ? "bg-red-100 text-red-700"
+                                                : "bg-teal-50 text-teal-700"
+                                            }`}
+                                          >
+                                            {role}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                  {canEditRadiographerWorkTime && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setEditingRadiographerTime({
+                                          userId: person.id,
+                                          name: person.name,
+                                          date: dateStr,
+                                          currentTime: person.workTime || "",
+                                        });
+                                        setRadiographerTimeInput(person.workTime || "");
+                                      }}
+                                      className="shrink-0 rounded-md border border-slate-200 px-1.5 py-1 text-[10px] font-bold text-slate-500 hover:border-teal-300 hover:text-teal-700"
+                                      title="修改上班時間"
+                                    >
+                                      {person.workTime ? "調整" : "+ 時間"}
+                                    </button>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                        {peopleForLocation.length === 0 && (
+                          <div className="rounded-xl border border-dashed border-slate-200 py-5 text-center text-sm text-slate-400">
+                            當日無{title}放射師排班資料
+                          </div>
+                        )}
+                      </div>
+                      );
+                    };
+
+                    return (
+                      <div className="space-y-6">
+                        {renderTimeSection(
+                          "北投",
+                          beitouRadiographers,
+                          "text-blue-600",
+                        )}
+                        {renderTimeSection(
+                          "大直",
+                          dazhiRadiographers,
+                          "text-purple-600",
+                        )}
+                      </div>
+                    );
+                  }
+
+                  return categories.map((cat) => {
                     const visibleStations = cat.stations.filter(
-                      (st) =>
-                        getAllAssignments(st, cat.title === "健管排班").length >
-                        0,
+                      (st) => getAllAssignments(st).length > 0,
                     );
                     if (visibleStations.length === 0) return null;
 
