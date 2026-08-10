@@ -3782,7 +3782,17 @@ class Store {
 
   // Batch Upsert
   async upsertShifts(shiftsToUpsert: Shift[]) {
-    if (shiftsToUpsert.length === 0) return;
+    if (shiftsToUpsert.length === 0) return { error: null };
+
+    const previousShifts = new Map<string, Shift | undefined>();
+    shiftsToUpsert.forEach((shift) => {
+      const key = `${shift.userId}-${shift.date}`;
+      const previous = this.shifts.find(
+        (candidate) =>
+          candidate.userId === shift.userId && candidate.date === shift.date,
+      );
+      previousShifts.set(key, previous ? { ...previous } : undefined);
+    });
 
     shiftsToUpsert.forEach(shift => {
       if (shift.station === "休假" || shift.station === "OFF" || shift.station === "SYSTEM_OFF") {
@@ -3823,7 +3833,41 @@ class Store {
     });
     
     const { error } = await supabase.from("shifts").upsert(dbUpserts);
-    if (error) console.error("Batch upsert error:", error);
+    if (error) {
+      console.error("Batch upsert error:", error);
+      shiftsToUpsert.forEach((shift) => {
+        const key = `${shift.userId}-${shift.date}`;
+        const previous = previousShifts.get(key);
+        const index = this.shifts.findIndex(
+          (candidate) =>
+            candidate.userId === shift.userId &&
+            candidate.date === shift.date,
+        );
+        if (previous && index >= 0) this.shifts[index] = previous;
+        else if (previous) this.shifts.push(previous);
+        else if (index >= 0) this.shifts.splice(index, 1);
+      });
+      this.notifyListeners();
+      return { error };
+    }
+
+    shiftsToUpsert.forEach((shift) => {
+      const previous = previousShifts.get(`${shift.userId}-${shift.date}`);
+      if ((previous?.workTime || "") === (shift.workTime || "")) return;
+      const user = this.users.find((candidate) => candidate.id === shift.userId);
+      this.logOperation("update", "radiographer", {
+        date: shift.date,
+        personId: shift.userId,
+        personName: user?.name || shift.userId,
+        oldValue: previous?.workTime || "未設定",
+        newValue: shift.workTime || "已清除",
+        note: shift.workTime
+          ? `批次設定上班時間 ${shift.workTime}`
+          : "批次清除上班時間",
+      });
+    });
+
+    return { error: null };
   }
 
   // Daily Stats
