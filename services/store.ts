@@ -41,6 +41,7 @@ import {
   countNonSundayDays,
   generateUUID,
   isUserOnEmploymentPause,
+  normalizeShiftForPersistence,
   toLocalISOString,
 } from "./utils";
 
@@ -97,14 +98,22 @@ export const getPermissionsByRole = (role: UserRole): string[] => {
         ...MEETING_ROOM_FULL_ACCESS,
       ];
     case UserRole.HM_STAFF:
-      return [PERMISSIONS.VIEW_CLOUD_SCHEDULE, PERMISSIONS.VIEW_HEALTH_MGMT, ...MEETING_ROOM_FULL_ACCESS];
+      return [
+        PERMISSIONS.VIEW_CLOUD_SCHEDULE,
+        PERMISSIONS.VIEW_HEALTH_MGMT,
+        ...MEETING_ROOM_FULL_ACCESS,
+      ];
     case UserRole.FINANCE:
-      return [PERMISSIONS.VIEW_PHYSICIAN, PERMISSIONS.VIEW_DOCTOR_STATS, ...MEETING_ROOM_FULL_ACCESS];
+      return [
+        PERMISSIONS.VIEW_PHYSICIAN,
+        PERMISSIONS.VIEW_DOCTOR_STATS,
+        ...MEETING_ROOM_FULL_ACCESS,
+      ];
     case UserRole.VIEWER:
       return [PERMISSIONS.VIEW_PHYSICIAN, PERMISSIONS.VIEW_MEETING_ROOM];
     default: // RADIOGRAPHER_STAFF
       return [
-        PERMISSIONS.VIEW_CLOUD_SCHEDULE, 
+        PERMISSIONS.VIEW_CLOUD_SCHEDULE,
         PERMISSIONS.VIEW_PHYSICIAN,
         PERMISSIONS.VIEW_DASHBOARD_STAFF,
         PERMISSIONS.VIEW_DASHBOARD_STATION,
@@ -124,10 +133,20 @@ export const normalizeUserPermissions = (
 
 import { fetchAssistantData, AssistantData } from "./assistantService";
 
-const isUserCertifiedOnDate = (user: User | undefined | null, cap: string, date: string): boolean => {
+const isUserCertifiedOnDate = (
+  user: User | undefined | null,
+  cap: string,
+  date: string,
+): boolean => {
   if (!user) return false;
   if (user.capabilities?.includes(cap)) return true;
-  if (user.learningCapabilities?.includes(cap) && user.learningSchedules && user.learningSchedules[cap] && date > user.learningSchedules[cap]) return true;
+  if (
+    user.learningCapabilities?.includes(cap) &&
+    user.learningSchedules &&
+    user.learningSchedules[cap] &&
+    date > user.learningSchedules[cap]
+  )
+    return true;
   return false;
 };
 
@@ -346,9 +365,12 @@ class Store {
     return { data: allData, error: lastError };
   }
 
-  
   // Helper: Fetch data by date range
-  private async fetchShiftsByRange(startDate: string, endDate: string, filter?: (q: any) => any) {
+  private async fetchShiftsByRange(
+    startDate: string,
+    endDate: string,
+    filter?: (q: any) => any,
+  ) {
     return this.fetchPaginated("shifts", (q) => {
       let query = q.gte("date", startDate).lte("date", endDate);
       if (filter) query = filter(query);
@@ -356,7 +378,11 @@ class Store {
     });
   }
 
-  private async fetchHealthMgmtShiftsByRange(startDate: string, endDate: string, filter?: (q: any) => any) {
+  private async fetchHealthMgmtShiftsByRange(
+    startDate: string,
+    endDate: string,
+    filter?: (q: any) => any,
+  ) {
     return this.fetchPaginated("health_mgmt_shifts", (q) => {
       let query = q.gte("date", startDate).lte("date", endDate);
       if (filter) query = filter(query);
@@ -365,62 +391,79 @@ class Store {
   }
 
   private async fetchDoctorShiftsByRange(startDate: string, endDate: string) {
-    return this.fetchPaginated("doctor_shifts", (q) => q.gte("date", startDate).lte("date", endDate));
+    return this.fetchPaginated("doctor_shifts", (q) =>
+      q.gte("date", startDate).lte("date", endDate),
+    );
   }
-  
-  private async fetchAnesthesiaShiftsByRange(startDate: string, endDate: string) {
-    return this.fetchPaginated("anesthesia_shifts", (q) => q.gte("date", startDate).lte("date", endDate));
+
+  private async fetchAnesthesiaShiftsByRange(
+    startDate: string,
+    endDate: string,
+  ) {
+    return this.fetchPaginated("anesthesia_shifts", (q) =>
+      q.gte("date", startDate).lte("date", endDate),
+    );
   }
 
   private async fetchWorkloadsByRange(startMonth: string, endMonth: string) {
     const startY = parseInt(startMonth.split("-")[0]);
     const endY = parseInt(endMonth.split("-")[0]);
-    return this.fetchPaginated("radiographer_workload", (q) => q.gte("year", startY).lte("year", endY));
+    return this.fetchPaginated("radiographer_workload", (q) =>
+      q.gte("year", startY).lte("year", endY),
+    );
   }
-  
+
   private async fetchLeavesByRange(startDate: string, _endDate: string) {
     return this.fetchPaginated("leaves", (q) => q.gte("endDate", startDate));
   }
-  
+
   private async fetchMeetingRoomsByRange(startDate: string, endDate: string) {
-    return this.fetchPaginated("meeting_room_bookings", (q) => q.gte("date", startDate).lte("date", endDate));
+    return this.fetchPaginated("meeting_room_bookings", (q) =>
+      q.gte("date", startDate).lte("date", endDate),
+    );
   }
 
   // Generate date window
   private getWindowDates(baseDate: Date) {
     const start = new Date(baseDate.getFullYear(), baseDate.getMonth() - 1, 1);
-    const end = new Date(baseDate.getFullYear(), baseDate.getMonth() + 7, 0); 
+    const end = new Date(baseDate.getFullYear(), baseDate.getMonth() + 7, 0);
     return {
-      startDate: `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-01`,
-      endDate: `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, '0')}-${String(end.getDate()).padStart(2, '0')}`,
-      startMonth: `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}`,
-      endMonth: `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, '0')}`
+      startDate: `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}-01`,
+      endDate: `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, "0")}-${String(end.getDate()).padStart(2, "0")}`,
+      startMonth: `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}`,
+      endMonth: `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, "0")}`,
     };
   }
 
   async loadDataForMonth(year: number, month: number) {
-    const monthStr = `${year}-${String(month).padStart(2, '0')}`;
+    const monthStr = `${year}-${String(month).padStart(2, "0")}`;
     if (this.loadedMonths.has(monthStr)) return;
-    
+
     console.log(`[Store] Lazy loading data for ${monthStr}...`);
     const date = new Date(year, month - 1, 1);
-    const { startDate, endDate, startMonth, endMonth } = this.getWindowDates(date);
-    
-    
+    const { startDate, endDate, startMonth, endMonth } =
+      this.getWindowDates(date);
+
     const user = this.currentUser;
     const perms = user?.permissions || [];
     const role = user?.role;
     const isAdmin = role === "SYSTEM_ADMIN" || role === "SUPERVISOR";
-    
-    let shiftsReq = Promise.resolve({ data: null }), leavesReq = Promise.resolve({ data: null }), workloadsReq = Promise.resolve({ data: null }),
-        docShiftsReq = Promise.resolve({ data: null }), hmShiftsReq = Promise.resolve({ data: null }), aneShiftsReq = Promise.resolve({ data: null }),
-        meetingRoomsReq = Promise.resolve({ data: null });
-        
-    const canViewCloud = perms.includes(PERMISSIONS.VIEW_CLOUD_SCHEDULE) || 
+
+    let shiftsReq = Promise.resolve({ data: null }),
+      leavesReq = Promise.resolve({ data: null }),
+      workloadsReq = Promise.resolve({ data: null }),
+      docShiftsReq = Promise.resolve({ data: null }),
+      hmShiftsReq = Promise.resolve({ data: null }),
+      aneShiftsReq = Promise.resolve({ data: null }),
+      meetingRoomsReq = Promise.resolve({ data: null });
+
+    const canViewCloud =
+      perms.includes(PERMISSIONS.VIEW_CLOUD_SCHEDULE) ||
       perms.includes(PERMISSIONS.VIEW_DASHBOARD_STAFF) ||
       perms.includes(PERMISSIONS.VIEW_DASHBOARD_STATION) ||
       perms.includes(PERMISSIONS.VIEW_DASHBOARD_TODAY) ||
-      user?.isRadiographer || isAdmin;
+      user?.isRadiographer ||
+      isAdmin;
     const canViewPhysician = perms.includes(PERMISSIONS.VIEW_PHYSICIAN);
     const canViewHM = perms.includes(PERMISSIONS.VIEW_HEALTH_MGMT) || isAdmin;
 
@@ -429,7 +472,11 @@ class Store {
       leavesReq = this.fetchLeavesByRange(startDate, endDate);
       workloadsReq = this.fetchWorkloadsByRange(startMonth, endMonth);
     } else if (canViewPhysician) {
-      shiftsReq = this.fetchShiftsByRange(startDate, endDate, (q) => q.or('station.ilike.%主%,station.ilike.%輔%,station.ilike.%場控%,specialRoles.cs.["輔班"]'));
+      shiftsReq = this.fetchShiftsByRange(startDate, endDate, (q) =>
+        q.or(
+          'station.ilike.%主%,station.ilike.%輔%,station.ilike.%場控%,specialRoles.cs.["輔班"]',
+        ),
+      );
     }
 
     if (canViewPhysician || isAdmin || role === "FINANCE") {
@@ -439,7 +486,11 @@ class Store {
     if (canViewHM) {
       hmShiftsReq = this.fetchHealthMgmtShiftsByRange(startDate, endDate);
     } else if (canViewPhysician) {
-      hmShiftsReq = this.fetchHealthMgmtShiftsByRange(startDate, endDate, (q) => q.or('task.ilike.%主控%,station.ilike.%主控%,task.ilike.%輔控%,station.ilike.%輔控%'));
+      hmShiftsReq = this.fetchHealthMgmtShiftsByRange(startDate, endDate, (q) =>
+        q.or(
+          "task.ilike.%主控%,station.ilike.%主控%,task.ilike.%輔控%,station.ilike.%輔控%",
+        ),
+      );
     }
     if (perms.includes(PERMISSIONS.VIEW_ANESTHESIA) || isAdmin) {
       aneShiftsReq = this.fetchAnesthesiaShiftsByRange(startDate, endDate);
@@ -459,119 +510,179 @@ class Store {
       .gte("date", startDate)
       .lte("date", endDate);
 
-    const [shiftsRes, hmShiftsRes, dShiftsRes, aneShiftsRes, workloadsRes, leavesRes, meetingRoomsRes, assistantRes, geneRes] = await Promise.all([
-      shiftsReq, hmShiftsReq, docShiftsReq, aneShiftsReq, workloadsReq, leavesReq, meetingRoomsReq, assistantReq, geneReq
+    const [
+      shiftsRes,
+      hmShiftsRes,
+      dShiftsRes,
+      aneShiftsRes,
+      workloadsRes,
+      leavesRes,
+      meetingRoomsRes,
+      assistantRes,
+      geneRes,
+    ] = await Promise.all([
+      shiftsReq,
+      hmShiftsReq,
+      docShiftsReq,
+      aneShiftsReq,
+      workloadsReq,
+      leavesReq,
+      meetingRoomsReq,
+      assistantReq,
+      geneReq,
     ]);
 
     const merge = (existing: any[], incoming: any[]) => {
-      const incomingIds = new Set(incoming.map(i => i.id));
-      return [...existing.filter(e => !incomingIds.has(e.id)), ...incoming];
+      const incomingIds = new Set(incoming.map((i) => i.id));
+      return [...existing.filter((e) => !incomingIds.has(e.id)), ...incoming];
     };
-    
+
     if (Object.keys(assistantRes).length > 0) {
       this.assistantShifts = { ...this.assistantShifts, ...assistantRes };
     }
 
     if (shiftsRes.data) {
-      const parsed = shiftsRes.data.map((s: any) => { const m = {...s}; this.mapFromDbFields(m); return m; });
+      const parsed = shiftsRes.data.map((s: any) => {
+        const m = { ...s };
+        this.mapFromDbFields(m);
+        return m;
+      });
       this.shifts = merge(this.shifts, parsed);
     }
     if (hmShiftsRes.data) {
       const parsed = hmShiftsRes.data.map((s: any) => {
-        const m = {...s}; this.mapFromDbFields(m);
-        let task = m.task || ""; let location = undefined;
-        if (task.includes("@@")) { const p = task.split("@@"); task = p[0]; location = p[1]; }
-        m.task = task || undefined; m.location = location;
+        const m = { ...s };
+        this.mapFromDbFields(m);
+        let task = m.task || "";
+        let location = undefined;
+        if (task.includes("@@")) {
+          const p = task.split("@@");
+          task = p[0];
+          location = p[1];
+        }
+        m.task = task || undefined;
+        m.location = location;
         return m;
       });
       this.healthMgmtShifts = merge(this.healthMgmtShifts, parsed);
     }
     if (dShiftsRes.data) {
-      const parsed = dShiftsRes.data.map((s: any) => { const m = {...s}; this.mapFromDbFields(m); return m; });
+      const parsed = dShiftsRes.data.map((s: any) => {
+        const m = { ...s };
+        this.mapFromDbFields(m);
+        return m;
+      });
       this.doctorShifts = merge(this.doctorShifts, parsed);
     }
     if (aneShiftsRes.data) {
-      const parsed = aneShiftsRes.data.map((s: any) => { const m = {...s}; this.mapFromDbFields(m); return m; });
+      const parsed = aneShiftsRes.data.map((s: any) => {
+        const m = { ...s };
+        this.mapFromDbFields(m);
+        return m;
+      });
       this.anesthesiaShifts = merge(this.anesthesiaShifts, parsed);
     }
     if (workloadsRes.data) {
       const parsed = workloadsRes.data.map((w: any) => ({
-          id: w.id,
-          year: w.year,
-          month: w.month,
-          date: w.year && w.month ? `${w.year}-${String(w.month).padStart(2, "0")}` : "",
-          radiographerName: w.radiographerName || w.radiographer_name || "",
-          mr: w.mr || 0,
-          mrLargeMale: w.mrLargeMale || w.mr_large_male || 0,
-          mrLargeFemale: w.mrLargeFemale || w.mr_large_female || 0,
-          mrMedium: w.mrMedium || w.mr_medium || 0,
-          mrSmall: w.mrSmall || w.mr_small || 0,
-          us: w.us || 0,
-          usA: w.usA || w.us_a || 0,
-          usBreast: w.usBreast || w.us_breast || 0,
-          usHeart: w.usHeart || w.us_heart || 0,
-          usThy: w.usThy || w.us_thy || 0,
-          usCCA: w.usCCA || w.us_cca || 0,
-          usNeck: w.usNeck || w.us_neck || 0,
-          usPelvisFemale: w.usPelvisFemale || w.us_pelvis_female || 0,
-          usPelvisMale: w.usPelvisMale || w.us_pelvis_male || 0,
-          usFibrosis: w.usFibrosis || w.us_fibrosis || 0,
-          ct: w.ct || 0,
-          dx: w.dx || 0,
-          mg: w.mg || 0,
-          bmd: w.bmd || 0,
-          cta: w.cta || 0,
-          ctaPostProcessing: w.ctaPostProcessing || w.cta_post_processing || 0,
-          reportTyping: w.reportTyping || w.report_typing || w.reportEntry || w.report_entry || 0,
-          proofreader: w.proofreader || w.imageProofing || w.image_proofing || 0,
-          tsmcReport: w.tsmcReport || w.tsmc_report || 0,
-          floorControl: w.floorControl || w.floor_control || 0,
-          assist: w.assist || 0,
-          scheduler: w.scheduler || 0,
-          mrTeaching: w.mrTeaching || w.mr_teaching || 0,
-          mrLargeMaleTeaching: w.mrLargeMaleTeaching || w.mr_large_male_teaching || 0,
-          mrLargeFemaleTeaching: w.mrLargeFemaleTeaching || w.mr_large_female_teaching || 0,
-          mrMediumTeaching: w.mrMediumTeaching || w.mr_medium_teaching || 0,
-          mrSmallTeaching: w.mrSmallTeaching || w.mr_small_teaching || 0,
-          usTeaching: w.usTeaching || w.us_teaching || 0,
-          usATeaching: w.usATeaching || w.us_a_teaching || 0,
-          usBreastTeaching: w.usBreastTeaching || w.us_breast_teaching || 0,
-          usHeartTeaching: w.usHeartTeaching || w.us_heart_teaching || 0,
-          usThyTeaching: w.usThyTeaching || w.us_thy_teaching || 0,
-          usCCATeaching: w.usCCATeaching || w.us_cca_teaching || 0,
-          usNeckTeaching: w.usNeckTeaching || w.us_neck_teaching || 0,
-          usPelvisFemaleTeaching: w.usPelvisFemaleTeaching || w.us_pelvis_female_teaching || 0,
-          usPelvisMaleTeaching: w.usPelvisMaleTeaching || w.us_pelvis_male_teaching || 0,
-          usFibrosisTeaching: w.usFibrosisTeaching || w.us_fibrosis_teaching || 0,
-          ctTeaching: w.ctTeaching || w.ct_teaching || 0,
-          dxTeaching: w.dxTeaching || w.dx_teaching || 0,
-          mgTeaching: w.mgTeaching || w.mg_teaching || 0,
-          bmdTeaching: w.bmdTeaching || w.bmd_teaching || 0,
-          ctaTeaching: w.ctaTeaching || w.cta_teaching || 0,
+        id: w.id,
+        year: w.year,
+        month: w.month,
+        date:
+          w.year && w.month
+            ? `${w.year}-${String(w.month).padStart(2, "0")}`
+            : "",
+        radiographerName: w.radiographerName || w.radiographer_name || "",
+        mr: w.mr || 0,
+        mrLargeMale: w.mrLargeMale || w.mr_large_male || 0,
+        mrLargeFemale: w.mrLargeFemale || w.mr_large_female || 0,
+        mrMedium: w.mrMedium || w.mr_medium || 0,
+        mrSmall: w.mrSmall || w.mr_small || 0,
+        us: w.us || 0,
+        usA: w.usA || w.us_a || 0,
+        usBreast: w.usBreast || w.us_breast || 0,
+        usHeart: w.usHeart || w.us_heart || 0,
+        usThy: w.usThy || w.us_thy || 0,
+        usCCA: w.usCCA || w.us_cca || 0,
+        usNeck: w.usNeck || w.us_neck || 0,
+        usPelvisFemale: w.usPelvisFemale || w.us_pelvis_female || 0,
+        usPelvisMale: w.usPelvisMale || w.us_pelvis_male || 0,
+        usFibrosis: w.usFibrosis || w.us_fibrosis || 0,
+        ct: w.ct || 0,
+        dx: w.dx || 0,
+        mg: w.mg || 0,
+        bmd: w.bmd || 0,
+        cta: w.cta || 0,
+        ctaPostProcessing: w.ctaPostProcessing || w.cta_post_processing || 0,
+        reportTyping:
+          w.reportTyping ||
+          w.report_typing ||
+          w.reportEntry ||
+          w.report_entry ||
+          0,
+        proofreader: w.proofreader || w.imageProofing || w.image_proofing || 0,
+        tsmcReport: w.tsmcReport || w.tsmc_report || 0,
+        floorControl: w.floorControl || w.floor_control || 0,
+        assist: w.assist || 0,
+        scheduler: w.scheduler || 0,
+        mrTeaching: w.mrTeaching || w.mr_teaching || 0,
+        mrLargeMaleTeaching:
+          w.mrLargeMaleTeaching || w.mr_large_male_teaching || 0,
+        mrLargeFemaleTeaching:
+          w.mrLargeFemaleTeaching || w.mr_large_female_teaching || 0,
+        mrMediumTeaching: w.mrMediumTeaching || w.mr_medium_teaching || 0,
+        mrSmallTeaching: w.mrSmallTeaching || w.mr_small_teaching || 0,
+        usTeaching: w.usTeaching || w.us_teaching || 0,
+        usATeaching: w.usATeaching || w.us_a_teaching || 0,
+        usBreastTeaching: w.usBreastTeaching || w.us_breast_teaching || 0,
+        usHeartTeaching: w.usHeartTeaching || w.us_heart_teaching || 0,
+        usThyTeaching: w.usThyTeaching || w.us_thy_teaching || 0,
+        usCCATeaching: w.usCCATeaching || w.us_cca_teaching || 0,
+        usNeckTeaching: w.usNeckTeaching || w.us_neck_teaching || 0,
+        usPelvisFemaleTeaching:
+          w.usPelvisFemaleTeaching || w.us_pelvis_female_teaching || 0,
+        usPelvisMaleTeaching:
+          w.usPelvisMaleTeaching || w.us_pelvis_male_teaching || 0,
+        usFibrosisTeaching: w.usFibrosisTeaching || w.us_fibrosis_teaching || 0,
+        ctTeaching: w.ctTeaching || w.ct_teaching || 0,
+        dxTeaching: w.dxTeaching || w.dx_teaching || 0,
+        mgTeaching: w.mgTeaching || w.mg_teaching || 0,
+        bmdTeaching: w.bmdTeaching || w.bmd_teaching || 0,
+        ctaTeaching: w.ctaTeaching || w.cta_teaching || 0,
       }));
       this.workloads = merge(this.workloads, parsed);
     }
     if (leavesRes.data) {
-      const parsed = leavesRes.data.map((l: any) => { const m = {...l}; this.mapFromDbFields(m); return m; });
+      const parsed = leavesRes.data.map((l: any) => {
+        const m = { ...l };
+        this.mapFromDbFields(m);
+        return m;
+      });
       this.leaves = merge(this.leaves, parsed);
     }
     if (geneRes.data) {
-        const parsed = geneRes.data.map((b) => { const m = {...b}; this.mapFromDbFields(m); return m; });
-        this.geneAppointments = merge(this.geneAppointments, parsed);
-      }
-      
-      if (meetingRoomsRes.data) {
-      const parsed = meetingRoomsRes.data.map((b: any) => { const m = {...b}; this.mapFromDbFields(m); return m; });
+      const parsed = geneRes.data.map((b) => {
+        const m = { ...b };
+        this.mapFromDbFields(m);
+        return m;
+      });
+      this.geneAppointments = merge(this.geneAppointments, parsed);
+    }
+
+    if (meetingRoomsRes.data) {
+      const parsed = meetingRoomsRes.data.map((b: any) => {
+        const m = { ...b };
+        this.mapFromDbFields(m);
+        return m;
+      });
       this.meetingRoomBookings = merge(this.meetingRoomBookings, parsed);
     }
-    
+
     this.loadedMonths.add(monthStr);
     this.notifyListeners();
   }
 
-
   // New method to fetch all data from Supabase
-  
+
   async initializeAuthData(force: boolean = false) {
     if (this.isLoaded && !force) return;
     this.authLoadError = null;
@@ -603,20 +714,29 @@ class Store {
           if (mappedUser.learningSchedules) {
             const today = toLocalISOString(new Date());
             let needsUpdate = false;
-            
-            const updatedSchedules = { ...mappedUser.learningSchedules };
-            const updatedLearning = [...(Array.isArray(mappedUser.learningCapabilities) ? mappedUser.learningCapabilities : [])];
-            const updatedCapabilities = [...(Array.isArray(mappedUser.capabilities) ? mappedUser.capabilities : [])];
 
-            for (const [station, endDate] of Object.entries(mappedUser.learningSchedules)) {
+            const updatedSchedules = { ...mappedUser.learningSchedules };
+            const updatedLearning = [
+              ...(Array.isArray(mappedUser.learningCapabilities)
+                ? mappedUser.learningCapabilities
+                : []),
+            ];
+            const updatedCapabilities = [
+              ...(Array.isArray(mappedUser.capabilities)
+                ? mappedUser.capabilities
+                : []),
+            ];
+
+            for (const [station, endDate] of Object.entries(
+              mappedUser.learningSchedules,
+            )) {
               if (endDate && today >= (endDate as string)) {
-                
                 // Only graduate if they are currently in learningCapabilities
                 const index = updatedLearning.indexOf(station);
                 if (index !== -1) {
                   needsUpdate = true;
                   updatedLearning.splice(index, 1);
-                  
+
                   // Add to independent capabilities
                   if (!updatedCapabilities.includes(station)) {
                     updatedCapabilities.push(station);
@@ -626,44 +746,86 @@ class Store {
             }
 
             if (needsUpdate) {
-              mappedUser.learningSchedules = Object.keys(updatedSchedules).length > 0 ? updatedSchedules : undefined;
+              mappedUser.learningSchedules =
+                Object.keys(updatedSchedules).length > 0
+                  ? updatedSchedules
+                  : undefined;
               mappedUser.learningCapabilities = updatedLearning;
               mappedUser.capabilities = updatedCapabilities;
-              
+
               // Asynchronously update DB
-              supabase.from("users").update({
-                capabilities: mappedUser.capabilities,
-                learning_capabilities: mappedUser.learningCapabilities,
-                learning_schedules: mappedUser.learningSchedules
-              } as any).eq("id", mappedUser.id).then(({ error }) => {
-                if (error) console.error(`Failed to auto-graduate ${mappedUser.name}`, error);
-                else console.log(`Auto-graduated ${mappedUser.name} learning schedules`);
-              });
+              supabase
+                .from("users")
+                .update({
+                  capabilities: mappedUser.capabilities,
+                  learning_capabilities: mappedUser.learningCapabilities,
+                  learning_schedules: mappedUser.learningSchedules,
+                } as any)
+                .eq("id", mappedUser.id)
+                .then(({ error }) => {
+                  if (error)
+                    console.error(
+                      `Failed to auto-graduate ${mappedUser.name}`,
+                      error,
+                    );
+                  else
+                    console.log(
+                      `Auto-graduated ${mappedUser.name} learning schedules`,
+                    );
+                });
             }
           }
 
-          let permissions = mappedUser.permissions !== null && mappedUser.permissions !== undefined
-              ? [...mappedUser.permissions] : getPermissionsByRole(mappedUser.role);
+          let permissions =
+            mappedUser.permissions !== null &&
+            mappedUser.permissions !== undefined
+              ? [...mappedUser.permissions]
+              : getPermissionsByRole(mappedUser.role);
 
-          if (permissions.includes("staff_edit") || permissions.includes("settings_edit")) {
-            if (mappedUser.isHealthMgmt && !permissions.includes("health_mgmt_edit")) permissions.push("health_mgmt_edit");
-            if (mappedUser.isRadiographer && !permissions.includes("edit_cloud_schedule")) permissions.push("edit_cloud_schedule");
+          if (
+            permissions.includes("staff_edit") ||
+            permissions.includes("settings_edit")
+          ) {
+            if (
+              mappedUser.isHealthMgmt &&
+              !permissions.includes("health_mgmt_edit")
+            )
+              permissions.push("health_mgmt_edit");
+            if (
+              mappedUser.isRadiographer &&
+              !permissions.includes("edit_cloud_schedule")
+            )
+              permissions.push("edit_cloud_schedule");
           }
-          if (mappedUser.isHealthMgmt && !permissions.includes("health_mgmt_view")) permissions.push("health_mgmt_view");
-          
+          if (
+            mappedUser.isHealthMgmt &&
+            !permissions.includes("health_mgmt_view")
+          )
+            permissions.push("health_mgmt_view");
+
           // Legacy mapping: automatically grant new dashboard permissions to existing users who should have them
-          const hasAnyNewDashPerm = permissions.includes(PERMISSIONS.VIEW_DASHBOARD_STAFF) || 
-                                    permissions.includes(PERMISSIONS.VIEW_DASHBOARD_STATION) || 
-                                    permissions.includes(PERMISSIONS.VIEW_DASHBOARD_TODAY);
-          
+          const hasAnyNewDashPerm =
+            permissions.includes(PERMISSIONS.VIEW_DASHBOARD_STAFF) ||
+            permissions.includes(PERMISSIONS.VIEW_DASHBOARD_STATION) ||
+            permissions.includes(PERMISSIONS.VIEW_DASHBOARD_TODAY);
+
           if (!hasAnyNewDashPerm) {
-            if (mappedUser.role === UserRole.SUPERVISOR || mappedUser.role === UserRole.SYSTEM_ADMIN || mappedUser.role === UserRole.SCHEDULER || mappedUser.role === UserRole.RADIOGRAPHER_STAFF) {
+            if (
+              mappedUser.role === UserRole.SUPERVISOR ||
+              mappedUser.role === UserRole.SYSTEM_ADMIN ||
+              mappedUser.role === UserRole.SCHEDULER ||
+              mappedUser.role === UserRole.RADIOGRAPHER_STAFF
+            ) {
               permissions.push(PERMISSIONS.VIEW_DASHBOARD_STAFF);
               permissions.push(PERMISSIONS.VIEW_DASHBOARD_STATION);
               permissions.push(PERMISSIONS.VIEW_DASHBOARD_TODAY);
             }
           }
-          if (mappedUser.isRadiographer && !permissions.includes("physician_view")) permissions.push("physician_view");
+          if (
+            mappedUser.isRadiographer &&
+            !permissions.includes("physician_view")
+          )
+            permissions.push("physician_view");
 
           // Meeting-room access used to be open to every signed-in role.
           // Preserve that behavior for existing non-viewer accounts while the
@@ -682,13 +844,23 @@ class Store {
             permissions = getPermissionsByRole(UserRole.VIEWER);
           }
 
-          return { ...mappedUser, permissions: Array.from(new Set(permissions)) };
+          return {
+            ...mappedUser,
+            permissions: Array.from(new Set(permissions)),
+          };
         });
-        this.connectionStatus = { type: "Supabase", details: `Loaded ${this.users.length} users` };
+        this.connectionStatus = {
+          type: "Supabase",
+          details: `Loaded ${this.users.length} users`,
+        };
       } else {
         this.users = [];
-        this.authLoadError = usersRes.error?.message || "Supabase did not return any users.";
-        this.connectionStatus = { type: "Supabase", details: this.authLoadError };
+        this.authLoadError =
+          usersRes.error?.message || "Supabase did not return any users.";
+        this.connectionStatus = {
+          type: "Supabase",
+          details: this.authLoadError,
+        };
       }
 
       let finalSettingsData = null;
@@ -696,7 +868,11 @@ class Store {
         finalSettingsData = settingsRes.data[0].data;
         this.settingsRowId = settingsRes.data[0].id;
       } else if (settingsRes.error && settingsRes.error.code === "PGRST116") {
-        const fallbackRes = await supabase.from("settings").select("id, data").limit(1).single();
+        const fallbackRes = await supabase
+          .from("settings")
+          .select("id, data")
+          .limit(1)
+          .single();
         if (fallbackRes.data && fallbackRes.data.data) {
           finalSettingsData = fallbackRes.data.data;
           this.settingsRowId = fallbackRes.data.id;
@@ -712,7 +888,8 @@ class Store {
     } catch (e: any) {
       console.error("Failed to fetch auth data", e);
       this.users = [];
-      this.authLoadError = e?.message || "Unable to load authentication data from Supabase.";
+      this.authLoadError =
+        e?.message || "Unable to load authentication data from Supabase.";
       this.connectionStatus = { type: "Supabase", details: this.authLoadError };
       this.isLoaded = true;
     }
@@ -721,23 +898,34 @@ class Store {
   async initializeDataForUser(user: User, force: boolean = false) {
     console.log(`[Store] Loading module data for user ${user.name}...`);
     const now = new Date();
-    const { startDate, endDate, startMonth, endMonth } = this.getWindowDates(now);
-    this.loadedMonths.add(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`);
+    const { startDate, endDate, startMonth, endMonth } =
+      this.getWindowDates(now);
+    this.loadedMonths.add(
+      `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`,
+    );
 
     const perms = user.permissions || [];
     const role = user.role;
     const isAdmin = role === "SYSTEM_ADMIN" || role === "SUPERVISOR";
-    
-    let shiftsReq = Promise.resolve({ data: null }), leavesReq = Promise.resolve({ data: null }), workloadsReq = Promise.resolve({ data: null }),
-        docReq = Promise.resolve({ data: null }), docShiftsReq = Promise.resolve({ data: null }), hmStaffReq = Promise.resolve({ data: null }),
-        hmShiftsReq = Promise.resolve({ data: null }), aneStaffReq = Promise.resolve({ data: null }), aneShiftsReq = Promise.resolve({ data: null }),
-        meetingRoomsReq = Promise.resolve({ data: null });
 
-    const canViewCloud = perms.includes(PERMISSIONS.VIEW_CLOUD_SCHEDULE) || 
+    let shiftsReq = Promise.resolve({ data: null }),
+      leavesReq = Promise.resolve({ data: null }),
+      workloadsReq = Promise.resolve({ data: null }),
+      docReq = Promise.resolve({ data: null }),
+      docShiftsReq = Promise.resolve({ data: null }),
+      hmStaffReq = Promise.resolve({ data: null }),
+      hmShiftsReq = Promise.resolve({ data: null }),
+      aneStaffReq = Promise.resolve({ data: null }),
+      aneShiftsReq = Promise.resolve({ data: null }),
+      meetingRoomsReq = Promise.resolve({ data: null });
+
+    const canViewCloud =
+      perms.includes(PERMISSIONS.VIEW_CLOUD_SCHEDULE) ||
       perms.includes(PERMISSIONS.VIEW_DASHBOARD_STAFF) ||
       perms.includes(PERMISSIONS.VIEW_DASHBOARD_STATION) ||
       perms.includes(PERMISSIONS.VIEW_DASHBOARD_TODAY) ||
-      user.isRadiographer || isAdmin;
+      user.isRadiographer ||
+      isAdmin;
     const canViewPhysician = perms.includes(PERMISSIONS.VIEW_PHYSICIAN);
     const canViewHM = perms.includes(PERMISSIONS.VIEW_HEALTH_MGMT) || isAdmin;
 
@@ -746,7 +934,11 @@ class Store {
       leavesReq = this.fetchLeavesByRange(startDate, endDate);
       workloadsReq = this.fetchWorkloadsByRange(startMonth, endMonth);
     } else if (canViewPhysician) {
-      shiftsReq = this.fetchShiftsByRange(startDate, endDate, (q) => q.or('station.ilike.%主%,station.ilike.%輔%,station.ilike.%場控%,specialRoles.cs.["輔班"]'));
+      shiftsReq = this.fetchShiftsByRange(startDate, endDate, (q) =>
+        q.or(
+          'station.ilike.%主%,station.ilike.%輔%,station.ilike.%場控%,specialRoles.cs.["輔班"]',
+        ),
+      );
     }
 
     if (canViewPhysician || isAdmin || role === "FINANCE") {
@@ -759,7 +951,11 @@ class Store {
       hmShiftsReq = this.fetchHealthMgmtShiftsByRange(startDate, endDate);
     } else if (canViewPhysician) {
       hmStaffReq = this.fetchPaginated("health_mgmt_staff"); // Required for names in PhysicianSchedule
-      hmShiftsReq = this.fetchHealthMgmtShiftsByRange(startDate, endDate, (q) => q.or('task.ilike.%主控%,station.ilike.%主控%,task.ilike.%輔控%,station.ilike.%輔控%'));
+      hmShiftsReq = this.fetchHealthMgmtShiftsByRange(startDate, endDate, (q) =>
+        q.or(
+          "task.ilike.%主控%,station.ilike.%主控%,task.ilike.%輔控%,station.ilike.%輔控%",
+        ),
+      );
     }
     if (perms.includes(PERMISSIONS.VIEW_ANESTHESIA) || isAdmin) {
       aneStaffReq = this.fetchPaginated("anesthesia_staff");
@@ -781,8 +977,32 @@ class Store {
       .lte("date", endDate);
 
     try {
-      const [shiftsRes, leavesRes, workloadsRes, doctorsRes, dShiftsRes, hmStaffRes, hmShiftsRes, anesthesiaStaffRes, anesthesiaShiftsRes, meetingRoomsRes, assistantRes, geneRes] = await Promise.all([
-        shiftsReq, leavesReq, workloadsReq, docReq, docShiftsReq, hmStaffReq, hmShiftsReq, aneStaffReq, aneShiftsReq, meetingRoomsReq, assistantReq, geneReq
+      const [
+        shiftsRes,
+        leavesRes,
+        workloadsRes,
+        doctorsRes,
+        dShiftsRes,
+        hmStaffRes,
+        hmShiftsRes,
+        anesthesiaStaffRes,
+        anesthesiaShiftsRes,
+        meetingRoomsRes,
+        assistantRes,
+        geneRes,
+      ] = await Promise.all([
+        shiftsReq,
+        leavesReq,
+        workloadsReq,
+        docReq,
+        docShiftsReq,
+        hmStaffReq,
+        hmShiftsReq,
+        aneStaffReq,
+        aneShiftsReq,
+        meetingRoomsReq,
+        assistantReq,
+        geneReq,
       ]);
 
       if (Object.keys(assistantRes).length > 0) {
@@ -797,18 +1017,26 @@ class Store {
           const key = `${mappedShift.userId}-${mappedShift.date}`;
           const existing = uniqueShiftsMap.get(key);
           if (!existing) uniqueShiftsMap.set(key, mappedShift);
-          else if (!existing.id.includes(" ") && mappedShift.id.includes(" ")) {}
-          else uniqueShiftsMap.set(key, mappedShift);
+          else if (!existing.id.includes(" ") && mappedShift.id.includes(" ")) {
+          } else uniqueShiftsMap.set(key, mappedShift);
         });
         this.shifts = Array.from(uniqueShiftsMap.values());
       }
 
       if (leavesRes.data) {
-        this.leaves = leavesRes.data.map((l: any) => { const m = {...l}; this.mapFromDbFields(m); return m; });
+        this.leaves = leavesRes.data.map((l: any) => {
+          const m = { ...l };
+          this.mapFromDbFields(m);
+          return m;
+        });
       }
 
       if (geneRes.data) {
-        this.geneAppointments = geneRes.data.map((b: any) => { const m = {...b}; this.mapFromDbFields(m); return m; });
+        this.geneAppointments = geneRes.data.map((b: any) => {
+          const m = { ...b };
+          this.mapFromDbFields(m);
+          return m;
+        });
       }
 
       if (workloadsRes.data) {
@@ -816,7 +1044,10 @@ class Store {
           id: w.id,
           year: w.year,
           month: w.month,
-          date: w.year && w.month ? `${w.year}-${String(w.month).padStart(2, "0")}` : "",
+          date:
+            w.year && w.month
+              ? `${w.year}-${String(w.month).padStart(2, "0")}`
+              : "",
           radiographerName: w.radiographerName || w.radiographer_name || "",
           mr: w.mr || 0,
           mrLargeMale: w.mrLargeMale || w.mr_large_male || 0,
@@ -839,15 +1070,23 @@ class Store {
           bmd: w.bmd || 0,
           cta: w.cta || 0,
           ctaPostProcessing: w.ctaPostProcessing || w.cta_post_processing || 0,
-          reportTyping: w.reportTyping || w.report_typing || w.reportEntry || w.report_entry || 0,
-          proofreader: w.proofreader || w.imageProofing || w.image_proofing || 0,
+          reportTyping:
+            w.reportTyping ||
+            w.report_typing ||
+            w.reportEntry ||
+            w.report_entry ||
+            0,
+          proofreader:
+            w.proofreader || w.imageProofing || w.image_proofing || 0,
           tsmcReport: w.tsmcReport || w.tsmc_report || 0,
           floorControl: w.floorControl || w.floor_control || 0,
           assist: w.assist || 0,
           scheduler: w.scheduler || 0,
           mrTeaching: w.mrTeaching || w.mr_teaching || 0,
-          mrLargeMaleTeaching: w.mrLargeMaleTeaching || w.mr_large_male_teaching || 0,
-          mrLargeFemaleTeaching: w.mrLargeFemaleTeaching || w.mr_large_female_teaching || 0,
+          mrLargeMaleTeaching:
+            w.mrLargeMaleTeaching || w.mr_large_male_teaching || 0,
+          mrLargeFemaleTeaching:
+            w.mrLargeFemaleTeaching || w.mr_large_female_teaching || 0,
           mrMediumTeaching: w.mrMediumTeaching || w.mr_medium_teaching || 0,
           mrSmallTeaching: w.mrSmallTeaching || w.mr_small_teaching || 0,
           usTeaching: w.usTeaching || w.us_teaching || 0,
@@ -857,9 +1096,12 @@ class Store {
           usThyTeaching: w.usThyTeaching || w.us_thy_teaching || 0,
           usCCATeaching: w.usCCATeaching || w.us_cca_teaching || 0,
           usNeckTeaching: w.usNeckTeaching || w.us_neck_teaching || 0,
-          usPelvisFemaleTeaching: w.usPelvisFemaleTeaching || w.us_pelvis_female_teaching || 0,
-          usPelvisMaleTeaching: w.usPelvisMaleTeaching || w.us_pelvis_male_teaching || 0,
-          usFibrosisTeaching: w.usFibrosisTeaching || w.us_fibrosis_teaching || 0,
+          usPelvisFemaleTeaching:
+            w.usPelvisFemaleTeaching || w.us_pelvis_female_teaching || 0,
+          usPelvisMaleTeaching:
+            w.usPelvisMaleTeaching || w.us_pelvis_male_teaching || 0,
+          usFibrosisTeaching:
+            w.usFibrosisTeaching || w.us_fibrosis_teaching || 0,
           ctTeaching: w.ctTeaching || w.ct_teaching || 0,
           dxTeaching: w.dxTeaching || w.dx_teaching || 0,
           mgTeaching: w.mgTeaching || w.mg_teaching || 0,
@@ -869,37 +1111,70 @@ class Store {
       }
 
       if (doctorsRes.data) {
-        this.doctors = doctorsRes.data.map((d: any) => { const m = {...d}; this.mapFromDbFields(m); m.capabilities = m.capabilities || []; m.locations = m.locations || []; return m; });
+        this.doctors = doctorsRes.data.map((d: any) => {
+          const m = { ...d };
+          this.mapFromDbFields(m);
+          m.capabilities = m.capabilities || [];
+          m.locations = m.locations || [];
+          return m;
+        });
       }
 
       if (dShiftsRes.data) {
-        this.doctorShifts = dShiftsRes.data.map((s: any) => { const m = {...s}; this.mapFromDbFields(m); return m; });
+        this.doctorShifts = dShiftsRes.data.map((s: any) => {
+          const m = { ...s };
+          this.mapFromDbFields(m);
+          return m;
+        });
       }
 
       if (hmStaffRes.data) {
-        this.healthMgmtStaff = hmStaffRes.data.map((s: any) => { const m = {...s}; this.mapFromDbFields(m); return m; });
+        this.healthMgmtStaff = hmStaffRes.data.map((s: any) => {
+          const m = { ...s };
+          this.mapFromDbFields(m);
+          return m;
+        });
       }
 
       if (hmShiftsRes.data) {
         this.healthMgmtShifts = hmShiftsRes.data.map((s: any) => {
-          const m = {...s}; this.mapFromDbFields(m);
-          let task = m.task || ""; let location = undefined;
-          if (task.includes("@@")) { const p = task.split("@@"); task = p[0]; location = p[1]; }
-          m.task = task || undefined; m.location = location;
+          const m = { ...s };
+          this.mapFromDbFields(m);
+          let task = m.task || "";
+          let location = undefined;
+          if (task.includes("@@")) {
+            const p = task.split("@@");
+            task = p[0];
+            location = p[1];
+          }
+          m.task = task || undefined;
+          m.location = location;
           return m;
         });
       }
 
       if (anesthesiaStaffRes.data) {
-        this.anesthesiaStaff = anesthesiaStaffRes.data.map((as: any) => ({ ...as, isActive: as.is_active, role: as.role || "VIEWER" }));
+        this.anesthesiaStaff = anesthesiaStaffRes.data.map((as: any) => ({
+          ...as,
+          isActive: as.is_active,
+          role: as.role || "VIEWER",
+        }));
       }
 
       if (anesthesiaShiftsRes.data) {
-        this.anesthesiaShifts = anesthesiaShiftsRes.data.map((s: any) => { const m = {...s}; this.mapFromDbFields(m); return m; });
+        this.anesthesiaShifts = anesthesiaShiftsRes.data.map((s: any) => {
+          const m = { ...s };
+          this.mapFromDbFields(m);
+          return m;
+        });
       }
 
       if (meetingRoomsRes.data) {
-        this.meetingRoomBookings = meetingRoomsRes.data.map((b: any) => { const m = {...b}; this.mapFromDbFields(m); return m; });
+        this.meetingRoomBookings = meetingRoomsRes.data.map((b: any) => {
+          const m = { ...b };
+          this.mapFromDbFields(m);
+          return m;
+        });
       }
 
       if (canViewCloud) {
@@ -909,11 +1184,10 @@ class Store {
       }
 
       console.log("[Store] User specific data loaded successfully.");
-    } catch(e) {
+    } catch (e) {
       console.error("[Store] Error loading user data", e);
     }
   }
-
 
   // [New] Update Radiographer Workload
   async updateWorkload(w: Partial<RadiographerWorkload>) {
@@ -953,7 +1227,7 @@ class Store {
         .from("radiographer_workload")
         .upsert(payload, { onConflict: "year,month,radiographerName" })
         .select();
-      
+
       if (error) throw error;
       if (data && data.length > 0) {
         w.id = data[0].id;
@@ -1021,7 +1295,7 @@ class Store {
   async saveDailyWorkloads(records: Partial<RadiographerDailyWorkload>[]) {
     if (!this.currentUser || records.length === 0) return;
     try {
-      const payloads = records.map(w => {
+      const payloads = records.map((w) => {
         const payload: any = {
           date: w.date,
           radiographer_name: w.radiographerName,
@@ -1052,10 +1326,10 @@ class Store {
           reportTyping: "report_entry",
           proofreader: "image_proofing",
           tsmcReport: "tsmc_report",
-          total: "total"
+          total: "total",
         };
 
-        Object.keys(fieldMapping).forEach(key => {
+        Object.keys(fieldMapping).forEach((key) => {
           const wKey = key as keyof RadiographerDailyWorkload;
           if (w[wKey] !== undefined) {
             payload[fieldMapping[key]] = w[wKey];
@@ -1081,18 +1355,21 @@ class Store {
   }
 
   // [New] Fetch Daily Workloads
-  async fetchDailyWorkloadsByRange(startDate: string, endDate: string): Promise<RadiographerDailyWorkload[]> {
+  async fetchDailyWorkloadsByRange(
+    startDate: string,
+    endDate: string,
+  ): Promise<RadiographerDailyWorkload[]> {
     try {
       const { data, error } = await supabase
         .from("radiographer_daily_workload")
         .select("*")
         .gte("date", startDate)
         .lte("date", endDate);
-      
+
       if (error) throw error;
       if (!data) return [];
-      
-      return data.map(d => {
+
+      return data.map((d) => {
         const m = { ...d };
         this.mapFromDbFields(m);
         return m as any;
@@ -1143,7 +1420,8 @@ class Store {
 
       // 4. Refresh Data
       await this.initializeAuthData(true);
-      if (this.currentUser) await this.initializeDataForUser(this.currentUser, true);
+      if (this.currentUser)
+        await this.initializeDataForUser(this.currentUser, true);
       return idsToDelete.length;
     } catch (e) {
       console.error("Cleanup failed:", e);
@@ -1224,7 +1502,8 @@ class Store {
 
       // Refresh Data
       await this.initializeAuthData(true);
-      if (this.currentUser) await this.initializeDataForUser(this.currentUser, true);
+      if (this.currentUser)
+        await this.initializeDataForUser(this.currentUser, true);
       return true;
     } catch (e) {
       console.error("Force clear exception:", e);
@@ -1620,7 +1899,6 @@ class Store {
     }
   }
 
-  
   // --- Gene Appointments ---
   getGeneAppointments() {
     return [...this.geneAppointments];
@@ -1635,7 +1913,7 @@ class Store {
         .eq("date", b.date)
         .lt("start_time", b.endTime)
         .gt("end_time", b.startTime);
-      
+
       if (checkError) throw checkError;
       if (existing && existing.length > 0) {
         throw new Error("OVERLAP_DETECTED");
@@ -1654,12 +1932,13 @@ class Store {
         medical_record_number: b.medicalRecordNumber,
         registered_by: b.registeredBy,
         companion_count: b.companionCount,
-        is_online: b.isOnline
+        is_online: b.isOnline,
       }));
-      const { error } = await supabase.from("gene_appointments").insert(records);
+      const { error } = await supabase
+        .from("gene_appointments")
+        .insert(records);
       if (error) throw error;
-      
-      
+
       this.logOperation("assign", "gene", {
         affectedCount: appointments.length,
         note: `新增基因預約 ${appointments.length} 筆`,
@@ -1667,7 +1946,9 @@ class Store {
     } catch (e) {
       console.error("Failed to add gene appointments:", e);
       const ids = appointments.map((b) => b.id);
-      this.geneAppointments = this.geneAppointments.filter((b) => !ids.includes(b.id));
+      this.geneAppointments = this.geneAppointments.filter(
+        (b) => !ids.includes(b.id),
+      );
       this.notifyListeners();
       throw e;
     }
@@ -1679,7 +1960,10 @@ class Store {
     this.notifyListeners();
 
     try {
-      const { error } = await supabase.from("gene_appointments").delete().eq("id", id);
+      const { error } = await supabase
+        .from("gene_appointments")
+        .delete()
+        .eq("id", id);
       if (error) throw error;
       if (bookingToDel) {
         this.logOperation("delete", "gene", {
@@ -1703,7 +1987,9 @@ class Store {
   }
 
   async addMeetingRoomBookings(bookings: MeetingRoomBooking[]) {
-    if (!this.currentUser?.permissions?.includes(PERMISSIONS.EDIT_MEETING_ROOM)) {
+    if (
+      !this.currentUser?.permissions?.includes(PERMISSIONS.EDIT_MEETING_ROOM)
+    ) {
       throw new Error("您只有查看會議室時段的權限");
     }
     this.meetingRoomBookings.push(...bookings);
@@ -1746,7 +2032,9 @@ class Store {
   }
 
   async deleteMeetingRoomBooking(id: string) {
-    if (!this.currentUser?.permissions?.includes(PERMISSIONS.EDIT_MEETING_ROOM)) {
+    if (
+      !this.currentUser?.permissions?.includes(PERMISSIONS.EDIT_MEETING_ROOM)
+    ) {
       throw new Error("您只有查看會議室時段的權限");
     }
     const bookingToDel = this.meetingRoomBookings.find((b) => b.id === id);
@@ -1819,7 +2107,9 @@ class Store {
       }
       this.notifyListeners();
     } else if (eventType === "DELETE") {
-      this.geneAppointments = this.geneAppointments.filter((b) => b.id !== oldRecord.id);
+      this.geneAppointments = this.geneAppointments.filter(
+        (b) => b.id !== oldRecord.id,
+      );
       this.notifyListeners();
     }
   }
@@ -1851,20 +2141,23 @@ class Store {
       this.settings.stationDisplayOrder = [];
     if (!this.settings.cycleAnchors) this.settings.cycleAnchors = [];
     if (!this.settings.stationNotes) this.settings.stationNotes = {};
-    
+
     // Ensure "助理" station exists
     let needSave = false;
     if (!this.settings.stations.includes(StationDefault.ASSISTANT)) {
       this.settings.stations.push(StationDefault.ASSISTANT);
       needSave = true;
     }
-    
+
     // Ensure ASSISTANT is under TECH_SUPPORT in display order
-    if (this.settings.stationDisplayOrder && this.settings.stationDisplayOrder.length > 0) {
+    if (
+      this.settings.stationDisplayOrder &&
+      this.settings.stationDisplayOrder.length > 0
+    ) {
       const order = this.settings.stationDisplayOrder;
       const techIdx = order.indexOf(StationDefault.TECH_SUPPORT);
       const asstIdx = order.indexOf(StationDefault.ASSISTANT);
-      
+
       if (techIdx !== -1) {
         if (asstIdx === -1) {
           // Insert right after TECH_SUPPORT
@@ -1879,7 +2172,7 @@ class Store {
         }
       }
     }
-    
+
     if (needSave && this.isLoaded) {
       this.saveSettings();
     }
@@ -2060,10 +2353,10 @@ class Store {
   // Users
   getUsers() {
     const orderMap = new Map(
-      (this.settings.userDisplayOrder || []).map((id, index) => [id, index])
+      (this.settings.userDisplayOrder || []).map((id, index) => [id, index]),
     );
 
-    // Sort users: 
+    // Sort users:
     // 1. Regular users by display order (ordered first, then new users at 9999)
     // 2. RADIOGRAPHER_ASSISTANT always at the very bottom
     return [...this.users].sort((a, b) => {
@@ -2172,8 +2465,8 @@ class Store {
       ctaPostProcessing: "cta_post_processing",
       reportTyping: "report_entry",
       proofreader: "image_proofing",
-      tsmcReport: "tsmc_report"
-};
+      tsmcReport: "tsmc_report",
+    };
     Object.keys(mapping).forEach((key) => {
       if (key in obj && key !== mapping[key]) {
         let val = obj[key];
@@ -2255,8 +2548,8 @@ class Store {
       cta_post_processing: "ctaPostProcessing",
       report_entry: "reportTyping",
       image_proofing: "proofreader",
-      tsmc_report: "tsmcReport"
-};
+      tsmc_report: "tsmcReport",
+    };
     Object.keys(mapping).forEach((key) => {
       if (key in obj && key !== mapping[key]) {
         obj[mapping[key]] = obj[key];
@@ -2277,14 +2570,18 @@ class Store {
     if (!existingUser) throw new Error("User not found");
 
     const nextRole = updates.role ?? existingUser.role;
-    const touchesAccess = updates.role !== undefined || updates.permissions !== undefined;
+    const touchesAccess =
+      updates.role !== undefined || updates.permissions !== undefined;
     const transition = getPasswordTransitionForAccessUpdate(
       updates.password ?? existingUser.password,
       nextRole,
       touchesAccess,
     );
     const temporaryPassword = transition.temporaryPassword;
-    const normalizedUpdates: Partial<User> = { ...updates, ...transition.updates };
+    const normalizedUpdates: Partial<User> = {
+      ...updates,
+      ...transition.updates,
+    };
 
     const dbUpdates: any = { ...normalizedUpdates };
     this.mapToDbFields(dbUpdates);
@@ -2362,7 +2659,8 @@ class Store {
       display_order: staff.displayOrder,
       designation: staff.designation,
       hire_date: staff.hireDate === "" ? null : staff.hireDate,
-      termination_date: staff.terminationDate === "" ? null : staff.terminationDate,
+      termination_date:
+        staff.terminationDate === "" ? null : staff.terminationDate,
     });
     if (error) {
       console.error("Failed to add health mgmt staff to Supabase:", error);
@@ -2388,9 +2686,11 @@ class Store {
       dbUpdates.display_order = updates.displayOrder;
     if (updates.designation !== undefined)
       dbUpdates.designation = updates.designation;
-    if (updates.hireDate !== undefined) dbUpdates.hire_date = updates.hireDate === "" ? null : updates.hireDate;
+    if (updates.hireDate !== undefined)
+      dbUpdates.hire_date = updates.hireDate === "" ? null : updates.hireDate;
     if (updates.terminationDate !== undefined)
-      dbUpdates.termination_date = updates.terminationDate === "" ? null : updates.terminationDate;
+      dbUpdates.termination_date =
+        updates.terminationDate === "" ? null : updates.terminationDate;
 
     if (Object.keys(dbUpdates).length > 0) {
       const { error } = await supabase
@@ -2594,10 +2894,8 @@ class Store {
   }
 
   async upsertShift(shift: Shift) {
-    if (shift.station === "休假" || shift.station === "OFF" || shift.station === "SYSTEM_OFF") {
-      shift.specialRoles = [];
-      shift.supportLocation = undefined;
-    }
+    const normalizedShift = normalizeShiftForPersistence(shift);
+    const effectiveShift = { ...normalizedShift };
 
     // 1. Update Local State: Optimistic Update
     const otherIndices: number[] = [];
@@ -2606,7 +2904,10 @@ class Store {
     // Clean local state first
     for (let i = 0; i < this.shifts.length; i++) {
       const s = this.shifts[i];
-      if (s.userId === shift.userId && s.date === shift.date) {
+      if (
+        s.userId === effectiveShift.userId &&
+        s.date === effectiveShift.date
+      ) {
         if (foundIndex === -1) {
           foundIndex = i;
         } else {
@@ -2622,9 +2923,9 @@ class Store {
     const oldShift = foundIndex >= 0 ? { ...this.shifts[foundIndex] } : null;
 
     if (foundIndex >= 0) {
-      this.shifts[foundIndex] = shift;
+      this.shifts[foundIndex] = effectiveShift;
     } else {
-      this.shifts.push(shift);
+      this.shifts.push(effectiveShift);
     }
 
     this.notifyListeners(); // Notify immediately for UI responsiveness
@@ -2635,8 +2936,8 @@ class Store {
       const { data: existing, error: fetchError } = await supabase
         .from("shifts")
         .select("id")
-        .eq("userId", shift.userId)
-        .eq("date", shift.date);
+        .eq("userId", effectiveShift.userId)
+        .eq("date", effectiveShift.date);
 
       if (fetchError) throw fetchError;
 
@@ -2656,13 +2957,17 @@ class Store {
 
         // Perform Update
         // Important: Ensure we don't accidentally change the ID
-        const dbUpdate = { ...shift, id: targetId } as any;
+        const dbUpdate = { ...effectiveShift, id: targetId } as any;
         if (dbUpdate.learningStation !== undefined) {
-          dbUpdate.learning_station = dbUpdate.learningStation === "" ? null : dbUpdate.learningStation;
+          dbUpdate.learning_station =
+            dbUpdate.learningStation === "" ? null : dbUpdate.learningStation;
           delete dbUpdate.learningStation;
         }
         if (dbUpdate.learningTeacherId !== undefined) {
-          dbUpdate.learning_teacher_id = dbUpdate.learningTeacherId === "" ? null : dbUpdate.learningTeacherId;
+          dbUpdate.learning_teacher_id =
+            dbUpdate.learningTeacherId === ""
+              ? null
+              : dbUpdate.learningTeacherId;
           delete dbUpdate.learningTeacherId;
         }
 
@@ -2678,13 +2983,17 @@ class Store {
         const newId = generateUUID();
         targetId = newId;
 
-        const dbInsert = { ...shift, id: newId } as any;
+        const dbInsert = { ...effectiveShift, id: newId } as any;
         if (dbInsert.learningStation !== undefined) {
-          dbInsert.learning_station = dbInsert.learningStation === "" ? null : dbInsert.learningStation;
+          dbInsert.learning_station =
+            dbInsert.learningStation === "" ? null : dbInsert.learningStation;
           delete dbInsert.learningStation;
         }
         if (dbInsert.learningTeacherId !== undefined) {
-          dbInsert.learning_teacher_id = dbInsert.learningTeacherId === "" ? null : dbInsert.learningTeacherId;
+          dbInsert.learning_teacher_id =
+            dbInsert.learningTeacherId === ""
+              ? null
+              : dbInsert.learningTeacherId;
           delete dbInsert.learningTeacherId;
         }
 
@@ -2698,7 +3007,8 @@ class Store {
       // 3. Sync Local ID to match DB ID
       // This is crucial so future updates target the correct DB record
       const finalIndex = this.shifts.findIndex(
-        (s) => s.userId === shift.userId && s.date === shift.date,
+        (s) =>
+          s.userId === effectiveShift.userId && s.date === effectiveShift.date,
       );
       if (finalIndex >= 0 && targetId) {
         this.shifts[finalIndex].id = targetId;
@@ -2713,28 +3023,28 @@ class Store {
     const user = this.users.find((u) => u.id === shift.userId);
 
     // 記錄崗位變化
-    if (oldShift?.station !== shift.station) {
+    if (oldShift?.station !== effectiveShift.station) {
       this.logOperation("assign", "radiographer", {
-        date: shift.date,
-        personId: shift.userId,
-        personName: user?.name || shift.userId,
-        station: shift.station,
+        date: effectiveShift.date,
+        personId: effectiveShift.userId,
+        personName: user?.name || effectiveShift.userId,
+        station: effectiveShift.station,
         oldValue: oldShift?.station,
-        newValue: shift.station,
+        newValue: effectiveShift.station,
       });
     }
 
     // 記錄特殊任務變化
     const oldRoles = oldShift?.specialRoles || [];
-    const newRoles = shift.specialRoles || [];
+    const newRoles = effectiveShift.specialRoles || [];
     const addedRoles = newRoles.filter((r) => !oldRoles.includes(r));
     const removedRoles = oldRoles.filter((r) => !newRoles.includes(r));
 
     if (addedRoles.length > 0 || removedRoles.length > 0) {
       this.logOperation("任務調整", "radiographer", {
-        date: shift.date,
-        personId: shift.userId,
-        personName: user?.name || shift.userId,
+        date: effectiveShift.date,
+        personId: effectiveShift.userId,
+        personName: user?.name || effectiveShift.userId,
         operation: "任務調整",
         addedTasks: addedRoles.join(", "),
         removedTasks: removedRoles.join(", "),
@@ -3316,7 +3626,15 @@ class Store {
 
   getHealthMgmtLeaveTypes(): string[] {
     return (
-      this.settings.healthMgmtLeaveTypes || ["V", "婚", "病", "事", "產", "投", "原"]
+      this.settings.healthMgmtLeaveTypes || [
+        "V",
+        "婚",
+        "病",
+        "事",
+        "產",
+        "投",
+        "原",
+      ]
     );
   }
 
@@ -3591,18 +3909,23 @@ class Store {
     return addedCount;
   }
 
-  getEffectiveGroupAndIndex(user: User, targetDate: string): { groupId: StaffGroup, groupIndex?: number } {
+  getEffectiveGroupAndIndex(
+    user: User,
+    targetDate: string,
+  ): { groupId: StaffGroup; groupIndex?: number } {
     if (!user.groupHistory || user.groupHistory.length === 0) {
       return { groupId: user.groupId, groupIndex: user.groupIndex };
     }
-    
+
     // History is presumed to be dates when the group changes.
     // If targetDate is >= a history entry's date, we use that entry's group.
     // So we sort by date ascending.
-    const sortedHistory = [...user.groupHistory].sort((a,b) => a.date.localeCompare(b.date));
+    const sortedHistory = [...user.groupHistory].sort((a, b) =>
+      a.date.localeCompare(b.date),
+    );
     let effectiveGroup = user.groupId;
     let effectiveIndex = user.groupIndex;
-    
+
     for (const entry of sortedHistory) {
       if (targetDate >= entry.date) {
         effectiveGroup = entry.groupId;
@@ -3611,7 +3934,7 @@ class Store {
         break;
       }
     }
-    
+
     return { groupId: effectiveGroup, groupIndex: effectiveIndex };
   }
 
@@ -3705,7 +4028,10 @@ class Store {
 
     // Part-Time users skip Group Cycle logic entirely
     if (!user.isPartTime) {
-      const { groupId, groupIndex } = this.getEffectiveGroupAndIndex(user, dateStr);
+      const { groupId, groupIndex } = this.getEffectiveGroupAndIndex(
+        user,
+        dateStr,
+      );
 
       // --- Group D: Rolling Rotation (Sun off, Mon-Sat rotate by fixed index) ---
       if (groupId === StaffGroup.GROUP_D) {
@@ -3762,8 +4088,12 @@ class Store {
   async upsertShifts(shiftsToUpsert: Shift[]) {
     if (shiftsToUpsert.length === 0) return;
 
-    shiftsToUpsert.forEach(shift => {
-      if (shift.station === "休假" || shift.station === "OFF" || shift.station === "SYSTEM_OFF") {
+    shiftsToUpsert.forEach((shift) => {
+      if (
+        shift.station === "休假" ||
+        shift.station === "OFF" ||
+        shift.station === "SYSTEM_OFF"
+      ) {
         shift.specialRoles = [];
         shift.supportLocation = undefined;
       }
@@ -3782,19 +4112,21 @@ class Store {
     });
 
     // Remote batch update
-    const dbUpserts = shiftsToUpsert.map(shift => {
+    const dbUpserts = shiftsToUpsert.map((shift) => {
       const dbShift = { ...shift } as any;
       if (dbShift.learningStation !== undefined) {
-        dbShift.learning_station = dbShift.learningStation === "" ? null : dbShift.learningStation;
+        dbShift.learning_station =
+          dbShift.learningStation === "" ? null : dbShift.learningStation;
         delete dbShift.learningStation;
       }
       if (dbShift.learningTeacherId !== undefined) {
-        dbShift.learning_teacher_id = dbShift.learningTeacherId === "" ? null : dbShift.learningTeacherId;
+        dbShift.learning_teacher_id =
+          dbShift.learningTeacherId === "" ? null : dbShift.learningTeacherId;
         delete dbShift.learningTeacherId;
       }
       return dbShift;
     });
-    
+
     const { error } = await supabase.from("shifts").upsert(dbUpserts);
     if (error) console.error("Batch upsert error:", error);
   }
@@ -4037,7 +4369,10 @@ class Store {
 
   async refreshDoctorShifts() {
     console.log("[Store] Refreshing Doctor Shifts...");
-    const { data } = await this.fetchDoctorShiftsByRange(this.getWindowDates(new Date()).startDate, this.getWindowDates(new Date()).endDate);
+    const { data } = await this.fetchDoctorShiftsByRange(
+      this.getWindowDates(new Date()).startDate,
+      this.getWindowDates(new Date()).endDate,
+    );
     if (data) {
       this.doctorShifts = data.map((s: any) => ({
         ...s,
@@ -4938,7 +5273,11 @@ class Store {
       });
 
       const allWorkingUsers = this.users.filter((user) => {
-        if (user.isActive === false && (!user.resignationDate || user.resignationDate < dateStr)) return false; // Skip resigned users
+        if (
+          user.isActive === false &&
+          (!user.resignationDate || user.resignationDate < dateStr)
+        )
+          return false; // Skip resigned users
         if (user.isPartTime) return false; // Skip part-time staff for auto-scheduling
         if (user.isRadiographer === false) return false; // Skip non-radiographers
         const status = this.getUserStatusOnDate(user.id, dateStr);
@@ -5163,7 +5502,11 @@ class Store {
         const shuffledUsers = [...this.users].sort(() => Math.random() - 0.5);
 
         const candidates = shuffledUsers.filter((u) => {
-          if (u.isActive === false && (!u.resignationDate || u.resignationDate < dateStr)) return false; // Skip resigned users
+          if (
+            u.isActive === false &&
+            (!u.resignationDate || u.resignationDate < dateStr)
+          )
+            return false; // Skip resigned users
           if (u.isRadiographer === false) return false; // Skip non-radiographers (e.g. admins)
           if (u.isPartTime) return false; // Skip part-time staff
 
@@ -5389,7 +5732,8 @@ class Store {
 
     // Refresh local state to ensure consistency
     await this.initializeAuthData(true);
-      if (this.currentUser) await this.initializeDataForUser(this.currentUser, true);
+    if (this.currentUser)
+      await this.initializeDataForUser(this.currentUser, true);
     this.notifyListeners();
 
     return { shifts: c1 || 0, doctorShifts: c2 || 0, leaves: c3 || 0 };
@@ -5429,7 +5773,8 @@ class Store {
     }
 
     await this.initializeAuthData(true);
-      if (this.currentUser) await this.initializeDataForUser(this.currentUser, true);
+    if (this.currentUser)
+      await this.initializeDataForUser(this.currentUser, true);
     this.notifyListeners();
     return importedCount;
   }

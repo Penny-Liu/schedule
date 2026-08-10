@@ -1,7 +1,7 @@
 /**
  * Shared utility helpers used across multiple pages and services.
  */
-import type { User, UserRole } from "../types";
+import type { Shift, User, UserRole } from "../types";
 
 export const EMPLOYMENT_PAUSE_KEY = "__employment_pause__";
 
@@ -110,4 +110,17 @@ export const isUserOnEmploymentPause = (
 export const hasBlockingSpecialRoles = (roles?: string[] | null): boolean => {
   if (!roles || roles.length === 0) return false;
   return roles.filter((r) => r !== "配合銷假").length > 0;
+};
+
+export const normalizeShiftForPersistence = (shift: Shift): Shift => {
+  const normalized = { ...shift };
+  if (
+    normalized.station === "休假" ||
+    normalized.station === "OFF" ||
+    normalized.station === "SYSTEM_OFF"
+  ) {
+    normalized.specialRoles = [];
+    normalized.supportLocation = undefined;
+  }
+  return normalized;
 };

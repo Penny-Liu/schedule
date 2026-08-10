@@ -9,6 +9,7 @@ import {
   getRoleLabel,
   hasBlockingSpecialRoles,
   isUserOnEmploymentPause,
+  normalizeShiftForPersistence,
   toLocalISOString,
 } from "./utils";
 
@@ -79,6 +80,20 @@ describe("role and special-role helpers", () => {
   it("ignores the non-blocking leave-cancellation marker", () => {
     expect(hasBlockingSpecialRoles(["配合銷假"])).toBe(false);
     expect(hasBlockingSpecialRoles(["配合銷假", "開機"])).toBe(true);
+  });
+
+  it("clears special tasks when a shift becomes off/leave", () => {
+    const normalized = normalizeShiftForPersistence({
+      id: "shift-1",
+      userId: "user-1",
+      date: "2026-08-10",
+      station: "休假",
+      specialRoles: ["開機", "晚班"],
+      supportLocation: "北投",
+    } as any);
+
+    expect(normalized.specialRoles).toEqual([]);
+    expect(normalized.supportLocation).toBeUndefined();
   });
 });
 
