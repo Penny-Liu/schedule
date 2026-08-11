@@ -1019,7 +1019,8 @@ class Store {
 
   // [New] Save Daily Workloads
   async saveDailyWorkloads(records: Partial<RadiographerDailyWorkload>[]) {
-    if (!this.currentUser || records.length === 0) return;
+    if (!this.currentUser) throw new Error("尚未登入，無法儲存每日工作量");
+    if (records.length === 0) return [];
     try {
       const payloads = records.map(w => {
         const payload: any = {
@@ -1065,15 +1066,28 @@ class Store {
         return payload;
       });
 
+      const savedRecords: RadiographerDailyWorkload[] = [];
       // upsert in batches of 100 to avoid payload limits
       for (let i = 0; i < payloads.length; i += 100) {
         const batch = payloads.slice(i, i + 100);
-        const { error } = await supabase
+        const { data, error } = await supabase
           .from("radiographer_daily_workload")
-          .upsert(batch, { onConflict: "date,radiographer_name" });
+          .upsert(batch, { onConflict: "date,radiographer_name" })
+          .select("*");
         if (error) throw error;
+        if (!data || data.length !== batch.length) {
+          throw new Error(
+            `每日工作量寫入驗證失敗：預期 ${batch.length} 筆，實際回傳 ${data?.length || 0} 筆`,
+          );
+        }
+        data.forEach((row) => {
+          const mapped = { ...row };
+          this.mapFromDbFields(mapped);
+          savedRecords.push(mapped as RadiographerDailyWorkload);
+        });
       }
       console.log(`Saved ${payloads.length} daily workloads.`);
+      return savedRecords;
     } catch (e) {
       console.error("[Store] Error saving daily workloads", e);
       throw e;

@@ -7,6 +7,10 @@ import {
 } from "../types";
 import { db } from "../services/store";
 import {
+  buildChangedDailyWorkloadRecords,
+  mergeDailyWorkloadRecords,
+} from "../services/radiographerDailyWorkload";
+import {
   BarChart3,
   FileSpreadsheet,
   Edit3,
@@ -1685,6 +1689,28 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
   const handleSave = async () => {
     setIsSaving(true);
     try {
+      if (selectedDate) {
+        const records = buildChangedDailyWorkloadRecords(
+          selectedDate,
+          Object.values(editingData),
+          workloadData,
+        );
+        if (records.length === 0) {
+          setIsEditing(false);
+          alert("沒有需要儲存的單日變更。");
+          return;
+        }
+
+        const savedRecords = await db.saveDailyWorkloads(records);
+        setCycleDailyData((previous) =>
+          mergeDailyWorkloadRecords(previous, savedRecords),
+        );
+        setRefreshCycleDailyDataTrigger((previous) => previous + 1);
+        setIsEditing(false);
+        alert(`已儲存 ${selectedDate} 的每日工作量！`);
+        return;
+      }
+
       const promises = Object.values(editingData).map((row) =>
         db.updateWorkload(row),
       );
