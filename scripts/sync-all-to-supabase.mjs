@@ -2,6 +2,7 @@ import "dotenv/config";
 import { createClient } from "@supabase/supabase-js";
 import { getSalesforceSession, runSoqlQuery } from "./salesforce-utils.mjs";
 import { omitManualDailyWorkloadFields } from "./radiographer-daily-sync.mjs";
+import { isBmdMedicalOrder } from "./daily-stats-counting.mjs";
 import readline from "readline";
 import { fileURLToPath } from "url";
 
@@ -61,10 +62,8 @@ async function syncDailyStats(session, startDate, endDate) {
   const seenDazhiGI = new Set();
   // 各項目去重 Set（以日期+clientId）
   const seenBeitouCT = new Set();
-  const seenBeitouBMD = new Set();
   const seenBeitouDX = new Set();
   const seenBeitouMG = new Set();
-  const seenDazhiBMD = new Set();
   const seenDazhiDX = new Set();
   const seenDazhiMG = new Set();
 
@@ -137,14 +136,14 @@ async function syncDailyStats(session, startDate, endDate) {
     if (!dailyResults[date]) dailyResults[date] = initStats();
     const stats = dailyResults[date];
 
-    // Detailed metrics directly assigned by ResourceCategory or Name (去重，每位客戶只計一次)
+    // Most detailed metrics count unique clients; BMD counts each valid medical order.
     const ck = `${date}_${clientId}`;
     if (loc === "北投") {
       if (category === "ct" && !name.includes("電腦斷層(顯影)")) {
         if (!seenBeitouCT.has(ck)) { stats.beitou_ct++; seenBeitouCT.add(ck); }
       }
-      if (category === "bmd" || category.includes("骨質")) {
-        if (!seenBeitouBMD.has(ck)) { stats.beitou_bmd++; seenBeitouBMD.add(ck); }
+      if (isBmdMedicalOrder(r)) {
+        stats.beitou_bmd++;
       }
       if (category === "dx" || category.includes("x光") || name.toUpperCase().includes("X光")) {
         if (!seenBeitouDX.has(ck)) { stats.beitou_dx++; seenBeitouDX.add(ck); }
@@ -153,8 +152,8 @@ async function syncDailyStats(session, startDate, endDate) {
         if (!seenBeitouMG.has(ck)) { stats.beitou_mg++; seenBeitouMG.add(ck); }
       }
     } else if (loc === "大直") {
-      if (category === "bmd" || category.includes("骨質")) {
-        if (!seenDazhiBMD.has(ck)) { stats.dazhi_bmd++; seenDazhiBMD.add(ck); }
+      if (isBmdMedicalOrder(r)) {
+        stats.dazhi_bmd++;
       }
       if (category === "dx" || category.includes("x光") || name.toUpperCase().includes("X光")) {
         if (!seenDazhiDX.has(ck)) { stats.dazhi_dx++; seenDazhiDX.add(ck); }
