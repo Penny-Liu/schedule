@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { createClient } from "@supabase/supabase-js";
 import { getSalesforceSession, runSoqlQuery } from "./salesforce-utils.mjs";
+import { omitManualDailyWorkloadFields } from "./radiographer-daily-sync.mjs";
 import readline from "readline";
 import { fileURLToPath } from "url";
 
@@ -456,8 +457,7 @@ export async function syncRadiographerWorkload(session, startDate, endDate) {
         bmd: 0,
         image_proofing: 0,
         cta_post_processing: 0,
-        report_entry: 0,
-        tsmc_report: 0
+        report_entry: 0
       };
     }
     return dailyWorkloadMap[formattedDate][name];
@@ -492,7 +492,7 @@ export async function syncRadiographerWorkload(session, startDate, endDate) {
           "mr", "mr_large_male", "mr_large_female", "mr_medium", "mr_small",
           "us", "us_a", "us_breast", "us_heart", "us_thy", "us_cca", "us_neck", 
           "us_pelvis_female", "us_pelvis_male", "us_fibrosis",
-          "ct", "cta", "cta_post_processing", "dx", "mg", "bmd", "report_entry", "tsmc_report"
+          "ct", "cta", "cta_post_processing", "dx", "mg", "bmd", "report_entry"
         ].forEach(k => dWorkload[k] = 0);
       }
       if (isDateInCycle(rec.radiographer_name, rec.date, "proofing")) {
@@ -883,7 +883,7 @@ export async function syncRadiographerWorkload(session, startDate, endDate) {
           mr: 0, mr_large_male: 0, mr_large_female: 0, mr_medium: 0, mr_small: 0,
           us: 0, us_a: 0, us_breast: 0, us_heart: 0, us_thy: 0, us_cca: 0, us_neck: 0,
           us_pelvis_female: 0, us_pelvis_male: 0, us_fibrosis: 0,
-          ct: 0, cta: 0, dx: 0, mg: 0, bmd: 0, report_entry: 0, tsmc_report: 0, image_proofing: 0
+          ct: 0, cta: 0, dx: 0, mg: 0, bmd: 0, report_entry: 0, image_proofing: 0
         };
       } else {
         const sfData = dailyWorkloadMap[row.date][row.radiographer_name];
@@ -896,18 +896,10 @@ export async function syncRadiographerWorkload(session, startDate, endDate) {
     });
   }
 
-  console.log(`[sync-stats] [SF API] 正在清理每日明細舊資料 (${minDate} ~ ${maxDate})...`);
-  await supabase
-    .from("radiographer_daily_workload")
-    .delete()
-    .gte("date", minDate)
-    .lte("date", maxDate);
-
   const dailyUpdates = [];
   Object.values(dailyWorkloadMap).forEach(usersMap => {
     Object.values(usersMap).forEach(w => {
         const cleanW = { ...w };
-        delete cleanW.id; // 移除原有的 id，避免 bulk insert 時部分有 id 部分無 id 導致 Supabase 填入 null 違反 constraint
 
         // Remove teaching columns as they don't exist in radiographer_daily_workload
         Object.keys(cleanW).forEach(k => {
@@ -915,26 +907,29 @@ export async function syncRadiographerWorkload(session, startDate, endDate) {
             delete cleanW[k];
           }
         });
-        dailyUpdates.push({
+        dailyUpdates.push(omitManualDailyWorkloadFields({
             ...cleanW,
             mr: Math.round(w.mr),
             mr_large_male: round2(w.mr_large_male),
             mr_large_female: round2(w.mr_large_female),
             mr_medium: round2(w.mr_medium),
             mr_small: round2(w.mr_small)
-        });
+        }));
     });
   });
 
   if (dailyUpdates.length > 0) {
-    console.log(`[sync-stats] [SF API] 正在寫入 ${dailyUpdates.length} 筆每日明細資料...`);
+    console.log(`[sync-stats] [SF API] 正在更新 ${dailyUpdates.length} 筆每日明細資料（保留手動台積電量）...`);
     // 分批寫入避免 payload 過大
     for (let i = 0; i < dailyUpdates.length; i += 100) {
       const batch = dailyUpdates.slice(i, i + 100);
       const { error: dailyErr } = await supabase
         .from("radiographer_daily_workload")
-        .insert(batch);
-      if (dailyErr) console.error("[sync-stats] [SF API] 每日明細寫入失敗:", dailyErr);
+        .upsert(batch, { onConflict: "date,radiographer_name" });
+      if (dailyErr) {
+        console.error("[sync-stats] [SF API] 每日明細寫入失敗:", dailyErr);
+        throw dailyErr;
+      }
     }
   }
 

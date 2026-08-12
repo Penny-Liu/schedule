@@ -36,6 +36,7 @@ import {
   assertPasswordMigrationReadyForRole,
   getDefaultPasswordForRole,
   getPasswordTransitionForAccessUpdate,
+  passwordForSupabaseAuth,
 } from "./passwordPolicy.mjs";
 import {
   countNonSundayDays,
@@ -2027,6 +2028,18 @@ class Store {
     if (!u) throw new Error("User not found");
     assertPasswordMigrationReadyForRole(newPass, u.role);
 
+    if (u.authUserId) {
+      const { data: authData } = await supabase.auth.getUser();
+      if (authData.user?.id !== u.authUserId) {
+        throw new Error("安全登入已失效，請重新登入後再修改密碼");
+      }
+      const authPassword = await passwordForSupabaseAuth(newPass, u.role);
+      const { error: authError } = await supabase.auth.updateUser({
+        password: authPassword,
+      });
+      if (authError) throw authError;
+    }
+
     const { error } = await supabase
       .from("users")
       .update({ password: newPass, must_change_password: false })
@@ -2041,6 +2054,9 @@ class Store {
   async resetPassword(userId: string) {
     const u = this.users.find((u) => u.id === userId);
     if (!u) throw new Error("User not found");
+    if (u.authUserId) {
+      throw new Error("此帳號已啟用安全登入，請由使用者登入後自行修改密碼");
+    }
     const temporaryPassword = getDefaultPasswordForRole(u.role);
 
     const { error } = await supabase
@@ -2059,6 +2075,18 @@ class Store {
     const u = this.users.find((u) => u.id === userId);
     if (!u) throw new Error("User not found");
     assertPasswordMigrationReadyForRole(newPass, u.role);
+
+    if (u.authUserId) {
+      const { data: authData } = await supabase.auth.getUser();
+      if (authData.user?.id !== u.authUserId) {
+        throw new Error("安全登入已失效，請重新登入後再修改密碼");
+      }
+      const authPassword = await passwordForSupabaseAuth(newPass, u.role);
+      const { error: authError } = await supabase.auth.updateUser({
+        password: authPassword,
+      });
+      if (authError) throw authError;
+    }
 
     const { error } = await supabase
       .from("users")

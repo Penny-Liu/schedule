@@ -1,6 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { X, Save, Loader2 } from 'lucide-react';
-import { RadiographerDailyWorkload, Shift } from '../../types';
+import { X, Save, Loader2, Plus, Trash2 } from 'lucide-react';
+import { RadiographerDailyWorkload, Shift, User } from '../../types';
+import { getLearningTeacherCandidates } from '../../services/radiographerLearning';
+import {
+  getTeachingCategoryForField,
+  RadiographerTeachingAllocation,
+  TEACHING_WORKLOAD_FIELDS,
+  TeachingWorkloadField,
+  validateTeachingAllocations,
+} from '../../services/radiographerTeachingAllocations';
 
 interface DailyDetailsModalProps {
   isOpen: boolean;
@@ -11,9 +19,18 @@ interface DailyDetailsModalProps {
   cycleEndDate?: string;
   initialData: RadiographerDailyWorkload[];
   userShifts: Shift[];
+  allShifts: Shift[];
+  radiographers: User[];
+  studentUserId: string;
+  teachingAllocations: RadiographerTeachingAllocation[];
+  canEditTeachingAllocations: boolean;
   weights: Record<string, number>;
   getDailyTotalOrders: (date: string) => number;
   onSave: (records: Partial<RadiographerDailyWorkload>[]) => Promise<void>;
+  onSaveTeachingAllocations: (
+    allocations: RadiographerTeachingAllocation[],
+    dates: string[],
+  ) => Promise<void>;
 }
 
 const FIELDS = [
@@ -52,11 +69,20 @@ export const DailyDetailsModal: React.FC<DailyDetailsModalProps> = ({
   cycleEndDate,
   initialData,
   userShifts,
+  allShifts,
+  radiographers,
+  studentUserId,
+  teachingAllocations,
+  canEditTeachingAllocations,
   weights,
   getDailyTotalOrders,
   onSave,
+  onSaveTeachingAllocations,
 }) => {
   const [editingData, setEditingData] = useState<Record<string, Record<string, number>>>({});
+  const [editingAllocations, setEditingAllocations] = useState<
+    Array<RadiographerTeachingAllocation & { clientId: string }>
+  >([]);
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
@@ -70,8 +96,18 @@ export const DailyDetailsModal: React.FC<DailyDetailsModalProps> = ({
         });
       });
       setEditingData(dataMap);
+      setEditingAllocations(
+        teachingAllocations
+          .filter((allocation) => dates.includes(allocation.date))
+          .map((allocation, index) => ({
+            ...allocation,
+            clientId:
+              allocation.id ||
+              `${allocation.date}-${allocation.teacherUserId}-${allocation.workloadField}-${index}`,
+          })),
+      );
     }
-  }, [isOpen, dates, initialData]);
+  }, [isOpen, dates, initialData, teachingAllocations]);
 
   const proofreaderStartDate = React.useMemo(() => {
     const baseDate = cycleStartDate || (dates.length > 0 ? dates[0] : undefined);
@@ -129,7 +165,23 @@ export const DailyDetailsModal: React.FC<DailyDetailsModalProps> = ({
         }
       });
 
+      const allocationErrors = canEditTeachingAllocations
+        ? validateTeachingAllocations(editingAllocations, editingData)
+        : [];
+      if (allocationErrors.length > 0) {
+        alert(allocationErrors.join("\n"));
+        return;
+      }
+
       await onSave(recordsToSave);
+      if (canEditTeachingAllocations) {
+        await onSaveTeachingAllocations(
+          editingAllocations.map(({ clientId: _clientId, ...allocation }) =>
+            allocation,
+          ),
+          dates,
+        );
+      }
       onClose();
     } catch (error) {
       console.error(error);
@@ -137,6 +189,37 @@ export const DailyDetailsModal: React.FC<DailyDetailsModalProps> = ({
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const addTeachingAllocation = () => {
+    const date = dates[0] || "";
+    const availableField = TEACHING_WORKLOAD_FIELDS.find(
+      (field) => Number(editingData[date]?.[field.key] || 0) > 0,
+    );
+    setEditingAllocations((previous) => [
+      ...previous,
+      {
+        clientId: `new-${Date.now()}-${previous.length}`,
+        date,
+        studentUserId,
+        teacherUserId: "",
+        workloadField: availableField?.key || "usHeart",
+        amount: 1,
+      },
+    ]);
+  };
+
+  const updateTeachingAllocation = (
+    clientId: string,
+    update: Partial<RadiographerTeachingAllocation>,
+  ) => {
+    setEditingAllocations((previous) =>
+      previous.map((allocation) =>
+        allocation.clientId === clientId
+          ? { ...allocation, ...update, studentUserId }
+          : allocation,
+      ),
+    );
   };
 
   return (
@@ -318,6 +401,170 @@ export const DailyDetailsModal: React.FC<DailyDetailsModalProps> = ({
                 </tr>
               </tfoot>
             </table>
+          </div>
+
+          <div className="mt-6 border border-amber-200 rounded-xl overflow-hidden bg-amber-50/30">
+            <div className="flex items-center justify-between gap-3 px-4 py-3 bg-amber-50 border-b border-amber-200">
+              <div>
+                <h3 className="text-sm font-bold text-amber-900">單日教學精確分配</h3>
+                <p className="text-xs text-amber-700 mt-0.5">
+                  可將同一檢查量分配給不同老師；各老師數量合計不可超過學員當日實際量。
+                </p>
+              </div>
+              {canEditTeachingAllocations && (
+                <button
+                  type="button"
+                  onClick={addTeachingAllocation}
+                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-amber-600 text-white text-xs font-bold hover:bg-amber-700"
+                >
+                  <Plus size={14} /> 新增分配
+                </button>
+              )}
+            </div>
+            {editingAllocations.length === 0 ? (
+              <div className="px-4 py-6 text-center text-sm text-slate-500">
+                尚未建立教學分配；未精確分配時，系統仍沿用排班中指定的單一老師。
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-amber-100">
+                  <thead className="bg-white/70">
+                    <tr className="text-xs text-slate-600">
+                      <th className="px-3 py-2 text-left">日期</th>
+                      <th className="px-3 py-2 text-left">檢查項目</th>
+                      <th className="px-3 py-2 text-left">老師</th>
+                      <th className="px-3 py-2 text-center">分配數量</th>
+                      <th className="px-3 py-2 text-center">當日可分配</th>
+                      {canEditTeachingAllocations && <th className="w-12" />}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-amber-100 bg-white">
+                    {editingAllocations.map((allocation) => {
+                      const category = getTeachingCategoryForField(
+                        allocation.workloadField,
+                      );
+                      const candidates = getLearningTeacherCandidates(
+                        radiographers,
+                        allShifts,
+                        studentUserId,
+                        allocation.date,
+                        category,
+                      );
+                      const selectedTeacher = radiographers.find(
+                        (teacher) => teacher.id === allocation.teacherUserId,
+                      );
+                      const selectedIsMissing =
+                        selectedTeacher &&
+                        !candidates.some(({ user }) => user.id === selectedTeacher.id);
+                      const available = Number(
+                        editingData[allocation.date]?.[allocation.workloadField] || 0,
+                      );
+                      const allocated = editingAllocations
+                        .filter(
+                          (item) =>
+                            item.date === allocation.date &&
+                            item.workloadField === allocation.workloadField,
+                        )
+                        .reduce((sum, item) => sum + Number(item.amount || 0), 0);
+                      return (
+                        <tr key={allocation.clientId} className="text-sm">
+                          <td className="px-3 py-2">
+                            <select
+                              value={allocation.date}
+                              disabled={!canEditTeachingAllocations}
+                              onChange={(event) =>
+                                updateTeachingAllocation(allocation.clientId, {
+                                  date: event.target.value,
+                                  teacherUserId: "",
+                                })
+                              }
+                              className="border border-slate-200 rounded px-2 py-1 bg-white disabled:bg-slate-50"
+                            >
+                              {dates.map((date) => <option key={date} value={date}>{date}</option>)}
+                            </select>
+                          </td>
+                          <td className="px-3 py-2">
+                            <select
+                              value={allocation.workloadField}
+                              disabled={!canEditTeachingAllocations}
+                              onChange={(event) =>
+                                updateTeachingAllocation(allocation.clientId, {
+                                  workloadField: event.target.value as TeachingWorkloadField,
+                                  teacherUserId: "",
+                                })
+                              }
+                              className="border border-slate-200 rounded px-2 py-1 bg-white disabled:bg-slate-50"
+                            >
+                              {TEACHING_WORKLOAD_FIELDS.map((field) => (
+                                <option key={field.key} value={field.key}>{field.label}</option>
+                              ))}
+                            </select>
+                          </td>
+                          <td className="px-3 py-2">
+                            <select
+                              value={allocation.teacherUserId}
+                              disabled={!canEditTeachingAllocations}
+                              onChange={(event) =>
+                                updateTeachingAllocation(allocation.clientId, {
+                                  teacherUserId: event.target.value,
+                                })
+                              }
+                              className="min-w-[150px] border border-slate-200 rounded px-2 py-1 bg-white disabled:bg-slate-50"
+                            >
+                              <option value="">請選老師</option>
+                              {selectedIsMissing && selectedTeacher && (
+                                <option value={selectedTeacher.id}>
+                                  {selectedTeacher.name}（目前不符合資格）
+                                </option>
+                              )}
+                              {candidates.map(({ user: teacher, shift }) => (
+                                <option key={teacher.id} value={teacher.id}>
+                                  {teacher.alias || teacher.name}（{shift.station}）
+                                </option>
+                              ))}
+                            </select>
+                          </td>
+                          <td className="px-3 py-2 text-center">
+                            <input
+                              type="number"
+                              min="0.01"
+                              step="any"
+                              value={allocation.amount}
+                              disabled={!canEditTeachingAllocations}
+                              onChange={(event) =>
+                                updateTeachingAllocation(allocation.clientId, {
+                                  amount: Number(event.target.value),
+                                })
+                              }
+                              className="w-20 text-center border border-slate-200 rounded px-2 py-1 disabled:bg-slate-50"
+                            />
+                          </td>
+                          <td className={`px-3 py-2 text-center font-bold ${allocated > available ? "text-red-600" : "text-teal-700"}`}>
+                            {allocated} / {available}
+                          </td>
+                          {canEditTeachingAllocations && (
+                            <td className="px-2 py-2 text-center">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setEditingAllocations((previous) =>
+                                    previous.filter((item) => item.clientId !== allocation.clientId),
+                                  )
+                                }
+                                className="p-1.5 rounded text-red-500 hover:bg-red-50"
+                                title="刪除分配"
+                              >
+                                <Trash2 size={15} />
+                              </button>
+                            </td>
+                          )}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </div>
 

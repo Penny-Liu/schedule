@@ -31,6 +31,17 @@ import { loadExcelJS } from "../services/exportLibraries";
 import { downloadExcelBuffer, finalizeExcelWorksheet, initializeExcelWorkbook, styleExcelTitle } from "../services/excelReportUtils";
 import { isUserOnEmploymentPause, generateUUID } from "../services/utils";
 import { DailyDetailsModal } from "../components/dashboard/DailyDetailsModal";
+import { canTeachLearningCategory } from "../services/radiographerLearning";
+import {
+  fetchTeachingAllocationsByRange,
+  getTeachingCategoryForField,
+  RadiographerTeachingAllocation,
+  replaceTeachingAllocationsForStudent,
+} from "../services/radiographerTeachingAllocations";
+import {
+  hasProtectedEditorSession,
+  isProtectedEditorRole,
+} from "../services/supabaseAuth";
 
 type WorkloadFieldKey =
   | "mr"
@@ -258,9 +269,27 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
   // 用來儲存「單日篩選」的狀態
   const [selectedDate, setSelectedDate] = useState<string>("");
   const [cycleDailyData, setCycleDailyData] = useState<any[]>([]);
+  const [savedTeachingAllocations, setSavedTeachingAllocations] = useState<
+    RadiographerTeachingAllocation[]
+  >([]);
   const [cycleDailyDataDebug, setCycleDailyDataDebug] = useState<string>("");
   const [refreshCycleDailyDataTrigger, setRefreshCycleDailyDataTrigger] = useState<number>(0);
   const [selectedRadiographerForDetails, setSelectedRadiographerForDetails] = useState<string | null>(null);
+  const [hasTeachingAllocationWriteSession, setHasTeachingAllocationWriteSession] =
+    useState(false);
+  const canEditTeachingAllocations =
+    isProtectedEditorRole(currentUser.role) &&
+    hasTeachingAllocationWriteSession;
+
+  useEffect(() => {
+    let active = true;
+    hasProtectedEditorSession(currentUser).then((hasSession) => {
+      if (active) setHasTeachingAllocationWriteSession(hasSession);
+    });
+    return () => {
+      active = false;
+    };
+  }, [currentUser]);
 
   useEffect(() => {
     if (!hasInitializedLineExcluded && radiographers.length > 0) {
@@ -524,6 +553,12 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
           setCycleDailyDataDebug(`Error: ${e.message}, range: ${minDate} to ${maxDate}`);
           console.error(e);
         });
+      fetchTeachingAllocationsByRange(fetchMinDateStr, maxDate)
+        .then(setSavedTeachingAllocations)
+        .catch((error) => {
+          console.error("Failed to fetch teaching allocations:", error);
+          setSavedTeachingAllocations([]);
+        });
     }
   }, [generalDates, radiographers, currentMonth, selectedDate, refreshCycleDailyDataTrigger]);
 
@@ -574,6 +609,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
     const teachingAllocations: Record<string, Record<string, number>> = {};
     const learningDates: Record<string, Record<string, Set<string>>> = {};
     const teachingDates: Record<string, Record<string, Set<string>>> = {};
+    const preciselyAllocatedStudentDays = new Set<string>();
 
     const isLearningCat = (user: any, cat: string, shiftDate: string) => {
       const allCaps = [
@@ -615,6 +651,47 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
       return station.includes(cat);
     };
 
+    // 精確分配優先於排班推算。每筆數量只計入被指定的老師，不再平均分給同場人員。
+    savedTeachingAllocations.forEach((allocation) => {
+      if (selectedDate && allocation.date !== selectedDate) return;
+      const student = radiographers.find(
+        (candidate) => candidate.id === allocation.studentUserId,
+      );
+      const teacher = radiographers.find(
+        (candidate) => candidate.id === allocation.teacherUserId,
+      );
+      if (!student || !teacher) return;
+
+      const studentCycle = student.personalCycles?.[currentMonth];
+      const studentDates = studentCycle
+        ? buildDateRange(studentCycle.startDate, studentCycle.endDate)
+        : generalDates;
+      if (!studentDates.includes(allocation.date)) return;
+
+      const category = getTeachingCategoryForField(allocation.workloadField);
+      preciselyAllocatedStudentDays.add(
+        `${allocation.studentUserId}|${allocation.date}|${category}`,
+      );
+
+      if (!learningDates[student.id]) learningDates[student.id] = {};
+      if (!learningDates[student.id][category]) {
+        learningDates[student.id][category] = new Set();
+      }
+      learningDates[student.id][category].add(allocation.date);
+
+      if (!teachingDates[teacher.id]) teachingDates[teacher.id] = {};
+      if (!teachingDates[teacher.id][category]) {
+        teachingDates[teacher.id][category] = new Set();
+      }
+      teachingDates[teacher.id][category].add(allocation.date);
+
+      const teachingFieldKey = `${allocation.workloadField}Teaching`;
+      if (!teachingAllocations[teacher.id]) teachingAllocations[teacher.id] = {};
+      teachingAllocations[teacher.id][teachingFieldKey] =
+        (teachingAllocations[teacher.id][teachingFieldKey] || 0) +
+        allocation.amount;
+    });
+
     radiographers.forEach((student) => {
       const studentCycle = student.personalCycles?.[currentMonth];
       const studentDates = studentCycle ? buildDateRange(studentCycle.startDate, studentCycle.endDate) : generalDates;
@@ -640,6 +717,13 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
 
         studentShifts.forEach((shift) => {
           if (isStationCat(shift.station, cat) || (shift.learningStation && isStationCat(shift.learningStation, cat))) {
+            if (
+              preciselyAllocatedStudentDays.has(
+                `${student.id}|${shift.date}|${cat}`,
+              )
+            ) {
+              return;
+            }
             if (processedDates.has(shift.date)) return;
             processedDates.add(shift.date);
 
@@ -663,7 +747,19 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
               if (explicitLearning && shift.learningTeacherId) {
                 // 有明確指定指導老師，直接灌給該老師
                 const explicitTeacher = radiographers.find(r => r.id === shift.learningTeacherId);
-                if (explicitTeacher) {
+                const teacherIsWorking = shifts.some(
+                  (teacherShift) =>
+                    teacherShift.userId === shift.learningTeacherId &&
+                    teacherShift.date === shift.date &&
+                    teacherShift.station !== StationDefault.OFF &&
+                    teacherShift.station !== StationDefault.UNASSIGNED &&
+                    teacherShift.station !== "休假",
+                );
+                if (
+                  explicitTeacher &&
+                  teacherIsWorking &&
+                  canTeachLearningCategory(explicitTeacher, cat, shift.date)
+                ) {
                   // 確認該老師在這天有在老師的個人週期內
                   const teacherCycle = explicitTeacher.personalCycles?.[currentMonth];
                   const teacherDates = teacherCycle ? buildDateRange(teacherCycle.startDate, teacherCycle.endDate) : generalDates;
@@ -1257,6 +1353,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
     cycleDailyData,
     selectedDate,
     cloudSchedule,
+    savedTeachingAllocations,
   ]);
 
   // Sorted display data (must be after workloadData)
@@ -3857,6 +3954,21 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
           return expandedDates;
         })()}
         initialData={cycleDailyData.filter(d => d.radiographerName === selectedRadiographerForDetails)}
+        allShifts={shifts}
+        radiographers={radiographers}
+        studentUserId={
+          radiographers.find(
+            (user) => user.name === selectedRadiographerForDetails,
+          )?.id || ""
+        }
+        teachingAllocations={savedTeachingAllocations.filter(
+          (allocation) =>
+            allocation.studentUserId ===
+            radiographers.find(
+              (user) => user.name === selectedRadiographerForDetails,
+            )?.id,
+        )}
+        canEditTeachingAllocations={canEditTeachingAllocations}
         userShifts={(() => {
           if (!selectedRadiographerForDetails) return [];
           const user = radiographers.find(r => r.name === selectedRadiographerForDetails);
@@ -3868,6 +3980,26 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
         onSave={async (records) => {
           await db.saveDailyWorkloads(records);
           setRefreshCycleDailyDataTrigger(prev => prev + 1);
+        }}
+        onSaveTeachingAllocations={async (allocations, dates) => {
+          const student = radiographers.find(
+            (user) => user.name === selectedRadiographerForDetails,
+          );
+          if (!student) throw new Error("找不到學員資料");
+          const saved = await replaceTeachingAllocationsForStudent(
+            student.id,
+            dates,
+            allocations,
+            currentUser.id,
+          );
+          setSavedTeachingAllocations((previous) => [
+            ...previous.filter(
+              (allocation) =>
+                allocation.studentUserId !== student.id ||
+                !dates.includes(allocation.date),
+            ),
+            ...saved,
+          ]);
         }}
       />
     </div>

@@ -28,6 +28,7 @@ jobs:
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_AUTH_USERNAME_DOMAIN: ${{ vars.VITE_AUTH_USERNAME_DOMAIN }}
         run: npm run build
 
       - name: Deploy
