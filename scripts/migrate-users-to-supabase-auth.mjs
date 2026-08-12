@@ -13,6 +13,16 @@ const args = new Set(process.argv.slice(2));
 const applyChanges = args.has("--apply");
 const confirmedPasswordMigration = args.has("--confirm-existing-passwords");
 const listNonCompliantUsers = args.has("--list-noncompliant-users");
+const rolesArg = process.argv.slice(2).find((arg) => arg.startsWith("--roles="));
+const selectedRoles = rolesArg
+  ? new Set(
+      rolesArg
+        .slice("--roles=".length)
+        .split(",")
+        .map((role) => role.trim())
+        .filter(Boolean),
+    )
+  : null;
 
 if (args.has("--help")) {
   console.log(`Usage:
@@ -24,6 +34,9 @@ if (args.has("--help")) {
 
   npm run auth:migrate -- --apply --confirm-existing-passwords
       Creates/resumes Auth users and links public.users.auth_user_id.
+
+  npm run auth:migrate -- --roles=SUPERVISOR,SYSTEM_ADMIN
+      Limits preflight or apply to the listed application roles.
 
 Required environment:
   SUPABASE_URL (or VITE_SUPABASE_URL)
@@ -138,7 +151,13 @@ const validateLegacyUsers = (users) => {
 const run = async () => {
   console.log(`[Auth migration] 模式：${applyChanges ? "APPLY" : "DRY RUN"}`);
 
-  const legacyUsers = await loadLegacyUsers(applyChanges);
+  const allLegacyUsers = await loadLegacyUsers(applyChanges);
+  const legacyUsers = selectedRoles
+    ? allLegacyUsers.filter((user) => selectedRoles.has(user.role))
+    : allLegacyUsers;
+  if (selectedRoles) {
+    console.log(`[Auth migration] 限定角色：${[...selectedRoles].join(", ")}`);
+  }
   const { nonCompliantUsers } = validateLegacyUsers(legacyUsers);
   const nonCompliantPasswordCount = nonCompliantUsers.length;
   const authUsers = await listAllAuthUsers();
@@ -234,7 +253,9 @@ const run = async () => {
     linkedNowCount += 1;
   }
 
-  const verifiedUsers = await loadLegacyUsers(true);
+  const verifiedUsers = (await loadLegacyUsers(true)).filter(
+    (user) => !selectedRoles || selectedRoles.has(user.role),
+  );
   const unlinkedCount = verifiedUsers.filter((user) => !user.auth_user_id).length;
   if (unlinkedCount > 0) {
     throw new Error(`驗證失敗：仍有 ${unlinkedCount} 筆帳號未連結 auth_user_id`);

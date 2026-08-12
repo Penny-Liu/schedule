@@ -76,6 +76,8 @@ import {
   getAutomaticRadiographerWorkTime,
   isWeekendOrRadiographerHoliday,
 } from "../services/radiographerWorkTime";
+import { calculateBmdSlots } from "../services/radiographerSlotCalculations";
+import { getLearningTeacherCandidates } from "../services/radiographerLearning";
 
 const isUserLearningOnDate = (user: User | undefined | null, cap: string, date: string): boolean => {
   if (!user || !user.learningCapabilities?.includes(cap)) return false;
@@ -211,7 +213,7 @@ export const calculateDailyLoadRate = (targetDate: string, location: 'beitou'|'d
     return r(knownSlots + (remainingUsCount * 2) + (st.usHeart * 3));
   };
   const calcCtSlots = (st: any) => r(st.ct * 1 + st.cta * 2);
-  const calcBmdSlots = (st: any) => r(st.bmd * 2);
+  const calcBmdSlots = (st: any) => calculateBmdSlots(st.bmd);
   const calcDxSlots = (st: any) => r(st.dx * 0.5);
   const calcMgSlots = (st: any) => r(st.mg * 1);
 
@@ -5224,10 +5226,13 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                             <option value="MG">學MG</option>
                                           </select>
                                           {existingShift?.learningStation && (() => {
-                                            const possibleTeachers = db.shifts.filter(s => s.date === date && s.station.includes(existingShift.learningStation!) && s.userId !== user.id).map(s => {
-                                              const t = db.users.find(u => u.id === s.userId);
-                                              return { id: s.userId, name: t?.alias || t?.name || s.userId };
-                                            });
+                                            const possibleTeachers = getLearningTeacherCandidates(
+                                              users,
+                                              shifts,
+                                              user.id,
+                                              date,
+                                              existingShift.learningStation,
+                                            );
                                             return (
                                               <select
                                                 value={existingShift.learningTeacherId || ""}
@@ -5235,8 +5240,10 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                 className="w-full text-[9px] py-0.5 px-0.5 border border-amber-200 rounded-[4px] bg-white text-amber-700 outline-none"
                                               >
                                                 <option value="">(未定老師)</option>
-                                                {possibleTeachers.map(pt => (
-                                                  <option key={pt.id} value={pt.id}>{pt.name}</option>
+                                                {possibleTeachers.map(({ user: teacher, shift: teacherShift }) => (
+                                                  <option key={teacher.id} value={teacher.id}>
+                                                    {teacher.alias || teacher.name}（{teacherShift.station}）
+                                                  </option>
                                                 ))}
                                               </select>
                                             );
@@ -7250,7 +7257,7 @@ BMD :{{bmd}}
       return r(knownSlots + (remainingUsCount * 2) + (st.usHeart * 3));
     };
     const calcCtSlots = (st: any) => r(st.ct * 1 + st.cta * 2);
-    const calcBmdSlots = (st: any) => r(st.bmd * 2);
+    const calcBmdSlots = (st: any) => calculateBmdSlots(st.bmd);
     const calcDxSlots = (st: any) => r(st.dx * 0.5);
     const calcMgSlots = (st: any) => r(st.mg * 1);
 
@@ -7406,7 +7413,7 @@ BMD :{{bmd}}
     }
 
     if (calcBmdSlots(beitouStats) > 0) {
-      out.push(buildLine("BMD", formatNameStr(names.beitou.bmd), `${r(beitouStats.bmd)}位`, calcBmdSlots(beitouStats)));
+      out.push(buildLine("BMD", formatNameStr(names.beitou.bmd), `${r(beitouStats.bmd)}醫令`, calcBmdSlots(beitouStats)));
     }
     
     if (calcDxSlots(beitouStats) > 0) {
@@ -7443,7 +7450,7 @@ BMD :{{bmd}}
       }
       
       if (calcBmdSlots(dazhiStats) > 0) {
-        out.push(buildLine("BMD", "", `${r(dazhiStats.bmd)}位`, calcBmdSlots(dazhiStats)));
+        out.push(buildLine("BMD", "", `${r(dazhiStats.bmd)}醫令`, calcBmdSlots(dazhiStats)));
       }
       
       if (calcDxSlots(dazhiStats) > 0) {

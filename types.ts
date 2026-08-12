@@ -320,7 +320,7 @@ export interface DailyManpowerStats {
   beitou_mr_medium?: number;
   beitou_mr_small?: number;
   beitou_ct?: number;
-  beitou_bmd?: number;
+  beitou_bmd?: number; // BMD order count; 1 order = 1 slot
   beitou_dx?: number;
   beitou_mg?: number;
   beitou_ultrasound?: number; // Total ultrasound count for Beitou
@@ -341,7 +341,7 @@ export interface DailyManpowerStats {
   dazhi_ultrasound_abdomen?: number;
   dazhi_ultrasound_breast?: number;
   dazhi_ultrasound_pelvic?: number;
-  dazhi_bmd?: number;
+  dazhi_bmd?: number; // BMD order count; 1 order = 1 slot
   dazhi_dx?: number;
   dazhi_mg?: number;
   beitou_gi?: number; // New: Manual GI cases count

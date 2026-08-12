@@ -4,9 +4,10 @@ import { db } from '../services/store';
 import { LogIn, User as UserIcon, Lock, ChevronLeft, Shield, Calendar, Activity, Eye, ChevronDown } from 'lucide-react';
 import { getRoleLabel, isUserOnEmploymentPause, toLocalISOString } from '../services/utils';
 import { getDefaultPasswordForRole, getTemporaryPasswordHint, isDefaultOrMissingPassword } from '../services/passwordPolicy.mjs';
+import { signInProtectedEditor } from '../services/supabaseAuth';
 
 interface LoginPageProps {
-    onLogin: (user: User) => void;
+    onLogin: (user: User) => void | Promise<void>;
 }
 
 
@@ -87,7 +88,9 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
         setError('');
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const [isAuthenticating, setIsAuthenticating] = useState(false);
+
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (selectedUser) {
             if (isUserOnEmploymentPause(selectedUser, todayStr)) {
@@ -96,8 +99,16 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
             }
             const targetPassword = selectedUser.password || getDefaultPasswordForRole(selectedUser.role);
             if (password === targetPassword) {
-                onLogin(selectedUser);
-                localStorage.setItem('last_user_id', selectedUser.id);
+                setIsAuthenticating(true);
+                try {
+                    await signInProtectedEditor(selectedUser, password);
+                    await onLogin(selectedUser);
+                    localStorage.setItem('last_user_id', selectedUser.id);
+                } catch (authError) {
+                    setError(authError instanceof Error ? authError.message : '安全登入失敗');
+                } finally {
+                    setIsAuthenticating(false);
+                }
             } else {
                 setError('密碼錯誤，請重試');
             }
@@ -293,10 +304,11 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
                                     </button>
                                     <button
                                         type="submit"
-                                        className="flex-[2] flex items-center justify-center gap-2 bg-slate-900 hover:bg-slate-800 text-white font-bold py-3.5 rounded-xl transition-all shadow-lg hover:shadow-xl active:scale-[0.98]"
+                                        disabled={isAuthenticating}
+                                        className="flex-[2] flex items-center justify-center gap-2 bg-slate-900 hover:bg-slate-800 text-white font-bold py-3.5 rounded-xl transition-all shadow-lg hover:shadow-xl active:scale-[0.98] disabled:opacity-60 disabled:cursor-wait"
                                     >
                                         <LogIn size={18} />
-                                        登入系統
+                                        {isAuthenticating ? "安全登入中..." : "登入系統"}
                                     </button>
                                 </div>
                              </form>

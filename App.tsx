@@ -6,6 +6,7 @@ import { db } from "./services/store";
 import { AlertTriangle, Loader2 } from "lucide-react";
 import ChangePasswordPage from "./pages/ChangePasswordPage";
 import { isPasswordMigrationReadyForRole } from "./services/passwordPolicy.mjs";
+import { signOutSupabaseAuth } from "./services/supabaseAuth";
 
 const DashboardPage = lazy(() => import("./pages/DashboardPage"));
 const LeavePage = lazy(() => import("./pages/LeavePage"));
@@ -143,6 +144,7 @@ const App: React.FC = () => {
   };
 
   const handleLogout = () => {
+    void signOutSupabaseAuth();
     db.logout();
     setCurrentUser(null);
   };
