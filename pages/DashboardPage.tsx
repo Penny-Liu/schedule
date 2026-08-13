@@ -77,6 +77,12 @@ import {
   isWeekendOrRadiographerHoliday,
 } from "../services/radiographerWorkTime";
 import { calculateBmdSlots } from "../services/radiographerSlotCalculations";
+import {
+  calculateMrCapacityForecast,
+  calculateMrScheduledSlots,
+  formatMrCapacityStatus,
+  formatMrPackageComposition,
+} from "../services/mrCapacityForecast";
 import { getLearningTeacherCandidates } from "../services/radiographerLearning";
 
 const isUserLearningOnDate = (user: User | undefined | null, cap: string, date: string): boolean => {
@@ -7464,7 +7470,71 @@ BMD :{{bmd}}
     
     const section5 = out.join("\n");
 
-    return { full: finalText, section1, section2, section3, section4, section5 };
+    // --- Section 6: future two-week MR capacity forecast ---
+    const [reportYear, reportMonth, reportDay] = date.split("-").map(Number);
+    const reportDate = new Date(reportYear, reportMonth - 1, reportDay);
+    const addDays = (baseDate: Date, days: number) => {
+      const nextDate = new Date(baseDate);
+      nextDate.setDate(nextDate.getDate() + days);
+      return nextDate;
+    };
+    const formatShortDate = (targetDate: Date) =>
+      `${targetDate.getMonth() + 1}/${targetDate.getDate()}`;
+    const formatForecastDate = (targetDate: Date) =>
+      `${formatShortDate(targetDate)} (${dayNames[targetDate.getDay()]})`;
+    const futureStart = addDays(reportDate, 1);
+    const futureEnd = addDays(reportDate, 14);
+    const forecastDays = Array.from({ length: 14 }, (_, index) => ({
+      offset: index + 1,
+      value: addDays(reportDate, index + 1),
+    })).filter(({ value }) => value.getDay() !== 0);
+
+    const buildForecastWeek = (
+      title: string,
+      startOffset: number,
+      endOffset: number,
+    ) => {
+      const weekStart = addDays(reportDate, startOffset);
+      const weekEnd = addDays(reportDate, endOffset);
+      const lines = forecastDays
+        .filter(({ offset }) => offset >= startOffset && offset <= endOffset)
+        .map(({ value }) => {
+          const targetDate = toLocalISOString(value);
+          const targetStats = db.getDailyStats(targetDate);
+          if (!targetStats) {
+            return `${formatForecastDate(value)}：⚪ 尚無排程資料`;
+          }
+
+          const scheduledSlots = calculateMrScheduledSlots(targetStats);
+          const packageComposition = formatMrPackageComposition(targetStats);
+          return `${formatForecastDate(value)}：${formatMrCapacityStatus(calculateMrCapacityForecast(scheduledSlots), packageComposition)}`;
+        });
+
+      return `${title} (${formatShortDate(weekStart)} - ${formatShortDate(weekEnd)})\n${lines.join("\n")}`;
+    };
+
+    const section6 = [
+      `日期：${formatShortDate(reportDate)}`,
+      "",
+      `未來二週 (${formatShortDate(futureStart)} - ${formatShortDate(futureEnd)}) MR 預約排程`,
+      "滿載基準：96 Slot｜🟢 <75%｜🟡 75%-90%｜🔴 >90%",
+      "",
+      buildForecastWeek("第一週", 1, 7),
+      "",
+      buildForecastWeek("第二週", 8, 14),
+      "",
+      "備註：以上可安插數量為系統預估值，實際狀況將依現場場控動態調度為準。",
+    ].join("\n");
+
+    return {
+      full: finalText,
+      section1,
+      section2,
+      section3,
+      section4,
+      section5,
+      section6,
+    };
   }, [date, shifts, manpower, users, stats, doctorShifts, physicianWorkload]);
 
   const handleCopy = (text: string) => {
@@ -7622,6 +7692,28 @@ BMD :{{bmd}}
             }}
             readOnly
             value={(copyText as any).section5}
+          />
+        </div>
+
+        {/* Section 6: Future two-week MR capacity forecast */}
+        <div className="bg-gradient-to-br from-sky-50 to-indigo-50 border border-sky-200 rounded-lg p-3 mt-4">
+          <div className="flex justify-between items-center mb-2">
+            <div className="text-xs text-sky-700 font-bold">
+              區塊 6：未來二週 MR 排程狀況
+            </div>
+            <button
+              type="button"
+              onClick={() => handleCopy(copyText.section6)}
+              className="text-xs bg-sky-100 hover:bg-sky-200 text-sky-800 px-2 py-1 rounded-lg flex items-center gap-1"
+            >
+              <Copy size={12} /> 複製
+            </button>
+          </div>
+          <textarea
+            className="w-full text-sm font-mono text-slate-700 bg-transparent outline-none resize-none leading-relaxed"
+            style={{ minHeight: "34rem" }}
+            readOnly
+            value={copyText.section6}
           />
         </div>
       </div>
