@@ -82,6 +82,8 @@ import {
   calculateMrScheduledSlots,
   formatMrCapacityStatus,
   formatMrPackageComposition,
+  getMrCapacitySlotsForDate,
+  MR_REDUCED_CAPACITY_SLOTS,
 } from "../services/mrCapacityForecast";
 import { getLearningTeacherCandidates } from "../services/radiographerLearning";
 
@@ -7484,10 +7486,11 @@ BMD :{{bmd}}
       `${formatShortDate(targetDate)} (${dayNames[targetDate.getDay()]})`;
     const futureStart = addDays(reportDate, 1);
     const futureEnd = addDays(reportDate, 14);
+    const forecastHolidays = db.getHolidays();
     const forecastDays = Array.from({ length: 14 }, (_, index) => ({
       offset: index + 1,
       value: addDays(reportDate, index + 1),
-    })).filter(({ value }) => value.getDay() !== 0);
+    }));
 
     const buildForecastWeek = (
       title: string,
@@ -7507,7 +7510,11 @@ BMD :{{bmd}}
 
           const scheduledSlots = calculateMrScheduledSlots(targetStats);
           const packageComposition = formatMrPackageComposition(targetStats);
-          return `${formatForecastDate(value)}：${formatMrCapacityStatus(calculateMrCapacityForecast(scheduledSlots), packageComposition)}`;
+          const capacitySlots = getMrCapacitySlotsForDate(
+            targetDate,
+            forecastHolidays,
+          );
+          return `${formatForecastDate(value)}：${formatMrCapacityStatus(calculateMrCapacityForecast(scheduledSlots, capacitySlots), packageComposition)}`;
         });
 
       return `${title} (${formatShortDate(weekStart)} - ${formatShortDate(weekEnd)})\n${lines.join("\n")}`;
@@ -7517,7 +7524,8 @@ BMD :{{bmd}}
       `日期：${formatShortDate(reportDate)}`,
       "",
       `未來二週 (${formatShortDate(futureStart)} - ${formatShortDate(futureEnd)}) MR 預約排程`,
-      "滿載基準：96 Slot｜🟢 <75%｜🟡 75%-90%｜🔴 >90%",
+      `滿載基準：平日 96 Slot｜星期日／國定假日 ${MR_REDUCED_CAPACITY_SLOTS} Slot（8折）`,
+      "🟢 <75%｜🟡 75%-90%｜🔴 >90%",
       "",
       buildForecastWeek("第一週", 1, 7),
       "",
