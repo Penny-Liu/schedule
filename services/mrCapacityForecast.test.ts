@@ -4,7 +4,10 @@ import {
   calculateMrScheduledSlots,
   formatMrCapacityStatus,
   formatMrPackageComposition,
+  getMrCapacitySlotsForDate,
+  MR_REDUCED_CAPACITY_SLOTS,
 } from "./mrCapacityForecast";
+import { DateEventType } from "../types";
 
 describe("MR capacity forecast", () => {
   it("calculates MR slots from the synchronized package counts", () => {
@@ -26,6 +29,41 @@ describe("MR capacity forecast", () => {
     expect(calculateMrCapacityForecast(72).level).toBe("yellow");
     expect(calculateMrCapacityForecast(86).level).toBe("yellow");
     expect(calculateMrCapacityForecast(87).level).toBe("red");
+  });
+
+  it("uses an eight-tenths capacity of 77 slots on Sunday", () => {
+    expect(MR_REDUCED_CAPACITY_SLOTS).toBe(77);
+
+    const sundayForecast = calculateMrCapacityForecast(
+      56,
+      MR_REDUCED_CAPACITY_SLOTS,
+    );
+    expect(sundayForecast.capacitySlots).toBe(77);
+    expect(sundayForecast.utilizationPercent).toBe(73);
+    expect(sundayForecast.remainingSlots).toBe(21);
+    expect(sundayForecast.level).toBe("green");
+    expect(sundayForecast.availableLargePackages).toBe(2);
+    expect(sundayForecast.availableSingleRegions).toBe(7);
+  });
+
+  it("uses the reduced capacity on configured national holidays", () => {
+    const holidays = [
+      {
+        date: "2026-08-19",
+        name: "測試國定假日",
+        type: DateEventType.NATIONAL,
+      },
+      {
+        date: "2026-08-20",
+        name: "測試休診",
+        type: DateEventType.CLOSED,
+      },
+    ];
+
+    expect(getMrCapacitySlotsForDate("2026-08-16", [])).toBe(77);
+    expect(getMrCapacitySlotsForDate("2026-08-19", holidays)).toBe(77);
+    expect(getMrCapacitySlotsForDate("2026-08-20", holidays)).toBe(96);
+    expect(getMrCapacitySlotsForDate("2026-08-21", holidays)).toBe(96);
   });
 
   it("shows every MR package type, including zero counts", () => {
