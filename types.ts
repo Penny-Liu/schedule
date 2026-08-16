@@ -97,7 +97,8 @@ export type HMDesignation =
   | "營養師"
   | "醫檢師"
   | "藥師"
-  | "麻護";
+  | "麻護"
+  | "醫務助理";
 
 export interface HealthMgmtStaff {
   id: string;

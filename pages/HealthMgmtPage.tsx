@@ -66,6 +66,7 @@ export const getMatchedGroupId = (sText: string) => {
   const STATION_GROUPS: Record<string, string[]> = {
     H: ["H", "健管", "接待"],
     G: ["G", "腸胃", "診1", "診2", "POR", "流動", "洗滌"],
+    A: ["A", "麻護", "麻", "麻1", "麻2"],
     R: [
       "R",
       "行政",
@@ -335,6 +336,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
     醫檢師: 4,
     藥師: 5,
     麻護: 6,
+    醫務助理: 7,
   };
 
   // Filtered staff list based on reactive state and location
@@ -1139,6 +1141,8 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
         return ["P", "藥師"].some((s) => mainStation.includes(s));
       case "麻護":
         return ["A", "麻"].some((s) => mainStation.includes(s));
+      case "醫務助理":
+        return ["HA", "醫務助理"].some((s) => mainStation.includes(s));
       default:
         return true;
     }
@@ -2759,6 +2763,8 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                 D: "D",
                 M: "M",
                 P: "P",
+                A: "A",
+                HA: "HA",
               };
 
               const getCountsForLocation = (loc: string) => {
@@ -2803,28 +2809,9 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                   }
                 });
 
-                const locAnesShifts = anesthesiaShifts.filter(
-                  (s) => s.date === statsViewDate && s.location === loc,
-                );
-                const uniqueAnesUserIds = new Set<string>();
-                const anesNames: string[] = [];
-                locAnesShifts.forEach((s) => {
-                  if (!uniqueAnesUserIds.has(s.userId)) {
-                    const u = db
-                      .getAnesthesiaStaff()
-                      .find((st) => st.id === s.userId);
-                    if (u && u.isActive !== false) {
-                      uniqueAnesUserIds.add(s.userId);
-                      anesNames.push(u.name);
-                    }
-                  }
-                });
-
                 return {
                   stationCounts,
                   groupNames,
-                  anesCount: uniqueAnesUserIds.size,
-                  anesNames,
                 };
               };
 
@@ -2851,7 +2838,11 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                               ? "bg-white text-teal-700 shadow-sm"
                               : "bg-white/20 text-white/40"
                             : cnt > 0
-                              ? "bg-teal-50 text-teal-700 shadow-sm border border-teal-100"
+                              ? key === "A"
+                                ? "bg-rose-50 text-rose-600 shadow-sm border border-rose-100"
+                                : key === "HA"
+                                  ? "bg-slate-100 text-slate-700 shadow-sm border border-slate-200"
+                                  : "bg-teal-50 text-teal-700 shadow-sm border border-teal-100"
                               : "bg-slate-50 text-slate-300 border border-slate-100"
                         }`}
                       >
@@ -2861,24 +2852,6 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                       </div>
                     );
                   })}
-                  <div
-                    title={
-                      stats.anesNames.length > 0
-                        ? stats.anesNames.join(", ")
-                        : "無排班"
-                    }
-                    className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-black transition-all cursor-help ${
-                      isHeader
-                        ? stats.anesCount > 0
-                          ? "bg-rose-100 text-rose-600 shadow-sm"
-                          : "bg-white/20 text-white/40"
-                        : stats.anesCount > 0
-                          ? "bg-rose-50 text-rose-600 shadow-sm border border-rose-100"
-                          : "bg-slate-50 text-slate-300 border border-slate-100"
-                    }`}
-                  >
-                    <span>A:{stats.anesCount}</span>
-                  </div>
                 </div>
               );
 

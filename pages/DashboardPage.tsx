@@ -74,7 +74,7 @@ import { isUserOnEmploymentPause, toLocalISOString } from "../services/utils";
 import { loadChineseFontToDoc } from "../services/pdfUtils";
 import {
   getAutomaticRadiographerWorkTime,
-  isWeekendOrRadiographerHoliday,
+  getRadiographerWorkDayType,
 } from "../services/radiographerWorkTime";
 import { calculateBmdSlots } from "../services/radiographerSlotCalculations";
 import {
@@ -2149,12 +2149,12 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
         shift.station !== StationDefault.OFF &&
         !shift.station.includes("休"),
     );
-    const isWeekendOrHoliday = isWeekendOrRadiographerHoliday(date, holidays);
+    const workDayType = getRadiographerWorkDayType(date, holidays);
     const updates = shiftsForDate.flatMap((shift) => {
       const workTime = getAutomaticRadiographerWorkTime(
         shift,
         shiftsForDate,
-        isWeekendOrHoliday,
+        workDayType,
         users.find((user) => user.id === shift.userId)?.role ===
           UserRole.RADIOGRAPHER_ASSISTANT,
       );
@@ -2168,9 +2168,12 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
       return;
     }
 
-    const specialDayNote = isWeekendOrHoliday
-      ? "\n此日期為週末或假日，09:00 班別將調整為 08:30。"
-      : "";
+    const specialDayNote =
+      workDayType === "SUNDAY_OR_HOLIDAY"
+        ? "\n此日期為星期日或國定／休診假日：開機 07:00、輔班與 MR1.5T 07:30，其餘放射師 08:00。"
+        : workDayType === "SATURDAY"
+          ? "\n此日期為星期六：場控與晚班調整為 08:30。"
+          : "";
     if (
       !window.confirm(
         `將依目前崗位與特殊任務，自動更新 ${updates.length} 位放射師的上班時間。${specialDayNote}\n\n確定繼續嗎？`,
