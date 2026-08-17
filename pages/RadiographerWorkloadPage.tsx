@@ -49,6 +49,7 @@ type WorkloadFieldKey =
   | "mrLargeFemale"
   | "mrMedium"
   | "mrSmall"
+  | "mrPostProcessing"
   | "us"
   | "usA"
   | "usBreast"
@@ -106,6 +107,7 @@ const workloadFieldMeta: { key: WorkloadFieldKey; label: string }[] = [
   { key: "mrLargeFemale", label: "mr大女" },
   { key: "mrMedium", label: "mr中" },
   { key: "mrSmall", label: "mr小" },
+  { key: "mrPostProcessing", label: "MR後處理" },
   { key: "us", label: "US" },
   { key: "usA", label: "腹" },
   { key: "usBreast", label: "乳" },
@@ -118,7 +120,7 @@ const workloadFieldMeta: { key: WorkloadFieldKey; label: string }[] = [
   { key: "usFibrosis", label: "肝纖" },
   { key: "ct", label: "CT" },
   { key: "cta", label: "CTA" },
-  { key: "ctaPostProcessing", label: "CTA後處理" },
+  { key: "ctaPostProcessing", label: "CT後處理" },
   { key: "dx", label: "DX" },
   { key: "mg", label: "MG" },
   { key: "bmd", label: "BMD" },
@@ -159,6 +161,7 @@ const defaultWorkloadWeights: Record<WorkloadFieldKey, number> = {
   mrLargeFemale: 1,
   mrMedium: 1,
   mrSmall: 1,
+  mrPostProcessing: 1,
   us: 1,
   usA: 1,
   usBreast: 1,
@@ -309,6 +312,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
     "mrLargeFemale",
     "mrMedium",
     "mrSmall",
+    "mrPostProcessing",
     "us",
     "usA",
     "usBreast",
@@ -443,7 +447,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
   const shouldRenderCategorySeparator = (field: WorkloadFieldKey) =>
     [
       "scheduler",
-      "mrSmall",
+      "mrPostProcessing",
       "usFibrosis",
       "ctaPostProcessing",
       "bmd",
@@ -910,6 +914,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
         mrLargeFemale: 0,
         mrMedium: 0,
         mrSmall: 0,
+        mrPostProcessing: 0,
         us: 0,
         usA: 0,
         usBreast: 0,
@@ -1019,6 +1024,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
             "mrLargeFemale",
             "mrMedium",
             "mrSmall",
+            "mrPostProcessing",
             "us",
             "usA",
             "usBreast",
@@ -1065,7 +1071,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
 
         if (userDailyData.length > 0) {
           [
-            "mr", "mrLargeMale", "mrLargeFemale", "mrMedium", "mrSmall",
+            "mr", "mrLargeMale", "mrLargeFemale", "mrMedium", "mrSmall", "mrPostProcessing",
             "us", "usA", "usBreast", "usHeart", "usThy", "usCCA", "usNeck",
             "usPelvisFemale", "usPelvisMale", "usFibrosis", "ct", "cta", "ctaPostProcessing",
             "dx", "mg", "bmd", "reportTyping", "proofreader", "tsmcReport"
@@ -1092,6 +1098,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
       stats.mrLargeFemale += w.mrLargeFemale || w.mr_large_female || 0;
       stats.mrMedium += w.mrMedium || w.mr_medium || 0;
       stats.mrSmall += w.mrSmall || w.mr_small || 0;
+      stats.mrPostProcessing += w.mrPostProcessing || w.mr_post_processing || 0;
       stats.us += w.us || 0;
       stats.usA += w.usA || w.us_a || 0;
       stats.usBreast += w.usBreast || w.us_breast || 0;
@@ -1979,11 +1986,13 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
         "MR(大女)": "mrLargeFemale",
         "MR(中)": "mrMedium",
         "MR(小)": "mrSmall",
+        MR後處理: "mrPostProcessing",
         CT: "ct",
         超音波: "us",
         DX: "dx",
         MG: "mg",
         BMD: "bmd",
+        CT後處理: "ctaPostProcessing",
         CTA後處理: "ctaPostProcessing",
       };
 
@@ -2115,12 +2124,13 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
         { header: "MR(大女)", key: "mrLargeFemale", width: 10 },
         { header: "MR(中)", key: "mrMedium", width: 10 },
         { header: "MR(小)", key: "mrSmall", width: 10 },
+        { header: "MR後處理", key: "mrPostProcessing", width: 12 },
         { header: "CT", key: "ct", width: 10 },
         { header: "超音波", key: "us", width: 10 },
         { header: "DX", key: "dx", width: 10 },
         { header: "MG", key: "mg", width: 10 },
         { header: "BMD", key: "bmd", width: 10 },
-        { header: "CTA後處理", key: "ctaPostProcessing", width: 10 },
+        { header: "CT後處理", key: "ctaPostProcessing", width: 10 },
       ];
 
       // Sort by date, then name
@@ -2132,12 +2142,12 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
       dailyData.forEach((d) => worksheet.addRow(d));
 
       worksheet.spliceRows(1, 0, [], []);
-      styleExcelTitle(worksheet, "每日放射師工作量明細", 13);
-      worksheet.mergeCells(2, 1, 2, 13);
+      styleExcelTitle(worksheet, "每日放射師工作量明細", 14);
+      worksheet.mergeCells(2, 1, 2, 14);
       worksheet.getCell(2, 1).value = `統計區間：${startDate} ~ ${endDate}`;
       worksheet.getCell(2, 1).font = { name: "微軟正黑體", italic: true, color: { argb: "FF475569" } };
       worksheet.getCell(2, 1).alignment = { horizontal: "center", vertical: "middle" };
-      finalizeExcelWorksheet(worksheet, { headerRows: [3], dataStartRow: 4, lastColumn: 13, freezeRows: 3, autoFilter: true });
+      finalizeExcelWorksheet(worksheet, { headerRows: [3], dataStartRow: 4, lastColumn: 14, freezeRows: 3, autoFilter: true });
 
       const buffer = await workbook.xlsx.writeBuffer();
       downloadExcelBuffer(buffer, `每日放射師工作量明細_${startDate}_${endDate}.xlsx`);
@@ -2177,8 +2187,8 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
           : "";
       const titleText = `${y}年 ${mm}月放射師工作量統計（排班週期：${cycleText} (${dateRangeText})）`;
 
-      // 1. 新增第一列 Title (合併 A 到 AL) 38 欄
-      worksheet.mergeCells("A1:AL1");
+      // 1. 新增第一列 Title (合併 A 到 AM) 39 欄
+      worksheet.mergeCells("A1:AM1");
       const titleCell = worksheet.getCell("A1");
       titleCell.value = titleText;
       titleCell.font = { size: 16, bold: true, name: "微軟正黑體" };
@@ -2192,26 +2202,26 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
       worksheet.mergeCells("B2:I2");
       worksheet.getCell("B2").value = "上班天數";
 
-      worksheet.mergeCells("J2:AD2");
+      worksheet.mergeCells("J2:AE2");
       worksheet.getCell("J2").value = "現場工作量";
 
-      worksheet.mergeCells("AE2:AG2");
-      worksheet.getCell("AE2").value = "遠班工作量";
-
-      worksheet.mergeCells("AH2:AH3");
-      worksheet.getCell("AH2").value = "現場加權";
+      worksheet.mergeCells("AF2:AH2");
+      worksheet.getCell("AF2").value = "遠班工作量";
 
       worksheet.mergeCells("AI2:AI3");
-      worksheet.getCell("AI2").value = "遠班加權";
+      worksheet.getCell("AI2").value = "現場加權";
 
       worksheet.mergeCells("AJ2:AJ3");
-      worksheet.getCell("AJ2").value = "總加權";
+      worksheet.getCell("AJ2").value = "遠班加權";
 
       worksheet.mergeCells("AK2:AK3");
-      worksheet.getCell("AK2").value = "教學與學習";
+      worksheet.getCell("AK2").value = "總加權";
 
       worksheet.mergeCells("AL2:AL3");
-      worksheet.getCell("AL2").value = "預估日期";
+      worksheet.getCell("AL2").value = "教學與學習";
+
+      worksheet.mergeCells("AM2:AM3");
+      worksheet.getCell("AM2").value = "預估日期";
 
       // 欄位標題 (Row 3)
       const headersRow3 = [
@@ -2231,6 +2241,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
         "MR大女",
         "MR中",
         "MR小",
+        "MR後處理",
         "腹",
         "乳",
         "心",
@@ -2241,18 +2252,18 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
         "肝纖",
         "CT",
         "CTA",
-        "CTA後處理",
+        "CT後處理",
         "DX",
         "MG",
         "BMD",
         "報告登打",
         "影像校對",
         "台積電報告",
-        "", // AH3
         "", // AI3
         "", // AJ3
         "", // AK3
-        "", // AL3 (merged)
+        "", // AL3
+        "", // AM3 (merged)
       ];
       worksheet.getRow(3).values = headersRow3;
 
@@ -2260,7 +2271,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
       [2, 3].forEach((r) => {
         const row = worksheet.getRow(r);
         row.height = r === 3 ? 35 : 25;
-        for (let i = 1; i <= 38; i++) {
+        for (let i = 1; i <= 39; i++) {
           const cell = row.getCell(i);
           cell.font = {
             bold: true,
@@ -2276,7 +2287,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
 
           // 區塊最後一欄使用粗線劃分
           const isBlockEnd = [
-            1, 9, 12, 16, 24, 30, 33, 34, 35, 36, 37, 38,
+            1, 9, 12, 17, 25, 31, 34, 35, 36, 37, 38, 39,
           ].includes(i);
           cell.border = {
             top: { style: "thin", color: { argb: "FFCCCCCC" } },
@@ -2308,24 +2319,24 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
         pattern: "solid",
         fgColor: { argb: "FFFFF2CC" },
       }; // 淡黃色 - 現場工作量
-      worksheet.getCell("AE2").fill = {
+      worksheet.getCell("AF2").fill = {
         type: "pattern",
         pattern: "solid",
         fgColor: { argb: "FFDDEBF7" },
       }; // 淡藍色 - 遠班工作量
 
-      // 覆寫最後三欄 (Row 2, AH, AI, AJ) 的加權顏色
-      worksheet.getCell("AH2").fill = {
+      // 覆寫三個加權欄位 (Row 2, AI, AJ, AK) 的底色
+      worksheet.getCell("AI2").fill = {
         type: "pattern",
         pattern: "solid",
         fgColor: { argb: "FFFFF2CC" },
       }; // 現場加權 (黃色系)
-      worksheet.getCell("AI2").fill = {
+      worksheet.getCell("AJ2").fill = {
         type: "pattern",
         pattern: "solid",
         fgColor: { argb: "FFDDEBF7" },
       }; // 遠班加權 (藍色系)
-      worksheet.getCell("AJ2").fill = {
+      worksheet.getCell("AK2").fill = {
         type: "pattern",
         pattern: "solid",
         fgColor: { argb: "FFFCE4D6" },
@@ -2374,6 +2385,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
           (row.mrLargeFemale || 0) + ((row as any).mrLargeFemaleTeaching || 0),
           (row.mrMedium || 0) + ((row as any).mrMediumTeaching || 0),
           (row.mrSmall || 0) + ((row as any).mrSmallTeaching || 0),
+          row.mrPostProcessing || 0,
           (row.usA || 0) + ((row as any).usATeaching || 0),
           (row.usBreast || 0) + ((row as any).usBreastTeaching || 0),
           (row.usHeart || 0) + ((row as any).usHeartTeaching || 0),
@@ -2423,7 +2435,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
           };
 
           const isBlockEnd = [
-            1, 9, 12, 16, 24, 30, 33, 34, 35, 36, 37, 38,
+            1, 9, 12, 17, 25, 31, 34, 35, 36, 37, 38, 39,
           ].includes(colNumber);
           cell.border = {
             top: { style: "thin", color: { argb: "FFEEEEEE" } },
@@ -2436,19 +2448,19 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
           };
 
           // 資料列最後三欄顏色
-          if (colNumber === 34) {
+          if (colNumber === 35) {
             cell.fill = {
               type: "pattern",
               pattern: "solid",
               fgColor: { argb: "FFFFF9E6" },
             }; // 極淡黃
-          } else if (colNumber === 35) {
+          } else if (colNumber === 36) {
             cell.fill = {
               type: "pattern",
               pattern: "solid",
               fgColor: { argb: "FFF0F6FA" },
             }; // 極淡藍
-          } else if (colNumber === 36) {
+          } else if (colNumber === 37) {
             cell.fill = {
               type: "pattern",
               pattern: "solid",
@@ -2476,6 +2488,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
         { width: 9 },
         { width: 8 },
         { width: 8 },
+        { width: 12 }, // 17: MR後處理
         { width: 8 },
         { width: 8 },
         { width: 8 },
@@ -2488,16 +2501,16 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
         { width: 8 },
         { width: 8 },
         { width: 8 },
-        { width: 8 }, // 29: MG
-        { width: 8 }, // 30: BMD (J-AD: 現場工作量)
-        { width: 10 }, // 31: 報告登打
-        { width: 10 }, // 32: 影像校對
-        { width: 12 }, // 33: 台積電報告 (AE-AG: 遠班工作量)
-        { width: 12 }, // 34: 現場加權
-        { width: 12 }, // 35: 遠班加權
-        { width: 12 }, // 36: 總加權
-        { width: 30 }, // 37: 教學與學習
-        { width: 20 }, // 38: 預估日期 (AH-AL: 加權, 教學與學習, 預估日期)
+        { width: 8 }, // 30: MG
+        { width: 8 }, // 31: BMD (J-AE: 現場工作量)
+        { width: 10 }, // 32: 報告登打
+        { width: 10 }, // 33: 影像校對
+        { width: 12 }, // 34: 台積電報告 (AF-AH: 遠班工作量)
+        { width: 12 }, // 35: 現場加權
+        { width: 12 }, // 36: 遠班加權
+        { width: 12 }, // 37: 總加權
+        { width: 30 }, // 38: 教學與學習
+        { width: 20 }, // 39: 預估日期 (AI-AM)
       ];
 
       // --- 第二個工作表：排序 ---
@@ -2693,8 +2706,9 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
           "",
           "",
           "",
+          "",
         ]);
-        worksheet3.mergeCells(titleRow.number, 1, titleRow.number, 14);
+        worksheet3.mergeCells(titleRow.number, 1, titleRow.number, 15);
         applyHeaderStyle(titleRow, "FFDDEBF7");
         titleRow.getCell(1).alignment = {
           vertical: "middle",
@@ -2708,9 +2722,10 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
           "現場單位",
           "場控天數",
           "MR",
+          "MR後處理",
           "US",
           "CT+CTA",
-          "CTA後處理",
+          "CT後處理",
           "BMD+DX+MG",
           "影像校對",
           "報告登打",
@@ -2720,20 +2735,20 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
         ]);
         applyHeaderStyle(colHeaderRow, "FFF2F2F2");
 
-        // 將現場單位與其附件(場控/MR/US/CT+CTA/CTA後/BMD+DX+MG/影像校對/報告登打)上黃色，遠班上藍色，總單位上橘色
-        for (let i = 3; i <= 11; i++) {
+        // 將現場單位與其附件上黃色，遠班上藍色，總單位上橘色
+        for (let i = 3; i <= 12; i++) {
           colHeaderRow.getCell(i).fill = {
             type: "pattern",
             pattern: "solid",
             fgColor: { argb: "FFFFF2CC" },
           };
         }
-        colHeaderRow.getCell(12).fill = {
+        colHeaderRow.getCell(13).fill = {
           type: "pattern",
           pattern: "solid",
           fgColor: { argb: "FFDDEBF7" },
         };
-        colHeaderRow.getCell(13).fill = {
+        colHeaderRow.getCell(14).fill = {
           type: "pattern",
           pattern: "solid",
           fgColor: { argb: "FFFCE4D6" },
@@ -2756,6 +2771,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
           );
 
           const mrTotal = row.mr || 0;
+          const mrPostTotal = row.mrPostProcessing || 0;
           const usTotal = row.us || 0;
           const ctCtaTotal = (row.ct || 0) + (row.cta || 0);
           const ctaPostTotal = row.ctaPostProcessing || 0;
@@ -2801,6 +2817,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
             onsite,
             row.floorControl || 0,
             mrTotal,
+            mrPostTotal,
             usTotal,
             ctCtaTotal,
             ctaPostTotal,
@@ -2841,9 +2858,10 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
         { width: 10 }, // 現場單位
         { width: 10 }, // 場控天數
         { width: 10 }, // MR
+        { width: 14 }, // MR後處理
         { width: 10 }, // US
         { width: 12 }, // CT+CTA
-        { width: 14 }, // CTA後處理
+        { width: 14 }, // CT後處理
         { width: 16 }, // BMD+DX+MG
         { width: 14 }, // 影像校對
         { width: 14 }, // 報告登打
@@ -3101,9 +3119,9 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
         addTextRow("• 院務協助，如督考、評鑑…");
       }
 
-      finalizeExcelWorksheet(worksheet, { headerRows: [2, 3], dataStartRow: 4, lastColumn: 38, freezeRows: 3, autoFilter: false, alternatingRows: false });
+      finalizeExcelWorksheet(worksheet, { headerRows: [2, 3], dataStartRow: 4, lastColumn: 39, freezeRows: 3, autoFilter: false, alternatingRows: false });
       finalizeExcelWorksheet(worksheet2, { headerRows: [], dataStartRow: 1, lastColumn: 6, freezeRows: 0, freezeColumns: 0, autoFilter: false, alternatingRows: false });
-      finalizeExcelWorksheet(worksheet3, { headerRows: [], dataStartRow: 1, lastColumn: 14, freezeRows: 0, freezeColumns: 0, autoFilter: false, alternatingRows: false });
+      finalizeExcelWorksheet(worksheet3, { headerRows: [], dataStartRow: 1, lastColumn: 15, freezeRows: 0, freezeColumns: 0, autoFilter: false, alternatingRows: false });
       const ws4 = workbook.getWorksheet("劉雅萍");
       if (ws4) finalizeExcelWorksheet(ws4, { headerRows: [], dataStartRow: 1, lastColumn: 6, freezeRows: 0, freezeColumns: 0, autoFilter: false, alternatingRows: false });
       const buffer = await workbook.xlsx.writeBuffer();

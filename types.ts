@@ -500,6 +500,7 @@ export interface RadiographerWorkload {
   mrLargeFemale: number;
   mrMedium: number;
   mrSmall: number;
+  mrPostProcessing: number;
   us: number;
   usA: number;
   usBreast: number;
