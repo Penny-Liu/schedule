@@ -6,6 +6,7 @@ export const DAILY_WORKLOAD_FIELD_KEYS = [
   "mrLargeFemale",
   "mrMedium",
   "mrSmall",
+  "mrPostProcessing",
   "us",
   "usA",
   "usBreast",

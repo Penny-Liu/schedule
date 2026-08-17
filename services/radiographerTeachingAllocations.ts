@@ -18,7 +18,7 @@ export const TEACHING_WORKLOAD_FIELDS = [
   { key: "usFibrosis", label: "肝纖" },
   { key: "ct", label: "CT" },
   { key: "cta", label: "CTA" },
-  { key: "ctaPostProcessing", label: "CTA後處理" },
+  { key: "ctaPostProcessing", label: "CT後處理" },
   { key: "dx", label: "DX" },
   { key: "mg", label: "MG" },
   { key: "bmd", label: "BMD" },

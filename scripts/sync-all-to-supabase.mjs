@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { getSalesforceSession, runSoqlQuery } from "./salesforce-utils.mjs";
 import { omitManualDailyWorkloadFields } from "./radiographer-daily-sync.mjs";
 import { isBmdMedicalOrder } from "./daily-stats-counting.mjs";
+import { getPostProcessingWorkloadField } from "./post-processing-classification.mjs";
 import readline from "readline";
 import { fileURLToPath } from "url";
 
@@ -417,6 +418,7 @@ export async function syncRadiographerWorkload(session, startDate, endDate) {
         bmd_teaching: 0,
         imageProofing: 0,
         cta_post_processing: 0,
+        mr_post_processing: 0,
         report_entry: 0,
       };
     }
@@ -456,6 +458,7 @@ export async function syncRadiographerWorkload(session, startDate, endDate) {
         bmd: 0,
         image_proofing: 0,
         cta_post_processing: 0,
+        mr_post_processing: 0,
         report_entry: 0
       };
     }
@@ -491,7 +494,7 @@ export async function syncRadiographerWorkload(session, startDate, endDate) {
           "mr", "mr_large_male", "mr_large_female", "mr_medium", "mr_small",
           "us", "us_a", "us_breast", "us_heart", "us_thy", "us_cca", "us_neck", 
           "us_pelvis_female", "us_pelvis_male", "us_fibrosis",
-          "ct", "cta", "cta_post_processing", "dx", "mg", "bmd", "report_entry"
+          "ct", "cta", "cta_post_processing", "mr_post_processing", "dx", "mg", "bmd", "report_entry"
         ].forEach(k => dWorkload[k] = 0);
       }
       if (isDateInCycle(rec.radiographer_name, rec.date, "proofing")) {
@@ -772,11 +775,11 @@ export async function syncRadiographerWorkload(session, startDate, endDate) {
     }
   });
 
-  // 2.5 CTA 後處理
+  // 2.5 CT / MR 後處理：Salesforce 共用同一個人員欄位，依資源類別拆分
   console.log(
-    `[sync-stats]   - [SOQL] 正在查詢 'CTA後處理' (CheckupReservation__c)...`,
+    `[sync-stats]   - [SOQL] 正在查詢 'CT/MR後處理' (CheckupReservation__c)...`,
   );
-  const ctaPostSoql = `SELECT CTA_Further_Rad__r.Name, Order__c, Order__r.ReserveDate__c 
+  const ctaPostSoql = `SELECT CTA_Further_Rad__r.Name, Order__c, Order__r.ReserveDate__c, ResourceCategory__c
                    FROM CheckupReservation__c 
                    WHERE (Order__r.ReserveDate__c >= ${soqlStartDate} AND Order__r.ReserveDate__c <= ${soqlEndDate}) 
                    AND CTA_Further_Rad__c != null 
@@ -787,25 +790,41 @@ export async function syncRadiographerWorkload(session, startDate, endDate) {
     soql: ctaPostSoql,
   });
   
-  const ctaPostOrders = new Set();
+  const postProcessingOrders = new Set();
+  const skippedPostProcessingCategories = new Map();
   (ctaPostData.records || []).forEach((rec) => {
     const rawName = rec.CTA_Further_Rad__r?.Name;
     const orderId = rec.Order__c;
     const date = rec.Order__r?.ReserveDate__c;
+    const workloadField = getPostProcessingWorkloadField(rec.ResourceCategory__c);
     const cleanName = findNameInPath([rawName], validNamesMap);
     if (cleanName === "Unknown" || !workloadMap[cleanName] || !orderId) return;
     if (!isDateInCycle(cleanName, date, "normal")) return;
+    if (!workloadField) {
+      const category = String(rec.ResourceCategory__c || "未設定");
+      skippedPostProcessingCategories.set(
+        category,
+        (skippedPostProcessingCategories.get(category) || 0) + 1,
+      );
+      return;
+    }
     
-    // We want COUNT_DISTINCT(Order__c) per person
-    const key = `${cleanName}_${orderId}`;
-    if (!ctaPostOrders.has(key)) {
-      ctaPostOrders.add(key);
-      workloadMap[cleanName].cta_post_processing += 1;
+    // 同一人、同一資源類別、同一醫令只計一次。
+    const key = `${workloadField}_${cleanName}_${orderId}`;
+    if (!postProcessingOrders.has(key)) {
+      postProcessingOrders.add(key);
+      workloadMap[cleanName][workloadField] += 1;
       
       const dWorkload = ensureDailyUser(date, cleanName);
-      if (dWorkload) dWorkload.cta_post_processing += 1;
+      if (dWorkload) dWorkload[workloadField] += 1;
     }
   });
+  if (skippedPostProcessingCategories.size > 0) {
+    console.warn(
+      "[sync-stats] ⚠️ 已略過無法判定 CT/MR 的後處理資料：",
+      Object.fromEntries(skippedPostProcessingCategories),
+    );
+  }
 
   // 3. 影像校對
   console.log(`[sync-stats]   - [SOQL] 正在查詢 '影像校對' (Order__c)...`);
@@ -882,7 +901,8 @@ export async function syncRadiographerWorkload(session, startDate, endDate) {
           mr: 0, mr_large_male: 0, mr_large_female: 0, mr_medium: 0, mr_small: 0,
           us: 0, us_a: 0, us_breast: 0, us_heart: 0, us_thy: 0, us_cca: 0, us_neck: 0,
           us_pelvis_female: 0, us_pelvis_male: 0, us_fibrosis: 0,
-          ct: 0, cta: 0, dx: 0, mg: 0, bmd: 0, report_entry: 0, image_proofing: 0
+          ct: 0, cta: 0, cta_post_processing: 0, mr_post_processing: 0,
+          dx: 0, mg: 0, bmd: 0, report_entry: 0, image_proofing: 0
         };
       } else {
         const sfData = dailyWorkloadMap[row.date][row.radiographer_name];

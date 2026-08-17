@@ -36,6 +36,16 @@ describe("daily radiographer workload editing", () => {
     expect(records[0]).toMatchObject({ tsmcReport: 0 });
   });
 
+  it("saves a changed MR post-processing value", () => {
+    const records = buildChangedDailyWorkloadRecords(
+      "2026-08-11",
+      [{ name: "甲", mrPostProcessing: 3 }],
+      [{ name: "甲", mrPostProcessing: 0 }],
+    );
+
+    expect(records[0]).toMatchObject({ mrPostProcessing: 3 });
+  });
+
   it("does not save unchanged rows", () => {
     expect(
       buildChangedDailyWorkloadRecords(
