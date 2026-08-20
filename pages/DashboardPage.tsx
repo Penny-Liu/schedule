@@ -83,7 +83,6 @@ import {
   formatMrCapacityStatus,
   formatMrPackageComposition,
   getMrCapacitySlotsForDate,
-  MR_REDUCED_CAPACITY_SLOTS,
 } from "../services/mrCapacityForecast";
 import { getLearningTeacherCandidates } from "../services/radiographerLearning";
 
@@ -7361,7 +7360,8 @@ BMD :{{bmd}}
 
     // Load Rate Calculation Function
     const getLoadRateStr = (demand: number, supply: number) => {
-      const formatStr = (rStr: string) => `負載 ${rStr} ｜ Slot ${r(demand)} ｜ T值 ${r(supply)}`;
+      const formatStr = (rStr: string) =>
+        `S/T ${rStr} ｜ Slot ${r(demand)} ｜ T值 ${r(supply)}`;
       if (supply === 0) return demand > 0 ? { emoji: "🔴", text: formatStr("100%") } : { emoji: "🟢", text: formatStr("0%") };
       const rate = (demand / supply) * 100;
       const rateStr = rate.toFixed(1) + "%";
@@ -7494,6 +7494,19 @@ BMD :{{bmd}}
       offset: index + 1,
       value: addDays(reportDate, index + 1),
     }));
+    const highlightedForecastDateLabels = forecastDays
+      .filter(({ value }) => {
+        const targetDate = toLocalISOString(value);
+        return (
+          value.getDay() === 0 ||
+          forecastHolidays.some(
+            (holiday) =>
+              holiday.date === targetDate &&
+              holiday.type === DateEventType.NATIONAL,
+          )
+        );
+      })
+      .map(({ value }) => formatForecastDate(value));
 
     const buildForecastWeek = (
       title: string,
@@ -7520,15 +7533,14 @@ BMD :{{bmd}}
           return `${formatForecastDate(value)}：${formatMrCapacityStatus(calculateMrCapacityForecast(scheduledSlots, capacitySlots), packageComposition)}`;
         });
 
-      return `${title} (${formatShortDate(weekStart)} - ${formatShortDate(weekEnd)})\n${lines.join("\n")}`;
+      return `${title} (${formatShortDate(weekStart)} - ${formatShortDate(weekEnd)})\n${lines.join("\n\n")}`;
     };
 
     const section6 = [
       `日期：${formatShortDate(reportDate)}`,
       "",
       `未來二週 (${formatShortDate(futureStart)} - ${formatShortDate(futureEnd)}) MR 預約排程`,
-      `滿載基準：平日 96 Slot｜星期日／國定假日 ${MR_REDUCED_CAPACITY_SLOTS} Slot（8折）`,
-      "🟢 <75%｜🟡 75%-90%｜🔴 >90%",
+      "MR運用率 1台1小時6 Slot",
       "",
       buildForecastWeek("第一週", 1, 7),
       "",
@@ -7545,6 +7557,7 @@ BMD :{{bmd}}
       section4,
       section5,
       section6,
+      section6HighlightedDateLabels: highlightedForecastDateLabels,
     };
   }, [date, shifts, manpower, users, stats, doctorShifts, physicianWorkload]);
 
@@ -7720,12 +7733,45 @@ BMD :{{bmd}}
               <Copy size={12} /> 複製
             </button>
           </div>
-          <textarea
-            className="w-full text-sm font-mono text-slate-700 bg-transparent outline-none resize-none leading-relaxed"
-            style={{ minHeight: "34rem" }}
-            readOnly
-            value={copyText.section6}
-          />
+          <div
+            className="w-full min-h-[34rem] text-sm font-mono text-slate-700 bg-transparent leading-relaxed whitespace-pre-wrap"
+            aria-label="未來二週 MR 排程內容"
+          >
+            {copyText.section6.split("\n").map((line, index) => {
+              const dateMatch = line.match(
+                /^(\d{1,2}\/\d{1,2} )(\([一二三四五六日]\))(：.*)$/,
+              );
+              const shouldHighlightWeekday =
+                !!dateMatch &&
+                copyText.section6HighlightedDateLabels.some((label) =>
+                  line.startsWith(`${label}：`),
+                );
+              const isAvailableLine = line.startsWith("➕【可再安插】");
+
+              return (
+                <div
+                  key={`${index}-${line}`}
+                  className={
+                    isAvailableLine
+                      ? "font-semibold text-emerald-700"
+                      : undefined
+                  }
+                >
+                  {shouldHighlightWeekday && dateMatch ? (
+                    <>
+                      <span>{dateMatch[1]}</span>
+                      <span className="font-bold text-red-600">
+                        {dateMatch[2]}
+                      </span>
+                      <span>{dateMatch[3]}</span>
+                    </>
+                  ) : (
+                    line || "\u00a0"
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
     </div>

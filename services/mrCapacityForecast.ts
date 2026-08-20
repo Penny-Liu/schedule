@@ -7,6 +7,7 @@ export const MR_REDUCED_CAPACITY_SLOTS = Math.round(
 );
 export const MR_LARGE_PACKAGE_SLOTS = 9;
 export const MR_SINGLE_REGION_SLOTS = 3;
+export const MR_SCHEDULING_TARGET_RATE = 0.9;
 
 export type MrCapacityLevel = "green" | "yellow" | "red";
 
@@ -14,6 +15,8 @@ export interface MrCapacityForecast {
   capacitySlots: number;
   scheduledSlots: number;
   remainingSlots: number;
+  schedulingLimitSlots: number;
+  schedulableSlots: number;
   utilizationPercent: number;
   level: MrCapacityLevel;
   emoji: "🟢" | "🟡" | "🔴";
@@ -69,6 +72,11 @@ export const calculateMrCapacityForecast = (
     Math.round(Number(capacitySlots) || MR_FULL_CAPACITY_SLOTS),
   );
   const remainingSlots = Math.max(0, normalizedCapacity - normalizedSlots);
+  const schedulingLimitSlots = normalizedCapacity * MR_SCHEDULING_TARGET_RATE;
+  const schedulableSlots = Math.max(
+    0,
+    schedulingLimitSlots - normalizedSlots,
+  );
   const utilizationPercent = Math.round(
     (normalizedSlots / normalizedCapacity) * 100,
   );
@@ -84,14 +92,16 @@ export const calculateMrCapacityForecast = (
     capacitySlots: normalizedCapacity,
     scheduledSlots: normalizedSlots,
     remainingSlots,
+    schedulingLimitSlots,
+    schedulableSlots,
     utilizationPercent,
     level,
     emoji: level === "green" ? "🟢" : level === "yellow" ? "🟡" : "🔴",
     availableLargePackages: Math.floor(
-      remainingSlots / MR_LARGE_PACKAGE_SLOTS,
+      schedulableSlots / MR_LARGE_PACKAGE_SLOTS,
     ),
     availableSingleRegions: Math.floor(
-      remainingSlots / MR_SINGLE_REGION_SLOTS,
+      schedulableSlots / MR_SINGLE_REGION_SLOTS,
     ),
   };
 };
@@ -100,21 +110,19 @@ export const formatMrCapacityStatus = (
   forecast: MrCapacityForecast,
   packageComposition?: string,
 ): string => {
-  const summary = `${forecast.emoji} ${forecast.utilizationPercent}% (已排 ${forecast.scheduledSlots} Slot)`;
+  const summary = `運用率${forecast.utilizationPercent}% (已排 ${forecast.scheduledSlots} Slot)`;
   const lines = [summary];
 
   if (packageComposition) {
-    lines.push(`- ${packageComposition}`);
+    lines.push(`排程：${packageComposition.replaceAll(" ", "")}`);
   }
 
-  if (forecast.level === "red") {
-    lines.push(
-      `- 滿載控管，僅餘特案 ${forecast.availableSingleRegions} 單部位`,
-    );
-  } else {
-    lines.push(
-      `- 可安插 ${forecast.availableLargePackages} 大套或 ${forecast.availableSingleRegions} 單部位`,
-    );
+  const availability = `${forecast.availableLargePackages}大套或${forecast.availableSingleRegions}單部位`;
+  if (
+    forecast.availableLargePackages > 0 ||
+    forecast.availableSingleRegions > 0
+  ) {
+    lines.push(`➕【可再安插】${availability}`);
   }
 
   return lines.join("\n");
