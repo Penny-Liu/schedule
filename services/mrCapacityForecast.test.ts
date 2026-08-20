@@ -42,8 +42,9 @@ describe("MR capacity forecast", () => {
     expect(sundayForecast.utilizationPercent).toBe(73);
     expect(sundayForecast.remainingSlots).toBe(21);
     expect(sundayForecast.level).toBe("green");
-    expect(sundayForecast.availableLargePackages).toBe(2);
-    expect(sundayForecast.availableSingleRegions).toBe(7);
+    expect(sundayForecast.schedulingLimitSlots).toBeCloseTo(69.3);
+    expect(sundayForecast.availableLargePackages).toBe(1);
+    expect(sundayForecast.availableSingleRegions).toBe(4);
   });
 
   it("uses the reduced capacity on configured national holidays", () => {
@@ -80,7 +81,7 @@ describe("MR capacity forecast", () => {
     expect(composition).toBe("3 男大、4 女大、0 中、2 小");
     expect(
       formatMrCapacityStatus(calculateMrCapacityForecast(69), composition),
-    ).toContain("\n- 3 男大、4 女大、0 中、2 小\n");
+    ).toContain("\n排程：3男大、4女大、0中、2小\n");
     expect(
       formatMrCapacityStatus(calculateMrCapacityForecast(69), composition),
     ).not.toContain("已排組成");
@@ -90,16 +91,18 @@ describe("MR capacity forecast", () => {
     const forecast = calculateMrCapacityForecast(69);
 
     expect(forecast.remainingSlots).toBe(27);
-    expect(forecast.availableLargePackages).toBe(3);
-    expect(forecast.availableSingleRegions).toBe(9);
+    expect(forecast.schedulingLimitSlots).toBeCloseTo(86.4);
+    expect(forecast.schedulableSlots).toBeCloseTo(17.4);
+    expect(forecast.availableLargePackages).toBe(1);
+    expect(forecast.availableSingleRegions).toBe(5);
     expect(formatMrCapacityStatus(forecast)).toBe(
-      "🟢 72% (已排 69 Slot)\n- 可安插 3 大套或 9 單部位",
+      "運用率72% (已排 69 Slot)\n➕【可再安插】1大套或5單部位",
     );
   });
 
-  it("uses strict-control wording for red capacity", () => {
-    expect(formatMrCapacityStatus(calculateMrCapacityForecast(90))).toBe(
-      "🔴 94% (已排 90 Slot)\n- 滿載控管，僅餘特案 2 單部位",
+  it("does not recommend additions beyond the ninety-percent target", () => {
+    expect(formatMrCapacityStatus(calculateMrCapacityForecast(84))).toBe(
+      "運用率88% (已排 84 Slot)",
     );
   });
 });
