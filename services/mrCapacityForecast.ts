@@ -54,13 +54,19 @@ export const getMrCapacitySlotsForDate = (
 
 export const formatMrPackageComposition = (
   stats: DailyManpowerStats,
-): string =>
-  [
-    `${normalizeCount(stats.beitou_mr_large_male)} 男大`,
-    `${normalizeCount(stats.beitou_mr_large_female)} 女大`,
-    `${normalizeCount(stats.beitou_mr_medium)} 中`,
-    `${normalizeCount(stats.beitou_mr_small)} 小`,
-  ].join("、");
+): string => {
+  const packageCounts = [
+    [normalizeCount(stats.beitou_mr_large_male), "男大"],
+    [normalizeCount(stats.beitou_mr_large_female), "女大"],
+    [normalizeCount(stats.beitou_mr_medium), "中"],
+    [normalizeCount(stats.beitou_mr_small), "小"],
+  ] as const;
+
+  return packageCounts
+    .filter(([count]) => count > 0)
+    .map(([count, label]) => `${count} ${label}`)
+    .join("、");
+};
 
 export const calculateMrCapacityForecast = (
   scheduledSlots: number,
@@ -110,11 +116,17 @@ export const formatMrCapacityStatus = (
   forecast: MrCapacityForecast,
   packageComposition?: string,
 ): string => {
-  const summary = `運用率${forecast.utilizationPercent}% (已排 ${forecast.scheduledSlots} Slot)`;
+  const summary = `運用率${forecast.utilizationPercent}% (${forecast.scheduledSlots} Slot)`;
   const lines = [summary];
 
   if (packageComposition) {
-    lines.push(`排程：${packageComposition.replaceAll(" ", "")}`);
+    lines.push(
+      "排程：",
+      `- ${packageComposition
+        .split("、")
+        .map((item) => item.replaceAll(" ", ""))
+        .join("  ")}`,
+    );
   }
 
   const availability = `${forecast.availableLargePackages}大套或${forecast.availableSingleRegions}單部位`;
@@ -122,7 +134,7 @@ export const formatMrCapacityStatus = (
     forecast.availableLargePackages > 0 ||
     forecast.availableSingleRegions > 0
   ) {
-    lines.push(`➕【可再安插】${availability}`);
+    lines.push(`- 再安插${availability}`);
   }
 
   return lines.join("\n");

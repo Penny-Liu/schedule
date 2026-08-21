@@ -7487,6 +7487,10 @@ BMD :{{bmd}}
       `${targetDate.getMonth() + 1}/${targetDate.getDate()}`;
     const formatForecastDate = (targetDate: Date) =>
       `${formatShortDate(targetDate)} (${dayNames[targetDate.getDay()]})`;
+    const formatForecastDay = (targetDate: Date) => {
+      const weekdayNumber = targetDate.getDay() === 0 ? 7 : targetDate.getDay();
+      return `${targetDate.getDate()} w${weekdayNumber}`;
+    };
     const futureStart = addDays(reportDate, 1);
     const futureEnd = addDays(reportDate, 14);
     const forecastHolidays = db.getHolidays();
@@ -7506,7 +7510,7 @@ BMD :{{bmd}}
           )
         );
       })
-      .map(({ value }) => formatForecastDate(value));
+      .map(({ value }) => formatForecastDay(value));
 
     const buildForecastWeek = (
       title: string,
@@ -7521,7 +7525,7 @@ BMD :{{bmd}}
           const targetDate = toLocalISOString(value);
           const targetStats = db.getDailyStats(targetDate);
           if (!targetStats) {
-            return `${formatForecastDate(value)}：⚪ 尚無排程資料`;
+            return `${formatForecastDay(value)}  ⚪ 尚無排程資料`;
           }
 
           const scheduledSlots = calculateMrScheduledSlots(targetStats);
@@ -7530,17 +7534,17 @@ BMD :{{bmd}}
             targetDate,
             forecastHolidays,
           );
-          return `${formatForecastDate(value)}：${formatMrCapacityStatus(calculateMrCapacityForecast(scheduledSlots, capacitySlots), packageComposition)}`;
+          return `${formatForecastDay(value)}  ${formatMrCapacityStatus(calculateMrCapacityForecast(scheduledSlots, capacitySlots), packageComposition)}`;
         });
 
       return `${title} (${formatShortDate(weekStart)} - ${formatShortDate(weekEnd)})\n${lines.join("\n\n")}`;
     };
 
     const section6 = [
-      `日期：${formatShortDate(reportDate)}`,
-      "",
-      `未來二週 (${formatShortDate(futureStart)} - ${formatShortDate(futureEnd)}) MR 預約排程`,
-      "MR運用率 1台1小時6 Slot",
+      formatForecastDate(reportDate),
+      `未來2週 (${formatShortDate(futureStart)} - ${formatShortDate(futureEnd)})`,
+      "MR 預約排程 /MR運用率",
+      "1台1小時 6 Slot",
       "",
       buildForecastWeek("第一週", 1, 7),
       "",
@@ -7739,14 +7743,14 @@ BMD :{{bmd}}
           >
             {copyText.section6.split("\n").map((line, index) => {
               const dateMatch = line.match(
-                /^(\d{1,2}\/\d{1,2} )(\([一二三四五六日]\))(：.*)$/,
+                /^(\d{1,2} )(w[1-7])(\s{2}.*)$/,
               );
               const shouldHighlightWeekday =
                 !!dateMatch &&
                 copyText.section6HighlightedDateLabels.some((label) =>
-                  line.startsWith(`${label}：`),
+                  line.startsWith(`${label}  `),
                 );
-              const isAvailableLine = line.startsWith("➕【可再安插】");
+              const isAvailableLine = line.startsWith("- 再安插");
 
               return (
                 <div

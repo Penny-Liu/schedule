@@ -67,7 +67,7 @@ describe("MR capacity forecast", () => {
     expect(getMrCapacitySlotsForDate("2026-08-21", holidays)).toBe(96);
   });
 
-  it("shows every MR package type, including zero counts", () => {
+  it("omits MR package types with zero counts", () => {
     const composition = formatMrPackageComposition({
         beitou_clients: 0,
         beitou_cta: 0,
@@ -78,10 +78,10 @@ describe("MR capacity forecast", () => {
         beitou_mr_small: 2,
       });
 
-    expect(composition).toBe("3 男大、4 女大、0 中、2 小");
+    expect(composition).toBe("3 男大、4 女大、2 小");
     expect(
       formatMrCapacityStatus(calculateMrCapacityForecast(69), composition),
-    ).toContain("\n排程：3男大、4女大、0中、2小\n");
+    ).toContain("\n排程：\n- 3男大  4女大  2小\n");
     expect(
       formatMrCapacityStatus(calculateMrCapacityForecast(69), composition),
     ).not.toContain("已排組成");
@@ -96,13 +96,13 @@ describe("MR capacity forecast", () => {
     expect(forecast.availableLargePackages).toBe(1);
     expect(forecast.availableSingleRegions).toBe(5);
     expect(formatMrCapacityStatus(forecast)).toBe(
-      "運用率72% (已排 69 Slot)\n➕【可再安插】1大套或5單部位",
+      "運用率72% (69 Slot)\n- 再安插1大套或5單部位",
     );
   });
 
   it("does not recommend additions beyond the ninety-percent target", () => {
     expect(formatMrCapacityStatus(calculateMrCapacityForecast(84))).toBe(
-      "運用率88% (已排 84 Slot)",
+      "運用率88% (84 Slot)",
     );
   });
 });
