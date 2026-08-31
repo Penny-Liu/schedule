@@ -1532,8 +1532,8 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
 {{imaging_doctors}}
 
 放射師人力
-北投：{{beitou_count}} (客戶：{{beitou_clients}}  CTA  {{beitou_cta}})
-BU領頭 場控：{{floor_control}}
+北投：{{beitou_count}} (客戶：{{beitou_clients}}  CTA：{{beitou_cta}})
+場控：{{floor_control}}
 MR : {{mr}}
 US：{{us}}
 CT: {{ct}}
