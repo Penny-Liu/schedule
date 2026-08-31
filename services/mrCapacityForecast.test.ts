@@ -1,15 +1,45 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildMrForecastWeekRanges,
   calculateMrCapacityForecast,
   calculateMrScheduledSlots,
   formatMrCapacityStatus,
+  formatMrForecastDay,
   formatMrPackageComposition,
   getMrCapacitySlotsForDate,
+  MR_FORECAST_DAYS,
   MR_REDUCED_CAPACITY_SLOTS,
 } from "./mrCapacityForecast";
 import { DateEventType } from "../types";
 
 describe("MR capacity forecast", () => {
+  it("covers the next thirty days", () => {
+    expect(MR_FORECAST_DAYS).toBe(30);
+  });
+
+  it("groups future dates into Sunday-to-Saturday weeks without past dates", () => {
+    expect(buildMrForecastWeekRanges(new Date(2026, 7, 31))).toEqual([
+      { title: "本週", startOffset: 1, endOffset: 5 },
+      { title: "第二週", startOffset: 6, endOffset: 12 },
+      { title: "第三週", startOffset: 13, endOffset: 19 },
+      { title: "第四週", startOffset: 20, endOffset: 26 },
+      { title: "第五週", startOffset: 27, endOffset: 30 },
+    ]);
+  });
+
+  it("starts a new forecast week on Sunday when the report date is Saturday", () => {
+    expect(buildMrForecastWeekRanges(new Date(2026, 8, 5), 8)).toEqual([
+      { title: "第一週", startOffset: 1, endOffset: 7 },
+      { title: "第二週", startOffset: 8, endOffset: 8 },
+    ]);
+  });
+
+  it("includes the month in each forecast date label", () => {
+    expect(formatMrForecastDay(new Date(2026, 8, 1))).toBe("9/1 w2");
+    expect(formatMrForecastDay(new Date(2026, 9, 1))).toBe("10/1 w4");
+    expect(formatMrForecastDay(new Date(2026, 8, 6))).toBe("9/6 w7");
+  });
+
   it("calculates MR slots from the synchronized package counts", () => {
     expect(
       calculateMrScheduledSlots({
@@ -98,6 +128,18 @@ describe("MR capacity forecast", () => {
     expect(formatMrCapacityStatus(forecast)).toBe(
       "運用率72% (69 Slot)\n- 再安插1大套或5單部位",
     );
+  });
+
+  it("adds a fire marker only when utilization is below fifty percent", () => {
+    expect(formatMrCapacityStatus(calculateMrCapacityForecast(47))).toContain(
+      "🔥 運用率49%",
+    );
+    expect(formatMrCapacityStatus(calculateMrCapacityForecast(48))).not.toContain(
+      "🔥",
+    );
+    expect(
+      formatMrCapacityStatus(calculateMrCapacityForecast(38, 77)),
+    ).toContain("🔥 運用率49%");
   });
 
   it("does not recommend additions beyond the ninety-percent target", () => {

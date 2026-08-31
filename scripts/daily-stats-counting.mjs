@@ -15,3 +15,16 @@ export const isBmdMedicalOrder = (record = {}) => {
 
 export const countBmdMedicalOrders = (records = []) =>
   records.filter(isBmdMedicalOrder).length;
+
+export const isUltrasoundOrder = (record = {}) =>
+  String(record.CheckupName__c || "").includes("超音波");
+
+export const getDatedClientKey = (record = {}) =>
+  `${record.CheckStartDate__c || ""}_${record.MedicalRecordNo__c || record.Order__c || ""}`;
+
+export const addDatedClientIfNew = (seenClientKeys, record = {}) => {
+  const clientKey = getDatedClientKey(record);
+  if (seenClientKeys.has(clientKey)) return false;
+  seenClientKeys.add(clientKey);
+  return true;
+};
