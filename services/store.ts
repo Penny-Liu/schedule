@@ -3934,6 +3934,7 @@ class Store {
       dazhi_metabolism_clients: 0,
       beitou_gi: 0,
       beitou_mr: 0,
+      beitou_ultrasound_clients: 0,
       dazhi_gi: 0,
       beitou_total: 0,
     };

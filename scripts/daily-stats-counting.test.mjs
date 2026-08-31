@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  addDatedClientIfNew,
   countBmdMedicalOrders,
+  getDatedClientKey,
   isBmdMedicalOrder,
+  isUltrasoundOrder,
 } from "./daily-stats-counting.mjs";
 
 describe("daily stats BMD medical-order counting", () => {
@@ -40,5 +43,31 @@ describe("daily stats BMD medical-order counting", () => {
         CheckupName__c: "骨盆腔超音波(女)",
       }),
     ).toBe(false);
+  });
+
+  it("identifies ultrasound orders and builds a daily client deduplication key", () => {
+    const firstOrder = {
+      CheckStartDate__c: "2026-08-31",
+      MedicalRecordNo__c: "P001",
+      Order__c: "O001",
+      CheckupName__c: "腹部超音波",
+    };
+    const secondOrderForSameClient = {
+      ...firstOrder,
+      Order__c: "O002",
+      CheckupName__c: "甲狀腺超音波",
+    };
+
+    expect(isUltrasoundOrder(firstOrder)).toBe(true);
+    expect(getDatedClientKey(firstOrder)).toBe("2026-08-31_P001");
+    expect(getDatedClientKey(secondOrderForSameClient)).toBe(
+      getDatedClientKey(firstOrder),
+    );
+
+    const seenClients = new Set();
+    expect(addDatedClientIfNew(seenClients, firstOrder)).toBe(true);
+    expect(addDatedClientIfNew(seenClients, secondOrderForSameClient)).toBe(
+      false,
+    );
   });
 });

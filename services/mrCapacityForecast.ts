@@ -8,6 +8,8 @@ export const MR_REDUCED_CAPACITY_SLOTS = Math.round(
 export const MR_LARGE_PACKAGE_SLOTS = 9;
 export const MR_SINGLE_REGION_SLOTS = 3;
 export const MR_SCHEDULING_TARGET_RATE = 0.9;
+export const MR_LOW_UTILIZATION_RATE = 0.5;
+export const MR_FORECAST_DAYS = 30;
 
 export type MrCapacityLevel = "green" | "yellow" | "red";
 
@@ -23,6 +25,57 @@ export interface MrCapacityForecast {
   availableLargePackages: number;
   availableSingleRegions: number;
 }
+
+export interface MrForecastWeekRange {
+  title: string;
+  startOffset: number;
+  endOffset: number;
+}
+
+const MR_FORECAST_WEEK_LABELS = [
+  "第一週",
+  "第二週",
+  "第三週",
+  "第四週",
+  "第五週",
+  "第六週",
+] as const;
+
+export const buildMrForecastWeekRanges = (
+  reportDate: Date,
+  forecastDays: number = MR_FORECAST_DAYS,
+): MrForecastWeekRange[] => {
+  const normalizedDays = Math.max(0, Math.floor(forecastDays));
+  const ranges: MrForecastWeekRange[] = [];
+  let startOffset = 1;
+
+  while (startOffset <= normalizedDays) {
+    const weekStart = new Date(reportDate);
+    weekStart.setDate(weekStart.getDate() + startOffset);
+    const daysThroughSaturday = 6 - weekStart.getDay();
+    const endOffset = Math.min(
+      startOffset + daysThroughSaturday,
+      normalizedDays,
+    );
+    const isRemainingCurrentWeek = ranges.length === 0 && weekStart.getDay() !== 0;
+
+    ranges.push({
+      title: isRemainingCurrentWeek
+        ? "本週"
+        : MR_FORECAST_WEEK_LABELS[ranges.length] ?? `第${ranges.length + 1}週`,
+      startOffset,
+      endOffset,
+    });
+    startOffset = endOffset + 1;
+  }
+
+  return ranges;
+};
+
+export const formatMrForecastDay = (date: Date): string => {
+  const weekdayNumber = date.getDay() === 0 ? 7 : date.getDay();
+  return `${date.getMonth() + 1}/${date.getDate()} w${weekdayNumber}`;
+};
 
 const normalizeCount = (value: number | undefined): number =>
   Math.max(0, Number(value) || 0);
@@ -116,7 +169,11 @@ export const formatMrCapacityStatus = (
   forecast: MrCapacityForecast,
   packageComposition?: string,
 ): string => {
-  const summary = `運用率${forecast.utilizationPercent}% (${forecast.scheduledSlots} Slot)`;
+  const lowUtilizationMarker =
+    forecast.scheduledSlots / forecast.capacitySlots < MR_LOW_UTILIZATION_RATE
+      ? "🔥 "
+      : "";
+  const summary = `${lowUtilizationMarker}運用率${forecast.utilizationPercent}% (${forecast.scheduledSlots} Slot)`;
   const lines = [summary];
 
   if (packageComposition) {

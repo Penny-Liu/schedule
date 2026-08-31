@@ -78,13 +78,17 @@ import {
 } from "../services/radiographerWorkTime";
 import { calculateBmdSlots } from "../services/radiographerSlotCalculations";
 import {
+  buildMrForecastWeekRanges,
   calculateMrCapacityForecast,
   calculateMrScheduledSlots,
   formatMrCapacityStatus,
+  formatMrForecastDay,
   formatMrPackageComposition,
   getMrCapacitySlotsForDate,
+  MR_FORECAST_DAYS,
 } from "../services/mrCapacityForecast";
 import { getLearningTeacherCandidates } from "../services/radiographerLearning";
+import { formatRadiographerDailyLineSummary } from "../services/radiographerDailyLineSummary";
 
 const isUserLearningOnDate = (user: User | undefined | null, cap: string, date: string): boolean => {
   if (!user || !user.learningCapabilities?.includes(cap)) return false;
@@ -7475,7 +7479,7 @@ BMD :{{bmd}}
     
     const section5 = out.join("\n");
 
-    // --- Section 6: future two-week MR capacity forecast ---
+    // --- Section 6: future one-month MR capacity forecast ---
     const [reportYear, reportMonth, reportDay] = date.split("-").map(Number);
     const reportDate = new Date(reportYear, reportMonth - 1, reportDay);
     const addDays = (baseDate: Date, days: number) => {
@@ -7487,14 +7491,10 @@ BMD :{{bmd}}
       `${targetDate.getMonth() + 1}/${targetDate.getDate()}`;
     const formatForecastDate = (targetDate: Date) =>
       `${formatShortDate(targetDate)} (${dayNames[targetDate.getDay()]})`;
-    const formatForecastDay = (targetDate: Date) => {
-      const weekdayNumber = targetDate.getDay() === 0 ? 7 : targetDate.getDay();
-      return `${targetDate.getDate()} w${weekdayNumber}`;
-    };
     const futureStart = addDays(reportDate, 1);
-    const futureEnd = addDays(reportDate, 14);
+    const futureEnd = addDays(reportDate, MR_FORECAST_DAYS);
     const forecastHolidays = db.getHolidays();
-    const forecastDays = Array.from({ length: 14 }, (_, index) => ({
+    const forecastDays = Array.from({ length: MR_FORECAST_DAYS }, (_, index) => ({
       offset: index + 1,
       value: addDays(reportDate, index + 1),
     }));
@@ -7510,7 +7510,7 @@ BMD :{{bmd}}
           )
         );
       })
-      .map(({ value }) => formatForecastDay(value));
+      .map(({ value }) => formatMrForecastDay(value));
 
     const buildForecastWeek = (
       title: string,
@@ -7525,7 +7525,7 @@ BMD :{{bmd}}
           const targetDate = toLocalISOString(value);
           const targetStats = db.getDailyStats(targetDate);
           if (!targetStats) {
-            return `${formatForecastDay(value)}  ⚪ 尚無排程資料`;
+            return `${formatMrForecastDay(value)}  ⚪ 尚無排程資料`;
           }
 
           const scheduledSlots = calculateMrScheduledSlots(targetStats);
@@ -7534,24 +7534,30 @@ BMD :{{bmd}}
             targetDate,
             forecastHolidays,
           );
-          return `${formatForecastDay(value)}  ${formatMrCapacityStatus(calculateMrCapacityForecast(scheduledSlots, capacitySlots), packageComposition)}`;
+          return `${formatMrForecastDay(value)}  ${formatMrCapacityStatus(calculateMrCapacityForecast(scheduledSlots, capacitySlots), packageComposition)}`;
         });
 
       return `${title} (${formatShortDate(weekStart)} - ${formatShortDate(weekEnd)})\n${lines.join("\n\n")}`;
     };
 
+    const forecastWeeks = buildMrForecastWeekRanges(
+      reportDate,
+      MR_FORECAST_DAYS,
+    ).map(({ title, startOffset, endOffset }) =>
+      buildForecastWeek(title, startOffset, endOffset),
+    );
+
     const section6 = [
       formatForecastDate(reportDate),
-      `未來2週 (${formatShortDate(futureStart)} - ${formatShortDate(futureEnd)})`,
+      `未來1個月 (${formatShortDate(futureStart)} - ${formatShortDate(futureEnd)})`,
       "MR 預約排程 /MR運用率",
       "1台1小時 6 Slot",
       "",
-      buildForecastWeek("第一週", 1, 7),
-      "",
-      buildForecastWeek("第二週", 8, 14),
+      forecastWeeks.join("\n\n"),
       "",
       "備註：以上可安插數量為系統預估值，實際狀況將依現場場控動態調度為準。",
     ].join("\n");
+    const section7 = formatRadiographerDailyLineSummary(date, stats);
 
     return {
       full: finalText,
@@ -7561,6 +7567,7 @@ BMD :{{bmd}}
       section4,
       section5,
       section6,
+      section7,
       section6HighlightedDateLabels: highlightedForecastDateLabels,
     };
   }, [date, shifts, manpower, users, stats, doctorShifts, physicianWorkload]);
@@ -7723,11 +7730,11 @@ BMD :{{bmd}}
           />
         </div>
 
-        {/* Section 6: Future two-week MR capacity forecast */}
+        {/* Section 6: Future one-month MR capacity forecast */}
         <div className="bg-gradient-to-br from-sky-50 to-indigo-50 border border-sky-200 rounded-lg p-3 mt-4">
           <div className="flex justify-between items-center mb-2">
             <div className="text-xs text-sky-700 font-bold">
-              區塊 6：未來二週 MR 排程狀況
+              區塊 6：未來一個月 MR 排程狀況
             </div>
             <button
               type="button"
@@ -7739,11 +7746,11 @@ BMD :{{bmd}}
           </div>
           <div
             className="w-full min-h-[34rem] text-sm font-mono text-slate-700 bg-transparent leading-relaxed whitespace-pre-wrap"
-            aria-label="未來二週 MR 排程內容"
+            aria-label="未來一個月 MR 排程內容"
           >
             {copyText.section6.split("\n").map((line, index) => {
               const dateMatch = line.match(
-                /^(\d{1,2} )(w[1-7])(\s{2}.*)$/,
+                /^(\d{1,2}\/\d{1,2} )(w[1-7])(\s{2}.*)$/,
               );
               const shouldHighlightWeekday =
                 !!dateMatch &&
@@ -7776,6 +7783,28 @@ BMD :{{bmd}}
               );
             })}
           </div>
+        </div>
+
+        {/* Section 7: Daily workload line summary */}
+        <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 mt-4">
+          <div className="flex justify-between items-center mb-2">
+            <div className="text-xs text-emerald-700 font-bold">
+              區塊 7：每日工作量 Line 摘要
+            </div>
+            <button
+              type="button"
+              onClick={() => handleCopy(copyText.section7)}
+              className="text-xs bg-emerald-100 hover:bg-emerald-200 text-emerald-800 px-2 py-1 rounded-lg flex items-center gap-1"
+            >
+              <Copy size={12} /> 複製
+            </button>
+          </div>
+          <textarea
+            className="w-full h-44 text-sm font-mono text-slate-700 bg-transparent outline-none resize-none"
+            aria-label="每日工作量 Line 摘要"
+            readOnly
+            value={copyText.section7}
+          />
         </div>
       </div>
     </div>

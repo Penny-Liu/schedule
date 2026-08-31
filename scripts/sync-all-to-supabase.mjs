@@ -2,7 +2,11 @@ import "dotenv/config";
 import { createClient } from "@supabase/supabase-js";
 import { getSalesforceSession, runSoqlQuery } from "./salesforce-utils.mjs";
 import { omitManualDailyWorkloadFields } from "./radiographer-daily-sync.mjs";
-import { isBmdMedicalOrder } from "./daily-stats-counting.mjs";
+import {
+  addDatedClientIfNew,
+  isBmdMedicalOrder,
+  isUltrasoundOrder,
+} from "./daily-stats-counting.mjs";
 import { getPostProcessingWorkloadField } from "./post-processing-classification.mjs";
 import readline from "readline";
 import { fileURLToPath } from "url";
@@ -59,6 +63,7 @@ async function syncDailyStats(session, startDate, endDate) {
   const seenMR = new Set();
   const seenDazhiClient = new Set(); // 追蹤大直已計數客戶 (日期+Order)
   const seenBeitouClient = new Set(); // 追蹤北投已計數客戶 (日期+Order)
+  const seenBeitouUltrasoundClients = new Set();
   const seenBeitouGI = new Set();
   const seenDazhiGI = new Set();
   // 各項目去重 Set（以日期+clientId）
@@ -78,6 +83,7 @@ async function syncDailyStats(session, startDate, endDate) {
     beitou_mr: 0,
     beitou_mr_orders: 0,
     beitou_ultrasound: 0,
+    beitou_ultrasound_clients: 0,
     beitou_ultrasound_heart: 0,
     beitou_ultrasound_fibrosis: 0,
     dazhi_clients: 0,
@@ -197,9 +203,12 @@ async function syncDailyStats(session, startDate, endDate) {
         if (!mrClients[mrKey]) mrClients[mrKey] = { date, loc, count: 0, gender };
         mrClients[mrKey].count++;
       }
-      if (name.includes("超音波")) {
+      if (isUltrasoundOrder(r)) {
         if (!stats.beitou_ultrasound) stats.beitou_ultrasound = 0;
         stats.beitou_ultrasound++;
+        if (addDatedClientIfNew(seenBeitouUltrasoundClients, r)) {
+          stats.beitou_ultrasound_clients++;
+        }
         if (name.includes("心臟")) stats.beitou_ultrasound_heart++;
         if (name.includes("肝纖維")) stats.beitou_ultrasound_fibrosis++;
         

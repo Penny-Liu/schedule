@@ -325,6 +325,7 @@ export interface DailyManpowerStats {
   beitou_dx?: number;
   beitou_mg?: number;
   beitou_ultrasound?: number; // Total ultrasound count for Beitou
+  beitou_ultrasound_clients?: number; // Unique ultrasound clients for Beitou
   beitou_ultrasound_heart?: number;
   beitou_ultrasound_fibrosis?: number;
   beitou_ultrasound_thyroid?: number;
