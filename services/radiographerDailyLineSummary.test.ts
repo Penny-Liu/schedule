@@ -4,30 +4,30 @@ import { formatRadiographerDailyLineSummary } from "./radiographerDailyLineSumma
 describe("radiographer daily line summary", () => {
   it("formats the requested Beitou workload fields and combines MR genders", () => {
     expect(
-      formatRadiographerDailyLineSummary("2026-08-31", {
-        beitou_clients: 42,
-        beitou_cta: 6,
+      formatRadiographerDailyLineSummary("2026-09-01", {
+        beitou_clients: 16,
+        beitou_cta: 2,
         dazhi_clients: 18,
-        beitou_mr: 12,
+        beitou_mr: 8,
         beitou_mr_large_male: 2,
         beitou_mr_large_female: 3,
-        beitou_mr_medium: 4,
-        beitou_mr_small: 3,
-        beitou_ct: 15,
+        beitou_mr_medium: 1,
+        beitou_mr_small: 2,
+        beitou_ct: 12,
         beitou_ultrasound: 21,
-        beitou_ultrasound_clients: 9,
-        beitou_gi: 8,
+        beitou_ultrasound_clients: 10,
+        beitou_gi: 10,
       }),
     ).toBe(
       [
-        "📅 8/31 w1",
+        "9/1 w2",
         "",
-        "客戶｜42位",
-        "MR　｜12位（5大・4中・3小）",
-        "CT　｜15位",
-        "CTA ｜6位",
-        "US　｜9位",
-        "GI　｜8台",
+        "解說：16人",
+        "MR：8人（5大・1中・2小）",
+        "CT：12人",
+        "CTA：2人",
+        "US：10人",
+        "GI：10台",
       ].join("\n"),
     );
   });
@@ -39,6 +39,6 @@ describe("radiographer daily line summary", () => {
         beitou_cta: 0,
         dazhi_clients: 0,
       }),
-    ).toContain("📅 9/6 w7\n\n客戶｜0位\nMR　｜0位（0大・0中・0小）");
+    ).toContain("9/6 w7\n\n解說：0人\nMR：0人（0大・0中・0小）");
   });
 });
