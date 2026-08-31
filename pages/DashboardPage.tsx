@@ -89,6 +89,10 @@ import {
 } from "../services/mrCapacityForecast";
 import { getLearningTeacherCandidates } from "../services/radiographerLearning";
 import { formatRadiographerDailyLineSummary } from "../services/radiographerDailyLineSummary";
+import {
+  formatImagingDoctorWorkloadLine,
+  normalizeRadiographerTodaySectionTemplate,
+} from "../services/radiographerTodayLineSummary";
 
 const isUserLearningOnDate = (user: User | undefined | null, cap: string, date: string): boolean => {
   if (!user || !user.learningCapabilities?.includes(cap)) return false;
@@ -6802,10 +6806,8 @@ const DailyManpowerSummary: React.FC<{
 {{events_section}}{{imaging_doctors}}
 
 放射師人力
-北投：{{beitou_count}} (客戶：{{beitou_clients}}  CTA  {{beitou_cta}})
+北投：{{beitou_count}} (客戶：{{beitou_clients}}  CTA：{{beitou_cta}})
 場控：{{floor_control}}
-輔班：{{assist}}
-排班：{{scheduler}}
 MR : {{mr}}
 US：{{us}}
 CT: {{ct}}
@@ -6895,28 +6897,7 @@ BMD :{{bmd}}
         return `${displayAlias}  -(無資料)${suffix ? ` ${suffix}` : ""}`;
       }
 
-      const big = wl.count_da_tao_5;
-      const small = wl.count_xiao_tao_4 + wl.count_xiao_tao_3;
-      const none = wl.count_wu_2 + wl.count_wu_1;
-      const dazhi = wl.count_dazhi_1 || 0;
-      const total = Math.round(big + small + none + dazhi).toString();
-      const units = Math.round(
-        big * 5 +
-          wl.count_xiao_tao_4 * 4 +
-          wl.count_xiao_tao_3 * 3 +
-          wl.count_wu_2 * 2 +
-          wl.count_wu_1 * 1 +
-          dazhi * 1,
-      ).toString();
-
-      const parts: string[] = [];
-      if (big > 0) parts.push(`${Number(big.toFixed(1))}大`);
-      if (small > 0) parts.push(`${Number(small.toFixed(1))}小`);
-      if (none > 0) parts.push(`${Number(none.toFixed(1))}無`);
-      if (dazhi > 0) parts.push(`${Number(dazhi.toFixed(1))}直`);
-
-      const core = `${displayAlias}  ${total} (${parts.join(" ")}) →${units} 單位`;
-      return suffix ? `${core} ${suffix}` : core;
+      return formatImagingDoctorWorkloadLine(displayAlias, wl, suffix);
     };
 
     // Doctor Lists formatting
@@ -7006,7 +6987,7 @@ BMD :{{bmd}}
     }
     replacements["{{remote_doctors_detail}}"] = remDocStr;
 
-    let finalText = template;
+    let finalText = normalizeRadiographerTodaySectionTemplate(template);
 
     // Custom Logic: Replace legacy "支援：{{support}}" with new {{support_section}}
     // This ensures label update ("支援" -> "技術支援") and content merge (Support + Admin/Tech)

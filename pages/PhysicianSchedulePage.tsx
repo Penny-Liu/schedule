@@ -6496,7 +6496,7 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
 
                 {/* Multi-Select Task Chips */}
                 <div className="flex gap-2 flex-wrap">
-                  {["晚班", "電台", "行政", "子抹", "董事會", "基因"].map((taskName) => {
+                  {["晚班", "電台", "行政", "子抹", "董事會", "基因", "代謝"].map((taskName) => {
                     const currentTasks = editData.task
                       ? editData.task.split(",").map((t) => t.trim()).filter(Boolean)
                       : [];
