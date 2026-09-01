@@ -8,6 +8,7 @@ import {
 import { db } from "../services/store";
 import {
   buildChangedDailyWorkloadRecords,
+  isDailyWorkloadFieldApplicableToCycle,
   mergeDailyWorkloadRecords,
 } from "../services/radiographerDailyWorkload";
 import {
@@ -1049,21 +1050,12 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
           });
         }
       } else {
-        // Aggregate daily workloads within the user's personal cycle dates
-        // For 'proofreader', we include the 5 days prior to the cycle start date
-        let proofreaderStartDate = personalCycle?.startDate || (generalDates.length > 0 ? generalDates[0] : undefined);
-        let proofreaderEndDate = personalCycle?.endDate || (generalDates.length > 0 ? generalDates[generalDates.length - 1] : undefined);
-        
-        if (proofreaderStartDate) {
-          const pd = new Date(proofreaderStartDate);
-          pd.setDate(pd.getDate() - 5);
-          proofreaderStartDate = `${pd.getFullYear()}-${String(pd.getMonth() + 1).padStart(2, "0")}-${String(pd.getDate()).padStart(2, "0")}`;
-        }
-        if (proofreaderEndDate) {
-          const pd = new Date(proofreaderEndDate);
-          pd.setDate(pd.getDate() - 5);
-          proofreaderEndDate = `${pd.getFullYear()}-${String(pd.getMonth() + 1).padStart(2, "0")}-${String(pd.getDate()).padStart(2, "0")}`;
-        }
+        // Aggregate daily workloads within the user's personal cycle.
+        // Only image proofing uses the cycle shifted five days earlier.
+        const strictCycleStartDate =
+          personalCycle?.startDate || generalDates[0];
+        const strictCycleEndDate =
+          personalCycle?.endDate || generalDates[generalDates.length - 1];
 
         const userDailyData = cycleDailyData.filter(
           (d) => d.radiographerName === user.name
@@ -1077,13 +1069,13 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
             "dx", "mg", "bmd", "reportTyping", "proofreader", "tsmcReport"
           ].forEach((k) => {
             wToUse[k] = userDailyData.reduce((sum, d) => {
-              const isStrictCycle = userDates.includes(d.date);
-              if (k === "proofreader" || k === "tsmcReport") {
-                const isProofreaderCycle = (!proofreaderStartDate || !proofreaderEndDate) || (d.date >= proofreaderStartDate && d.date <= proofreaderEndDate);
-                return sum + (isProofreaderCycle ? (d[k] || 0) : 0);
-              } else {
-                return sum + (isStrictCycle ? (d[k] || 0) : 0);
-              }
+              const isApplicable = isDailyWorkloadFieldApplicableToCycle(
+                k,
+                d.date,
+                strictCycleStartDate,
+                strictCycleEndDate,
+              );
+              return sum + (isApplicable ? (d[k] || 0) : 0);
             }, 0);
           });
         }
@@ -3158,7 +3150,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
                 </div>
                 <div className="flex items-center gap-1">
                   <span className="px-1.5 py-0.5 bg-purple-50 text-purple-600 rounded shrink-0">
-                    報告
+                    影像校對
                   </span>
                   <span className="truncate">
                     {reportDates[0]?.replace(/-/g, "/")} ~{" "}
