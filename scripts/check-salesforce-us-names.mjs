@@ -1,4 +1,5 @@
 import { getSalesforceSession, runSoqlQuery } from './salesforce-utils.mjs';
+import { VALID_MEDICAL_ORDER_STATUS_SOQL } from './medical-order-status.mjs';
 
 async function main() {
   const session = await getSalesforceSession();
@@ -8,7 +9,7 @@ async function main() {
       WHERE (Location__c = '北投' OR Location__c = '大直')
         AND CheckStartDate__c >= 2026-07-28
         AND CheckStartDate__c <= 2026-07-28
-        AND Checkup_Status__c != '90'
+        AND ${VALID_MEDICAL_ORDER_STATUS_SOQL}
         AND CheckupName__c LIKE '%超音波%'
   `.trim();
 

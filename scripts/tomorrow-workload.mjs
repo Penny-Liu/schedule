@@ -1,4 +1,5 @@
 import { getSalesforceSession, runSoqlQuery } from "./salesforce-utils.mjs";
+import { VALID_MEDICAL_ORDER_STATUS_SOQL } from "./medical-order-status.mjs";
 
 async function getTomorrowWorkload() {
   try {
@@ -13,7 +14,7 @@ async function getTomorrowWorkload() {
       SELECT Order__c, Order__r.Gender__c, Location__c, ResourceCategory__c, CheckupName__c
       FROM CheckupReservation__c 
       WHERE Order__r.ReserveDate__c = ${targetDate}
-      AND Checkup_Status__c != '90'
+      AND ${VALID_MEDICAL_ORDER_STATUS_SOQL}
       AND ResourceCategory__c IN ('MR','US','CT','BMD','DX','MG')
       AND Location__c != null
     `;
