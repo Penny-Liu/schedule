@@ -8,6 +8,7 @@ import {
   isUltrasoundOrder,
 } from "./daily-stats-counting.mjs";
 import { getPostProcessingWorkloadField } from "./post-processing-classification.mjs";
+import { VALID_MEDICAL_ORDER_STATUS_SOQL } from "./medical-order-status.mjs";
 import readline from "readline";
 import { fileURLToPath } from "url";
 
@@ -50,7 +51,7 @@ async function syncDailyStats(session, startDate, endDate) {
       WHERE (Location__c = '北投' OR Location__c = '大直')
         AND CheckStartDate__c >= ${startDate}
         AND CheckStartDate__c <= ${endDate}
-        AND Checkup_Status__c != '90'
+        AND ${VALID_MEDICAL_ORDER_STATUS_SOQL}
       ORDER BY CheckStartDate__c ASC
   `.trim();
 
@@ -576,7 +577,7 @@ export async function syncRadiographerWorkload(session, startDate, endDate) {
                     AND Radiologist__c != null 
                     AND ResourceCategory__c IN ('CT','BMD','MG','DX') 
                     AND (NOT Name LIKE '%報到%') 
-                    AND Checkup_Status__c != '90'`;
+                    AND ${VALID_MEDICAL_ORDER_STATUS_SOQL}`;
   const ctDxData = await runSoqlQuery({
     instanceUrl: session.instanceUrl,
     accessToken: session.accessToken,
@@ -637,7 +638,7 @@ export async function syncRadiographerWorkload(session, startDate, endDate) {
                   AND Radiologist__c != null 
                   AND ResourceCategory__c = 'US' 
                   AND (NOT Name LIKE '%報到%') 
-                  AND Checkup_Status__c != '90'`;
+                  AND ${VALID_MEDICAL_ORDER_STATUS_SOQL}`;
   const usData = await runSoqlQuery({
     instanceUrl: session.instanceUrl,
     accessToken: session.accessToken,
@@ -683,7 +684,7 @@ export async function syncRadiographerWorkload(session, startDate, endDate) {
                   AND Radiologist__c != null 
                   AND ResourceCategory__c = 'MR' 
                   AND (NOT Name LIKE '%報到%') 
-                  AND Checkup_Status__c != '90'`;
+                  AND ${VALID_MEDICAL_ORDER_STATUS_SOQL}`;
   const mrData = await runSoqlQuery({
     instanceUrl: session.instanceUrl,
     accessToken: session.accessToken,
@@ -745,7 +746,7 @@ export async function syncRadiographerWorkload(session, startDate, endDate) {
                    FROM CheckupReservation__c 
                    WHERE (Order__r.ReserveDate__c >= ${soqlStartDate} AND Order__r.ReserveDate__c <= ${soqlEndDate}) 
                    AND Radiologist__c != null 
-                   AND Checkup_Status__c != '90'
+                   AND ${VALID_MEDICAL_ORDER_STATUS_SOQL}
                    AND CTAUseTime__c != null`;
   const ctaData = await runSoqlQuery({
     instanceUrl: session.instanceUrl,
@@ -792,7 +793,7 @@ export async function syncRadiographerWorkload(session, startDate, endDate) {
                    FROM CheckupReservation__c 
                    WHERE (Order__r.ReserveDate__c >= ${soqlStartDate} AND Order__r.ReserveDate__c <= ${soqlEndDate}) 
                    AND CTA_Further_Rad__c != null 
-                   AND Checkup_Status__c != '90'`;
+                   AND ${VALID_MEDICAL_ORDER_STATUS_SOQL}`;
   const ctaPostData = await runSoqlQuery({
     instanceUrl: session.instanceUrl,
     accessToken: session.accessToken,
@@ -984,7 +985,7 @@ async function syncPhysicianWorkload(session, startDate, endDate) {
       FROM CheckupReservation__c 
       WHERE CheckStartDate__c >= ${startDate}
         AND CheckStartDate__c <= ${endDate}
-        AND Checkup_Status__c != '90'
+        AND ${VALID_MEDICAL_ORDER_STATUS_SOQL}
         AND (Location__c LIKE '北投%' OR Location__c LIKE '大直%')
   `.trim();
 

@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { createClient } from "@supabase/supabase-js";
 import { getSalesforceSession, runSoqlQuery } from "./salesforce-utils.mjs";
+import { VALID_MEDICAL_ORDER_STATUS_SOQL } from "./medical-order-status.mjs";
 import readline from "readline";
 
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL;
@@ -248,7 +249,7 @@ async function syncAllWorkloads() {
                        AND Radiologist__c != null 
                        AND ResourceCategory__c IN ('CT','US','BMD','MG','DX') 
                        AND (NOT Name LIKE '%報到%') 
-                       AND Checkup_Status__c != '90' 
+                       AND ${VALID_MEDICAL_ORDER_STATUS_SOQL}
                        GROUP BY Radiologist__r.Name, ResourceCategory__c, CheckupName__c`;
 
     const nonMrData = await runSoqlQuery({ ...session, soql: nonMrSoql });
@@ -282,7 +283,7 @@ async function syncAllWorkloads() {
                     AND Radiologist__c != null 
                     AND ResourceCategory__c = 'MR' 
                     AND (NOT Name LIKE '%報到%') 
-                    AND Checkup_Status__c != '90'`;
+                    AND ${VALID_MEDICAL_ORDER_STATUS_SOQL}`;
 
     const mrData = await runSoqlQuery({ ...session, soql: mrSoql });
 
