@@ -1,10 +1,55 @@
 import { describe, expect, it } from "vitest";
 import {
   buildChangedDailyWorkloadRecords,
+  getDailyWorkloadFieldCycleRange,
+  isDailyWorkloadFieldApplicableToCycle,
   mergeDailyWorkloadRecords,
 } from "./radiographerDailyWorkload";
 
 describe("daily radiographer workload editing", () => {
+  it("keeps TSMC reports in the personal cycle while shifting only proofreader dates", () => {
+    expect(
+      getDailyWorkloadFieldCycleRange(
+        "proofreader",
+        "2026-08-26",
+        "2026-09-25",
+      ),
+    ).toEqual({ startDate: "2026-08-21", endDate: "2026-09-20" });
+
+    expect(
+      getDailyWorkloadFieldCycleRange(
+        "tsmcReport",
+        "2026-08-26",
+        "2026-09-25",
+      ),
+    ).toEqual({ startDate: "2026-08-26", endDate: "2026-09-25" });
+
+    expect(
+      isDailyWorkloadFieldApplicableToCycle(
+        "proofreader",
+        "2026-08-21",
+        "2026-08-26",
+        "2026-09-25",
+      ),
+    ).toBe(true);
+    expect(
+      isDailyWorkloadFieldApplicableToCycle(
+        "tsmcReport",
+        "2026-08-21",
+        "2026-08-26",
+        "2026-09-25",
+      ),
+    ).toBe(false);
+    expect(
+      isDailyWorkloadFieldApplicableToCycle(
+        "tsmcReport",
+        "2026-09-25",
+        "2026-08-26",
+        "2026-09-25",
+      ),
+    ).toBe(true);
+  });
+
   it("creates a daily record only for the changed radiographer", () => {
     const records = buildChangedDailyWorkloadRecords(
       "2026-08-11",

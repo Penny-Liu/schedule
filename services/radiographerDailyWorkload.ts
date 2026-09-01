@@ -30,6 +30,44 @@ export const DAILY_WORKLOAD_FIELD_KEYS = [
 
 type DailyWorkloadField = (typeof DAILY_WORKLOAD_FIELD_KEYS)[number];
 
+const shiftLocalDate = (date: string, days: number): string => {
+  const [year, month, day] = date.split("-").map(Number);
+  const shifted = new Date(year, month - 1, day);
+  shifted.setDate(shifted.getDate() + days);
+  return `${shifted.getFullYear()}-${String(shifted.getMonth() + 1).padStart(2, "0")}-${String(shifted.getDate()).padStart(2, "0")}`;
+};
+
+export const getDailyWorkloadFieldCycleRange = (
+  field: string,
+  cycleStartDate: string | undefined,
+  cycleEndDate: string | undefined,
+): { startDate: string | undefined; endDate: string | undefined } => {
+  if (field !== "proofreader") {
+    return { startDate: cycleStartDate, endDate: cycleEndDate };
+  }
+
+  return {
+    startDate: cycleStartDate
+      ? shiftLocalDate(cycleStartDate, -5)
+      : undefined,
+    endDate: cycleEndDate ? shiftLocalDate(cycleEndDate, -5) : undefined,
+  };
+};
+
+export const isDailyWorkloadFieldApplicableToCycle = (
+  field: string,
+  date: string,
+  cycleStartDate: string | undefined,
+  cycleEndDate: string | undefined,
+): boolean => {
+  const { startDate, endDate } = getDailyWorkloadFieldCycleRange(
+    field,
+    cycleStartDate,
+    cycleEndDate,
+  );
+  return !startDate || !endDate || (date >= startDate && date <= endDate);
+};
+
 export type EditableDailyWorkloadRow = Partial<RadiographerDailyWorkload> & {
   name?: string;
 };

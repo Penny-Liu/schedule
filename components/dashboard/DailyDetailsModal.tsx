@@ -9,6 +9,7 @@ import {
   TeachingWorkloadField,
   validateTeachingAllocations,
 } from '../../services/radiographerTeachingAllocations';
+import { isDailyWorkloadFieldApplicableToCycle } from '../../services/radiographerDailyWorkload';
 
 interface DailyDetailsModalProps {
   isOpen: boolean;
@@ -109,22 +110,6 @@ export const DailyDetailsModal: React.FC<DailyDetailsModalProps> = ({
       );
     }
   }, [isOpen, dates, initialData, teachingAllocations]);
-
-  const proofreaderStartDate = React.useMemo(() => {
-    const baseDate = cycleStartDate || (dates.length > 0 ? dates[0] : undefined);
-    if (!baseDate) return undefined;
-    const pd = new Date(baseDate);
-    pd.setDate(pd.getDate() - 5);
-    return `${pd.getFullYear()}-${String(pd.getMonth() + 1).padStart(2, "0")}-${String(pd.getDate()).padStart(2, "0")}`;
-  }, [cycleStartDate, dates]);
-
-  const proofreaderEndDate = React.useMemo(() => {
-    const baseDate = cycleEndDate || (dates.length > 0 ? dates[dates.length - 1] : undefined);
-    if (!baseDate) return undefined;
-    const pd = new Date(baseDate);
-    pd.setDate(pd.getDate() - 5);
-    return `${pd.getFullYear()}-${String(pd.getMonth() + 1).padStart(2, "0")}-${String(pd.getDate()).padStart(2, "0")}`;
-  }, [cycleEndDate, dates]);
 
   if (!isOpen) return null;
 
@@ -291,10 +276,12 @@ export const DailyDetailsModal: React.FC<DailyDetailsModalProps> = ({
                         {stationStr}
                       </td>
                       {FIELDS.map(f => {
-                        const isReportField = f.key === "proofreader" || f.key === "tsmcReport";
-                        const inCycle = !cycleStartDate || !cycleEndDate || (date >= cycleStartDate && date <= cycleEndDate);
-                        const isProofreaderCycle = (!proofreaderStartDate || !proofreaderEndDate) || (date >= proofreaderStartDate && date <= proofreaderEndDate);
-                        const isApplicable = isReportField ? isProofreaderCycle : inCycle;
+                        const isApplicable = isDailyWorkloadFieldApplicableToCycle(
+                          f.key,
+                          date,
+                          cycleStartDate,
+                          cycleEndDate,
+                        );
                         // Always show the value in the input so the user can see/edit the full daily record
                         const val = editingData[date]?.[f.key] || 0;
                         return (
@@ -314,12 +301,18 @@ export const DailyDetailsModal: React.FC<DailyDetailsModalProps> = ({
                       })}
                       <td className={`px-2 py-2 whitespace-nowrap text-xs text-center font-bold text-teal-700 sticky right-0 border-l border-gray-100 z-10 shadow-[-1px_0_0_0_#f3f4f6] ${isModified ? 'bg-orange-50/50' : 'bg-teal-50 group-hover:bg-teal-100/50'}`}>
                         {(() => {
-                          const inCycle = !cycleStartDate || !cycleEndDate || (date >= cycleStartDate && date <= cycleEndDate);
+                          const inCycle =
+                            !cycleStartDate ||
+                            !cycleEndDate ||
+                            (date >= cycleStartDate && date <= cycleEndDate);
                           let sum = 0;
                           FIELDS.forEach(f => {
-                            const isReportField = f.key === "proofreader" || f.key === "tsmcReport";
-                            const isProofreaderCycle = (!proofreaderStartDate || !proofreaderEndDate) || (date >= proofreaderStartDate && date <= proofreaderEndDate);
-                            const isApplicable = isReportField ? isProofreaderCycle : inCycle;
+                            const isApplicable = isDailyWorkloadFieldApplicableToCycle(
+                              f.key,
+                              date,
+                              cycleStartDate,
+                              cycleEndDate,
+                            );
                             if (!isApplicable) return;
                             sum += (editingData[date]?.[f.key] || 0) * (weights[f.key] || 0);
                           });
@@ -355,10 +348,12 @@ export const DailyDetailsModal: React.FC<DailyDetailsModalProps> = ({
                   </td>
                   {FIELDS.map(f => {
                     const total = dates.reduce((sum, d) => {
-                      const inCycle = !cycleStartDate || !cycleEndDate || (d >= cycleStartDate && d <= cycleEndDate);
-                      const isReportField = f.key === "proofreader" || f.key === "tsmcReport";
-                      const isProofreaderCycle = (!proofreaderStartDate || !proofreaderEndDate) || (d >= proofreaderStartDate && d <= proofreaderEndDate);
-                      const isApplicable = isReportField ? isProofreaderCycle : inCycle;
+                      const isApplicable = isDailyWorkloadFieldApplicableToCycle(
+                        f.key,
+                        d,
+                        cycleStartDate,
+                        cycleEndDate,
+                      );
                       if (!isApplicable) return sum;
                       return sum + (editingData[d]?.[f.key] || 0);
                     }, 0);
@@ -372,11 +367,17 @@ export const DailyDetailsModal: React.FC<DailyDetailsModalProps> = ({
                     {(() => {
                       let grandTotal = 0;
                       dates.forEach(date => {
-                        const inCycle = !cycleStartDate || !cycleEndDate || (date >= cycleStartDate && date <= cycleEndDate);
+                        const inCycle =
+                          !cycleStartDate ||
+                          !cycleEndDate ||
+                          (date >= cycleStartDate && date <= cycleEndDate);
                         FIELDS.forEach(f => {
-                          const isReportField = f.key === "proofreader" || f.key === "tsmcReport";
-                          const isProofreaderCycle = (!proofreaderStartDate || !proofreaderEndDate) || (date >= proofreaderStartDate && date <= proofreaderEndDate);
-                          const isApplicable = isReportField ? isProofreaderCycle : inCycle;
+                          const isApplicable = isDailyWorkloadFieldApplicableToCycle(
+                            f.key,
+                            date,
+                            cycleStartDate,
+                            cycleEndDate,
+                          );
                           if (!isApplicable) return;
                           grandTotal += (editingData[date]?.[f.key] || 0) * (weights[f.key] || 0);
                         });
