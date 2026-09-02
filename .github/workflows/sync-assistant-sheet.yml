@@ -2,7 +2,9 @@ name: 同步放射師助理至工讀生班表
 
 on:
   schedule:
-    - cron: "*/15 * * * *"
+    # 每月 15 日台灣時間 08:15 執行一次
+    - cron: "15 8 15 * *"
+      timezone: "Asia/Taipei"
   workflow_dispatch:
     inputs:
       dry_run:
