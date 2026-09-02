@@ -1,12 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  buildMemoUpdates,
-  formatManagedAssistantMarker,
+  buildSheetUpdatePlan,
   getDisplayName,
-  mergeManagedAssistantMemo,
   normalizeSheetDate,
   removeManagedAssistantMarker,
+  YINGPING_STUDENT_USER_ID,
 } from "./sync-assistant-to-student-sheet.mjs";
 
 describe("radiographer assistant to student sheet synchronization", () => {
@@ -16,18 +15,9 @@ describe("radiographer assistant to student sheet synchronization", () => {
     expect(getDisplayName("雅")).toBe("雅");
   });
 
-  it("formats multiple assistants without duplicates", () => {
-    expect(formatManagedAssistantMarker(["江英平", "陳庭榕", "江英平"])).toBe(
-      "【放射師助理：英平、庭榕】",
-    );
-  });
-
-  it("preserves human notes while replacing or removing the managed marker", () => {
+  it("removes only the old managed marker and preserves human notes", () => {
     const original = "請提早到班\n【放射師助理：舊名】";
-    expect(mergeManagedAssistantMemo(original, ["江英平"])).toBe(
-      "請提早到班\n【放射師助理：英平】",
-    );
-    expect(mergeManagedAssistantMemo(original, [])).toBe("請提早到班");
+    expect(removeManagedAssistantMarker(original)).toBe("請提早到班");
     expect(removeManagedAssistantMarker("【放射師助理：英平】")).toBe("");
   });
 
@@ -37,7 +27,7 @@ describe("radiographer assistant to student sheet synchronization", () => {
     expect(normalizeSheetDate("09/02/2026")).toBe("");
   });
 
-  it("updates only the managed memo cells matched by date", () => {
+  it("writes Yingping to ConfirmedUserID and removes managed memo markers", () => {
     const rows = [
       ["Date", "Signups_JSON", "ConfirmedUserID", "IsClosed", "Note", "Memos_JSON", "工讀生備忘"],
       ["2026-09-01", "", "", "", "", "", "人工備忘"],
@@ -46,16 +36,19 @@ describe("radiographer assistant to student sheet synchronization", () => {
     const assistantsByDate = new Map([
       ["2026-09-01", ["江英平"]],
       ["2026-09-02", []],
+      ["2026-10-01", ["江英平"]],
     ]);
 
-    expect(buildMemoUpdates(rows, assistantsByDate)).toEqual({
+    expect(buildSheetUpdatePlan(rows, assistantsByDate)).toEqual({
       sheetDates: ["2026-09-01", "2026-09-02"],
-      updates: [
+      headerColumnCount: 7,
+      preservedOtherConfirmedCount: 0,
+      cellUpdates: [
         {
           rowNumber: 2,
-          columnIndex: 6,
+          columnIndex: 2,
           date: "2026-09-01",
-          value: "人工備忘\n【放射師助理：英平】",
+          value: YINGPING_STUDENT_USER_ID,
         },
         {
           rowNumber: 3,
@@ -64,6 +57,60 @@ describe("radiographer assistant to student sheet synchronization", () => {
           value: "",
         },
       ],
+      appendedRows: [
+        {
+          rowNumber: 4,
+          date: "2026-10-01",
+          values: [
+            "2026-10-01",
+            "",
+            YINGPING_STUDENT_USER_ID,
+            "",
+            "",
+            "",
+            "",
+          ],
+        },
+      ],
     });
+  });
+
+  it("preserves another confirmed student and still removes the old marker", () => {
+    const rows = [
+      ["Date", "Signups_JSON", "ConfirmedUserID", "IsClosed", "Note", "Memos_JSON", "工讀生備忘"],
+      ["2026-09-09", "", "u_other", "", "", "", "【放射師助理：英平】"],
+    ];
+    const plan = buildSheetUpdatePlan(
+      rows,
+      new Map([["2026-09-09", ["江英平"]]]),
+    );
+
+    expect(plan.preservedOtherConfirmedCount).toBe(1);
+    expect(plan.cellUpdates).toEqual([
+      {
+        rowNumber: 2,
+        columnIndex: 6,
+        date: "2026-09-09",
+        value: "",
+      },
+    ]);
+  });
+
+  it("clears only Yingping when the radiographer assistant shift is removed", () => {
+    const rows = [
+      ["Date", "Signups_JSON", "ConfirmedUserID", "IsClosed", "Note", "Memos_JSON", "工讀生備忘"],
+      ["2026-09-10", "", YINGPING_STUDENT_USER_ID, "", "", "", ""],
+      ["2026-09-11", "", "u_other", "", "", "", ""],
+    ];
+    const plan = buildSheetUpdatePlan(rows, new Map());
+
+    expect(plan.cellUpdates).toEqual([
+      {
+        rowNumber: 2,
+        columnIndex: 2,
+        date: "2026-09-10",
+        value: "",
+      },
+    ]);
   });
 });

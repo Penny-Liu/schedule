@@ -8,6 +8,8 @@ export const STUDENT_SCHEDULE_SPREADSHEET_ID =
 export const STUDENT_SCHEDULE_SHEET = "Shifts";
 export const STUDENT_SCHEDULE_SHEET_ID = 408801150;
 export const ASSISTANT_STATION = "助理";
+export const YINGPING_STUDENT_USER_ID = "u_1782207383509";
+export const YINGPING_DISPLAY_NAME = "英平";
 
 const GOOGLE_SHEETS_SCOPE = "https://www.googleapis.com/auth/spreadsheets";
 const MANAGED_MARKER_PATTERN = /【放射師助理：[^】\r\n]*】/gu;
@@ -43,21 +45,6 @@ export const removeManagedAssistantMarker = (memo) =>
     .join("\n")
     .trim();
 
-export const formatManagedAssistantMarker = (names) => {
-  const uniqueNames = [...new Set(names.map(getDisplayName).filter(Boolean))].sort(
-    (left, right) => left.localeCompare(right, "zh-Hant"),
-  );
-  return uniqueNames.length > 0
-    ? `【放射師助理：${uniqueNames.join("、")}】`
-    : "";
-};
-
-export const mergeManagedAssistantMemo = (memo, names) => {
-  const humanMemo = removeManagedAssistantMarker(memo);
-  const marker = formatManagedAssistantMarker(names);
-  return [humanMemo, marker].filter(Boolean).join("\n");
-};
-
 export const normalizeSheetDate = (value) => {
   const text = String(value ?? "").trim();
   const match = text.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/u);
@@ -66,33 +53,70 @@ export const normalizeSheetDate = (value) => {
   return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
 };
 
-export const buildMemoUpdates = (rows, assistantsByDate) => {
+const hasYingpingAssistant = (names) =>
+  names.some((name) => getDisplayName(name) === YINGPING_DISPLAY_NAME);
+
+export const buildSheetUpdatePlan = (rows, assistantsByDate) => {
   if (!Array.isArray(rows) || rows.length === 0) {
     throw new Error("Shifts 工作表沒有資料。");
   }
 
   const headers = rows[0].map((value) => String(value ?? "").trim());
   const dateColumnIndex = headers.indexOf("Date");
+  const confirmedUserColumnIndex = headers.indexOf("ConfirmedUserID");
   const memoColumnIndex = headers.indexOf("工讀生備忘");
-  if (dateColumnIndex < 0 || memoColumnIndex < 0) {
-    throw new Error("Shifts 工作表缺少 Date 或工讀生備忘欄位。");
+  if (
+    dateColumnIndex < 0 ||
+    confirmedUserColumnIndex < 0 ||
+    memoColumnIndex < 0
+  ) {
+    throw new Error(
+      "Shifts 工作表缺少 Date、ConfirmedUserID 或工讀生備忘欄位。",
+    );
   }
 
-  const updates = [];
+  const cellUpdates = [];
   const sheetDates = [];
+  const existingDates = new Set();
+  let preservedOtherConfirmedCount = 0;
 
   for (let rowIndex = 1; rowIndex < rows.length; rowIndex += 1) {
     const date = normalizeSheetDate(rows[rowIndex]?.[dateColumnIndex]);
     if (!date) continue;
     sheetDates.push(date);
+    existingDates.add(date);
+
+    const names = assistantsByDate.get(date) || [];
+    const isYingpingAssistant = hasYingpingAssistant(names);
+    const currentConfirmedUserId = String(
+      rows[rowIndex]?.[confirmedUserColumnIndex] ?? "",
+    ).trim();
+    let nextConfirmedUserId = currentConfirmedUserId;
+    if (isYingpingAssistant) {
+      if (
+        currentConfirmedUserId === "" ||
+        currentConfirmedUserId === YINGPING_STUDENT_USER_ID
+      ) {
+        nextConfirmedUserId = YINGPING_STUDENT_USER_ID;
+      } else {
+        preservedOtherConfirmedCount += 1;
+      }
+    } else if (currentConfirmedUserId === YINGPING_STUDENT_USER_ID) {
+      nextConfirmedUserId = "";
+    }
+    if (currentConfirmedUserId !== nextConfirmedUserId) {
+      cellUpdates.push({
+        rowNumber: rowIndex + 1,
+        columnIndex: confirmedUserColumnIndex,
+        date,
+        value: nextConfirmedUserId,
+      });
+    }
 
     const currentMemo = String(rows[rowIndex]?.[memoColumnIndex] ?? "");
-    const nextMemo = mergeManagedAssistantMemo(
-      currentMemo,
-      assistantsByDate.get(date) || [],
-    );
+    const nextMemo = removeManagedAssistantMarker(currentMemo);
     if (currentMemo !== nextMemo) {
-      updates.push({
+      cellUpdates.push({
         rowNumber: rowIndex + 1,
         columnIndex: memoColumnIndex,
         date,
@@ -101,7 +125,29 @@ export const buildMemoUpdates = (rows, assistantsByDate) => {
     }
   }
 
-  return { updates, sheetDates };
+  const missingYingpingDates = [...assistantsByDate.entries()]
+    .filter(([date, names]) => date && hasYingpingAssistant(names))
+    .map(([date]) => date)
+    .filter((date) => !existingDates.has(date))
+    .sort();
+  const appendedRows = missingYingpingDates.map((date, index) => {
+    const values = Array(headers.length).fill("");
+    values[dateColumnIndex] = date;
+    values[confirmedUserColumnIndex] = YINGPING_STUDENT_USER_ID;
+    return {
+      rowNumber: rows.length + index + 1,
+      date,
+      values,
+    };
+  });
+
+  return {
+    cellUpdates,
+    appendedRows,
+    sheetDates,
+    headerColumnCount: headers.length,
+    preservedOtherConfirmedCount,
+  };
 };
 
 const getGoogleAccessToken = async (credentials) => {
@@ -174,14 +220,13 @@ const fetchAllPages = async (makeQuery) => {
   return rows;
 };
 
-const buildAssistantsByDate = async (supabase, startDate, endDate) => {
+const buildAssistantsByDate = async (supabase, startDate) => {
   const shifts = await fetchAllPages(() =>
     supabase
       .from("shifts")
       .select("date,station,userId")
       .eq("station", ASSISTANT_STATION)
       .gte("date", startDate)
-      .lte("date", endDate)
       .order("date", { ascending: true }),
   );
 
@@ -257,7 +302,7 @@ export const runAssistantSheetSync = async () => {
     `spreadsheets/${STUDENT_SCHEDULE_SPREADSHEET_ID}/values/${sourceRange}?valueRenderOption=FORMATTED_VALUE&dateTimeRenderOption=FORMATTED_STRING`,
   );
   const rows = values.values || [];
-  const initial = buildMemoUpdates(rows, new Map());
+  const initial = buildSheetUpdatePlan(rows, new Map());
   if (initial.sheetDates.length === 0) {
     throw new Error("Shifts 工作表沒有可辨識的日期。");
   }
@@ -265,34 +310,51 @@ export const runAssistantSheetSync = async () => {
   const startDate = initial.sheetDates.reduce((left, right) =>
     left < right ? left : right,
   );
-  const endDate = initial.sheetDates.reduce((left, right) =>
-    left > right ? left : right,
-  );
   const supabase = createClient(supabaseUrl, supabaseKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
-  const assistantsByDate = await buildAssistantsByDate(
-    supabase,
-    startDate,
-    endDate,
-  );
-  const { updates } = buildMemoUpdates(rows, assistantsByDate);
+  const assistantsByDate = await buildAssistantsByDate(supabase, startDate);
+  const {
+    cellUpdates,
+    appendedRows,
+    headerColumnCount,
+    preservedOtherConfirmedCount,
+  } = buildSheetUpdatePlan(rows, assistantsByDate);
+  const updateCount = cellUpdates.length + appendedRows.length;
 
-  if (updates.length === 0) {
-    console.log("[assistant-sheet-sync] 已是最新狀態，無需更新。");
-    return { updatedCount: 0, dryRun };
+  if (updateCount === 0) {
+    console.log(
+      `[assistant-sheet-sync] 已是最新狀態；保留 ${preservedOtherConfirmedCount} 筆其他工讀生安排。`,
+    );
+    return {
+      updatedCount: 0,
+      appendedRowCount: 0,
+      preservedOtherConfirmedCount,
+      dryRun,
+    };
   }
   if (dryRun) {
     console.log(
-      `[assistant-sheet-sync] 試跑完成：偵測到 ${updates.length} 格需要更新，未寫入。`,
+      `[assistant-sheet-sync] 試跑完成：${cellUpdates.length} 格更新、${appendedRows.length} 列新增、保留 ${preservedOtherConfirmedCount} 筆其他工讀生安排；未寫入。`,
     );
-    return { updatedCount: updates.length, dryRun };
+    return {
+      updatedCount: cellUpdates.length,
+      appendedRowCount: appendedRows.length,
+      preservedOtherConfirmedCount,
+      dryRun,
+    };
   }
 
-  const data = updates.map((update) => ({
+  const data = cellUpdates.map((update) => ({
     range: `${STUDENT_SCHEDULE_SHEET}!${columnLetter(update.columnIndex)}${update.rowNumber}`,
     values: [[update.value]],
   }));
+  for (const row of appendedRows) {
+    data.push({
+      range: `${STUDENT_SCHEDULE_SHEET}!A${row.rowNumber}:${columnLetter(headerColumnCount - 1)}${row.rowNumber}`,
+      values: [row.values],
+    });
+  }
   await callGoogleSheets(
     accessToken,
     `spreadsheets/${STUDENT_SCHEDULE_SPREADSHEET_ID}/values:batchUpdate`,
@@ -302,8 +364,15 @@ export const runAssistantSheetSync = async () => {
     },
   );
 
-  console.log(`[assistant-sheet-sync] 已更新 ${updates.length} 格工讀生備忘。`);
-  return { updatedCount: updates.length, dryRun };
+  console.log(
+    `[assistant-sheet-sync] 已更新 ${cellUpdates.length} 格、新增 ${appendedRows.length} 列；保留 ${preservedOtherConfirmedCount} 筆其他工讀生安排。`,
+  );
+  return {
+    updatedCount: cellUpdates.length,
+    appendedRowCount: appendedRows.length,
+    preservedOtherConfirmedCount,
+    dryRun,
+  };
 };
 
 if (import.meta.url === pathToFileURL(process.argv[1] || "").href) {
