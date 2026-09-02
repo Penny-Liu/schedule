@@ -5,7 +5,7 @@
 ## 目前專案會用到（package.json 有掛 npm script）
 
 - `scripts/sync-all-to-supabase.mjs`：`npm run sync-stats`
-- `scripts/sync-assistant-to-student-sheet.mjs`：`npm run sync-assistant-sheet`，將放射師排班的「助理」同步到工讀生班表的「工讀生備忘」欄
+- `scripts/sync-assistant-to-student-sheet.mjs`：`npm run sync-assistant-sheet`，英平排「助理」時將其工讀生 ID 同步到 `Shifts.ConfirmedUserID`；保留其他已確認工讀生，缺少日期時自動新增
 - `scripts/sync-salesforce-daily-stats.mjs`：`npm run sf:sync-daily-stats`
 - `scripts/salesforce-list-objects.mjs`：`npm run sf:list-objects`
 - `scripts/salesforce-describe-object.mjs`：`npm run sf:describe -- <ObjectApiName>`
