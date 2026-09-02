@@ -1,0 +1,43 @@
+name: 同步放射師助理至工讀生班表
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "只檢查、不寫入 Google Sheet"
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sync-assistant-sheet
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: 取得程式碼
+        uses: actions/checkout@v6
+
+      - name: 安裝 Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+
+      - name: 安裝依賴套件
+        run: npm ci
+
+      - name: 同步助理排班
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          DRY_RUN: ${{ inputs.dry_run || 'false' }}
+        run: npm run sync-assistant-sheet
