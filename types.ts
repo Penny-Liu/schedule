@@ -409,6 +409,24 @@ export interface DoctorStationConfig {
   location: string; // '北投' | '大直' | '台中'
 }
 
+export type RadiographerMonthlyReportItemKind =
+  | "heading"
+  | "bullet"
+  | "nestedBullet"
+  | "detail";
+
+export interface RadiographerMonthlyReportItem {
+  id: string;
+  kind: RadiographerMonthlyReportItemKind;
+  text: string;
+}
+
+export interface RadiographerMonthlyReportSection {
+  id: string;
+  title: string;
+  items: RadiographerMonthlyReportItem[];
+}
+
 export interface SystemSettings {
   stations: string[];
   cycles: RosterCycle[];
@@ -435,6 +453,7 @@ export interface SystemSettings {
   healthMgmtCycles?: RosterCycle[]; // New: Independent cycles for HM
   healthMgmtLeaveTypes?: string[]; // New: Health management leave types
   radiographerWorkloadWeights?: Record<string, number>; // 放射師工作量欄位權重
+  radiographerMonthlyReportSections?: RadiographerMonthlyReportSection[];
   stationNotes?: Record<string, string>; // Map of 'YYYY-MM-DD_StationName' -> text
   geneSettings?: GeneSettings; // New: Settings for gene appointments
 }
