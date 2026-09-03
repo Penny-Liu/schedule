@@ -4,6 +4,8 @@ import {
   StationDefault,
   SPECIAL_ROLES,
   RadiographerDailyWorkload,
+  RadiographerMonthlyReportItemKind,
+  RadiographerMonthlyReportSection,
 } from "../types";
 import { db } from "../services/store";
 import {
@@ -43,6 +45,13 @@ import {
   hasProtectedEditorSession,
   isProtectedEditorRole,
 } from "../services/supabaseAuth";
+import {
+  cloneRadiographerMonthlyReportSections,
+  DEFAULT_RADIOGRAPHER_MONTHLY_REPORT_SECTIONS,
+  formatRadiographerMonthlyReportItem,
+  formatRadiographerMonthlyReportSectionTitle,
+  normalizeRadiographerMonthlyReportSections,
+} from "../services/radiographerMonthlyReport";
 
 type WorkloadFieldKey =
   | "mr"
@@ -247,6 +256,15 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
   const [isSavingWeights, setIsSavingWeights] = useState(false);
   const [showWeights, setShowWeights] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [showMonthlyReportEditor, setShowMonthlyReportEditor] = useState(false);
+  const [isSavingMonthlyReport, setIsSavingMonthlyReport] = useState(false);
+  const [monthlyReportSections, setMonthlyReportSections] = useState<
+    RadiographerMonthlyReportSection[]
+  >(() =>
+    normalizeRadiographerMonthlyReportSections(
+      db.settings.radiographerMonthlyReportSections,
+    ),
+  );
 
   // Sort
   const [sortField, setSortField] = useState<string | null>(null);
@@ -1483,6 +1501,66 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
       ...prev,
       [field]: parseFloat(value) || 0,
     }));
+  };
+
+  const updateMonthlyReportSection = (
+    sectionIndex: number,
+    updater: (section: RadiographerMonthlyReportSection) => RadiographerMonthlyReportSection,
+  ) => {
+    setMonthlyReportSections((previous) =>
+      previous.map((section, index) =>
+        index === sectionIndex ? updater(section) : section,
+      ),
+    );
+  };
+
+  const moveMonthlyReportSection = (sectionIndex: number, direction: -1 | 1) => {
+    setMonthlyReportSections((previous) => {
+      const targetIndex = sectionIndex + direction;
+      if (targetIndex < 0 || targetIndex >= previous.length) return previous;
+      const next = [...previous];
+      [next[sectionIndex], next[targetIndex]] = [
+        next[targetIndex],
+        next[sectionIndex],
+      ];
+      return next;
+    });
+  };
+
+  const moveMonthlyReportItem = (
+    sectionIndex: number,
+    itemIndex: number,
+    direction: -1 | 1,
+  ) => {
+    updateMonthlyReportSection(sectionIndex, (section) => {
+      const targetIndex = itemIndex + direction;
+      if (targetIndex < 0 || targetIndex >= section.items.length) return section;
+      const items = [...section.items];
+      [items[itemIndex], items[targetIndex]] = [items[targetIndex], items[itemIndex]];
+      return { ...section, items };
+    });
+  };
+
+  const handleSaveMonthlyReportSections = async () => {
+    setIsSavingMonthlyReport(true);
+    try {
+      const normalized = normalizeRadiographerMonthlyReportSections(
+        monthlyReportSections,
+      );
+      db.settings.radiographerMonthlyReportSections =
+        cloneRadiographerMonthlyReportSections(normalized);
+      const { error } = await db.saveSettings();
+      if (error) throw error;
+      setMonthlyReportSections(
+        cloneRadiographerMonthlyReportSections(normalized),
+      );
+      alert("劉雅萍月報內容已儲存，之後匯出會自動套用固定格式。");
+    } catch (error) {
+      console.error("Failed to save monthly report sections", error);
+      alert("月報內容儲存失敗，請確認權限後再試。");
+    } finally {
+      setIsSavingMonthlyReport(false);
+    }
   };
 
   // ── Group management ──────────────────────────────────────────
@@ -3009,7 +3087,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
           const prefix = isIndented ? "    " : "";
           const r = ws4.addRow(["", prefix + text, "", "", "", ""]);
           ws4.mergeCells(`B${r.number}:F${r.number}`);
-          r.height = 22;
+          r.height = Math.max(22, Math.min(58, Math.ceil((prefix.length + text.length) / 48) * 20));
           r.getCell(2).font = {
             name: "微軟正黑體",
             size: 12,
@@ -3068,47 +3146,19 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
         addMetricRow("• 校對影像", proofreader, "份"); // put extra note in label2
         addMetricRow("• 台積電登打校對", tsmcReport, "份");
 
-        // 3. 專案推動
-        addSubHeader("【專案推動】");
-        addTextRow("• 一森專案：排程、流程優化、月報彙整、ARIA手寫單");
-        addTextRow("• 關渡代檢專案");
-        addTextRow("• 智慧醫療合作（醫師 / 報告組 / 放射）:");
-        addTextRow(">> 遠健(遠距報告)、一森專案、報告系統優化", true);
-        addTextRow(">> 大直超音波初步登打及校對", true);
-        addTextRow(">> 台積電報告登打及校對", true);
-        addTextRow(">> 一森檢查前SOAP確認", true);
-        addTextRow(">> 一森報告校對", true);
-        addTextRow(">> 影像醫學部排班系統 + 全院排班系統(含醫師、基因、大直健管)", true);
-        addTextRow(">> Vibe coding：排班系統 / 報告登打片語庫", true);
-
-        // 4. 人員管理與行政支援
-        addSubHeader("【人員管理與行政支援】");
-        addTextRow("放射科部門科務管理");
-        addTextRow("• 放射師人員成長儀表版(技能/配合度/公事務參與/潛能)", true);
-        addTextRow("• 放射師整月工作量單位u 統計(現場/遠班/總)", true);
-        addTextRow("• 放射師每日工作量", true);
-        addTextRow("• 放射師每週期崗位安排", true);
-        addTextRow("• 協助工讀生排班與任務分配", true);
-        addTextRow("• 處理衛材耗材清點與請購", true);
-        addTextRow("• Neupid 系統放射數據統計與月報統整", true);
-        addTextRow("• 放射師評核、受訓安排(親自指導)", true);
-        addTextRow("• 光碟燒錄流程優化", true);
-        addTextRow("• 膠片配章管理", true);
-        addTextRow("• 科會安排", true);
-        addTextRow("• 颱風班排班、工作安排", true);
-        addTextRow("院務協助");
-        addTextRow("• 現場流程優化", true);
-        addTextRow("• 醫政督考", true);
-
-        // 5. 職責內容總覽
-        addSubHeader("【職責內容總覽】");
-        addTextRow("• 遠健公司：與醫師工作、智慧醫療數據、AI工具");
-        addTextRow("• 現場流程(協助支援北投／大直現場作業)、人力招募與環境優化");
-        addTextRow("• 培育放射師多專才、提供臨床技術指導");
-        addTextRow("• 儀器保養維護管理");
-        addTextRow("• 協助醫師報告、影像校對、現場崗位支援");
-        addTextRow("• 影像相關資訊系統/硬體問題排除");
-        addTextRow("• 院務協助，如督考、評鑑…");
+        // 3+. 可在畫面動態調整的文字區塊；Excel 樣式仍由此處統一控制。
+        monthlyReportSections.forEach((section) => {
+          const sectionTitle = formatRadiographerMonthlyReportSectionTitle(
+            section.title,
+          );
+          if (!sectionTitle) return;
+          addSubHeader(sectionTitle);
+          section.items.forEach((item) => {
+            const formatted = formatRadiographerMonthlyReportItem(item);
+            if (!formatted.text) return;
+            addTextRow(formatted.text, formatted.isIndented);
+          });
+        });
       }
 
       finalizeExcelWorksheet(worksheet, { headerRows: [2, 3], dataStartRow: 4, lastColumn: 39, freezeRows: 3, autoFilter: false, alternatingRows: false });
@@ -3441,6 +3491,231 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
               </div>
             )}
           </div>
+          <div className="bg-white border border-sky-200 rounded-2xl p-4 shadow-sm">
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <button
+                type="button"
+                onClick={() => setShowMonthlyReportEditor((visible) => !visible)}
+                className="group flex items-center gap-2 text-left"
+              >
+                <div className="flex h-6 w-6 items-center justify-center rounded-md bg-sky-50 text-sky-600 transition-colors group-hover:bg-sky-100">
+                  {showMonthlyReportEditor ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                </div>
+                <div>
+                  <div className="text-sm font-bold text-slate-800">劉雅萍月報內容</div>
+                  <div className="text-xs text-slate-500">
+                    編輯文字、類型與順序；匯出時自動套用固定 Excel 格式。
+                  </div>
+                </div>
+              </button>
+              {showMonthlyReportEditor && (
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setMonthlyReportSections(
+                        cloneRadiographerMonthlyReportSections(
+                          DEFAULT_RADIOGRAPHER_MONTHLY_REPORT_SECTIONS,
+                        ),
+                      )
+                    }
+                    className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50"
+                  >
+                    恢復預設
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSaveMonthlyReportSections}
+                    disabled={isSavingMonthlyReport}
+                    className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold text-white ${
+                      isSavingMonthlyReport
+                        ? "bg-slate-400"
+                        : "bg-sky-600 hover:bg-sky-700"
+                    }`}
+                  >
+                    <Save size={14} />
+                    {isSavingMonthlyReport ? "儲存中..." : "儲存月報內容"}
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {showMonthlyReportEditor && (
+              <div className="mt-4 space-y-4 border-t border-slate-100 pt-4">
+                <div className="rounded-lg bg-sky-50 px-3 py-2 text-xs leading-5 text-sky-800">
+                  「項目」會自動加 •，「子項目」會自動加 &gt;&gt; 並縮排；不需要自行輸入符號或空格。
+                </div>
+
+                {monthlyReportSections.map((section, sectionIndex) => (
+                  <div
+                    key={section.id}
+                    className="rounded-xl border border-slate-200 bg-slate-50/60 p-3"
+                  >
+                    <div className="flex flex-col gap-2 md:flex-row md:items-center">
+                      <input
+                        value={section.title}
+                        onChange={(event) =>
+                          updateMonthlyReportSection(sectionIndex, (current) => ({
+                            ...current,
+                            title: event.target.value,
+                          }))
+                        }
+                        placeholder="區段名稱"
+                        className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-800 outline-none focus:border-sky-400"
+                      />
+                      <div className="flex items-center gap-1 self-end md:self-auto">
+                        <button
+                          type="button"
+                          onClick={() => moveMonthlyReportSection(sectionIndex, -1)}
+                          disabled={sectionIndex === 0}
+                          className="rounded p-1.5 text-slate-500 hover:bg-white disabled:opacity-25"
+                          title="區段上移"
+                        >
+                          <ChevronUp size={15} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => moveMonthlyReportSection(sectionIndex, 1)}
+                          disabled={sectionIndex === monthlyReportSections.length - 1}
+                          className="rounded p-1.5 text-slate-500 hover:bg-white disabled:opacity-25"
+                          title="區段下移"
+                        >
+                          <ChevronDown size={15} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setMonthlyReportSections((previous) =>
+                              previous.filter((_, index) => index !== sectionIndex),
+                            )
+                          }
+                          className="rounded p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600"
+                          title="刪除區段"
+                        >
+                          <X size={15} />
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="mt-3 space-y-2">
+                      {section.items.map((item, itemIndex) => (
+                        <div
+                          key={item.id}
+                          className="grid gap-2 rounded-lg border border-slate-100 bg-white p-2 md:grid-cols-[112px_minmax(0,1fr)_auto] md:items-center"
+                        >
+                          <select
+                            value={item.kind}
+                            onChange={(event) =>
+                              updateMonthlyReportSection(sectionIndex, (current) => ({
+                                ...current,
+                                items: current.items.map((currentItem, index) =>
+                                  index === itemIndex
+                                    ? {
+                                        ...currentItem,
+                                        kind: event.target.value as RadiographerMonthlyReportItemKind,
+                                      }
+                                    : currentItem,
+                                ),
+                              }))
+                            }
+                            className="rounded-md border border-slate-200 bg-slate-50 px-2 py-2 text-xs font-bold text-slate-700 outline-none focus:border-sky-400"
+                          >
+                            <option value="heading">小標題</option>
+                            <option value="bullet">項目 •</option>
+                            <option value="nestedBullet">縮排項目 •</option>
+                            <option value="detail">子項目 &gt;&gt;</option>
+                          </select>
+                          <textarea
+                            rows={2}
+                            value={item.text}
+                            onChange={(event) =>
+                              updateMonthlyReportSection(sectionIndex, (current) => ({
+                                ...current,
+                                items: current.items.map((currentItem, index) =>
+                                  index === itemIndex
+                                    ? { ...currentItem, text: event.target.value }
+                                    : currentItem,
+                                ),
+                              }))
+                            }
+                            placeholder="輸入月報內容"
+                            className="min-w-0 resize-y rounded-md border border-slate-200 px-2 py-1.5 text-sm text-slate-800 outline-none focus:border-sky-400"
+                          />
+                          <div className="flex items-center justify-end gap-0.5">
+                            <button
+                              type="button"
+                              onClick={() => moveMonthlyReportItem(sectionIndex, itemIndex, -1)}
+                              disabled={itemIndex === 0}
+                              className="rounded p-1.5 text-slate-400 hover:bg-slate-50 disabled:opacity-20"
+                              title="項目上移"
+                            >
+                              <ChevronUp size={14} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => moveMonthlyReportItem(sectionIndex, itemIndex, 1)}
+                              disabled={itemIndex === section.items.length - 1}
+                              className="rounded p-1.5 text-slate-400 hover:bg-slate-50 disabled:opacity-20"
+                              title="項目下移"
+                            >
+                              <ChevronDown size={14} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                updateMonthlyReportSection(sectionIndex, (current) => ({
+                                  ...current,
+                                  items: current.items.filter((_, index) => index !== itemIndex),
+                                }))
+                              }
+                              className="rounded p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600"
+                              title="刪除項目"
+                            >
+                              <X size={14} />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        updateMonthlyReportSection(sectionIndex, (current) => ({
+                          ...current,
+                          items: [
+                            ...current.items,
+                            {
+                              id: generateUUID(),
+                              kind: "bullet",
+                              text: "",
+                            },
+                          ],
+                        }))
+                      }
+                      className="mt-3 inline-flex items-center gap-1 rounded-lg border border-dashed border-sky-300 px-3 py-1.5 text-xs font-bold text-sky-700 hover:bg-sky-50"
+                    >
+                      <Plus size={13} /> 新增項目
+                    </button>
+                  </div>
+                ))}
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setMonthlyReportSections((previous) => [
+                      ...previous,
+                      { id: generateUUID(), title: "新區段", items: [] },
+                    ])
+                  }
+                  className="inline-flex items-center gap-1 rounded-lg border border-dashed border-sky-400 px-3 py-2 text-xs font-bold text-sky-700 hover:bg-sky-50"
+                >
+                  <Plus size={14} /> 新增區段
+                </button>
+              </div>
+            )}
+          </div>
+
           <div className="grid gap-3 sm:grid-cols-3">
             <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
               <div className="text-sm font-bold text-slate-800">現場加權</div>
