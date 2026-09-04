@@ -33,6 +33,8 @@ import {
 import { loadExcelJS } from "../services/exportLibraries";
 import { downloadExcelBuffer, finalizeExcelWorksheet, initializeExcelWorkbook, styleExcelTitle } from "../services/excelReportUtils";
 import { isUserOnEmploymentPause, generateUUID } from "../services/utils";
+import { calculateAgeOnDate } from "../services/radiographerAge";
+import { fetchRadiographerBirthDates } from "../services/radiographerPrivateProfile";
 import { DailyDetailsModal } from "../components/dashboard/DailyDetailsModal";
 import { canTeachLearningCategory } from "../services/radiographerLearning";
 import {
@@ -2256,9 +2258,28 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
           ? `${startDate.substring(5).replace("-", "/")}-${endDate.substring(5).replace("-", "/")}`
           : "";
       const titleText = `${y}年 ${mm}月放射師工作量統計（排班週期：${cycleText} (${dateRangeText})）`;
+      const reportReferenceDate =
+        endDate || `${currentMonth}-${String(new Date(y, m, 0).getDate()).padStart(2, "0")}`;
+      const exportedUsers = radiographers.filter((user) =>
+        filteredDisplayData.some((row) => row.name === user.name),
+      );
+      const birthDatesByUserId = await fetchRadiographerBirthDates(
+        exportedUsers.map((user) => user.id),
+      );
+      const getAgeForName = (name: string): number | "" => {
+        const user = exportedUsers.find((candidate) => candidate.name === name);
+        if (!user) return "";
+        return calculateAgeOnDate(
+          birthDatesByUserId[user.id],
+          reportReferenceDate,
+        ) ?? "";
+      };
+      const missingBirthDateNames = exportedUsers
+        .filter((user) => !birthDatesByUserId[user.id])
+        .map((user) => user.name);
 
-      // 1. 新增第一列 Title (合併 A 到 AM) 39 欄
-      worksheet.mergeCells("A1:AM1");
+      // 1. 新增第一列 Title (合併 A 到 AN) 40 欄
+      worksheet.mergeCells("A1:AN1");
       const titleCell = worksheet.getCell("A1");
       titleCell.value = titleText;
       titleCell.font = { size: 16, bold: true, name: "微軟正黑體" };
@@ -2267,35 +2288,39 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
 
       // 2. 準備第二與第三列 (合併欄位與子標題)
       worksheet.mergeCells("A2:A3");
-      worksheet.getCell("A2").value = "姓名";
+      worksheet.getCell("A2").value = "年紀";
 
-      worksheet.mergeCells("B2:I2");
-      worksheet.getCell("B2").value = "上班天數";
+      worksheet.mergeCells("B2:B3");
+      worksheet.getCell("B2").value = "姓名";
 
-      worksheet.mergeCells("J2:AE2");
-      worksheet.getCell("J2").value = "現場工作量";
+      worksheet.mergeCells("C2:J2");
+      worksheet.getCell("C2").value = "上班天數";
 
-      worksheet.mergeCells("AF2:AH2");
-      worksheet.getCell("AF2").value = "遠班工作量";
+      worksheet.mergeCells("K2:AF2");
+      worksheet.getCell("K2").value = "現場工作量";
 
-      worksheet.mergeCells("AI2:AI3");
-      worksheet.getCell("AI2").value = "現場加權";
+      worksheet.mergeCells("AG2:AI2");
+      worksheet.getCell("AG2").value = "遠班工作量";
 
       worksheet.mergeCells("AJ2:AJ3");
-      worksheet.getCell("AJ2").value = "遠班加權";
+      worksheet.getCell("AJ2").value = "現場加權";
 
       worksheet.mergeCells("AK2:AK3");
-      worksheet.getCell("AK2").value = "總加權";
+      worksheet.getCell("AK2").value = "遠班加權";
 
       worksheet.mergeCells("AL2:AL3");
-      worksheet.getCell("AL2").value = "教學與學習";
+      worksheet.getCell("AL2").value = "總加權";
 
       worksheet.mergeCells("AM2:AM3");
-      worksheet.getCell("AM2").value = "預估日期";
+      worksheet.getCell("AM2").value = "教學與學習";
+
+      worksheet.mergeCells("AN2:AN3");
+      worksheet.getCell("AN2").value = "預估日期";
 
       // 欄位標題 (Row 3)
       const headersRow3 = [
         "", // A3 (merged)
+        "", // B3 (merged)
         "上班天數",
         "現場天數",
         "遠班",
@@ -2329,11 +2354,11 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
         "報告登打",
         "影像校對",
         "台積電報告",
-        "", // AI3
         "", // AJ3
         "", // AK3
         "", // AL3
-        "", // AM3 (merged)
+        "", // AM3
+        "", // AN3 (merged)
       ];
       worksheet.getRow(3).values = headersRow3;
 
@@ -2341,7 +2366,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
       [2, 3].forEach((r) => {
         const row = worksheet.getRow(r);
         row.height = r === 3 ? 35 : 25;
-        for (let i = 1; i <= 39; i++) {
+        for (let i = 1; i <= 40; i++) {
           const cell = row.getCell(i);
           cell.font = {
             bold: true,
@@ -2357,7 +2382,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
 
           // 區塊最後一欄使用粗線劃分
           const isBlockEnd = [
-            1, 9, 12, 17, 25, 31, 34, 35, 36, 37, 38, 39,
+            1, 2, 10, 13, 18, 26, 32, 35, 36, 37, 38, 39, 40,
           ].includes(i);
           cell.border = {
             top: { style: "thin", color: { argb: "FFCCCCCC" } },
@@ -2379,34 +2404,34 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
       });
 
       // 覆寫第二列主標題與最後三欄加權顏色的底色
-      worksheet.getCell("B2").fill = {
+      worksheet.getCell("C2").fill = {
         type: "pattern",
         pattern: "solid",
         fgColor: { argb: "FFE2EFDA" },
       }; // 淡綠色 - 上班天數
-      worksheet.getCell("J2").fill = {
+      worksheet.getCell("K2").fill = {
         type: "pattern",
         pattern: "solid",
         fgColor: { argb: "FFFFF2CC" },
       }; // 淡黃色 - 現場工作量
-      worksheet.getCell("AF2").fill = {
+      worksheet.getCell("AG2").fill = {
         type: "pattern",
         pattern: "solid",
         fgColor: { argb: "FFDDEBF7" },
       }; // 淡藍色 - 遠班工作量
 
       // 覆寫三個加權欄位 (Row 2, AI, AJ, AK) 的底色
-      worksheet.getCell("AI2").fill = {
+      worksheet.getCell("AJ2").fill = {
         type: "pattern",
         pattern: "solid",
         fgColor: { argb: "FFFFF2CC" },
       }; // 現場加權 (黃色系)
-      worksheet.getCell("AJ2").fill = {
+      worksheet.getCell("AK2").fill = {
         type: "pattern",
         pattern: "solid",
         fgColor: { argb: "FFDDEBF7" },
       }; // 遠班加權 (藍色系)
-      worksheet.getCell("AK2").fill = {
+      worksheet.getCell("AL2").fill = {
         type: "pattern",
         pattern: "solid",
         fgColor: { argb: "FFFCE4D6" },
@@ -2439,6 +2464,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
           richTextValue.richText.length > 0 ? richTextValue : "";
 
         const excelRow = worksheet.addRow([
+          getAgeForName(row.name),
           row.name,
           row.workDays || 0,
           row.onSiteDays || 0,
@@ -2505,7 +2531,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
           };
 
           const isBlockEnd = [
-            1, 9, 12, 17, 25, 31, 34, 35, 36, 37, 38, 39,
+            1, 2, 10, 13, 18, 26, 32, 35, 36, 37, 38, 39, 40,
           ].includes(colNumber);
           cell.border = {
             top: { style: "thin", color: { argb: "FFEEEEEE" } },
@@ -2518,19 +2544,19 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
           };
 
           // 資料列最後三欄顏色
-          if (colNumber === 35) {
+          if (colNumber === 36) {
             cell.fill = {
               type: "pattern",
               pattern: "solid",
               fgColor: { argb: "FFFFF9E6" },
             }; // 極淡黃
-          } else if (colNumber === 36) {
+          } else if (colNumber === 37) {
             cell.fill = {
               type: "pattern",
               pattern: "solid",
               fgColor: { argb: "FFF0F6FA" },
             }; // 極淡藍
-          } else if (colNumber === 37) {
+          } else if (colNumber === 38) {
             cell.fill = {
               type: "pattern",
               pattern: "solid",
@@ -2542,7 +2568,8 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
 
       // 設定欄寬
       worksheet.columns = [
-        { width: 12 }, // A: 姓名
+        { width: 8 }, // A: 年紀
+        { width: 12 }, // B: 姓名
         { width: 10 },
         { width: 10 },
         { width: 10 },
@@ -2646,8 +2673,8 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
         if (rows.length === 0) return;
         rows.sort(sortDesc);
 
-        const titleRow = worksheet2.addRow([title, "", "", "", "", ""]);
-        worksheet2.mergeCells(titleRow.number, 1, titleRow.number, 6);
+        const titleRow = worksheet2.addRow([title, "", "", "", "", "", ""]);
+        worksheet2.mergeCells(titleRow.number, 1, titleRow.number, 7);
         applyHeaderStyle(titleRow, "FFDDEBF7");
         titleRow.getCell(1).alignment = {
           vertical: "middle",
@@ -2656,6 +2683,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
         };
 
         const colHeaderRow = worksheet2.addRow([
+          "年紀",
           "姓名",
           "上班天數",
           "現場單位",
@@ -2714,6 +2742,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
             richTextValue.richText.length > 0 ? richTextValue : "";
 
           const dataRow = worksheet2.addRow([
+            getAgeForName(row.name),
             row.name,
             row.workDays || 0,
             onsite,
@@ -2746,6 +2775,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
       renderGroupSheet2("未分組", unassignedData);
 
       worksheet2.columns = [
+        { width: 8 },
         { width: 15 },
         { width: 12 },
         { width: 12 },
@@ -2777,8 +2807,9 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
           "",
           "",
           "",
+          "",
         ]);
-        worksheet3.mergeCells(titleRow.number, 1, titleRow.number, 15);
+        worksheet3.mergeCells(titleRow.number, 1, titleRow.number, 16);
         applyHeaderStyle(titleRow, "FFDDEBF7");
         titleRow.getCell(1).alignment = {
           vertical: "middle",
@@ -2787,6 +2818,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
         };
 
         const colHeaderRow = worksheet3.addRow([
+          "年紀",
           "姓名",
           "上班天數",
           "現場單位",
@@ -2806,19 +2838,19 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
         applyHeaderStyle(colHeaderRow, "FFF2F2F2");
 
         // 將現場單位與其附件上黃色，遠班上藍色，總單位上橘色
-        for (let i = 3; i <= 12; i++) {
+        for (let i = 4; i <= 13; i++) {
           colHeaderRow.getCell(i).fill = {
             type: "pattern",
             pattern: "solid",
             fgColor: { argb: "FFFFF2CC" },
           };
         }
-        colHeaderRow.getCell(13).fill = {
+        colHeaderRow.getCell(14).fill = {
           type: "pattern",
           pattern: "solid",
           fgColor: { argb: "FFDDEBF7" },
         };
-        colHeaderRow.getCell(14).fill = {
+        colHeaderRow.getCell(15).fill = {
           type: "pattern",
           pattern: "solid",
           fgColor: { argb: "FFFCE4D6" },
@@ -2882,6 +2914,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
             richTextValue.richText.length > 0 ? richTextValue : "";
 
           const dataRow = worksheet3.addRow([
+            getAgeForName(row.name),
             row.name,
             row.workDays || 0,
             onsite,
@@ -2923,6 +2956,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
       renderGroupSheet3("未分組", unassignedData);
 
       worksheet3.columns = [
+        { width: 8 }, // 年紀
         { width: 12 }, // 姓名
         { width: 10 }, // 上班天數
         { width: 10 }, // 現場單位
@@ -3161,13 +3195,18 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
         });
       }
 
-      finalizeExcelWorksheet(worksheet, { headerRows: [2, 3], dataStartRow: 4, lastColumn: 39, freezeRows: 3, autoFilter: false, alternatingRows: false });
-      finalizeExcelWorksheet(worksheet2, { headerRows: [], dataStartRow: 1, lastColumn: 6, freezeRows: 0, freezeColumns: 0, autoFilter: false, alternatingRows: false });
-      finalizeExcelWorksheet(worksheet3, { headerRows: [], dataStartRow: 1, lastColumn: 15, freezeRows: 0, freezeColumns: 0, autoFilter: false, alternatingRows: false });
+      finalizeExcelWorksheet(worksheet, { headerRows: [2, 3], dataStartRow: 4, lastColumn: 40, freezeRows: 3, autoFilter: false, alternatingRows: false });
+      finalizeExcelWorksheet(worksheet2, { headerRows: [], dataStartRow: 1, lastColumn: 7, freezeRows: 0, freezeColumns: 0, autoFilter: false, alternatingRows: false });
+      finalizeExcelWorksheet(worksheet3, { headerRows: [], dataStartRow: 1, lastColumn: 16, freezeRows: 0, freezeColumns: 0, autoFilter: false, alternatingRows: false });
       const ws4 = workbook.getWorksheet("劉雅萍");
       if (ws4) finalizeExcelWorksheet(ws4, { headerRows: [], dataStartRow: 1, lastColumn: 6, freezeRows: 0, freezeColumns: 0, autoFilter: false, alternatingRows: false });
       const buffer = await workbook.xlsx.writeBuffer();
       downloadExcelBuffer(buffer, `放射師工作量統計_${currentMonth}.xlsx`);
+      if (missingBirthDateNames.length > 0) {
+        alert(
+          `Excel 已匯出；以下放射師尚未在人員管理設定出生年月日，年紀欄將留白：${missingBirthDateNames.join("、")}`,
+        );
+      }
     } catch (e: any) {
       console.error("Excel export failed", e);
       alert(`匯出 Excel 失敗: ${e.message}`);
