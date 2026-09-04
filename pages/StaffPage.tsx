@@ -43,6 +43,10 @@ import {
   getEmploymentPause,
   toLocalISOString,
 } from "../services/utils";
+import {
+  fetchRadiographerBirthDate,
+  saveRadiographerBirthDate,
+} from "../services/radiographerPrivateProfile";
 
 interface StaffPageProps {
   currentUser: User;
@@ -112,6 +116,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
     isActive: boolean; // New
     resignationDate: string; // New
     hireDate: string; // New
+    birthDate: string;
     personalCycles: User["personalCycles"];
     employmentPauseStartDate: string;
     employmentPauseEndDate: string;
@@ -138,6 +143,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
     isActive: true, // New
     resignationDate: "", // New
     hireDate: "", // New
+    birthDate: "",
     personalCycles: {},
     employmentPauseStartDate: "",
     employmentPauseEndDate: "",
@@ -167,6 +173,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
       healthMgmtLocation: "全部",
       resignationDate: "",
       hireDate: "",
+      birthDate: "",
       personalCycles: {},
       employmentPauseStartDate: "",
       employmentPauseEndDate: "",
@@ -184,6 +191,19 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
 
     // Auto-generate alias if empty (take first char)
     const finalAlias = formData.alias || formData.name.charAt(0);
+    if (formData.isRadiographer && !formData.birthDate) {
+      setError("放射師需填寫出生年月日。");
+      setIsSaving(false);
+      return;
+    }
+    if (
+      formData.birthDate &&
+      formData.birthDate > toLocalISOString(new Date())
+    ) {
+      setError("出生年月日不可晚於今天。");
+      setIsSaving(false);
+      return;
+    }
     if (
       (formData.employmentPauseStartDate && !formData.employmentPauseEndDate) ||
       (!formData.employmentPauseStartDate && formData.employmentPauseEndDate)
@@ -240,6 +260,10 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
             `人員資料與權限已儲存。\n\n此帳號原密碼不符合新規則，已改用臨時密碼：${result.temporaryPassword}\n請通知本人登入後設定個人密碼。`,
           );
         }
+        await saveRadiographerBirthDate(
+          editingId,
+          formData.isRadiographer ? formData.birthDate : null,
+        );
       } else {
         const u: User = {
           id: generateUUID(),
@@ -273,6 +297,10 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
           permissions: formData.permissions,
         };
         await db.addUser(u);
+        await saveRadiographerBirthDate(
+          u.id,
+          formData.isRadiographer ? formData.birthDate : null,
+        );
       }
 
       setUsers([...db.getUsers()]); // Refresh list
@@ -289,10 +317,19 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
     }
   };
 
-  const handleEditClick = (e: React.MouseEvent, user: User) => {
+  const handleEditClick = async (e: React.MouseEvent, user: User) => {
     e.stopPropagation(); // Prevent triggering parent clicks
     setEditingId(user.id);
     const employmentPause = getEmploymentPause(user);
+    let birthDate = "";
+    if (user.isRadiographer) {
+      try {
+        birthDate = await fetchRadiographerBirthDate(user.id);
+      } catch (err: any) {
+        console.error("Load radiographer birth date failed:", err);
+        setError(`無法讀取出生年月日：${err?.message || err}`);
+      }
+    }
     setFormData({
       name: user.name,
       alias: user.alias || user.name.charAt(0),
@@ -313,6 +350,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
       isActive: user.isActive !== undefined ? user.isActive : true,
       resignationDate: user.resignationDate || "",
       hireDate: user.hireDate || "",
+      birthDate,
       personalCycles: user.personalCycles || {},
       employmentPauseStartDate: employmentPause?.startDate || "",
       employmentPauseEndDate: employmentPause?.endDate || "",
@@ -738,6 +776,31 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                     </div>
                   )}
                 </div>
+
+                {formData.isRadiographer && (
+                  <div className="mb-3 rounded-lg border border-cyan-200 bg-cyan-50 p-3">
+                    <label
+                      htmlFor="birthDate"
+                      className="mb-1 block text-xs font-bold text-cyan-800"
+                    >
+                      出生年月日（放射師必填）
+                    </label>
+                    <input
+                      id="birthDate"
+                      type="date"
+                      required
+                      max={toLocalISOString(new Date())}
+                      value={formData.birthDate}
+                      onChange={(e) =>
+                        setFormData({ ...formData, birthDate: e.target.value })
+                      }
+                      className="w-full rounded-lg border border-cyan-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-cyan-500"
+                    />
+                    <p className="mt-1.5 text-[11px] text-cyan-700">
+                      此資料獨立加密傳輸並受權限控管；月報只帶入年紀，不匯出出生年月日。
+                    </p>
+                  </div>
+                )}
 
                 <div className="flex items-center gap-2 mb-2 bg-gray-50 p-2 rounded border border-gray-100">
                   <input
