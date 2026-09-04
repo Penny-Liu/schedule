@@ -993,7 +993,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                       formData.role === UserRole.SYSTEM_ADMIN) && (
                       <div>
                         <label className="text-xs font-semibold text-gray-500 mb-1 block">
-                          D組輪休順序 (Index 0–3)
+                          D組四週平衡輪休代碼 (Index 0–3)
                         </label>
                         <select
                           value={formData.groupIndex}
@@ -1011,7 +1011,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                           <option value={3}>3（第4位休）</option>
                         </select>
                         <p className="text-[10px] text-gray-400 mt-1">
-                          每4天中的第幾天輪到這個人休息，4人各設不同數字 (0-3)
+                          2026/11/3 起適用；4人各設不同數字，四週內每人輪休6天
                         </p>
                       </div>
                     )}
