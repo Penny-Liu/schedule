@@ -15,7 +15,7 @@ export enum StaffGroup {
   GROUP_A = "A",
   GROUP_B = "B",
   GROUP_C = "C",
-  GROUP_D = "D", // Rolling rotation: Sun always off, Mon-Sat rotate by index
+  GROUP_D = "D", // Sun always off; Mon-Sat use a four-week balanced rotation
 }
 
 export enum AdministrativeCategory {
@@ -155,7 +155,7 @@ export interface User {
   isPartTime?: boolean; // New: Flag for part-time radiographers (hidden in main view)
   isHealthMgmt?: boolean; // New: Flag for health management staff
   healthMgmtLocation?: "全部" | "北投" | "大直"; // New: Restricts HM_SUPERVISOR/HM_STAFF view and edit location. '全部' allows dropdown.
-  groupIndex?: number; // New: Fixed rotation index for Group D (0-based, determines rest day order)
+  groupIndex?: number; // Group D balanced-rotation code (0-3)
   groupHistory?: GroupHistoryEntry[]; // New: Historical group changes
   personalCycles?: Record<
     string,

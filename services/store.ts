@@ -39,11 +39,11 @@ import {
   passwordForSupabaseAuth,
 } from "./passwordPolicy.mjs";
 import {
-  countNonSundayDays,
   generateUUID,
   isUserOnEmploymentPause,
   toLocalISOString,
 } from "./utils";
+import { getGroupDRestIndexForDate } from "./groupDRotation";
 
 const SCHEDULE_STORAGE_KEY = "radiology_schedule_data";
 const MEETING_ROOM_FULL_ACCESS = [
@@ -3778,7 +3778,7 @@ class Store {
     if (!user.isPartTime) {
       const { groupId, groupIndex } = this.getEffectiveGroupAndIndex(user, dateStr);
 
-      // --- Group D: Rolling Rotation (Sun off, Mon-Sat rotate by fixed index) ---
+      // --- Group D: Sunday off plus a four-week balanced Mon-Sat rotation ---
       if (groupId === StaffGroup.GROUP_D) {
         const d = new Date(dateStr + "T00:00:00");
         // Sunday is always OFF
@@ -3786,15 +3786,15 @@ class Store {
           return "OFF";
         }
 
-        // Count non-Sunday days from cycle start to (but not including) dateStr
+        // Before 2026-11-03 this preserves the original modulo-four result.
+        // The balanced cycle starts from day zero on 2026-11-03.
         const refStr = this.settings.cycleStartDate || "2024-01-01";
-        const ref = new Date(refStr + "T00:00:00");
-        const nonSundayCount = countNonSundayDays(ref, d);
 
-        // Fixed index: groupIndex 0-3 for 4-person D group
+        // Four-week balanced table: one of four people rests on each
+        // non-Sunday day; every person covers all six weekday positions.
         const myIndex = groupIndex ?? 0;
-        const groupSize = 4;
-        const result = nonSundayCount % groupSize === myIndex ? "OFF" : "WORK";
+        const restIndex = getGroupDRestIndexForDate(dateStr, refStr);
+        const result = restIndex === myIndex ? "OFF" : "WORK";
         return result;
       }
 

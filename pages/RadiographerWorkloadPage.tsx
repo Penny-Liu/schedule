@@ -54,6 +54,11 @@ import {
   formatRadiographerMonthlyReportSectionTitle,
   normalizeRadiographerMonthlyReportSections,
 } from "../services/radiographerMonthlyReport";
+import {
+  excludeRowsFromRankedSheets,
+  getRadiographerAssistantNames,
+  orderMonthlySummaryRows,
+} from "../services/radiographerWorkloadExport";
 
 type WorkloadFieldKey =
   | "mr"
@@ -2236,15 +2241,14 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
       const worksheet = workbook.addWorksheet("工作量統計");
       initializeExcelWorkbook(workbook, `放射師工作量統計 ${currentMonth}`);
 
-      const assistants = radiographers
-        .filter((r) => r.role === "RADIOGRAPHER_ASSISTANT")
-        .map((r) => r.name);
-      const excludedNames = ["劉雅萍", ...assistants];
-      const filteredWorkloadData = workloadData.filter(
-        (r) => !excludedNames.includes(r.name),
+      const assistantNames = getRadiographerAssistantNames(radiographers);
+      const summaryWorkloadData = orderMonthlySummaryRows(
+        workloadData,
+        assistantNames,
       );
-      const filteredDisplayData = displayData.filter(
-        (r) => !excludedNames.includes(r.name),
+      const filteredDisplayData = excludeRowsFromRankedSheets(
+        displayData,
+        assistantNames,
       );
 
       // 取得標題資訊
@@ -2261,10 +2265,13 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
       const reportReferenceDate =
         endDate || `${currentMonth}-${String(new Date(y, m, 0).getDate()).padStart(2, "0")}`;
       const exportedUsers = radiographers.filter((user) =>
-        filteredDisplayData.some((row) => row.name === user.name),
+        summaryWorkloadData.some((row) => row.name === user.name),
+      );
+      const birthDateUsers = exportedUsers.filter(
+        (user) => user.isRadiographer,
       );
       const birthDatesByUserId = await fetchRadiographerBirthDates(
-        exportedUsers.map((user) => user.id),
+        birthDateUsers.map((user) => user.id),
       );
       const getAgeForName = (name: string): number | "" => {
         const user = exportedUsers.find((candidate) => candidate.name === name);
@@ -2274,7 +2281,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
           reportReferenceDate,
         ) ?? "";
       };
-      const missingBirthDateNames = exportedUsers
+      const missingBirthDateNames = birthDateUsers
         .filter((user) => !birthDatesByUserId[user.id])
         .map((user) => user.name);
 
@@ -2438,7 +2445,8 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
       }; // 總加權 (橘色系)
 
       // 資料列
-      filteredWorkloadData.forEach((row) => {
+      summaryWorkloadData.forEach((row) => {
+        const isAssistantRow = assistantNames.has(row.name);
         let richTextValue: any = { richText: [] };
         if (row.teachingDates && Object.keys(row.teachingDates).length > 0) {
           const parts = Object.entries(row.teachingDates).map(
@@ -2562,6 +2570,18 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
               pattern: "solid",
               fgColor: { argb: "FFFDF3EB" },
             }; // 極淡橘
+          }
+
+          if (isAssistantRow && colNumber >= 3) {
+            cell.fill = {
+              type: "pattern",
+              pattern: "solid",
+              fgColor: { argb: "FFE7E6E6" },
+            };
+            cell.font = {
+              ...cell.font,
+              color: { argb: "FF666666" },
+            };
           }
         });
       });
