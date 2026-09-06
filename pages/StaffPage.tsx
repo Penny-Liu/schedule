@@ -1011,7 +1011,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                           <option value={3}>3（第4位休）</option>
                         </select>
                         <p className="text-[10px] text-gray-400 mt-1">
-                          2026/11/3 起適用；4人各設不同數字。每週含固定週日共休2–3天，四週中2週休2天、2週休3天
+                          2026/11/3 起適用；4人各設不同數字，四週內每人輪休6天
                         </p>
                       </div>
                     )}
