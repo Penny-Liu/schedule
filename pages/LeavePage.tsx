@@ -631,7 +631,7 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
     return `${d.getMonth() + 1}/${d.getDate()}`;
   };
 
-  const handleStatusChange = (id: string, status: LeaveStatus) => {
+  const handleStatusChange = async (id: string, status: LeaveStatus) => {
     // Validation for Approval: Check if user has tasks/roles
     if (status === LeaveStatus.APPROVED) {
       const leave = leaves.find((l) => l.id === id);
@@ -741,14 +741,18 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
       }
     }
 
-    // Alert logic handled by window.alert
-    db.updateLeaveStatus(id, status, currentUser.id);
-    setLeaves([...db.getLeaves()]); // Fix: Force new array for re-render
+    try {
+      await db.updateLeaveStatus(id, status, currentUser.id);
+      setLeaves([...db.getLeaves()]);
 
-    if (status === LeaveStatus.APPROVED) {
-      window.alert("已成功核准該申請，並自動更新排班表。");
-    } else if (status === LeaveStatus.REJECTED) {
-      window.alert("已駁回該申請。");
+      if (status === LeaveStatus.APPROVED) {
+        window.alert("已成功核准該申請，並自動更新排班表。");
+      } else if (status === LeaveStatus.REJECTED) {
+        window.alert("已駁回該申請。");
+      }
+    } catch (error) {
+      console.error("Failed to update leave status:", error);
+      window.alert("核准失敗，排班尚未完整更新，請稍後再試。");
     }
   };
 
