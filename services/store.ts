@@ -43,7 +43,10 @@ import {
   isUserOnEmploymentPause,
   toLocalISOString,
 } from "./utils";
-import { getGroupDRestIndexForDate } from "./groupDRotation";
+import {
+  getGroupDRestIndexForDate,
+  shouldUseGroupDRotationOverShift,
+} from "./groupDRotation";
 
 const SCHEDULE_STORAGE_KEY = "radiology_schedule_data";
 const MEETING_ROOM_FULL_ACCESS = [
@@ -3753,18 +3756,26 @@ class Store {
       // But for NEW assignments, they should be OFF.
     }
 
+    const effectiveGroup = !user.isPartTime
+      ? this.getEffectiveGroupAndIndex(user, dateStr)
+      : undefined;
     const shift = this.shifts.find(
       (s) => s.userId === userId && s.date === dateStr,
     );
+    const useGroupDRotation = shouldUseGroupDRotationOverShift(
+      dateStr,
+      effectiveGroup?.groupId,
+      shift,
+    );
     // Explicit override: If assigned to OFF, it's OFF.
-    if (shift && shift.station === SYSTEM_OFF) {
+    if (shift && !useGroupDRotation && shift.station === SYSTEM_OFF) {
       return "OFF";
     }
 
     // Explicit override: If record exists and NOT OFF, it is WORK.
     // Since we now use "Nuclear Persistence" (Delete-then-Insert), any record here is intentional.
     // So even "Unassigned" means the user was explicitly set to be available/working.
-    if (shift) {
+    if (shift && !useGroupDRotation) {
       return "WORK";
     }
 
@@ -3775,8 +3786,8 @@ class Store {
     }
 
     // Part-Time users skip Group Cycle logic entirely
-    if (!user.isPartTime) {
-      const { groupId, groupIndex } = this.getEffectiveGroupAndIndex(user, dateStr);
+    if (effectiveGroup) {
+      const { groupId, groupIndex } = effectiveGroup;
 
       // --- Group D: Sunday off plus a four-week balanced Mon-Sat rotation ---
       if (groupId === StaffGroup.GROUP_D) {

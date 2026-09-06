@@ -19,6 +19,7 @@ import {
   PERMISSIONS,
   StaffGroup,
 } from "../types";
+import { shouldUseGroupDRotationOverShift } from "../services/groupDRotation";
 import { db } from "../services/store";
 import { supabase } from "../services/supabaseClient";
 import {
@@ -2026,8 +2027,21 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
     // Optimized Lookup O(1)
     const override = shiftMap.get(`${userId}-${dateStr}`);
 
-    // 1. If there is an override shift record for Radiographer, TRUST IT.
-    if (override) {
+    const effectiveGroupId =
+      user && !user.isPartTime
+        ? db.getEffectiveGroupAndIndex(user, dateStr).groupId
+        : undefined;
+    const useGroupDRotation = shouldUseGroupDRotationOverShift(
+      dateStr,
+      effectiveGroupId,
+      override,
+    );
+
+    // 1. Trust every existing row except a Group D generated placeholder.
+    // The narrow exception lets the current D rotation decide whether that
+    // still-unassigned day is work or rest without touching other groups,
+    // manual assignments, approved leave or swaps.
+    if (override && !useGroupDRotation) {
       return {
         station: override.station === SYSTEM_OFF ? null : override.station,
         specialRoles: override.specialRoles || [],
@@ -2060,6 +2074,15 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
     const status = db.getUserStatusOnDate(userId, dateStr);
     if (status === "OFF")
       return { station: null, specialRoles: [], isOff: true, isNotHired: false };
+
+    if (override) {
+      return {
+        station: override.station === SYSTEM_OFF ? null : override.station,
+        specialRoles: override.specialRoles || [],
+        isOff: false,
+        isNotHired: false,
+      };
+    }
 
     // Default: Unassigned work day
     return { station: null, specialRoles: [], isOff: false, isNotHired: false };
