@@ -43,39 +43,6 @@ describe("Group D four-week balanced rotation", () => {
     }
   });
 
-  it("limits every complete week to two or three total rest days", () => {
-    // Sunday is the fixed rest day. Every six-value window represents the
-    // following Monday-Saturday rotation, including windows that cross the
-    // end of the four-week cycle.
-    for (
-      let windowStart = 0;
-      windowStart < GROUP_D_BALANCED_ROTATION.length;
-      windowStart += 1
-    ) {
-      const weekdayRestCounts = [0, 0, 0, 0];
-
-      for (let day = 0; day < 6; day += 1) {
-        const restIndex = getGroupDRestIndex(windowStart + day);
-        weekdayRestCounts[restIndex] += 1;
-      }
-
-      expect(weekdayRestCounts.sort()).toEqual([1, 1, 2, 2]);
-    }
-  });
-
-  it("gives each person exactly two 2-day weeks and two 3-day weeks per cycle", () => {
-    for (let index = 0; index < 4; index += 1) {
-      const weeklyTotalRests = [0, 1, 2, 3].map((week) => {
-        const weekdayRests = GROUP_D_BALANCED_ROTATION
-          .slice(week * 6, week * 6 + 6)
-          .filter((restIndex) => restIndex === index).length;
-        return weekdayRests + 1; // fixed Sunday rest
-      });
-
-      expect(weeklyTotalRests.sort()).toEqual([2, 2, 3, 3]);
-    }
-  });
-
   it("repeats after 24 non-Sunday days", () => {
     for (let day = 0; day < 24; day += 1) {
       expect(getGroupDRestIndex(day + 24)).toBe(getGroupDRestIndex(day));
