@@ -17,7 +17,8 @@ export const formatRadiographerDailyLineSummary = (
   return [
     `${month}/${day} w${weekdayNumber}`,
     "",
-    `解說：${normalizeCount(stats.beitou_health_explanations ?? stats.beitou_clients)}人`,
+    `客戶：${normalizeCount(stats.beitou_clients)}人`,
+    `解說：${normalizeCount(stats.beitou_health_explanations)}人`,
     `MR：${normalizeCount(stats.beitou_mr)}人（${largePackages}大・${normalizeCount(stats.beitou_mr_medium)}中・${normalizeCount(stats.beitou_mr_small)}小）`,
     `CT：${normalizeCount(stats.beitou_ct)}人`,
     `CTA：${normalizeCount(stats.beitou_cta)}人`,

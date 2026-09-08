@@ -6,6 +6,7 @@ describe("radiographer daily line summary", () => {
     expect(
       formatRadiographerDailyLineSummary("2026-09-01", {
         beitou_clients: 16,
+        beitou_health_explanations: 14,
         beitou_cta: 2,
         dazhi_clients: 18,
         beitou_mr: 8,
@@ -22,7 +23,8 @@ describe("radiographer daily line summary", () => {
       [
         "9/1 w2",
         "",
-        "解說：16人",
+        "客戶：16人",
+        "解說：14人",
         "MR：8人（5大・1中・2小）",
         "CT：12人",
         "CTA：2人",
@@ -39,7 +41,9 @@ describe("radiographer daily line summary", () => {
         beitou_cta: 0,
         dazhi_clients: 0,
       }),
-    ).toContain("9/6 w7\n\n解說：0人\nMR：0人（0大・0中・0小）");
+    ).toContain(
+      "9/6 w7\n\n客戶：0人\n解說：0人\nMR：0人（0大・0中・0小）",
+    );
   });
 
   it("uses the dedicated Beitou explanation count when available", () => {
@@ -50,6 +54,6 @@ describe("radiographer daily line summary", () => {
         beitou_cta: 0,
         dazhi_clients: 19,
       }),
-    ).toContain("解說：21人");
+    ).toContain("客戶：19人\n解說：21人");
   });
 });

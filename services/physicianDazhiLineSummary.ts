@@ -20,6 +20,14 @@ export const formatPhysicianDazhiLineStats = (
     `心超：${displayCount(stats?.dazhi_ultrasound_heart)}`,
   ].join("\n");
 
+export const formatPhysicianBeitouLineStats = (
+  stats?: DailyManpowerStats,
+): string =>
+  [
+    `總人數 : ${displayCount(stats?.beitou_clients)}人`,
+    `解說：${displayCount(stats?.beitou_health_explanations)}人`,
+  ].join("\n");
+
 const getShiftTokens = (shift: HealthMgmtShift): string[] => {
   const unpackedTask = String(shift.task || "").split("@@")[0];
   return `${unpackedTask},${shift.station || ""}`

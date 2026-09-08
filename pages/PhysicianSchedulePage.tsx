@@ -50,6 +50,7 @@ import ConfirmModal from "../components/ConfirmModal";
 import { supabase } from "../services/supabaseClient";
 import { loadChineseFontToDoc } from "../services/pdfUtils";
 import {
+  formatPhysicianBeitouLineStats,
   formatPhysicianDazhiLineStaffBlock,
   formatPhysicianDazhiLineStats,
 } from "../services/physicianDazhiLineSummary";
@@ -214,7 +215,7 @@ const PhysicianSchedulePage: React.FC<PhysicianSchedulePageProps> = ({
 支援：${getDocs("支援").join("/") || "無"}
 GI：${giDocsArr.join("/") || "無"}
 行政：${getDocs("行政").join("/") || "無"}
-總人數 : ${stats?.beitou_clients || 0}人
+${formatPhysicianBeitouLineStats(stats)}
 MR：${stats?.beitou_mr || 0} 人
 GI：${stats?.beitou_gi || 0} 台`;
   };
