@@ -48,6 +48,7 @@ describe("physician Dazhi LINE summary", () => {
       ["u5", "梁蕙雯"],
       ["u6", "鍾佩君"],
       ["u7", "排班人員"],
+      ["u8", "陳右婷"],
     ].map(([id, name]) => ({
       id,
       name,
@@ -62,6 +63,7 @@ describe("physician Dazhi LINE summary", () => {
       ["u5", "晚班,基礎B"],
       ["u6", "主控"],
       ["u7", "排班"],
+      ["u8", "基礎B"],
     ].map(([userId, task], index) => ({
       id: String(index),
       userId,
@@ -76,7 +78,7 @@ describe("physician Dazhi LINE summary", () => {
         "抽１：陳姵安(輔控)",
         "抽２：葉乃菱(若抽血有空，協助問診第一順位)",
         "基礎A (眼科＋鼻咽鏡)：徐珮芯(若基礎有空，協助問診第二順位)",
-        "基礎Ｂ(聽肺、ABI、HRV)：梁蕙雯",
+        "基礎Ｂ(聽肺、ABI、HRV)：梁蕙雯、陳右婷",
         "主控：鍾佩君",
         "排班：排班人員",
       ].join("\n"),
