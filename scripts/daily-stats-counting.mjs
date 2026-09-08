@@ -33,6 +33,14 @@ export const isDazhiNutritionConsultation = (record = {}) => {
   );
 };
 
+export const isDazhiHealthExplanation = (record = {}) =>
+  String(record.Location__c || "").trim() === "大直" &&
+  String(record.CheckupName__c || "").trim() === "體檢總評";
+
+export const isDazhiMetabolismExplanation = (record = {}) =>
+  String(record.Location__c || "").trim() === "大直" &&
+  String(record.CheckupName__c || "").trim() === "代謝總評";
+
 export const getDatedClientKey = (record = {}) =>
   `${record.CheckStartDate__c || ""}_${record.MedicalRecordNo__c || record.Order__c || ""}`;
 

@@ -5,6 +5,8 @@ import { omitManualDailyWorkloadFields } from "./radiographer-daily-sync.mjs";
 import {
   addDatedClientIfNew,
   isBmdMedicalOrder,
+  isDazhiHealthExplanation,
+  isDazhiMetabolismExplanation,
   isDazhiNutritionConsultation,
   isUltrasoundOrder,
   mergeSynchronizedDailyStats,
@@ -70,6 +72,8 @@ async function syncDailyStats(session, startDate, endDate) {
   const seenBeitouGI = new Set();
   const seenDazhiGI = new Set();
   const seenDazhiNutritionConsultations = new Set();
+  const seenDazhiHealthExplanations = new Set();
+  const seenDazhiMetabolismExplanations = new Set();
   // 各項目去重 Set（以日期+clientId）
   const seenBeitouCT = new Set();
   const seenBeitouDX = new Set();
@@ -94,6 +98,8 @@ async function syncDailyStats(session, startDate, endDate) {
     dazhi_gi: 0,
     dazhi_metabolism_clients: 0,
     dazhi_nutrition_consultations: 0,
+    dazhi_health_explanations: 0,
+    dazhi_metabolism_explanations: 0,
     dazhi_ultrasound: 0,
     dazhi_ultrasound_heart: 0,
     dazhi_ultrasound_fibrosis: 0,
@@ -231,14 +237,25 @@ async function syncDailyStats(session, startDate, endDate) {
         }
       }
     } else if (loc === "大直") {
-      // 大直客戶數：和北投一樣抓有體檢總評/解說的客人
-      if (name.includes("解說") || name.includes("總評")) {
+      // 大直健檢客戶與解說皆以「體檢總評」醫令辨識。
+      if (
+        isDazhiHealthExplanation(r) &&
+        addDatedClientIfNew(seenDazhiHealthExplanations, r)
+      ) {
+        stats.dazhi_health_explanations++;
         const clientKey = `${date}_${clientId}`;
         if (!seenDazhiClient.has(clientKey)) {
           stats.dazhi_clients++;
           seenDazhiClient.add(clientKey);
-          dazhiTargetOrders.add(clientKey); // 記錄大直目標客戶
+          dazhiTargetOrders.add(clientKey);
         }
+      }
+
+      if (
+        isDazhiMetabolismExplanation(r) &&
+        addDatedClientIfNew(seenDazhiMetabolismExplanations, r)
+      ) {
+        stats.dazhi_metabolism_explanations++;
       }
 
       if (name.includes("腸鏡") || name.includes("胃鏡") || name.includes("消化道內視鏡")) {

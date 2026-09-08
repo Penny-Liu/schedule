@@ -336,6 +336,8 @@ export interface DailyManpowerStats {
   dazhi_clients: number;
   dazhi_metabolism_clients?: number;
   dazhi_nutrition_consultations?: number;
+  dazhi_health_explanations?: number;
+  dazhi_metabolism_explanations?: number;
   dazhi_ultrasound?: number;
   dazhi_ultrasound_heart?: number;
   dazhi_ultrasound_fibrosis?: number;

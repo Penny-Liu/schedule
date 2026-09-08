@@ -13,13 +13,15 @@ describe("physician Dazhi LINE summary", () => {
         dazhi_clients: 28,
         dazhi_metabolism_clients: 9,
         dazhi_nutrition_consultations: 12,
+        dazhi_health_explanations: 27,
+        dazhi_metabolism_explanations: 8,
         dazhi_gi: 14,
         dazhi_ultrasound_heart: 3,
       }),
     ).toBe(
       [
         "健檢/代謝總人數：28 位/9 位",
-        "健檢/代謝解說： 位/ 位",
+        "健檢/代謝解說：27 位/8 位",
         "營養諮詢：12位",
         "腸胃：14",
         "心超：3",

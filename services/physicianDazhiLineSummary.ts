@@ -14,7 +14,7 @@ export const formatPhysicianDazhiLineStats = (
 ): string =>
   [
     `健檢/代謝總人數：${displayCount(stats?.dazhi_clients)} 位/${displayCount(stats?.dazhi_metabolism_clients)} 位`,
-    "健檢/代謝解說： 位/ 位",
+    `健檢/代謝解說：${displayCount(stats?.dazhi_health_explanations)} 位/${displayCount(stats?.dazhi_metabolism_explanations)} 位`,
     `營養諮詢：${displayCount(stats?.dazhi_nutrition_consultations)}位`,
     `腸胃：${displayCount(stats?.dazhi_gi)}`,
     `心超：${displayCount(stats?.dazhi_ultrasound_heart)}`,
