@@ -335,6 +335,7 @@ export interface DailyManpowerStats {
   beitou_ultrasound_pelvic?: number;
   dazhi_clients: number;
   dazhi_metabolism_clients?: number;
+  dazhi_nutrition_consultations?: number;
   dazhi_ultrasound?: number;
   dazhi_ultrasound_heart?: number;
   dazhi_ultrasound_fibrosis?: number;

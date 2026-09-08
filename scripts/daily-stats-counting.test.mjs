@@ -4,7 +4,9 @@ import {
   countBmdMedicalOrders,
   getDatedClientKey,
   isBmdMedicalOrder,
+  isDazhiNutritionConsultation,
   isUltrasoundOrder,
+  mergeSynchronizedDailyStats,
 } from "./daily-stats-counting.mjs";
 
 describe("daily stats BMD medical-order counting", () => {
@@ -69,5 +71,54 @@ describe("daily stats BMD medical-order counting", () => {
     expect(addDatedClientIfNew(seenClients, secondOrderForSameClient)).toBe(
       false,
     );
+  });
+
+  it("identifies only the Dazhi health-check nutrition consultation order", () => {
+    expect(
+      isDazhiNutritionConsultation({
+        Location__c: "大直",
+        CheckupName__c: "健檢營養諮詢",
+        ResourceCategory__c: "NUTR",
+      }),
+    ).toBe(true);
+    expect(
+      isDazhiNutritionConsultation({
+        Location__c: "大直",
+        CheckupName__c: "營養門診(30)",
+        ResourceCategory__c: "NutrC",
+      }),
+    ).toBe(false);
+    expect(
+      isDazhiNutritionConsultation({
+        Location__c: "北投",
+        CheckupName__c: "健檢營養諮詢",
+        ResourceCategory__c: "NUTR",
+      }),
+    ).toBe(false);
+  });
+
+  it("preserves manual fields while replacing synchronized daily counts", () => {
+    expect(
+      mergeSynchronizedDailyStats(
+        {
+          "2026-09-07": {
+            dazhi_clients: 20,
+            dazhi_max_capacity: 40,
+          },
+        },
+        {
+          "2026-09-07": {
+            dazhi_clients: 28,
+            dazhi_nutrition_consultations: 12,
+          },
+        },
+      ),
+    ).toEqual({
+      "2026-09-07": {
+        dazhi_clients: 28,
+        dazhi_max_capacity: 40,
+        dazhi_nutrition_consultations: 12,
+      },
+    });
   });
 });

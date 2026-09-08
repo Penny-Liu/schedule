@@ -5,7 +5,9 @@ import { omitManualDailyWorkloadFields } from "./radiographer-daily-sync.mjs";
 import {
   addDatedClientIfNew,
   isBmdMedicalOrder,
+  isDazhiNutritionConsultation,
   isUltrasoundOrder,
+  mergeSynchronizedDailyStats,
 } from "./daily-stats-counting.mjs";
 import { getPostProcessingWorkloadField } from "./post-processing-classification.mjs";
 import { VALID_MEDICAL_ORDER_STATUS_SOQL } from "./medical-order-status.mjs";
@@ -67,6 +69,7 @@ async function syncDailyStats(session, startDate, endDate) {
   const seenBeitouUltrasoundClients = new Set();
   const seenBeitouGI = new Set();
   const seenDazhiGI = new Set();
+  const seenDazhiNutritionConsultations = new Set();
   // 各項目去重 Set（以日期+clientId）
   const seenBeitouCT = new Set();
   const seenBeitouDX = new Set();
@@ -90,6 +93,7 @@ async function syncDailyStats(session, startDate, endDate) {
     dazhi_clients: 0,
     dazhi_gi: 0,
     dazhi_metabolism_clients: 0,
+    dazhi_nutrition_consultations: 0,
     dazhi_ultrasound: 0,
     dazhi_ultrasound_heart: 0,
     dazhi_ultrasound_fibrosis: 0,
@@ -246,6 +250,12 @@ async function syncDailyStats(session, startDate, endDate) {
       }
 
       if (name === "營養門診(30)") stats.dazhi_metabolism_clients++;
+      if (
+        isDazhiNutritionConsultation(r) &&
+        addDatedClientIfNew(seenDazhiNutritionConsultations, r)
+      ) {
+        stats.dazhi_nutrition_consultations++;
+      }
       if (name.includes("超音波")) {
         stats.dazhi_ultrasound++;
         if (name.includes("心臟")) stats.dazhi_ultrasound_heart++;
@@ -323,8 +333,7 @@ async function syncDailyStats(session, startDate, endDate) {
   const dailyStats = settingsData.dailyStats || {};
 
   settingsData.dailyStats = {
-    ...dailyStats,
-    ...dailyResults,
+    ...mergeSynchronizedDailyStats(dailyStats, dailyResults),
     updated_at: new Date().toISOString(),
   };
 
