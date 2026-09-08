@@ -19,6 +19,20 @@ export const countBmdMedicalOrders = (records = []) =>
 export const isUltrasoundOrder = (record = {}) =>
   String(record.CheckupName__c || "").includes("超音波");
 
+export const isDazhiNutritionConsultation = (record = {}) => {
+  const location = String(record.Location__c || "").trim();
+  const name = String(record.CheckupName__c || "").trim();
+  const category = String(record.ResourceCategory__c || "")
+    .trim()
+    .toUpperCase();
+
+  return (
+    location === "大直" &&
+    name.includes("營養諮詢") &&
+    (category === "NUTR" || name === "健檢營養諮詢")
+  );
+};
+
 export const getDatedClientKey = (record = {}) =>
   `${record.CheckStartDate__c || ""}_${record.MedicalRecordNo__c || record.Order__c || ""}`;
 
@@ -28,3 +42,19 @@ export const addDatedClientIfNew = (seenClientKeys, record = {}) => {
   seenClientKeys.add(clientKey);
   return true;
 };
+
+export const mergeSynchronizedDailyStats = (
+  existingDailyStats = {},
+  synchronizedDailyStats = {},
+) => ({
+  ...existingDailyStats,
+  ...Object.fromEntries(
+    Object.entries(synchronizedDailyStats).map(([date, synchronizedStats]) => [
+      date,
+      {
+        ...(existingDailyStats[date] || {}),
+        ...synchronizedStats,
+      },
+    ]),
+  ),
+});
