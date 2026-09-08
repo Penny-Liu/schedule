@@ -3915,6 +3915,8 @@ class Store {
       dazhi_clients: 0,
       dazhi_metabolism_clients: 0,
       dazhi_nutrition_consultations: 0,
+      dazhi_health_explanations: 0,
+      dazhi_metabolism_explanations: 0,
       beitou_gi: 0,
       beitou_mr: 0,
       beitou_ultrasound_clients: 0,

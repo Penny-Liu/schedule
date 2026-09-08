@@ -4,6 +4,8 @@ import {
   countBmdMedicalOrders,
   getDatedClientKey,
   isBmdMedicalOrder,
+  isDazhiHealthExplanation,
+  isDazhiMetabolismExplanation,
   isDazhiNutritionConsultation,
   isUltrasoundOrder,
   mergeSynchronizedDailyStats,
@@ -93,6 +95,28 @@ describe("daily stats BMD medical-order counting", () => {
         Location__c: "北投",
         CheckupName__c: "健檢營養諮詢",
         ResourceCategory__c: "NUTR",
+      }),
+    ).toBe(false);
+  });
+
+  it("maps Dazhi explanation orders to health check and metabolism separately", () => {
+    const base = { Location__c: "大直" };
+    expect(
+      isDazhiHealthExplanation({ ...base, CheckupName__c: "體檢總評" }),
+    ).toBe(true);
+    expect(
+      isDazhiHealthExplanation({ ...base, CheckupName__c: "代謝總評" }),
+    ).toBe(false);
+    expect(
+      isDazhiMetabolismExplanation({
+        ...base,
+        CheckupName__c: "代謝總評",
+      }),
+    ).toBe(true);
+    expect(
+      isDazhiMetabolismExplanation({
+        Location__c: "北投",
+        CheckupName__c: "代謝總評",
       }),
     ).toBe(false);
   });
