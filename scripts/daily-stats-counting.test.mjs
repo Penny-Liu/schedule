@@ -5,8 +5,10 @@ import {
   getDatedClientKey,
   isBmdMedicalOrder,
   isDazhiHealthExplanation,
+  isDazhiMetabolismClientAnchor,
   isDazhiMetabolismExplanation,
   isDazhiNutritionConsultation,
+  isHealthCheckInterview,
   isUltrasoundOrder,
   mergeSynchronizedDailyStats,
 } from "./daily-stats-counting.mjs";
@@ -117,6 +119,47 @@ describe("daily stats BMD medical-order counting", () => {
       isDazhiMetabolismExplanation({
         Location__c: "北投",
         CheckupName__c: "代謝總評",
+      }),
+    ).toBe(false);
+  });
+
+  it("uses nursing consultation as the health-check client anchor", () => {
+    expect(
+      isHealthCheckInterview({
+        Location__c: "北投",
+        CheckupName__c: "護理諮詢",
+        ResourceCategory__c: "檢備",
+      }),
+    ).toBe(true);
+    expect(
+      isHealthCheckInterview({
+        Location__c: "大直",
+        CheckupName__c: "護理諮詢",
+        ResourceCategory__c: "檢備",
+      }),
+    ).toBe(true);
+    expect(
+      isHealthCheckInterview({
+        Location__c: "大直",
+        CheckupName__c: "體檢總評",
+        ResourceCategory__c: "解",
+      }),
+    ).toBe(false);
+  });
+
+  it("uses the Dazhi NutrC check-in as the metabolism client anchor", () => {
+    expect(
+      isDazhiMetabolismClientAnchor({
+        Location__c: "大直",
+        CheckupName__c: "流程報到",
+        ResourceCategory__c: "NutrC",
+      }),
+    ).toBe(true);
+    expect(
+      isDazhiMetabolismClientAnchor({
+        Location__c: "大直",
+        CheckupName__c: "營養門診(30)",
+        ResourceCategory__c: "NutrC",
       }),
     ).toBe(false);
   });

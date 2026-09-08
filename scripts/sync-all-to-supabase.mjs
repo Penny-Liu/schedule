@@ -6,8 +6,10 @@ import {
   addDatedClientIfNew,
   isBmdMedicalOrder,
   isDazhiHealthExplanation,
+  isDazhiMetabolismClientAnchor,
   isDazhiMetabolismExplanation,
   isDazhiNutritionConsultation,
+  isHealthCheckInterview,
   isUltrasoundOrder,
   mergeSynchronizedDailyStats,
 } from "./daily-stats-counting.mjs";
@@ -74,6 +76,8 @@ async function syncDailyStats(session, startDate, endDate) {
   const seenDazhiNutritionConsultations = new Set();
   const seenDazhiHealthExplanations = new Set();
   const seenDazhiMetabolismExplanations = new Set();
+  const seenDazhiMetabolismClients = new Set();
+  const seenBeitouHealthExplanations = new Set();
   // 各項目去重 Set（以日期+clientId）
   const seenBeitouCT = new Set();
   const seenBeitouDX = new Set();
@@ -86,6 +90,7 @@ async function syncDailyStats(session, startDate, endDate) {
 
   const initStats = () => ({
     beitou_clients: 0,
+    beitou_health_explanations: 0,
     beitou_gi: 0,
     beitou_cta: 0,
     beitou_mr: 0,
@@ -185,12 +190,18 @@ async function syncDailyStats(session, startDate, endDate) {
       // 記錄北投的 Client
       beitouOrders.add(`${date}_${clientId}`);
 
-      if (name.includes("解說") || name.includes("總評")) {
-        const clientKey = `${date}_${clientId}`;
-        if (!seenBeitouClient.has(clientKey)) {
-          stats.beitou_clients++;
-          seenBeitouClient.add(clientKey);
-        }
+      if (
+        isHealthCheckInterview(r) &&
+        addDatedClientIfNew(seenBeitouClient, r)
+      ) {
+        stats.beitou_clients++;
+      }
+
+      if (
+        name === "體檢總評" &&
+        addDatedClientIfNew(seenBeitouHealthExplanations, r)
+      ) {
+        stats.beitou_health_explanations++;
       }
       
       if (name.includes("腸鏡") || name.includes("胃鏡") || name.includes("消化道內視鏡")) {
@@ -237,18 +248,22 @@ async function syncDailyStats(session, startDate, endDate) {
         }
       }
     } else if (loc === "大直") {
-      // 大直健檢客戶與解說皆以「體檢總評」醫令辨識。
+      // 大直健檢解說以「體檢總評」醫令辨識。
       if (
         isDazhiHealthExplanation(r) &&
         addDatedClientIfNew(seenDazhiHealthExplanations, r)
       ) {
         stats.dazhi_health_explanations++;
+      }
+
+      // 大直健檢總客戶數以「護理諮詢」醫令辨識。
+      if (
+        isHealthCheckInterview(r) &&
+        addDatedClientIfNew(seenDazhiClient, r)
+      ) {
         const clientKey = `${date}_${clientId}`;
-        if (!seenDazhiClient.has(clientKey)) {
-          stats.dazhi_clients++;
-          seenDazhiClient.add(clientKey);
-          dazhiTargetOrders.add(clientKey);
-        }
+        stats.dazhi_clients++;
+        dazhiTargetOrders.add(clientKey);
       }
 
       if (
@@ -266,7 +281,12 @@ async function syncDailyStats(session, startDate, endDate) {
         }
       }
 
-      if (name === "營養門診(30)") stats.dazhi_metabolism_clients++;
+      if (
+        isDazhiMetabolismClientAnchor(r) &&
+        addDatedClientIfNew(seenDazhiMetabolismClients, r)
+      ) {
+        stats.dazhi_metabolism_clients++;
+      }
       if (
         isDazhiNutritionConsultation(r) &&
         addDatedClientIfNew(seenDazhiNutritionConsultations, r)
