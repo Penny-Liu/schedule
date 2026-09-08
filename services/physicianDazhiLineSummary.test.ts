@@ -72,8 +72,11 @@ describe("physician Dazhi LINE summary", () => {
       task,
     }));
 
-    expect(formatPhysicianDazhiLineStaffBlock(shifts, staff)).toBe(
+    expect(
+      formatPhysicianDazhiLineStaffBlock("2026-09-08", shifts, staff),
+    ).toBe(
       [
+        "(9/8) 點位分配",
         "問診：葉穎琦",
         "抽１：陳姵安(輔控)",
         "抽２：葉乃菱(若抽血有空，協助問診第一順位)",
@@ -88,6 +91,7 @@ describe("physician Dazhi LINE summary", () => {
   it("does not include a same-day Beitou assignment", () => {
     expect(
       formatPhysicianDazhiLineStaffBlock(
+        "2026-09-08",
         [
           {
             id: "s1",

@@ -449,6 +449,7 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
       .getHealthMgmtShifts()
       .filter((shift) => shift.date === dateStr);
     return formatPhysicianDazhiLineStaffBlock(
+      dateStr,
       dayHMShifts,
       db.getHealthMgmtStaff(),
     );
@@ -5960,7 +5961,7 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
                 </div>
 
                 {/* Dazhi Health-management Quick Copy Block */}
-                <div className="space-y-2 md:col-span-2">
+                <div className="space-y-2 md:col-start-2">
                   <div className="flex justify-between items-center">
                     <span className="text-xs font-bold text-gray-500">
                       大直區塊二（問診／抽血／基礎）
