@@ -1,10 +1,22 @@
 import { describe, expect, it } from "vitest";
 import {
+  formatPhysicianBeitouLineStats,
   formatPhysicianDazhiLineStaffBlock,
   formatPhysicianDazhiLineStats,
 } from "./physicianDazhiLineSummary";
 
 describe("physician Dazhi LINE summary", () => {
+  it("keeps Beitou client and explanation counts separate", () => {
+    expect(
+      formatPhysicianBeitouLineStats({
+        beitou_clients: 19,
+        beitou_health_explanations: 21,
+        beitou_cta: 0,
+        dazhi_clients: 19,
+      }),
+    ).toBe("總人數 : 19人\n解說：21人");
+  });
+
   it("formats the requested five-line block with existing daily statistics", () => {
     expect(
       formatPhysicianDazhiLineStats({
