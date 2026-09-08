@@ -34,8 +34,12 @@ export const formatPhysicianDazhiLineStaffBlock = (
   shifts: HealthMgmtShift[],
   staff: HealthMgmtStaff[],
 ): string => {
-  const [, month = "", day = ""] = date.split("-");
+  const [year = "", month = "", day = ""] = date.split("-");
   const dateLabel = `${Number(month) || month}/${Number(day) || day}`;
+  const dayNames = ["日", "一", "二", "三", "四", "五", "六"];
+  const weekday = dayNames[
+    new Date(Number(year), Number(month) - 1, Number(day)).getDay()
+  ];
   const staffById = new Map(staff.map((person) => [person.id, person]));
   const getAssignments = (
     target: string,
@@ -64,7 +68,7 @@ export const formatPhysicianDazhiLineStaffBlock = (
   };
 
   return [
-    `(${dateLabel}) 點位分配`,
+    `${dateLabel} （${weekday}） 點位分配`,
     `問診：${getAssignments("問診")}`,
     `抽１：${getAssignments("抽1", true)}`,
     `抽２：${getAssignments("抽2")}(若抽血有空，協助問診第一順位)`,
