@@ -315,6 +315,7 @@ export interface CycleAnchor {
 
 export interface DailyManpowerStats {
   beitou_clients: number;
+  beitou_health_explanations?: number;
   beitou_cta: number;
   beitou_mr_large_male?: number;
   beitou_mr_large_female?: number;

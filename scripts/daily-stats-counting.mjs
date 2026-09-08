@@ -41,6 +41,22 @@ export const isDazhiMetabolismExplanation = (record = {}) =>
   String(record.Location__c || "").trim() === "大直" &&
   String(record.CheckupName__c || "").trim() === "代謝總評";
 
+export const isHealthCheckInterview = (record = {}) => {
+  const location = String(record.Location__c || "").trim();
+  const name = String(record.CheckupName__c || "").trim();
+  const category = String(record.ResourceCategory__c || "").trim();
+  return (
+    (location === "北投" || location === "大直") &&
+    name === "護理諮詢" &&
+    category === "檢備"
+  );
+};
+
+export const isDazhiMetabolismClientAnchor = (record = {}) =>
+  String(record.Location__c || "").trim() === "大直" &&
+  String(record.CheckupName__c || "").trim() === "流程報到" &&
+  String(record.ResourceCategory__c || "").trim() === "NutrC";
+
 export const getDatedClientKey = (record = {}) =>
   `${record.CheckStartDate__c || ""}_${record.MedicalRecordNo__c || record.Order__c || ""}`;
 

@@ -41,4 +41,15 @@ describe("radiographer daily line summary", () => {
       }),
     ).toContain("9/6 w7\n\n解說：0人\nMR：0人（0大・0中・0小）");
   });
+
+  it("uses the dedicated Beitou explanation count when available", () => {
+    expect(
+      formatRadiographerDailyLineSummary("2026-09-09", {
+        beitou_clients: 19,
+        beitou_health_explanations: 21,
+        beitou_cta: 0,
+        dazhi_clients: 19,
+      }),
+    ).toContain("解說：21人");
+  });
 });
