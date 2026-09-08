@@ -33,9 +33,13 @@ export const isDazhiNutritionConsultation = (record = {}) => {
   );
 };
 
-export const isDazhiHealthExplanation = (record = {}) =>
-  String(record.Location__c || "").trim() === "大直" &&
-  String(record.CheckupName__c || "").trim() === "體檢總評";
+export const isHealthCheckExplanation = (record = {}) => {
+  const location = String(record.Location__c || "").trim();
+  return (
+    (location === "北投" || location === "大直") &&
+    String(record.CheckupName__c || "").trim() === "體檢總評"
+  );
+};
 
 export const isDazhiMetabolismExplanation = (record = {}) =>
   String(record.Location__c || "").trim() === "大直" &&

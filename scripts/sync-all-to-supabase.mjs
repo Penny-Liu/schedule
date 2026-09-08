@@ -5,11 +5,11 @@ import { omitManualDailyWorkloadFields } from "./radiographer-daily-sync.mjs";
 import {
   addDatedClientIfNew,
   isBmdMedicalOrder,
-  isDazhiHealthExplanation,
   isDazhiMetabolismClientAnchor,
   isDazhiMetabolismExplanation,
   isDazhiNutritionConsultation,
   isHealthCheckInterview,
+  isHealthCheckExplanation,
   isUltrasoundOrder,
   mergeSynchronizedDailyStats,
 } from "./daily-stats-counting.mjs";
@@ -198,7 +198,7 @@ async function syncDailyStats(session, startDate, endDate) {
       }
 
       if (
-        name === "體檢總評" &&
+        isHealthCheckExplanation(r) &&
         addDatedClientIfNew(seenBeitouHealthExplanations, r)
       ) {
         stats.beitou_health_explanations++;
@@ -250,7 +250,7 @@ async function syncDailyStats(session, startDate, endDate) {
     } else if (loc === "大直") {
       // 大直健檢解說以「體檢總評」醫令辨識。
       if (
-        isDazhiHealthExplanation(r) &&
+        isHealthCheckExplanation(r) &&
         addDatedClientIfNew(seenDazhiHealthExplanations, r)
       ) {
         stats.dazhi_health_explanations++;

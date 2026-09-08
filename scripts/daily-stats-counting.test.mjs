@@ -4,11 +4,11 @@ import {
   countBmdMedicalOrders,
   getDatedClientKey,
   isBmdMedicalOrder,
-  isDazhiHealthExplanation,
   isDazhiMetabolismClientAnchor,
   isDazhiMetabolismExplanation,
   isDazhiNutritionConsultation,
   isHealthCheckInterview,
+  isHealthCheckExplanation,
   isUltrasoundOrder,
   mergeSynchronizedDailyStats,
 } from "./daily-stats-counting.mjs";
@@ -101,13 +101,19 @@ describe("daily stats BMD medical-order counting", () => {
     ).toBe(false);
   });
 
-  it("maps Dazhi explanation orders to health check and metabolism separately", () => {
+  it("maps both locations' health-check explanations and Dazhi metabolism explanations separately", () => {
     const base = { Location__c: "大直" };
     expect(
-      isDazhiHealthExplanation({ ...base, CheckupName__c: "體檢總評" }),
+      isHealthCheckExplanation({ ...base, CheckupName__c: "體檢總評" }),
     ).toBe(true);
     expect(
-      isDazhiHealthExplanation({ ...base, CheckupName__c: "代謝總評" }),
+      isHealthCheckExplanation({
+        Location__c: "北投",
+        CheckupName__c: "體檢總評",
+      }),
+    ).toBe(true);
+    expect(
+      isHealthCheckExplanation({ ...base, CheckupName__c: "代謝總評" }),
     ).toBe(false);
     expect(
       isDazhiMetabolismExplanation({
