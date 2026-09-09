@@ -56,6 +56,16 @@ export const isHealthCheckInterview = (record = {}) => {
   );
 };
 
+export const isBeitouHealthCheckClientAnchor = (record = {}) =>
+  String(record.Location__c || "").trim() === "北投" &&
+  (isHealthCheckInterview(record) || isHealthCheckExplanation(record));
+
+export const isDazhiHealthCheckClientAnchor = (record = {}) =>
+  String(record.Location__c || "").trim() === "大直" &&
+  String(record.CheckupName__c || "").trim() ===
+    "身高、體重、脈搏呼吸、體溫、腰圍、臀圍" &&
+  String(record.ResourceCategory__c || "").trim() === "檢備";
+
 export const isDazhiMetabolismClientAnchor = (record = {}) =>
   String(record.Location__c || "").trim() === "大直" &&
   String(record.CheckupName__c || "").trim() === "流程報到" &&

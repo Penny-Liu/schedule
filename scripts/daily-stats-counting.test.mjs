@@ -4,6 +4,8 @@ import {
   countBmdMedicalOrders,
   getDatedClientKey,
   isBmdMedicalOrder,
+  isBeitouHealthCheckClientAnchor,
+  isDazhiHealthCheckClientAnchor,
   isDazhiMetabolismClientAnchor,
   isDazhiMetabolismExplanation,
   isDazhiNutritionConsultation,
@@ -149,6 +151,54 @@ describe("daily stats BMD medical-order counting", () => {
         Location__c: "大直",
         CheckupName__c: "體檢總評",
         ResourceCategory__c: "解",
+      }),
+    ).toBe(false);
+  });
+
+  it("uses the union of nursing consultation and total evaluation for Beitou clients", () => {
+    expect(
+      isBeitouHealthCheckClientAnchor({
+        Location__c: "北投",
+        CheckupName__c: "護理諮詢",
+        ResourceCategory__c: "檢備",
+      }),
+    ).toBe(true);
+    expect(
+      isBeitouHealthCheckClientAnchor({
+        Location__c: "北投",
+        CheckupName__c: "體檢總評",
+        ResourceCategory__c: "解",
+      }),
+    ).toBe(true);
+    expect(
+      isBeitouHealthCheckClientAnchor({
+        Location__c: "大直",
+        CheckupName__c: "體檢總評",
+        ResourceCategory__c: "解",
+      }),
+    ).toBe(false);
+  });
+
+  it("uses Dazhi body measurements as the health-check client anchor", () => {
+    expect(
+      isDazhiHealthCheckClientAnchor({
+        Location__c: "大直",
+        CheckupName__c: "身高、體重、脈搏呼吸、體溫、腰圍、臀圍",
+        ResourceCategory__c: "檢備",
+      }),
+    ).toBe(true);
+    expect(
+      isDazhiHealthCheckClientAnchor({
+        Location__c: "大直",
+        CheckupName__c: "護理諮詢",
+        ResourceCategory__c: "檢備",
+      }),
+    ).toBe(false);
+    expect(
+      isDazhiHealthCheckClientAnchor({
+        Location__c: "北投",
+        CheckupName__c: "身高、體重、脈搏呼吸、體溫、腰圍、臀圍",
+        ResourceCategory__c: "檢備",
       }),
     ).toBe(false);
   });

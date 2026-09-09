@@ -5,10 +5,11 @@ import { omitManualDailyWorkloadFields } from "./radiographer-daily-sync.mjs";
 import {
   addDatedClientIfNew,
   isBmdMedicalOrder,
+  isBeitouHealthCheckClientAnchor,
+  isDazhiHealthCheckClientAnchor,
   isDazhiMetabolismClientAnchor,
   isDazhiMetabolismExplanation,
   isDazhiNutritionConsultation,
-  isHealthCheckInterview,
   isHealthCheckExplanation,
   isUltrasoundOrder,
   mergeSynchronizedDailyStats,
@@ -191,7 +192,7 @@ async function syncDailyStats(session, startDate, endDate) {
       beitouOrders.add(`${date}_${clientId}`);
 
       if (
-        isHealthCheckInterview(r) &&
+        isBeitouHealthCheckClientAnchor(r) &&
         addDatedClientIfNew(seenBeitouClient, r)
       ) {
         stats.beitou_clients++;
@@ -256,9 +257,9 @@ async function syncDailyStats(session, startDate, endDate) {
         stats.dazhi_health_explanations++;
       }
 
-      // 大直健檢總客戶數以「護理諮詢」醫令辨識。
+      // 大直健檢總客戶數以完整的基礎量測醫令辨識。
       if (
-        isHealthCheckInterview(r) &&
+        isDazhiHealthCheckClientAnchor(r) &&
         addDatedClientIfNew(seenDazhiClient, r)
       ) {
         const clientKey = `${date}_${clientId}`;
