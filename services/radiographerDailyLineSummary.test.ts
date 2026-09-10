@@ -46,14 +46,14 @@ describe("radiographer daily line summary", () => {
     );
   });
 
-  it("uses the dedicated Beitou explanation count when available", () => {
+  it("uses the synchronized 9/10 Beitou client and explanation counts", () => {
     expect(
-      formatRadiographerDailyLineSummary("2026-09-09", {
-        beitou_clients: 19,
-        beitou_health_explanations: 21,
+      formatRadiographerDailyLineSummary("2026-09-10", {
+        beitou_clients: 18,
+        beitou_health_explanations: 17,
         beitou_cta: 0,
-        dazhi_clients: 19,
+        dazhi_clients: 18,
       }),
-    ).toContain("客戶：19人\n解說：21人");
+    ).toContain("客戶：18人\n解說：17人");
   });
 });

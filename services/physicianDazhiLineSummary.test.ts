@@ -6,15 +6,30 @@ import {
 } from "./physicianDazhiLineSummary";
 
 describe("physician Dazhi LINE summary", () => {
-  it("keeps Beitou client and explanation counts separate", () => {
+  it("uses the synchronized 9/10 Beitou client and explanation counts", () => {
     expect(
       formatPhysicianBeitouLineStats({
-        beitou_clients: 19,
-        beitou_health_explanations: 21,
+        beitou_clients: 18,
+        beitou_health_explanations: 17,
         beitou_cta: 0,
-        dazhi_clients: 19,
+        dazhi_clients: 18,
       }),
-    ).toBe("總人數 : 19人\n解說：21人");
+    ).toBe("總人數 : 18人\n解說：17人");
+  });
+
+  it("uses the synchronized 9/10 Dazhi client and explanation counts", () => {
+    expect(
+      formatPhysicianDazhiLineStats({
+        beitou_clients: 18,
+        beitou_cta: 0,
+        dazhi_clients: 18,
+        dazhi_metabolism_clients: 3,
+        dazhi_health_explanations: 17,
+        dazhi_metabolism_explanations: 0,
+      }),
+    ).toContain(
+      "健檢/代謝總人數：18 位/3 位\n健檢/代謝解說：17 位/ 位",
+    );
   });
 
   it("formats the requested five-line block with existing daily statistics", () => {

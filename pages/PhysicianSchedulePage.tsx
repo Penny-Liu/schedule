@@ -522,6 +522,10 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
   const [staffShifts, setStaffShifts] = useState(db.shifts); // New: For Radiologist Total Count
   // Fetch all users for name resolution (radiographers)
   const [users, setUsers] = useState<any[]>(db.getUsers());
+  useEffect(() => {
+    void db.refreshSettings();
+  }, [currentDate]);
+
   const radiographers = useMemo(
     () =>
       users.filter((u) => u.isRadiographer === true && u.isActive !== false),
@@ -5906,7 +5910,8 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
                       北投區塊
                     </span>
                     <button
-                      onClick={() => {
+                      onClick={async () => {
+                        await db.refreshSettings();
                         const text = generateBeitouCopyText(
                           currentDate,
                           shifts,
@@ -5941,7 +5946,8 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
                       大直區塊
                     </span>
                     <button
-                      onClick={() => {
+                      onClick={async () => {
+                        await db.refreshSettings();
                         const text = generateDazhiCopyText(
                           currentDate,
                           shifts,
@@ -5968,7 +5974,8 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
                       大直區塊二（問診／抽血／基礎）
                     </span>
                     <button
-                      onClick={() => {
+                      onClick={async () => {
+                        await db.refreshSettings();
                         navigator.clipboard.writeText(
                           generateDazhiStaffCopyText(currentDate),
                         );

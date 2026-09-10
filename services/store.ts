@@ -2018,6 +2018,28 @@ class Store {
     return { error };
   }
 
+  async refreshSettings() {
+    const { data, error } = await supabase
+      .from("settings")
+      .select("id, data")
+      .limit(1)
+      .maybeSingle();
+
+    if (error) {
+      console.error("Error refreshing settings:", error);
+      return { error };
+    }
+
+    if (data?.data) {
+      this.settingsRowId = data.id;
+      this.settings = { ...this.settings, ...data.data };
+      this.ensureSettingsIntegrity();
+      this.notifyListeners();
+    }
+
+    return { error: null };
+  }
+
   // Auth
   login(username: string): User | undefined {
     const user = this.users.find((u) => u.username === username);
