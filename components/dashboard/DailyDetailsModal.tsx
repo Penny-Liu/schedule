@@ -411,6 +411,7 @@ export const DailyDetailsModal: React.FC<DailyDetailsModalProps> = ({
                 <h3 className="text-sm font-bold text-amber-900">單日教學精確分配</h3>
                 <p className="text-xs text-amber-700 mt-0.5">
                   可將同一檢查量分配給不同老師；各老師數量合計不可超過學員當日實際量。
+                  MR 各項目扣除手動分配後，剩餘量會自動計入排班判定的唯一老師；若無法判定唯一老師，請完整填寫分配。
                 </p>
               </div>
               {canEditTeachingAllocations && (

@@ -38,6 +38,10 @@ import { fetchRadiographerBirthDates } from "../services/radiographerPrivateProf
 import { DailyDetailsModal } from "../components/dashboard/DailyDetailsModal";
 import { canTeachLearningCategory } from "../services/radiographerLearning";
 import {
+  getAutomaticMrTeachingAmount,
+  normalizeMrTeachingAmount,
+} from "../services/radiographerMrTeaching";
+import {
   fetchTeachingAllocationsByRange,
   getTeachingCategoryForField,
   RadiographerTeachingAllocation,
@@ -640,6 +644,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
     const learningDates: Record<string, Record<string, Set<string>>> = {};
     const teachingDates: Record<string, Record<string, Set<string>>> = {};
     const preciselyAllocatedStudentDays = new Set<string>();
+    const manualMrAssignments = new Map<string, RadiographerTeachingAllocation[]>();
 
     const isLearningCat = (user: any, cat: string, shiftDate: string) => {
       const allCaps = [
@@ -702,6 +707,13 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
       preciselyAllocatedStudentDays.add(
         `${allocation.studentUserId}|${allocation.date}|${category}`,
       );
+      if (category === "MR") {
+        const key = `${allocation.studentUserId}|${allocation.date}`;
+        manualMrAssignments.set(key, [
+          ...(manualMrAssignments.get(key) || []),
+          allocation,
+        ]);
+      }
 
       if (!learningDates[student.id]) learningDates[student.id] = {};
       if (!learningDates[student.id][category]) {
@@ -748,6 +760,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
         studentShifts.forEach((shift) => {
           if (isStationCat(shift.station, cat) || (shift.learningStation && isStationCat(shift.learningStation, cat))) {
             if (
+              cat !== "MR" &&
               preciselyAllocatedStudentDays.has(
                 `${student.id}|${shift.date}|${cat}`,
               )
@@ -825,11 +838,17 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
                   if (!hasMatchingStation) return false;
 
                   const teacherIsLearning = isLearningCat(r, cat, shift.date);
-                  return !teacherIsLearning;
+                  return !teacherIsLearning &&
+                    (cat !== "MR" || canTeachLearningCategory(r, cat, shift.date));
                 });
                 if (teachersOnSameDay.length > 0) {
                   weightPerTeacher = 1 / teachersOnSameDay.length;
                 }
+              }
+
+              const mrAssignments = manualMrAssignments.get(`${student.id}|${shift.date}`) || [];
+              if (cat === "MR" && mrAssignments.length > 0 && teachersOnSameDay.length !== 1) {
+                return;
               }
 
               if (teachersOnSameDay.length > 0) {
@@ -907,7 +926,9 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
                             assignedVal: actualPoints * weightPerTeacher,
                           });
                         }
-                        const assignedVal = actualPoints * weightPerTeacher;
+                        const assignedVal = cat === "MR"
+                          ? getAutomaticMrTeachingAmount(field, actualPoints, mrAssignments, teachersOnSameDay.length)
+                          : actualPoints * weightPerTeacher;
                         const teachingFieldKey = `${field}Teaching`;
 
                         if (!teachingAllocations[t.id])
@@ -1138,11 +1159,11 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
 
       const teacherAlloc = teachingAllocations[user.id];
       if (teacherAlloc) {
-        stats.mrTeaching += Math.round(teacherAlloc.mrTeaching || 0);
-        stats.mrLargeMaleTeaching += Math.round(teacherAlloc.mrLargeMaleTeaching || 0);
-        stats.mrLargeFemaleTeaching += Math.round(teacherAlloc.mrLargeFemaleTeaching || 0);
-        stats.mrMediumTeaching += Math.round(teacherAlloc.mrMediumTeaching || 0);
-        stats.mrSmallTeaching += Math.round(teacherAlloc.mrSmallTeaching || 0);
+        stats.mrTeaching += normalizeMrTeachingAmount(teacherAlloc.mrTeaching || 0);
+        stats.mrLargeMaleTeaching += normalizeMrTeachingAmount(teacherAlloc.mrLargeMaleTeaching || 0);
+        stats.mrLargeFemaleTeaching += normalizeMrTeachingAmount(teacherAlloc.mrLargeFemaleTeaching || 0);
+        stats.mrMediumTeaching += normalizeMrTeachingAmount(teacherAlloc.mrMediumTeaching || 0);
+        stats.mrSmallTeaching += normalizeMrTeachingAmount(teacherAlloc.mrSmallTeaching || 0);
         stats.usTeaching += Math.round(teacherAlloc.usTeaching || 0);
         stats.usATeaching += Math.round(teacherAlloc.usATeaching || 0);
         stats.usBreastTeaching += Math.round(teacherAlloc.usBreastTeaching || 0);

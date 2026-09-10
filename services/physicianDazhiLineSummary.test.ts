@@ -28,7 +28,7 @@ describe("physician Dazhi LINE summary", () => {
         dazhi_metabolism_explanations: 0,
       }),
     ).toContain(
-      "健檢/代謝總人數：18 位/3 位\n健檢/代謝解說：17 位/ 位",
+      "健檢/代謝總人數：18 位/3 位\n健檢/代謝解說：17 位/0 位",
     );
   });
 
@@ -56,7 +56,30 @@ describe("physician Dazhi LINE summary", () => {
     );
   });
 
-  it("leaves unavailable or zero counts blank for manual LINE entry", () => {
+  it("displays zero counts with units in both locations", () => {
+    const stats = {
+      beitou_clients: 0,
+      beitou_cta: 0,
+      beitou_health_explanations: 0,
+      dazhi_clients: 0,
+      dazhi_metabolism_clients: 0,
+      dazhi_health_explanations: 0,
+      dazhi_metabolism_explanations: 0,
+      dazhi_nutrition_consultations: 0,
+      dazhi_gi: 0,
+      dazhi_ultrasound_heart: 0,
+    };
+    expect(formatPhysicianBeitouLineStats(stats)).toBe("總人數 : 0人\n解說：0人");
+    expect(formatPhysicianDazhiLineStats(stats)).toBe([
+      "健檢/代謝總人數：0 位/0 位",
+      "健檢/代謝解說：0 位/0 位",
+      "營養諮詢：0位",
+      "腸胃：0",
+      "心超：0",
+    ].join("\n"));
+  });
+
+  it("leaves unavailable counts blank for manual LINE entry", () => {
     expect(formatPhysicianDazhiLineStats()).toBe(
       [
         "健檢/代謝總人數： 位/ 位",
