@@ -43,7 +43,8 @@ export const isHealthCheckExplanation = (record = {}) => {
 
 export const isDazhiMetabolismExplanation = (record = {}) =>
   String(record.Location__c || "").trim() === "大直" &&
-  String(record.CheckupName__c || "").trim() === "代謝總評";
+  String(record.CheckupName__c || "").trim() === "流程報到" &&
+  String(record.ResourceCategory__c || "").trim() === "MetC";
 
 export const isHealthCheckInterview = (record = {}) => {
   const location = String(record.Location__c || "").trim();
@@ -58,18 +59,20 @@ export const isHealthCheckInterview = (record = {}) => {
 
 export const isBeitouHealthCheckClientAnchor = (record = {}) =>
   String(record.Location__c || "").trim() === "北投" &&
-  (isHealthCheckInterview(record) || isHealthCheckExplanation(record));
+  String(record.CheckupName__c || "").trim() === "客戶報到" &&
+  String(record.ResourceCategory__c || "").trim() === "櫃台";
 
 export const isDazhiHealthCheckClientAnchor = (record = {}) =>
   String(record.Location__c || "").trim() === "大直" &&
-  String(record.CheckupName__c || "").trim() ===
-    "身高、體重、脈搏呼吸、體溫、腰圍、臀圍" &&
-  String(record.ResourceCategory__c || "").trim() === "檢備";
+  String(record.CheckupName__c || "").trim() === "客戶報到" &&
+  String(record.ResourceCategory__c || "").trim() === "櫃台" &&
+  String(record.Order__r?.OrderType__c || "").trim() === "健檢";
 
 export const isDazhiMetabolismClientAnchor = (record = {}) =>
   String(record.Location__c || "").trim() === "大直" &&
-  String(record.CheckupName__c || "").trim() === "流程報到" &&
-  String(record.ResourceCategory__c || "").trim() === "NutrC";
+  String(record.CheckupName__c || "").trim() === "客戶報到" &&
+  String(record.ResourceCategory__c || "").trim() === "櫃台" &&
+  String(record.Order__r?.OrderType__c || "").trim() === "代謝";
 
 export const getDatedClientKey = (record = {}) =>
   `${record.CheckStartDate__c || ""}_${record.MedicalRecordNo__c || record.Order__c || ""}`;

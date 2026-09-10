@@ -53,7 +53,7 @@ async function syncDailyStats(session, startDate, endDate) {
 
   // 一次性抓取整個區間的資料，取代原本跑 31 次報表的低效做法
   const soql = `
-      SELECT CheckupName__c, Location__c, Order__c, MedicalRecordNo__c, CheckStartDate__c, ResourceCategory__c, Gender__c
+      SELECT CheckupName__c, Location__c, Order__c, Order__r.OrderType__c, MedicalRecordNo__c, CheckStartDate__c, ResourceCategory__c, Gender__c
       FROM CheckupReservation__c 
       WHERE (Location__c = '北投' OR Location__c = '大直')
         AND CheckStartDate__c >= ${startDate}
@@ -191,6 +191,7 @@ async function syncDailyStats(session, startDate, endDate) {
       // 記錄北投的 Client
       beitouOrders.add(`${date}_${clientId}`);
 
+      // 北投健檢客戶數以櫃台「客戶報到」醫令辨識。
       if (
         isBeitouHealthCheckClientAnchor(r) &&
         addDatedClientIfNew(seenBeitouClient, r)
@@ -257,7 +258,7 @@ async function syncDailyStats(session, startDate, endDate) {
         stats.dazhi_health_explanations++;
       }
 
-      // 大直健檢總客戶數以完整的基礎量測醫令辨識。
+      // 大直健檢客戶以櫃台報到醫令上的訂單類別「健檢」辨識。
       if (
         isDazhiHealthCheckClientAnchor(r) &&
         addDatedClientIfNew(seenDazhiClient, r)
