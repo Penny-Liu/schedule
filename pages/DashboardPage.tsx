@@ -6482,6 +6482,10 @@ const DailyManpowerSummary: React.FC<{
   currentUser: User;
   stats?: DailyManpowerStats;
 }> = ({ date, users, shifts, doctorShifts, currentUser, stats: suppliedStats }) => {
+  useEffect(() => {
+    void db.refreshSettings();
+  }, [date]);
+
   const stats: DailyManpowerStats = suppliedStats || {
     beitou_clients: 0,
     beitou_cta: 0,
@@ -7797,7 +7801,11 @@ BMD :{{bmd}}
             </div>
             <button
               type="button"
-              onClick={() => handleCopy(copyText.section7)}
+              onClick={async () => {
+                await db.refreshSettings();
+                const latestStats = db.getDailyStats(date) || stats;
+                handleCopy(formatRadiographerDailyLineSummary(date, latestStats));
+              }}
               className="text-xs bg-emerald-100 hover:bg-emerald-200 text-emerald-800 px-2 py-1 rounded-lg flex items-center gap-1"
             >
               <Copy size={12} /> 複製
