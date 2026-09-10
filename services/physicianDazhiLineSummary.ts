@@ -5,8 +5,9 @@ import type {
 } from "../types";
 
 const displayCount = (value: number | undefined): string => {
+  if (value == null) return "";
   const count = Math.max(0, Math.round(Number(value) || 0));
-  return count > 0 ? String(count) : "";
+  return String(count);
 };
 
 export const formatPhysicianDazhiLineStats = (
