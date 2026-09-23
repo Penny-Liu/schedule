@@ -54,7 +54,14 @@ import {
   formatPhysicianDazhiLineStaffBlock,
   formatPhysicianDazhiLineStats,
 } from "../services/physicianDazhiLineSummary";
-import { downloadExcelBuffer, finalizeExcelWorksheet, getExcelColumnName, initializeExcelWorkbook, styleExcelSubtitle, styleExcelTitle } from "../services/excelReportUtils";
+import {
+  downloadExcelBuffer,
+  finalizeExcelWorksheet,
+  getExcelColumnName,
+  initializeExcelWorkbook,
+  styleExcelSubtitle,
+  styleExcelTitle,
+} from "../services/excelReportUtils";
 
 interface PhysicianSchedulePageProps {
   currentUser: any;
@@ -653,7 +660,11 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
         grouped[shift.category].push(shift.staff_names);
       } else if (shift.category === "H班") {
         grouped["基因"].push(
-          shift.staff_names.split(",").map(n => `${n.trim()}(H)`).filter(Boolean).join(",")
+          shift.staff_names
+            .split(",")
+            .map((n) => `${n.trim()}(H)`)
+            .filter(Boolean)
+            .join(","),
         );
       }
     });
@@ -873,7 +884,12 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
     const unsubscribe = db.subscribe(handleDataChange);
 
     // Ensure data is loaded
-    Promise.all([db.initializeAuthData(), db.currentUser ? db.initializeDataForUser(db.currentUser) : Promise.resolve()]).then(() => {
+    Promise.all([
+      db.initializeAuthData(),
+      db.currentUser
+        ? db.initializeDataForUser(db.currentUser)
+        : Promise.resolve(),
+    ]).then(() => {
       setDoctors(db.getDoctors().filter((d) => d.isActive !== false));
       setShifts(db.getDoctorShifts());
       setStaffShifts(db.shifts);
@@ -1403,8 +1419,12 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
             let contentHeight = 2.5; // station name
             if (time) contentHeight += 1.8 + lineSpacing;
             if (task) {
-              const taskTokens = task.split(",").map((t: string) => t.trim()).filter(Boolean);
-              contentHeight += taskTokens.length * 1.8 + (taskTokens.length) * lineSpacing;
+              const taskTokens = task
+                .split(",")
+                .map((t: string) => t.trim())
+                .filter(Boolean);
+              contentHeight +=
+                taskTokens.length * 1.8 + taskTokens.length * lineSpacing;
             }
 
             let y = data.cell.y + (data.cell.height - contentHeight) / 2 + 2.0;
@@ -1435,7 +1455,10 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
             }
 
             if (task) {
-              const taskTokens = task.split(",").map((t: string) => t.trim()).filter(Boolean);
+              const taskTokens = task
+                .split(",")
+                .map((t: string) => t.trim())
+                .filter(Boolean);
               taskTokens.forEach((t: string) => {
                 doc.setFontSize(5);
                 if (t === "晚班") {
@@ -1507,7 +1530,10 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
                 shift.task &&
                 !(shift.stationName === "晚班" && shift.task === "晚班")
               ) {
-                const taskTokens = shift.task.split(",").map((t: string) => t.trim()).filter(Boolean);
+                const taskTokens = shift.task
+                  .split(",")
+                  .map((t: string) => t.trim())
+                  .filter(Boolean);
                 taskTokens.forEach((t: string) => {
                   doc.setFontSize(7);
                   if (t === "晚班") {
@@ -1960,7 +1986,10 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
                   const showTask =
                     s.task && !(stName === "晚班" && s.task === "晚班");
                   if (showTask) {
-                    const taskTokens = s.task!.split(",").map((t) => t.trim()).filter(Boolean);
+                    const taskTokens = s
+                      .task!.split(",")
+                      .map((t) => t.trim())
+                      .filter(Boolean);
                     totalHeight += taskTokens.length * 2.3;
                   }
                   if (idx < assignedShifts.length - 1) totalHeight += 1.5;
@@ -2177,7 +2206,9 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
             const [y, m, day] = dateStr.split("-").map(Number);
             const d = new Date(y, m - 1, day);
             const isHoliday = holidays.some(
-              (h) => h.date === dateStr && (h.type === "NATIONAL" || h.type === "CLOSED"),
+              (h) =>
+                h.date === dateStr &&
+                (h.type === "NATIONAL" || h.type === "CLOSED"),
             );
             if (d.getDay() === 0 || d.getDay() === 6 || isHoliday) {
               data.cell.styles.textColor = [255, 0, 0];
@@ -2188,7 +2219,9 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
             const [y, m, day] = dateStr.split("-").map(Number);
             const d = new Date(y, m - 1, day);
             const isHoliday = holidays.some(
-              (h) => h.date === dateStr && (h.type === "NATIONAL" || h.type === "CLOSED"),
+              (h) =>
+                h.date === dateStr &&
+                (h.type === "NATIONAL" || h.type === "CLOSED"),
             );
             if (d.getDay() === 0 || d.getDay() === 6 || isHoliday) {
               data.cell.styles.fillColor = [245, 245, 245];
@@ -2218,7 +2251,10 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
               totalHeight += 2.8;
               if (shift.locationAbbr) totalHeight += 2.3;
               if (shift.time) totalHeight += 2.3;
-              if (shift.task && !(shift.stationName === "晚班" && shift.task === "晚班"))
+              if (
+                shift.task &&
+                !(shift.stationName === "晚班" && shift.task === "晚班")
+              )
                 totalHeight += 2.3;
               if (idx < shifts.length - 1) totalHeight += 1.5;
             });
@@ -2242,8 +2278,14 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
                 doc.setTextColor(0, 0, 0);
                 y += 2.3;
               }
-              if (shift.task && !(shift.stationName === "晚班" && shift.task === "晚班")) {
-                const taskTokens = shift.task.split(",").map((t: string) => t.trim()).filter(Boolean);
+              if (
+                shift.task &&
+                !(shift.stationName === "晚班" && shift.task === "晚班")
+              ) {
+                const taskTokens = shift.task
+                  .split(",")
+                  .map((t: string) => t.trim())
+                  .filter(Boolean);
                 taskTokens.forEach((t: string) => {
                   doc.setFontSize(7);
                   if (t === "晚班") {
@@ -2260,8 +2302,10 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
                 doc.setDrawColor(200, 200, 200);
                 doc.setLineWidth(0.2);
                 doc.line(
-                  data.cell.x + 3, y + 0.5,
-                  data.cell.x + data.cell.width - 3, y + 0.5,
+                  data.cell.x + 3,
+                  y + 0.5,
+                  data.cell.x + data.cell.width - 3,
+                  y + 0.5,
                 );
                 doc.setDrawColor(0, 0, 0);
                 y += 1.5;
@@ -2336,7 +2380,10 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
     try {
       const ExcelJS = (await import("exceljs")).default;
       const workbook = new ExcelJS.Workbook();
-      initializeExcelWorkbook(workbook, `醫師排班表 ${dateRange[0]} ~ ${dateRange[dateRange.length - 1]}`);
+      initializeExcelWorkbook(
+        workbook,
+        `醫師排班表 ${dateRange[0]} ~ ${dateRange[dateRange.length - 1]}`,
+      );
 
       // Shared Styles & Config
       const borderStyle: any = {
@@ -2384,14 +2431,21 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
         if (value && typeof value === "object" && value.richText) {
           return Math.max(
             1,
-            value.richText.map((part: any) => part.text || "").join("").split("\n").length,
+            value.richText
+              .map((part: any) => part.text || "")
+              .join("")
+              .split("\n").length,
           );
         }
         return Math.max(1, String(value ?? "").split("\n").length);
       };
 
       const fitScheduleRows = (sheet: any, dataStartRow = 4) => {
-        for (let rowNumber = dataStartRow; rowNumber <= sheet.rowCount; rowNumber += 1) {
+        for (
+          let rowNumber = dataStartRow;
+          rowNumber <= sheet.rowCount;
+          rowNumber += 1
+        ) {
           const row = sheet.getRow(rowNumber);
           const isSectionRow = row.getCell(2).isMerged;
           if (isSectionRow) {
@@ -2441,7 +2495,8 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
           const isHoliday = holidays.some(
             (holiday) =>
               holiday.date === dateStr &&
-              (holiday.type === DateEventType.NATIONAL || holiday.type === DateEventType.CLOSED),
+              (holiday.type === DateEventType.NATIONAL ||
+                holiday.type === DateEventType.CLOSED),
           );
           if (!isWeekend && !isHoliday) return;
 
@@ -2535,7 +2590,10 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
       // ==========================================
       const sheet1 = workbook.addWorksheet("崗位視角");
       applyPageSetup(sheet1);
-      generateHeader(sheet1, "依院區與崗位排列　｜　內容順序：姓名、時段、任務　｜　橘字＝模擬排班");
+      generateHeader(
+        sheet1,
+        "依院區與崗位排列　｜　內容順序：姓名、時段、任務　｜　橘字＝模擬排班",
+      );
 
       let currentRowIndex = 4;
 
@@ -2815,7 +2873,12 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
           }
 
           // Skip if station is explicitly '晚班' unless it's Beitou or Dazhi
-          if (station === "晚班" && locationName !== "北投" && locationName !== "大直") return;
+          if (
+            station === "晚班" &&
+            locationName !== "北投" &&
+            locationName !== "大直"
+          )
+            return;
 
           const row = sheet1.getRow(currentRowIndex);
           row.getCell(1).value = station;
@@ -2909,7 +2972,10 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
       // ==========================================
       const sheet2 = workbook.addWorksheet("人員視角");
       applyPageSetup(sheet2);
-      generateHeader(sheet2, "藍底＝北投　｜　棕底＝大直　｜　黃底＝台中　｜　紅字＝晚班　｜　灰底／X＝休假或不排班");
+      generateHeader(
+        sheet2,
+        "藍底＝北投　｜　棕底＝大直　｜　黃底＝台中　｜　紅字＝晚班　｜　灰底／X＝休假或不排班",
+      );
 
       let sheet2RowIndex = 4;
 
@@ -3010,7 +3076,11 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
                         size: 9,
                         bold: isLateTask,
                         color: isTask
-                          ? { argb: isLateTask ? PHYSICIAN_EXCEL_LATE_TEXT : PHYSICIAN_EXCEL_TASK_TEXT }
+                          ? {
+                              argb: isLateTask
+                                ? PHYSICIAN_EXCEL_LATE_TEXT
+                                : PHYSICIAN_EXCEL_TASK_TEXT,
+                            }
                           : undefined,
                       },
                 });
@@ -3054,8 +3124,16 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
         sheet2RowIndex++;
       });
 
-      styleExcelTitle(sheet1, `醫師排班表 ${dateRange[0]} ~ ${dateRange[dateRange.length - 1]}`, dateRange.length + 1);
-      styleExcelTitle(sheet2, `醫師排班表 ${dateRange[0]} ~ ${dateRange[dateRange.length - 1]}`, dateRange.length + 1);
+      styleExcelTitle(
+        sheet1,
+        `醫師排班表 ${dateRange[0]} ~ ${dateRange[dateRange.length - 1]}`,
+        dateRange.length + 1,
+      );
+      styleExcelTitle(
+        sheet2,
+        `醫師排班表 ${dateRange[0]} ~ ${dateRange[dateRange.length - 1]}`,
+        dateRange.length + 1,
+      );
       polishDoctorScheduleSheet(sheet1, "FF0F4C81");
       polishDoctorScheduleSheet(sheet2, "FF5B9BD5");
 
@@ -3644,8 +3722,7 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
                     );
 
                     const isHoliday = !!holiday;
-                    const isToday =
-                      date === toLocalISOString(new Date());
+                    const isToday = date === toLocalISOString(new Date());
 
                     return (
                       <th
@@ -4038,14 +4115,18 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
                                   )}
                                   {shift.task && (
                                     <span className="flex flex-wrap gap-x-0.5 leading-tight w-full px-1 justify-center">
-                                      {shift.task.split(",").map((t) => t.trim()).filter(Boolean).map((t, i) => (
-                                        <span
-                                          key={i}
-                                          className={`text-[10px] font-bold ${t === "晚班" ? "text-red-600" : "text-blue-600"}`}
-                                        >
-                                          {t}
-                                        </span>
-                                      ))}
+                                      {shift.task
+                                        .split(",")
+                                        .map((t) => t.trim())
+                                        .filter(Boolean)
+                                        .map((t, i) => (
+                                          <span
+                                            key={i}
+                                            className={`text-[10px] font-bold ${t === "晚班" ? "text-red-600" : "text-blue-600"}`}
+                                          >
+                                            {t}
+                                          </span>
+                                        ))}
                                     </span>
                                   )}
                                   {shift.location && (
@@ -4764,7 +4845,7 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
                                 "眼科",
                                 "婦科",
                               ],
-                              台中: ["影像", "GI"],
+                              台中: ["影像", "遠班", "GI"],
                             };
 
                             const orderedStationNames =
@@ -5034,14 +5115,18 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
                                                     )}
                                                     {shift.task && (
                                                       <div className="flex flex-wrap gap-x-0.5 leading-tight justify-center">
-                                                        {shift.task.split(",").map((t) => t.trim()).filter(Boolean).map((t, i) => (
-                                                          <span
-                                                            key={i}
-                                                            className={`text-[9px] font-bold ${t === "晚班" ? "text-red-500" : "text-blue-500"}`}
-                                                          >
-                                                            {t}
-                                                          </span>
-                                                        ))}
+                                                        {shift.task
+                                                          .split(",")
+                                                          .map((t) => t.trim())
+                                                          .filter(Boolean)
+                                                          .map((t, i) => (
+                                                            <span
+                                                              key={i}
+                                                              className={`text-[9px] font-bold ${t === "晚班" ? "text-red-500" : "text-blue-500"}`}
+                                                            >
+                                                              {t}
+                                                            </span>
+                                                          ))}
                                                       </div>
                                                     )}
                                                     {index <
@@ -5649,18 +5734,25 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
                                 return {
                                   card: "bg-gradient-to-br from-white to-indigo-50/70 border-indigo-200/80 hover:border-indigo-300 hover:shadow-indigo-100/50",
                                   cardBorder: "border-indigo-200/80",
-                                  headerBg: "bg-gradient-to-r from-indigo-500 to-indigo-600",
+                                  headerBg:
+                                    "bg-gradient-to-r from-indigo-500 to-indigo-600",
                                   title: "text-indigo-900",
                                   border: "border-indigo-100",
-                                  badge: "bg-indigo-100 text-indigo-700 border border-indigo-200",
-                                  badgeNormal: "bg-indigo-50 text-indigo-700 border-indigo-200",
+                                  badge:
+                                    "bg-indigo-100 text-indigo-700 border border-indigo-200",
+                                  badgeNormal:
+                                    "bg-indigo-50 text-indigo-700 border-indigo-200",
                                   avatarRing: "ring-indigo-100",
-                                  avatarBg: "bg-gradient-to-br from-indigo-50 to-indigo-100/50 text-indigo-700",
+                                  avatarBg:
+                                    "bg-gradient-to-br from-indigo-50 to-indigo-100/50 text-indigo-700",
                                   avatarEdge: "bg-indigo-400/80",
                                   itemHover: "hover:bg-indigo-50/50",
-                                  emptyBorder: "border-indigo-200/80 bg-indigo-50/30 hover:bg-indigo-50/50 hover:border-indigo-300 hover:text-indigo-700",
-                                  emptyIconBg: "group-hover/empty:bg-indigo-50 group-hover/empty:border-indigo-200 group-hover/empty:shadow-indigo-100/50",
-                                  emptyIconText: "group-hover/empty:text-indigo-500 text-indigo-300",
+                                  emptyBorder:
+                                    "border-indigo-200/80 bg-indigo-50/30 hover:bg-indigo-50/50 hover:border-indigo-300 hover:text-indigo-700",
+                                  emptyIconBg:
+                                    "group-hover/empty:bg-indigo-50 group-hover/empty:border-indigo-200 group-hover/empty:shadow-indigo-100/50",
+                                  emptyIconText:
+                                    "group-hover/empty:text-indigo-500 text-indigo-300",
                                 };
                               if (
                                 stationName.includes("影像") ||
@@ -5669,35 +5761,49 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
                                 return {
                                   card: "bg-gradient-to-br from-white to-blue-50/70 border-blue-200/80 hover:border-blue-300 hover:shadow-blue-100/50",
                                   cardBorder: "border-blue-200/80",
-                                  headerBg: "bg-gradient-to-r from-blue-500 to-blue-600",
+                                  headerBg:
+                                    "bg-gradient-to-r from-blue-500 to-blue-600",
                                   title: "text-blue-900",
                                   border: "border-blue-100",
-                                  badge: "bg-blue-100 text-blue-700 border border-blue-200",
-                                  badgeNormal: "bg-blue-50 text-blue-700 border-blue-200",
+                                  badge:
+                                    "bg-blue-100 text-blue-700 border border-blue-200",
+                                  badgeNormal:
+                                    "bg-blue-50 text-blue-700 border-blue-200",
                                   avatarRing: "ring-blue-100",
-                                  avatarBg: "bg-gradient-to-br from-blue-50 to-blue-100/50 text-blue-700",
+                                  avatarBg:
+                                    "bg-gradient-to-br from-blue-50 to-blue-100/50 text-blue-700",
                                   avatarEdge: "bg-blue-400/80",
                                   itemHover: "hover:bg-blue-50/50",
-                                  emptyBorder: "border-blue-200/80 bg-blue-50/30 hover:bg-blue-50/50 hover:border-blue-300 hover:text-blue-700",
-                                  emptyIconBg: "group-hover/empty:bg-blue-50 group-hover/empty:border-blue-200 group-hover/empty:shadow-blue-100/50",
-                                  emptyIconText: "group-hover/empty:text-blue-500 text-blue-300",
+                                  emptyBorder:
+                                    "border-blue-200/80 bg-blue-50/30 hover:bg-blue-50/50 hover:border-blue-300 hover:text-blue-700",
+                                  emptyIconBg:
+                                    "group-hover/empty:bg-blue-50 group-hover/empty:border-blue-200 group-hover/empty:shadow-blue-100/50",
+                                  emptyIconText:
+                                    "group-hover/empty:text-blue-500 text-blue-300",
                                 };
                               if (stationName.includes("遠"))
                                 return {
                                   card: "bg-gradient-to-br from-white to-rose-50/70 border-rose-200/80 hover:border-rose-300 hover:shadow-rose-100/50",
                                   cardBorder: "border-rose-200/80",
-                                  headerBg: "bg-gradient-to-r from-rose-500 to-rose-600",
+                                  headerBg:
+                                    "bg-gradient-to-r from-rose-500 to-rose-600",
                                   title: "text-rose-900",
                                   border: "border-rose-100",
-                                  badge: "bg-rose-100 text-rose-700 border border-rose-200",
-                                  badgeNormal: "bg-rose-50 text-rose-700 border-rose-200",
+                                  badge:
+                                    "bg-rose-100 text-rose-700 border border-rose-200",
+                                  badgeNormal:
+                                    "bg-rose-50 text-rose-700 border-rose-200",
                                   avatarRing: "ring-rose-100",
-                                  avatarBg: "bg-gradient-to-br from-rose-50 to-rose-100/50 text-rose-700",
+                                  avatarBg:
+                                    "bg-gradient-to-br from-rose-50 to-rose-100/50 text-rose-700",
                                   avatarEdge: "bg-rose-400/80",
                                   itemHover: "hover:bg-rose-50/50",
-                                  emptyBorder: "border-rose-200/80 bg-rose-50/30 hover:bg-rose-50/50 hover:border-rose-300 hover:text-rose-700",
-                                  emptyIconBg: "group-hover/empty:bg-rose-50 group-hover/empty:border-rose-200 group-hover/empty:shadow-rose-100/50",
-                                  emptyIconText: "group-hover/empty:text-rose-500 text-rose-300",
+                                  emptyBorder:
+                                    "border-rose-200/80 bg-rose-50/30 hover:bg-rose-50/50 hover:border-rose-300 hover:text-rose-700",
+                                  emptyIconBg:
+                                    "group-hover/empty:bg-rose-50 group-hover/empty:border-rose-200 group-hover/empty:shadow-rose-100/50",
+                                  emptyIconText:
+                                    "group-hover/empty:text-rose-500 text-rose-300",
                                 };
                               if (
                                 stationName.includes("GI") ||
@@ -5706,51 +5812,72 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
                                 return {
                                   card: "bg-gradient-to-br from-white to-emerald-50/70 border-emerald-200/80 hover:border-emerald-300 hover:shadow-emerald-100/50",
                                   cardBorder: "border-emerald-200/80",
-                                  headerBg: "bg-gradient-to-r from-emerald-500 to-emerald-600",
+                                  headerBg:
+                                    "bg-gradient-to-r from-emerald-500 to-emerald-600",
                                   title: "text-emerald-900",
                                   border: "border-emerald-100",
-                                  badge: "bg-emerald-100 text-emerald-700 border border-emerald-200",
-                                  badgeNormal: "bg-emerald-50 text-emerald-700 border-emerald-200",
+                                  badge:
+                                    "bg-emerald-100 text-emerald-700 border border-emerald-200",
+                                  badgeNormal:
+                                    "bg-emerald-50 text-emerald-700 border-emerald-200",
                                   avatarRing: "ring-emerald-100",
-                                  avatarBg: "bg-gradient-to-br from-emerald-50 to-emerald-100/50 text-emerald-700",
+                                  avatarBg:
+                                    "bg-gradient-to-br from-emerald-50 to-emerald-100/50 text-emerald-700",
                                   avatarEdge: "bg-emerald-400/80",
                                   itemHover: "hover:bg-emerald-50/50",
-                                  emptyBorder: "border-emerald-200/80 bg-emerald-50/30 hover:bg-emerald-50/50 hover:border-emerald-300 hover:text-emerald-700",
-                                  emptyIconBg: "group-hover/empty:bg-emerald-50 group-hover/empty:border-emerald-200 group-hover/empty:shadow-emerald-100/50",
-                                  emptyIconText: "group-hover/empty:text-emerald-500 text-emerald-300",
+                                  emptyBorder:
+                                    "border-emerald-200/80 bg-emerald-50/30 hover:bg-emerald-50/50 hover:border-emerald-300 hover:text-emerald-700",
+                                  emptyIconBg:
+                                    "group-hover/empty:bg-emerald-50 group-hover/empty:border-emerald-200 group-hover/empty:shadow-emerald-100/50",
+                                  emptyIconText:
+                                    "group-hover/empty:text-emerald-500 text-emerald-300",
                                 };
                               if (stationName.includes("婦科"))
                                 return {
                                   card: "bg-gradient-to-br from-white to-pink-50/70 border-pink-200/80 hover:border-pink-300 hover:shadow-pink-100/50",
                                   cardBorder: "border-pink-200/80",
-                                  headerBg: "bg-gradient-to-r from-pink-500 to-pink-600",
+                                  headerBg:
+                                    "bg-gradient-to-r from-pink-500 to-pink-600",
                                   title: "text-pink-900",
                                   border: "border-pink-100",
-                                  badge: "bg-pink-100 text-pink-700 border border-pink-200",
-                                  badgeNormal: "bg-pink-50 text-pink-700 border-pink-200",
+                                  badge:
+                                    "bg-pink-100 text-pink-700 border border-pink-200",
+                                  badgeNormal:
+                                    "bg-pink-50 text-pink-700 border-pink-200",
                                   avatarRing: "ring-pink-100",
-                                  avatarBg: "bg-gradient-to-br from-pink-50 to-pink-100/50 text-pink-700",
+                                  avatarBg:
+                                    "bg-gradient-to-br from-pink-50 to-pink-100/50 text-pink-700",
                                   avatarEdge: "bg-pink-400/80",
                                   itemHover: "hover:bg-pink-50/50",
-                                  emptyBorder: "border-pink-200/80 bg-pink-50/30 hover:bg-pink-50/50 hover:border-pink-300 hover:text-pink-700",
-                                  emptyIconBg: "group-hover/empty:bg-pink-50 group-hover/empty:border-pink-200 group-hover/empty:shadow-pink-100/50",
-                                  emptyIconText: "group-hover/empty:text-pink-500 text-pink-300",
+                                  emptyBorder:
+                                    "border-pink-200/80 bg-pink-50/30 hover:bg-pink-50/50 hover:border-pink-300 hover:text-pink-700",
+                                  emptyIconBg:
+                                    "group-hover/empty:bg-pink-50 group-hover/empty:border-pink-200 group-hover/empty:shadow-pink-100/50",
+                                  emptyIconText:
+                                    "group-hover/empty:text-pink-500 text-pink-300",
                                 };
                               return {
                                 card: "bg-gradient-to-br from-white to-slate-50/30 border-slate-200/60 hover:border-slate-300 hover:shadow-slate-100/50",
                                 cardBorder: "border-slate-200/60",
-                                headerBg: "bg-gradient-to-r from-teal-500 to-teal-600",
+                                headerBg:
+                                  "bg-gradient-to-r from-teal-500 to-teal-600",
                                 title: "text-slate-800",
                                 border: "border-slate-100/80",
-                                badge: "bg-teal-100 text-teal-700 border border-teal-200",
-                                badgeNormal: "bg-slate-50 text-slate-500 border-slate-200",
+                                badge:
+                                  "bg-teal-100 text-teal-700 border border-teal-200",
+                                badgeNormal:
+                                  "bg-slate-50 text-slate-500 border-slate-200",
                                 avatarRing: "ring-teal-50",
-                                avatarBg: "bg-gradient-to-br from-teal-50 to-teal-100/50 text-teal-700",
+                                avatarBg:
+                                  "bg-gradient-to-br from-teal-50 to-teal-100/50 text-teal-700",
                                 avatarEdge: "bg-teal-400/80",
                                 itemHover: "hover:bg-teal-50/40",
-                                emptyBorder: "border-slate-200/80 bg-slate-50/30 hover:bg-teal-50/20 hover:border-teal-300/60 hover:text-teal-600",
-                                emptyIconBg: "group-hover/empty:bg-teal-50 group-hover/empty:border-teal-200 group-hover/empty:shadow-teal-100/50",
-                                emptyIconText: "group-hover/empty:text-teal-500 text-slate-300",
+                                emptyBorder:
+                                  "border-slate-200/80 bg-slate-50/30 hover:bg-teal-50/20 hover:border-teal-300/60 hover:text-teal-600",
+                                emptyIconBg:
+                                  "group-hover/empty:bg-teal-50 group-hover/empty:border-teal-200 group-hover/empty:shadow-teal-100/50",
+                                emptyIconText:
+                                  "group-hover/empty:text-teal-500 text-slate-300",
                               };
                             };
                             const theme = getStationTheme(st);
@@ -5810,6 +5937,14 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
                                                 className={`font-bold text-sm truncate ${theme.title}`}
                                               >
                                                 {doc?.name}
+                                                {loc === "台中" &&
+                                                ["遠班", "遠距", "遠"].includes(
+                                                  s.scheduled_station ||
+                                                    s.station ||
+                                                    "",
+                                                )
+                                                  ? "(遠)"
+                                                  : ""}
                                               </span>
                                               {s.workTime && (
                                                 <span className="text-[9px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded flex items-center gap-0.5 shrink-0">
@@ -5826,14 +5961,18 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
                                               )}
                                               {s.task && (
                                                 <span className="flex flex-wrap gap-x-1 justify-center">
-                                                  {s.task.split(",").map((t) => t.trim()).filter(Boolean).map((t, i) => (
-                                                    <span
-                                                      key={i}
-                                                      className={`text-[9px] px-1.5 py-0.5 rounded border font-bold ${t === "晚班" ? "text-red-700 bg-red-50 border-red-100" : "text-blue-700 bg-blue-50 border-blue-100"}`}
-                                                    >
-                                                      {t}
-                                                    </span>
-                                                  ))}
+                                                  {s.task
+                                                    .split(",")
+                                                    .map((t) => t.trim())
+                                                    .filter(Boolean)
+                                                    .map((t, i) => (
+                                                      <span
+                                                        key={i}
+                                                        className={`text-[9px] px-1.5 py-0.5 rounded border font-bold ${t === "晚班" ? "text-red-700 bg-red-50 border-red-100" : "text-blue-700 bg-blue-50 border-blue-100"}`}
+                                                      >
+                                                        {t}
+                                                      </span>
+                                                    ))}
                                                 </span>
                                               )}
                                               {s.note && (
@@ -6537,14 +6676,27 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-gray-500 uppercase">
                   特殊任務
-                  <span className="ml-1 text-gray-400 font-normal normal-case">(可複選)</span>
+                  <span className="ml-1 text-gray-400 font-normal normal-case">
+                    (可複選)
+                  </span>
                 </label>
 
                 {/* Multi-Select Task Chips */}
                 <div className="flex gap-2 flex-wrap">
-                  {["晚班", "電台", "行政", "子抹", "董事會", "基因", "代謝"].map((taskName) => {
+                  {[
+                    "晚班",
+                    "電台",
+                    "行政",
+                    "子抹",
+                    "董事會",
+                    "基因",
+                    "代謝",
+                  ].map((taskName) => {
                     const currentTasks = editData.task
-                      ? editData.task.split(",").map((t) => t.trim()).filter(Boolean)
+                      ? editData.task
+                          .split(",")
+                          .map((t) => t.trim())
+                          .filter(Boolean)
                       : [];
                     const isSelected = currentTasks.includes(taskName);
                     return (
@@ -6553,7 +6705,10 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
                         type="button"
                         onClick={() => {
                           const tasks = editData.task
-                            ? editData.task.split(",").map((t) => t.trim()).filter(Boolean)
+                            ? editData.task
+                                .split(",")
+                                .map((t) => t.trim())
+                                .filter(Boolean)
                             : [];
                           const next = isSelected
                             ? tasks.filter((t) => t !== taskName)
@@ -6575,25 +6730,34 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
                 {/* Selected Tags Preview */}
                 {editData.task && editData.task.trim() && (
                   <div className="flex flex-wrap gap-1.5">
-                    {editData.task.split(",").map((t) => t.trim()).filter(Boolean).map((t) => (
-                      <span
-                        key={t}
-                        className="inline-flex items-center gap-1 px-2 py-0.5 bg-teal-50 text-teal-700 border border-teal-200 rounded-full text-xs font-medium"
-                      >
-                        {t}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const next = editData.task
-                              .split(",").map((x) => x.trim()).filter((x) => x && x !== t);
-                            setEditData({ ...editData, task: next.join(", ") });
-                          }}
-                          className="hover:text-red-500 transition-colors"
+                    {editData.task
+                      .split(",")
+                      .map((t) => t.trim())
+                      .filter(Boolean)
+                      .map((t) => (
+                        <span
+                          key={t}
+                          className="inline-flex items-center gap-1 px-2 py-0.5 bg-teal-50 text-teal-700 border border-teal-200 rounded-full text-xs font-medium"
                         >
-                          ×
-                        </button>
-                      </span>
-                    ))}
+                          {t}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const next = editData.task
+                                .split(",")
+                                .map((x) => x.trim())
+                                .filter((x) => x && x !== t);
+                              setEditData({
+                                ...editData,
+                                task: next.join(", "),
+                              });
+                            }}
+                            className="hover:text-red-500 transition-colors"
+                          >
+                            ×
+                          </button>
+                        </span>
+                      ))}
                   </div>
                 )}
 
@@ -6613,7 +6777,6 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
                   />
                 </div>
               </div>
-
 
               {/* Note */}
               <div className="space-y-1.5">
@@ -6776,7 +6939,9 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
                           </div>
                           <div className="flex flex-col gap-1.5 px-1">
                             {assigned.map((s) => {
-                              const doc = doctors.find((d) => d.id === s.doctorId);
+                              const doc = doctors.find(
+                                (d) => d.id === s.doctorId,
+                              );
                               if (!doc) return null;
                               return (
                                 <div
@@ -6787,15 +6952,28 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
                                     {doc.alias}
                                   </div>
                                   <div className="min-w-0 flex-1">
-                                    <div className="font-bold text-sm text-gray-800 truncate">{doc.name}</div>
+                                    <div className="font-bold text-sm text-gray-800 truncate">
+                                      {doc.name}
+                                    </div>
                                     {s.task && (
-                                      <div className="text-[10px] text-blue-500 font-medium">{s.task}</div>
+                                      <div className="text-[10px] text-blue-500 font-medium">
+                                        {s.task}
+                                      </div>
                                     )}
                                   </div>
                                   <button
                                     onClick={async () => {
-                                      if (!confirm(`確定要清除 ${doc.name} 的崗位排班嗎？`)) return;
-                                      await db.assignDoctorSchedule(doc.id, assignModal.date, "");
+                                      if (
+                                        !confirm(
+                                          `確定要清除 ${doc.name} 的崗位排班嗎？`,
+                                        )
+                                      )
+                                        return;
+                                      await db.assignDoctorSchedule(
+                                        doc.id,
+                                        assignModal.date,
+                                        "",
+                                      );
                                       setShifts(db.getDoctorShifts());
                                       setAssignModal(null);
                                     }}
@@ -6815,7 +6993,6 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
 
                     {/* 1. Unscheduled Skilled (Priority) */}
                     {unscheduledSkilled.length > 0 && (
-
                       <div className="mb-4">
                         <div className="text-[11px] font-black text-emerald-600 uppercase px-3 py-1 bg-emerald-50 rounded-md mb-2 mx-1 tracking-wider flex items-center gap-1">
                           <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />

@@ -60,11 +60,17 @@ import {
   Heart,
   Clock,
 } from "lucide-react";
+import { loadExcelJS, loadPdfLibraries } from "../services/exportLibraries";
 import {
-  loadExcelJS,
-  loadPdfLibraries,
-} from "../services/exportLibraries";
-import { downloadExcelBuffer, finalizeExcelWorksheet, formatExcelScheduleLabel, getExcelColumnName, getExcelTextLineCount, initializeExcelWorkbook, styleExcelSubtitle, styleExcelTitle } from "../services/excelReportUtils";
+  downloadExcelBuffer,
+  finalizeExcelWorksheet,
+  formatExcelScheduleLabel,
+  getExcelColumnName,
+  getExcelTextLineCount,
+  initializeExcelWorkbook,
+  styleExcelSubtitle,
+  styleExcelTitle,
+} from "../services/excelReportUtils";
 import ConfirmModal from "../components/ConfirmModal";
 import {
   AutoScheduleModal,
@@ -86,6 +92,7 @@ import {
   formatMrForecastDay,
   formatMrPackageComposition,
   getMrCapacitySlotsForDate,
+  MR_LOW_UTILIZATION_RATE,
   MR_FORECAST_DAYS,
 } from "../services/mrCapacityForecast";
 import { getLearningTeacherCandidates } from "../services/radiographerLearning";
@@ -95,24 +102,52 @@ import {
   normalizeRadiographerTodaySectionTemplate,
 } from "../services/radiographerTodayLineSummary";
 
-const isUserLearningOnDate = (user: User | undefined | null, cap: string, date: string): boolean => {
+const isUserLearningOnDate = (
+  user: User | undefined | null,
+  cap: string,
+  date: string,
+): boolean => {
   if (!user || !user.learningCapabilities?.includes(cap)) return false;
-  if (user.learningSchedules && user.learningSchedules[cap] && date > user.learningSchedules[cap]) return false;
+  if (
+    user.learningSchedules &&
+    user.learningSchedules[cap] &&
+    date > user.learningSchedules[cap]
+  )
+    return false;
   return true;
 };
 
-const isUserCertifiedOnDate = (user: User | undefined | null, cap: string, date: string): boolean => {
+const isUserCertifiedOnDate = (
+  user: User | undefined | null,
+  cap: string,
+  date: string,
+): boolean => {
   if (!user) return false;
   if (user.capabilities?.includes(cap)) return true;
-  if (user.learningCapabilities?.includes(cap) && user.learningSchedules && user.learningSchedules[cap] && date > user.learningSchedules[cap]) return true;
+  if (
+    user.learningCapabilities?.includes(cap) &&
+    user.learningSchedules &&
+    user.learningSchedules[cap] &&
+    date > user.learningSchedules[cap]
+  )
+    return true;
   return false;
 };
 
-const isUserLearningStationOnDate = (user: User | undefined | null, station: string, date: string): boolean => {
+const isUserLearningStationOnDate = (
+  user: User | undefined | null,
+  station: string,
+  date: string,
+): boolean => {
   if (!user || !user.learningCapabilities) return false;
-  return user.learningCapabilities.some(cap => {
+  return user.learningCapabilities.some((cap) => {
     if (!station.includes(cap)) return false;
-    if (user.learningSchedules && user.learningSchedules[cap] && date > user.learningSchedules[cap]) return false;
+    if (
+      user.learningSchedules &&
+      user.learningSchedules[cap] &&
+      date > user.learningSchedules[cap]
+    )
+      return false;
     return true;
   });
 };
@@ -135,38 +170,65 @@ const RADIOGRAPHER_WORK_TIME_OPTIONS = [
 
 const WORK_TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d-([01]\d|2[0-3]):[0-5]\d$/;
 
-export const calculateDailyLoadRate = (targetDate: string, location: 'beitou'|'dazhi', shifts: Shift[], users: User[], stats: any) => {
+export const calculateDailyLoadRate = (
+  targetDate: string,
+  location: "beitou" | "dazhi",
+  shifts: Shift[],
+  users: User[],
+  stats: any,
+) => {
   let demandExtra = 0;
   let supplySlots = 0;
-  
+
   shifts.forEach((s) => {
     if (s.date !== targetDate) return;
-    if (s.station === SYSTEM_OFF || s.station === StationDefault.UNASSIGNED) return;
-    
+    if (s.station === SYSTEM_OFF || s.station === StationDefault.UNASSIGNED)
+      return;
+
     const u = users.find((user) => user.id === s.userId);
     if (!u || isUserOnEmploymentPause(u, targetDate)) return;
-    const isDazhiSupport = s.specialRoles?.includes(SPECIAL_ROLES.DAZHI_SUPPORT);
+    const isDazhiSupport = s.specialRoles?.includes(
+      SPECIAL_ROLES.DAZHI_SUPPORT,
+    );
     const isDazhi = s.station.includes("大直") || isDazhiSupport;
-    if ((location === 'dazhi' && !isDazhi) || (location === 'beitou' && isDazhi)) return;
+    if (
+      (location === "dazhi" && !isDazhi) ||
+      (location === "beitou" && isDazhi)
+    )
+      return;
 
     const isLeader = s.station.includes("場控");
-    const isAdmin = s.station === "行政"; 
-    const isLearning = s.station.includes("學習") || isUserLearningStationOnDate(u, s.station, targetDate);
+    const isAdmin = s.station === "行政";
+    const isLearning =
+      s.station.includes("學習") ||
+      isUserLearningStationOnDate(u, s.station, targetDate);
     const isRemote = s.station.includes("遠距") || s.station.includes("遠班");
     const isAssistant = s.station.includes("助理");
-    
+
     if (!isLeader && !isAdmin && !isLearning && !isAssistant) {
-       const isBmdStation = s.station.toLowerCase().includes("bmd") || s.station.includes("骨密") || s.station.includes("骨質") || (s.specialRoles || []).includes(SPECIAL_ROLES.DUAL_BMD);
-       if (isRemote && !isDazhi && !isBmdStation) {
-           // 遠班在大直或骨密才算48 slot，不然不算
-       } else {
-           supplySlots += 48;
-       }
+      const isBmdStation =
+        s.station.toLowerCase().includes("bmd") ||
+        s.station.includes("骨密") ||
+        s.station.includes("骨質") ||
+        (s.specialRoles || []).includes(SPECIAL_ROLES.DUAL_BMD);
+      if (isRemote && !isDazhi && !isBmdStation) {
+        // 遠班在大直或骨密才算48 slot，不然不算
+      } else {
+        supplySlots += 48;
+      }
     }
 
     let extra = 0;
-    if (s.station.includes("輔班") || s.specialRoles.includes(SPECIAL_ROLES.ASSIST)) extra += 6;
-    if (s.station.includes("排班") || s.specialRoles.includes(SPECIAL_ROLES.SCHEDULER)) extra += 9;
+    if (
+      s.station.includes("輔班") ||
+      s.specialRoles.includes(SPECIAL_ROLES.ASSIST)
+    )
+      extra += 6;
+    if (
+      s.station.includes("排班") ||
+      s.specialRoles.includes(SPECIAL_ROLES.SCHEDULER)
+    )
+      extra += 9;
     if (s.specialRoles.includes(SPECIAL_ROLES.OPENING)) extra += 12;
 
     demandExtra += extra;
@@ -174,14 +236,28 @@ export const calculateDailyLoadRate = (targetDate: string, location: 'beitou'|'d
 
   const rawDailyStats = stats || {};
   let locStats = {
-    mrLargeMale: 0, mrLargeFemale: 0, mrMedium: 0, mrSmall: 0,
-    us: 0, usHeart: 0, ct: 0, cta: 0, bmd: 0, dx: 0, mg: 0,
+    mrLargeMale: 0,
+    mrLargeFemale: 0,
+    mrMedium: 0,
+    mrSmall: 0,
+    us: 0,
+    usHeart: 0,
+    ct: 0,
+    cta: 0,
+    bmd: 0,
+    dx: 0,
+    mg: 0,
     ctaPostProcessing: 0,
-    usThyroid: 0, usCca: 0, usAbdomen: 0, usBreast: 0, usPelvic: 0,
-    usTotal: 0, usFibrosis: 0,
+    usThyroid: 0,
+    usCca: 0,
+    usAbdomen: 0,
+    usBreast: 0,
+    usPelvic: 0,
+    usTotal: 0,
+    usFibrosis: 0,
   };
 
-  if (location === 'dazhi') {
+  if (location === "dazhi") {
     locStats.usTotal = rawDailyStats.dazhi_ultrasound || 0;
     locStats.usFibrosis = rawDailyStats.dazhi_ultrasound_fibrosis || 0;
     locStats.usThyroid = rawDailyStats.dazhi_ultrasound_thyroid || 0;
@@ -189,7 +265,7 @@ export const calculateDailyLoadRate = (targetDate: string, location: 'beitou'|'d
     locStats.usAbdomen = rawDailyStats.dazhi_ultrasound_abdomen || 0;
     locStats.usBreast = rawDailyStats.dazhi_ultrasound_breast || 0;
     locStats.usPelvic = rawDailyStats.dazhi_ultrasound_pelvic || 0;
-    
+
     locStats.us = Math.max(0, locStats.usTotal - locStats.usFibrosis);
     locStats.usHeart = rawDailyStats.dazhi_ultrasound_heart || 0;
     locStats.bmd = rawDailyStats.dazhi_bmd || 0;
@@ -200,7 +276,7 @@ export const calculateDailyLoadRate = (targetDate: string, location: 'beitou'|'d
     locStats.mrLargeFemale = rawDailyStats.beitou_mr_large_female || 0;
     locStats.mrMedium = rawDailyStats.beitou_mr_medium || 0;
     locStats.mrSmall = rawDailyStats.beitou_mr_small || 0;
-    
+
     locStats.usTotal = rawDailyStats.beitou_ultrasound || 0;
     locStats.usFibrosis = rawDailyStats.beitou_ultrasound_fibrosis || 0;
     locStats.usThyroid = rawDailyStats.beitou_ultrasound_thyroid || 0;
@@ -208,7 +284,7 @@ export const calculateDailyLoadRate = (targetDate: string, location: 'beitou'|'d
     locStats.usAbdomen = rawDailyStats.beitou_ultrasound_abdomen || 0;
     locStats.usBreast = rawDailyStats.beitou_ultrasound_breast || 0;
     locStats.usPelvic = rawDailyStats.beitou_ultrasound_pelvic || 0;
-    
+
     locStats.us = Math.max(0, locStats.usTotal - locStats.usFibrosis);
     locStats.usHeart = rawDailyStats.beitou_ultrasound_heart || 0;
     locStats.ct = rawDailyStats.beitou_ct || 0;
@@ -220,27 +296,79 @@ export const calculateDailyLoadRate = (targetDate: string, location: 'beitou'|'d
   }
 
   const r = (val: number) => Math.round(val || 0);
-  const calcMrSlots = (st: any) => r(st.mrLargeMale * 7 + st.mrLargeFemale * 9 + st.mrMedium * 3 + st.mrSmall * 3);
-  
+  const calcMrSlots = (st: any) =>
+    r(
+      st.mrLargeMale * 7 +
+        st.mrLargeFemale * 9 +
+        st.mrMedium * 3 +
+        st.mrSmall * 3,
+    );
+
   const calcUsSlots = (st: any) => {
-    const knownDetailsCount = st.usThyroid + st.usCca + st.usAbdomen + st.usBreast + st.usPelvic;
-    const remainingUsCount = Math.max(0, st.usTotal - knownDetailsCount - st.usFibrosis);
-    const knownSlots = (st.usThyroid * 1) + (st.usCca * 1) + (st.usAbdomen * 2) + (st.usBreast * 2) + (st.usPelvic * 1);
-    return r(knownSlots + (remainingUsCount * 2) + (st.usHeart * 3));
+    const knownDetailsCount =
+      st.usThyroid + st.usCca + st.usAbdomen + st.usBreast + st.usPelvic;
+    const remainingUsCount = Math.max(
+      0,
+      st.usTotal - knownDetailsCount - st.usFibrosis,
+    );
+    const knownSlots =
+      st.usThyroid * 1 +
+      st.usCca * 1 +
+      st.usAbdomen * 2 +
+      st.usBreast * 2 +
+      st.usPelvic * 1;
+    return r(knownSlots + remainingUsCount * 2 + st.usHeart * 3);
   };
   const calcCtSlots = (st: any) => r(st.ct * 1 + st.cta * 2);
   const calcBmdSlots = (st: any) => calculateBmdSlots(st.bmd);
   const calcDxSlots = (st: any) => r(st.dx * 0.5);
   const calcMgSlots = (st: any) => r(st.mg * 1);
 
-  const demand = calcMrSlots(locStats) + calcUsSlots(locStats) + calcCtSlots(locStats) + locStats.ctaPostProcessing * 5 + calcBmdSlots(locStats) + calcDxSlots(locStats) + calcMgSlots(locStats) + demandExtra;
+  const demand =
+    calcMrSlots(locStats) +
+    calcUsSlots(locStats) +
+    calcCtSlots(locStats) +
+    locStats.ctaPostProcessing * 5 +
+    calcBmdSlots(locStats) +
+    calcDxSlots(locStats) +
+    calcMgSlots(locStats) +
+    demandExtra;
 
-  if (supplySlots === 0) return { rateStr: demand > 0 ? "100.0% (紅區)" : "0.0% (綠區)", color: demand > 0 ? "text-red-600 bg-red-50" : "text-emerald-600 bg-emerald-50", demand, supply: supplySlots };
+  if (supplySlots === 0)
+    return {
+      rateStr: demand > 0 ? "100.0% (紅區)" : "0.0% (綠區)",
+      color:
+        demand > 0
+          ? "text-red-600 bg-red-50"
+          : "text-emerald-600 bg-emerald-50",
+      demand,
+      supply: supplySlots,
+    };
   const rate = (demand / supplySlots) * 100;
   const rateStr = rate.toFixed(1) + "%";
-  if (rate < 75) return { rateStr: `${rateStr} (綠區)`, color: "text-emerald-600 bg-emerald-50", demand, supply: supplySlots, rate };
-  if (rate <= 90) return { rateStr: `${rateStr} (黃區)`, color: "text-amber-600 bg-amber-50", demand, supply: supplySlots, rate };
-  return { rateStr: `${rateStr} (紅區)`, color: "text-red-600 bg-red-50", demand, supply: supplySlots, rate };
+  if (rate < 75)
+    return {
+      rateStr: `${rateStr} (綠區)`,
+      color: "text-emerald-600 bg-emerald-50",
+      demand,
+      supply: supplySlots,
+      rate,
+    };
+  if (rate <= 90)
+    return {
+      rateStr: `${rateStr} (黃區)`,
+      color: "text-amber-600 bg-amber-50",
+      demand,
+      supply: supplySlots,
+      rate,
+    };
+  return {
+    rateStr: `${rateStr} (紅區)`,
+    color: "text-red-600 bg-red-50",
+    demand,
+    supply: supplySlots,
+    rate,
+  };
 };
 
 const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
@@ -267,9 +395,15 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
     return activeCycle ? activeCycle.id : "rolling";
   });
 
-  const canViewStaff = isSupervisorOrHigher || currentUser.permissions?.includes(PERMISSIONS.VIEW_DASHBOARD_STAFF);
-  const canViewStation = isSupervisorOrHigher || currentUser.permissions?.includes(PERMISSIONS.VIEW_DASHBOARD_STATION);
-  const canViewToday = isSupervisorOrHigher || currentUser.permissions?.includes(PERMISSIONS.VIEW_DASHBOARD_TODAY);
+  const canViewStaff =
+    isSupervisorOrHigher ||
+    currentUser.permissions?.includes(PERMISSIONS.VIEW_DASHBOARD_STAFF);
+  const canViewStation =
+    isSupervisorOrHigher ||
+    currentUser.permissions?.includes(PERMISSIONS.VIEW_DASHBOARD_STATION);
+  const canViewToday =
+    isSupervisorOrHigher ||
+    currentUser.permissions?.includes(PERMISSIONS.VIEW_DASHBOARD_TODAY);
 
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     // If HM user, default to 'daily' (Today's Stations) even on desktop
@@ -280,7 +414,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
     ) {
       if (canViewToday) return "daily";
     }
-    
+
     // Default to 'daily' for mobile, 'user' for radiographer desktop
     if (window.innerWidth < 768) {
       if (canViewToday) return "daily";
@@ -305,8 +439,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
   const [radiographerTimeInput, setRadiographerTimeInput] = useState("");
   const [isSavingRadiographerTime, setIsSavingRadiographerTime] =
     useState(false);
-  const [isAutoAssigningWorkTime, setIsAutoAssigningWorkTime] =
-    useState(false);
+  const [isAutoAssigningWorkTime, setIsAutoAssigningWorkTime] = useState(false);
   const [dailyDisplayMode, setDailyDisplayMode] = useState<"station" | "time">(
     "station",
   );
@@ -387,7 +520,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
   const [isEditMode, setIsEditMode] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
-  
+
   const [dailyWorkloads, setDailyWorkloads] = useState<any[]>([]);
 
   // Fetch workloads when selected cycle or date changes
@@ -450,7 +583,9 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
     if (window.innerWidth < 768) {
       const refresh = async () => {
         console.log("Mobile detected: Forcing data refresh...");
-        await db.initializeAuthData(true); if (db.currentUser) await db.initializeDataForUser(db.currentUser, true);
+        await db.initializeAuthData(true);
+        if (db.currentUser)
+          await db.initializeDataForUser(db.currentUser, true);
       };
       refresh();
     }
@@ -850,500 +985,648 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
       let userSheet;
       if (canViewStaff) {
         userSheet = workbook.addWorksheet("人員視角", {
-        pageSetup: {
-          orientation: "landscape",
-          fitToPage: true,
-          fitToWidth: 1,
-          fitToHeight: 999,
-          margins: {
-            left: 0.25,
-            right: 0.25,
-            top: 0.4,
-            bottom: 0.4,
-            header: 0.2,
-            footer: 0.2,
+          pageSetup: {
+            orientation: "landscape",
+            fitToPage: true,
+            fitToWidth: 1,
+            fitToHeight: 999,
+            margins: {
+              left: 0.25,
+              right: 0.25,
+              top: 0.4,
+              bottom: 0.4,
+              header: 0.2,
+              footer: 0.2,
+            },
           },
-        },
-      });
-
-      // Headers
-      const userHeaders = [
-        "姓名",
-        ...dateRange.map((d) => {
-          const date = new Date(d);
-          const weekArr = ["日", "一", "二", "三", "四", "五", "六"];
-          return `${date.getMonth() + 1}/${date.getDate()} (${weekArr[date.getDay()]})`;
-        }),
-        "上班天數",
-      ];
-
-      // Title Row
-      userSheet.mergeCells(1, 1, 1, userHeaders.length);
-      const userTitleCell = userSheet.getCell(1, 1);
-      userTitleCell.value = `影像醫學部-人員排班表 (${getCycleTitle()})`;
-      userTitleCell.font = { size: 16, bold: true, name: "微軟正黑體" };
-      userTitleCell.alignment = { vertical: "middle", horizontal: "center" };
-      userSheet.getRow(1).height = 35;
-
-      // 第二列保留給週末、休診與特殊角色圖例，讓列印後仍能快速辨識。
-      userSheet.addRow([]);
-
-      const userHeaderRow = userSheet.addRow(userHeaders);
-      userHeaderRow.height = 34;
-      userHeaderRow.eachCell((cell, colNumber) => {
-        cell.fill = {
-          type: "pattern",
-          pattern: "solid",
-          fgColor: { argb: "FFF0F0F0" },
-        };
-        cell.border = {
-          top: { style: "thin" },
-          left: { style: "thin" },
-          bottom: { style: "thin" },
-          right: { style: "thin" },
-        };
-        cell.alignment = { vertical: "middle", horizontal: "center" };
-
-        if (colNumber > 1 && colNumber < userHeaders.length) {
-          const dateStr = dateRange[colNumber - 2];
-          const d = new Date(dateStr);
-          const isWeekend = d.getDay() === 0 || d.getDay() === 6;
-          const isHoliday = holidays.some((h) => h.date === dateStr && h.type === DateEventType.CLOSED);
-          
-          if (isWeekend || isHoliday) {
-            cell.font = { bold: true, name: "微軟正黑體", color: { argb: "FFDC2626" } };
-            cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFF0F5" } };
-          } else {
-            cell.font = { bold: true, name: "微軟正黑體" };
-          }
-        } else {
-          cell.font = { bold: true, name: "微軟正黑體" };
-        }
-      });
-
-      // Data Rows (User View)
-      users.forEach((user, idx) => {
-        const rowData: any[] = [user.name];
-        let workDaysCount = 0;
-        let maxContentLines = 1;
-
-        dateRange.forEach((date) => {
-          const { station, specialRoles, isOff, isNotHired } = getDayShift(user.id, date);
-          const event = holidays.find((h) => h.date === date);
-          const isClosed = event?.type === DateEventType.CLOSED;
-
-          // Logic from handleExportPDF
-          const hasAssignedStation =
-            station &&
-            station !== StationDefault.UNASSIGNED &&
-            station !== SYSTEM_OFF &&
-            !station.includes("休假");
-
-          if (isNotHired) {
-            rowData.push("－");
-          } else if ((isOff || isClosed) && !hasAssignedStation) {
-            rowData.push("休");
-          } else {
-            // Build content: Station + Roles
-            let cellText = "";
-            let specialText = "";
-            if (station && station !== StationDefault.UNASSIGNED)
-              cellText += formatExcelScheduleLabel(station);
-            if (specialRoles.length > 0) {
-              const roleMap: Record<string, string> = {
-                [SPECIAL_ROLES.OPENING]: "開",
-                [SPECIAL_ROLES.LATE]: "晚",
-                [SPECIAL_ROLES.ASSIST]: "輔",
-                [SPECIAL_ROLES.SCHEDULER]: "排",
-                [SPECIAL_ROLES.DAZHI_SUPPORT]: "支",
-                配合銷假: "銷",
-              };
-              const rolesShort = specialRoles
-                .map((r) => roleMap[r] || r[0])
-                .join("");
-              specialText = (cellText ? "\n" : "") + rolesShort;
-            }
-            maxContentLines = Math.max(
-              maxContentLines,
-              getExcelTextLineCount(`${cellText}${specialText}`),
-            );
-            if (specialText) {
-              const rtf = [];
-              if (cellText) rtf.push({ font: { name: "微軟正黑體", size: 10 }, text: cellText });
-              if (specialText) rtf.push({ font: { name: "微軟正黑體", size: 10, bold: true, color: { argb: "FFEA580C" } }, text: specialText });
-              rowData.push(rtf.length > 0 ? { richText: rtf } : "");
-            } else {
-              rowData.push(cellText || "");
-            }
-
-            if (
-              station &&
-              station !== StationDefault.UNASSIGNED &&
-              station !== SYSTEM_OFF &&
-              !station.includes("休假")
-            ) {
-              workDaysCount++;
-            }
-          }
         });
-        rowData.push(workDaysCount);
 
-        const row = userSheet.addRow(rowData);
-        row.height = Math.min(64, Math.max(38, maxContentLines * 17 + 8));
-        row.eachCell((cell, colNumber) => {
+        // Headers
+        const userHeaders = [
+          "姓名",
+          ...dateRange.map((d) => {
+            const date = new Date(d);
+            const weekArr = ["日", "一", "二", "三", "四", "五", "六"];
+            return `${date.getMonth() + 1}/${date.getDate()} (${weekArr[date.getDay()]})`;
+          }),
+          "上班天數",
+        ];
+
+        // Title Row
+        userSheet.mergeCells(1, 1, 1, userHeaders.length);
+        const userTitleCell = userSheet.getCell(1, 1);
+        userTitleCell.value = `影像醫學部-人員排班表 (${getCycleTitle()})`;
+        userTitleCell.font = { size: 16, bold: true, name: "微軟正黑體" };
+        userTitleCell.alignment = { vertical: "middle", horizontal: "center" };
+        userSheet.getRow(1).height = 35;
+
+        // 第二列保留給週末、休診與特殊角色圖例，讓列印後仍能快速辨識。
+        userSheet.addRow([]);
+
+        const userHeaderRow = userSheet.addRow(userHeaders);
+        userHeaderRow.height = 34;
+        userHeaderRow.eachCell((cell, colNumber) => {
+          cell.fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: { argb: "FFF0F0F0" },
+          };
           cell.border = {
             top: { style: "thin" },
             left: { style: "thin" },
             bottom: { style: "thin" },
             right: { style: "thin" },
           };
-          cell.alignment = {
-            vertical: "middle",
-            horizontal: "center",
-            wrapText: true,
-            shrinkToFit: false,
-          };
-          if (!(cell.value && typeof cell.value === "object" && (cell.value as any).richText)) {
-            cell.font = { name: "微軟正黑體" };
-          }
+          cell.alignment = { vertical: "middle", horizontal: "center" };
 
-          if (colNumber === 1) {
-            cell.font = { bold: true, name: "微軟正黑體", size: 12, color: { argb: "FF17365D" } };
-            cell.fill = {
-              type: "pattern",
-              pattern: "solid",
-              fgColor: { argb: "FFEAF2F8" },
-            };
-          }
-
-          if (colNumber === userHeaders.length) {
-            cell.font = { bold: true, name: "微軟正黑體", size: 11, color: { argb: "FF365314" } };
-            cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE2F0D9" } };
-          }
-
-          // Styling Logic
-          if (colNumber > 1 && colNumber < userHeaders.length + 1) {
+          if (colNumber > 1 && colNumber < userHeaders.length) {
             const dateStr = dateRange[colNumber - 2];
-            if (dateStr) {
-              const d = new Date(dateStr);
-              const isWeekend = d.getDay() === 0 || d.getDay() === 6;
-              const isHoliday = holidays.some((h) => h.date === dateStr && h.type === DateEventType.CLOSED);
-              if (isWeekend || isHoliday) {
-                cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFF0F5" } };
-              }
-            }
+            const d = new Date(dateStr);
+            const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+            const isHoliday = holidays.some(
+              (h) => h.date === dateStr && h.type === DateEventType.CLOSED,
+            );
 
-            // Date Columns
-            let cellValue = "";
-            if (cell.value && typeof cell.value === "object" && (cell.value as any).richText) {
-              cellValue = (cell.value as any).richText.map((rt: any) => rt.text).join("");
+            if (isWeekend || isHoliday) {
+              cell.font = {
+                bold: true,
+                name: "微軟正黑體",
+                color: { argb: "FFDC2626" },
+              };
+              cell.fill = {
+                type: "pattern",
+                pattern: "solid",
+                fgColor: { argb: "FFFFF0F5" },
+              };
             } else {
-              cellValue = cell.value?.toString() || "";
+              cell.font = { bold: true, name: "微軟正黑體" };
             }
-            const styleValue = cellValue.replace(/\s/g, "");
-
-            if (cellValue === "休") {
-              // White or keep weekend pink
-            } else {
-              if (styleValue.includes("銷"))
-                cell.fill = {
-                  type: "pattern",
-                  pattern: "solid",
-                  fgColor: { argb: "FFF87171" }, // Red-400 for Coord/Cancel Leave
-                };
-              else if (styleValue.includes("MR"))
-                cell.fill = {
-                  type: "pattern",
-                  pattern: "solid",
-                  fgColor: { argb: "FFFFEDD5" },
-                };
-              else if (styleValue.includes("US"))
-                cell.fill = {
-                  type: "pattern",
-                  pattern: "solid",
-                  fgColor: { argb: "FFCEFFCE" },
-                };
-              else if (styleValue.includes("CT"))
-                cell.fill = {
-                  type: "pattern",
-                  pattern: "solid",
-                  fgColor: { argb: "FFF0F9FF" },
-                };
-              else if (styleValue.includes("場控"))
-                cell.fill = {
-                  type: "pattern",
-                  pattern: "solid",
-                  fgColor: { argb: "FFFFFF" },
-                };
-              else if (styleValue.includes("遠"))
-                cell.fill = {
-                  type: "pattern",
-                  pattern: "solid",
-                  fgColor: { argb: "FFFAE8FF" },
-                };
-              else if (styleValue.includes("BMD") || styleValue.includes("DX"))
-                cell.fill = {
-                  type: "pattern",
-                  pattern: "solid",
-                  fgColor: { argb: "FFEFF6FF" },
-                };
-              else if (styleValue.includes("大直"))
-                cell.fill = {
-                  type: "pattern",
-                  pattern: "solid",
-                  fgColor: { argb: "FFDDD6FF" },
-                };
-              else if (styleValue.includes("技術支援"))
-                cell.fill = {
-                  type: "pattern",
-                  pattern: "solid",
-                  fgColor: { argb: "FFFFED97" },
-                };
-              else if (styleValue.includes("行政"))
-                cell.fill = {
-                  type: "pattern",
-                  pattern: "solid",
-                  fgColor: { argb: "FFF0FDF4" },
-                };
-              else if (styleValue.includes("閱片"))
-                cell.fill = {
-                  type: "pattern",
-                  pattern: "solid",
-                  fgColor: { argb: "FFECFEFF" },
-                };
-              else if (styleValue.includes("放腫"))
-                cell.fill = {
-                  type: "pattern",
-                  pattern: "solid",
-                  fgColor: { argb: "FFFDF2F8" },
-                };
-              else if (styleValue.includes("體檢"))
-                cell.fill = {
-                  type: "pattern",
-                  pattern: "solid",
-                  fgColor: { argb: "FFFFF7ED" },
-                };
-            }
+          } else {
+            cell.font = { bold: true, name: "微軟正黑體" };
           }
         });
-      });
 
-      // Set Column Widths
-      if (userSheet) {
-        userSheet.columns = [
-          { width: 14 },
-          ...dateRange.map(() => ({ width: 9.5 })),
-          { width: 9 },
-        ];
-      }
+        // Data Rows (User View)
+        users.forEach((user, idx) => {
+          const rowData: any[] = [user.name];
+          let workDaysCount = 0;
+          let maxContentLines = 1;
+
+          dateRange.forEach((date) => {
+            const { station, specialRoles, isOff, isNotHired } = getDayShift(
+              user.id,
+              date,
+            );
+            const event = holidays.find((h) => h.date === date);
+            const isClosed = event?.type === DateEventType.CLOSED;
+
+            // Logic from handleExportPDF
+            const hasAssignedStation =
+              station &&
+              station !== StationDefault.UNASSIGNED &&
+              station !== SYSTEM_OFF &&
+              !station.includes("休假");
+
+            if (isNotHired) {
+              rowData.push("－");
+            } else if ((isOff || isClosed) && !hasAssignedStation) {
+              rowData.push("休");
+            } else {
+              // Build content: Station + Roles
+              let cellText = "";
+              let specialText = "";
+              if (station && station !== StationDefault.UNASSIGNED)
+                cellText += formatExcelScheduleLabel(station);
+              if (specialRoles.length > 0) {
+                const roleMap: Record<string, string> = {
+                  [SPECIAL_ROLES.OPENING]: "開",
+                  [SPECIAL_ROLES.LATE]: "晚",
+                  [SPECIAL_ROLES.ASSIST]: "輔",
+                  [SPECIAL_ROLES.SCHEDULER]: "排",
+                  [SPECIAL_ROLES.DAZHI_SUPPORT]: "支",
+                  配合銷假: "銷",
+                };
+                const rolesShort = specialRoles
+                  .map((r) => roleMap[r] || r[0])
+                  .join("");
+                specialText = (cellText ? "\n" : "") + rolesShort;
+              }
+              maxContentLines = Math.max(
+                maxContentLines,
+                getExcelTextLineCount(`${cellText}${specialText}`),
+              );
+              if (specialText) {
+                const rtf = [];
+                if (cellText)
+                  rtf.push({
+                    font: { name: "微軟正黑體", size: 10 },
+                    text: cellText,
+                  });
+                if (specialText)
+                  rtf.push({
+                    font: {
+                      name: "微軟正黑體",
+                      size: 10,
+                      bold: true,
+                      color: { argb: "FFEA580C" },
+                    },
+                    text: specialText,
+                  });
+                rowData.push(rtf.length > 0 ? { richText: rtf } : "");
+              } else {
+                rowData.push(cellText || "");
+              }
+
+              if (
+                station &&
+                station !== StationDefault.UNASSIGNED &&
+                station !== SYSTEM_OFF &&
+                !station.includes("休假")
+              ) {
+                workDaysCount++;
+              }
+            }
+          });
+          rowData.push(workDaysCount);
+
+          const row = userSheet.addRow(rowData);
+          row.height = Math.min(64, Math.max(38, maxContentLines * 17 + 8));
+          row.eachCell((cell, colNumber) => {
+            cell.border = {
+              top: { style: "thin" },
+              left: { style: "thin" },
+              bottom: { style: "thin" },
+              right: { style: "thin" },
+            };
+            cell.alignment = {
+              vertical: "middle",
+              horizontal: "center",
+              wrapText: true,
+              shrinkToFit: false,
+            };
+            if (
+              !(
+                cell.value &&
+                typeof cell.value === "object" &&
+                (cell.value as any).richText
+              )
+            ) {
+              cell.font = { name: "微軟正黑體" };
+            }
+
+            if (colNumber === 1) {
+              cell.font = {
+                bold: true,
+                name: "微軟正黑體",
+                size: 12,
+                color: { argb: "FF17365D" },
+              };
+              cell.fill = {
+                type: "pattern",
+                pattern: "solid",
+                fgColor: { argb: "FFEAF2F8" },
+              };
+            }
+
+            if (colNumber === userHeaders.length) {
+              cell.font = {
+                bold: true,
+                name: "微軟正黑體",
+                size: 11,
+                color: { argb: "FF365314" },
+              };
+              cell.fill = {
+                type: "pattern",
+                pattern: "solid",
+                fgColor: { argb: "FFE2F0D9" },
+              };
+            }
+
+            // Styling Logic
+            if (colNumber > 1 && colNumber < userHeaders.length + 1) {
+              const dateStr = dateRange[colNumber - 2];
+              if (dateStr) {
+                const d = new Date(dateStr);
+                const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+                const isHoliday = holidays.some(
+                  (h) => h.date === dateStr && h.type === DateEventType.CLOSED,
+                );
+                if (isWeekend || isHoliday) {
+                  cell.fill = {
+                    type: "pattern",
+                    pattern: "solid",
+                    fgColor: { argb: "FFFFF0F5" },
+                  };
+                }
+              }
+
+              // Date Columns
+              let cellValue = "";
+              if (
+                cell.value &&
+                typeof cell.value === "object" &&
+                (cell.value as any).richText
+              ) {
+                cellValue = (cell.value as any).richText
+                  .map((rt: any) => rt.text)
+                  .join("");
+              } else {
+                cellValue = cell.value?.toString() || "";
+              }
+              const styleValue = cellValue.replace(/\s/g, "");
+
+              if (cellValue === "休") {
+                // White or keep weekend pink
+              } else {
+                if (styleValue.includes("銷"))
+                  cell.fill = {
+                    type: "pattern",
+                    pattern: "solid",
+                    fgColor: { argb: "FFF87171" }, // Red-400 for Coord/Cancel Leave
+                  };
+                else if (styleValue.includes("MR"))
+                  cell.fill = {
+                    type: "pattern",
+                    pattern: "solid",
+                    fgColor: { argb: "FFFFEDD5" },
+                  };
+                else if (styleValue.includes("US"))
+                  cell.fill = {
+                    type: "pattern",
+                    pattern: "solid",
+                    fgColor: { argb: "FFCEFFCE" },
+                  };
+                else if (styleValue.includes("CT"))
+                  cell.fill = {
+                    type: "pattern",
+                    pattern: "solid",
+                    fgColor: { argb: "FFF0F9FF" },
+                  };
+                else if (styleValue.includes("場控"))
+                  cell.fill = {
+                    type: "pattern",
+                    pattern: "solid",
+                    fgColor: { argb: "FFFFFF" },
+                  };
+                else if (styleValue.includes("遠"))
+                  cell.fill = {
+                    type: "pattern",
+                    pattern: "solid",
+                    fgColor: { argb: "FFFAE8FF" },
+                  };
+                else if (
+                  styleValue.includes("BMD") ||
+                  styleValue.includes("DX")
+                )
+                  cell.fill = {
+                    type: "pattern",
+                    pattern: "solid",
+                    fgColor: { argb: "FFEFF6FF" },
+                  };
+                else if (styleValue.includes("大直"))
+                  cell.fill = {
+                    type: "pattern",
+                    pattern: "solid",
+                    fgColor: { argb: "FFDDD6FF" },
+                  };
+                else if (styleValue.includes("技術支援"))
+                  cell.fill = {
+                    type: "pattern",
+                    pattern: "solid",
+                    fgColor: { argb: "FFFFED97" },
+                  };
+                else if (styleValue.includes("行政"))
+                  cell.fill = {
+                    type: "pattern",
+                    pattern: "solid",
+                    fgColor: { argb: "FFF0FDF4" },
+                  };
+                else if (styleValue.includes("閱片"))
+                  cell.fill = {
+                    type: "pattern",
+                    pattern: "solid",
+                    fgColor: { argb: "FFECFEFF" },
+                  };
+                else if (styleValue.includes("放腫"))
+                  cell.fill = {
+                    type: "pattern",
+                    pattern: "solid",
+                    fgColor: { argb: "FFFDF2F8" },
+                  };
+                else if (styleValue.includes("體檢"))
+                  cell.fill = {
+                    type: "pattern",
+                    pattern: "solid",
+                    fgColor: { argb: "FFFFF7ED" },
+                  };
+              }
+            }
+          });
+        });
+
+        // Set Column Widths
+        if (userSheet) {
+          userSheet.columns = [
+            { width: 14 },
+            ...dateRange.map(() => ({ width: 9.5 })),
+            { width: 9 },
+          ];
+        }
       } // end canViewStaff
 
       // --- Sheet 2: Station View (崗位視角) ---
       let stationSheet;
       if (canViewStation) {
         stationSheet = workbook.addWorksheet("崗位視角", {
-        pageSetup: {
-          orientation: "landscape",
-          fitToPage: true,
-          fitToWidth: 1,
-          fitToHeight: 999,
-          margins: {
-            left: 0.25,
-            right: 0.25,
-            top: 0.4,
-            bottom: 0.4,
-            header: 0.2,
-            footer: 0.2,
+          pageSetup: {
+            orientation: "landscape",
+            fitToPage: true,
+            fitToWidth: 1,
+            fitToHeight: 999,
+            margins: {
+              left: 0.25,
+              right: 0.25,
+              top: 0.4,
+              bottom: 0.4,
+              header: 0.2,
+              footer: 0.2,
+            },
           },
-        },
-      });
-
-      // Header
-      const stationHeaders = [
-        "崗位",
-        ...dateRange.map((d) => {
-          const date = new Date(d);
-          const weekArr = ["日", "一", "二", "三", "四", "五", "六"];
-          return `${date.getMonth() + 1}/${date.getDate()} (${weekArr[date.getDay()]})`;
-        }),
-      ];
-
-      // Title Row
-      stationSheet.mergeCells(1, 1, 1, stationHeaders.length);
-      const stationTitleCell = stationSheet.getCell(1, 1);
-      stationTitleCell.value = `影像醫學部-崗位分配表 (${getCycleTitle()})`;
-      stationTitleCell.font = { size: 16, bold: true, name: "微軟正黑體" };
-      stationTitleCell.alignment = { vertical: "middle", horizontal: "center" };
-      stationSheet.getRow(1).height = 35;
-
-      stationSheet.addRow([]);
-
-      const stationHeaderRow = stationSheet.addRow(stationHeaders);
-      stationHeaderRow.height = 34;
-      stationHeaderRow.eachCell((cell, colNumber) => {
-        cell.fill = {
-          type: "pattern",
-          pattern: "solid",
-          fgColor: { argb: "FFF0F0F0" },
-        };
-        cell.border = {
-          top: { style: "thin" },
-          left: { style: "thin" },
-          bottom: { style: "thin" },
-          right: { style: "thin" },
-        };
-        cell.alignment = { vertical: "middle", horizontal: "center" };
-
-        if (colNumber > 1) {
-          const dateStr = dateRange[colNumber - 2];
-          const d = new Date(dateStr);
-          const isWeekend = d.getDay() === 0 || d.getDay() === 6;
-          const isHoliday = holidays.some((h) => h.date === dateStr && h.type === DateEventType.CLOSED);
-          
-          if (isWeekend || isHoliday) {
-            cell.font = { bold: true, name: "微軟正黑體", color: { argb: "FFDC2626" } };
-            cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFF0F5" } };
-          } else {
-            cell.font = { bold: true, name: "微軟正黑體" };
-          }
-        } else {
-          cell.font = { bold: true, name: "微軟正黑體" };
-        }
-      });
-
-      // Data Rows (Station View)
-      const stationsToExport = rowConfigs.filter(
-        (row) =>
-          row.label !== StationDefault.UNASSIGNED &&
-          row.label !== "未分配" &&
-          row.label !== SPECIAL_ROLES.OPENING &&
-          row.label !== SPECIAL_ROLES.LATE,
-      );
-
-      stationsToExport.forEach((rowConfig) => {
-        const isOffRow = rowConfig.label.includes("休");
-        const nameFontSize = isOffRow ? 10 : 14;
-        const nameFontBold = !isOffRow;
-        
-        const rowData: any[] = [rowConfig.label];
-        let maxLines = 1;
-
-        dateRange.forEach((date) => {
-          const staff = rowConfig.getData(date);
-          // Sort (Learners last)
-          staff.sort((a, b) => {
-            const isALearner =
-              isUserLearningOnDate(a.user, rowConfig.label, date);
-            const isBLearner =
-              isUserLearningOnDate(b.user, rowConfig.label, date);
-            if (isALearner === isBLearner) return 0;
-            return isALearner ? 1 : -1;
-          });
-
-          // Build Content: Name + Roles
-          const richTextChunks: any[] = [];
-
-          staff.forEach((s, idx) => {
-            let nameText = formatName(s.user?.name || "");
-            if (idx > 0) nameText = "\n" + nameText;
-            
-            if (nameText) {
-              richTextChunks.push({
-                 font: { name: "微軟正黑體", size: nameFontSize, bold: nameFontBold, color: { argb: "FF222222" } },
-                 text: nameText
-              });
-            }
-
-            if (s.shift.specialRoles.length > 0) {
-              const roleMap: Record<string, string> = {
-                [SPECIAL_ROLES.OPENING]: "開機",
-                [SPECIAL_ROLES.LATE]: "晚班",
-                [SPECIAL_ROLES.ASSIST]: "輔班",
-                [SPECIAL_ROLES.SCHEDULER]: "排班",
-                配合銷假: "配合銷假",
-              };
-              let roleLabels = s.shift.specialRoles.map((r) => roleMap[r] || r);
-              const noteText = `\n(${roleLabels.join(",")})`;
-              if (noteText) {
-                richTextChunks.push({
-                   font: { name: "微軟正黑體", size: 9, color: { argb: "FFEA580C" } },
-                   text: noteText
-                });
-              }
-            }
-          });
-
-          const cellContentString = richTextChunks.map(rt => rt.text).join("");
-          const lineCount = cellContentString.split("\n").length;
-          if (lineCount > maxLines) maxLines = lineCount;
-
-          rowData.push(richTextChunks.length > 0 ? { richText: richTextChunks } : "");
         });
 
-        const row = stationSheet.addRow(rowData);
-        row.height = Math.max(isOffRow ? 30 : 42, maxLines * (isOffRow ? 15 : 21));
-        row.eachCell((cell, colNumber) => {
+        // Header
+        const stationHeaders = [
+          "崗位",
+          ...dateRange.map((d) => {
+            const date = new Date(d);
+            const weekArr = ["日", "一", "二", "三", "四", "五", "六"];
+            return `${date.getMonth() + 1}/${date.getDate()} (${weekArr[date.getDay()]})`;
+          }),
+        ];
+
+        // Title Row
+        stationSheet.mergeCells(1, 1, 1, stationHeaders.length);
+        const stationTitleCell = stationSheet.getCell(1, 1);
+        stationTitleCell.value = `影像醫學部-崗位分配表 (${getCycleTitle()})`;
+        stationTitleCell.font = { size: 16, bold: true, name: "微軟正黑體" };
+        stationTitleCell.alignment = {
+          vertical: "middle",
+          horizontal: "center",
+        };
+        stationSheet.getRow(1).height = 35;
+
+        stationSheet.addRow([]);
+
+        const stationHeaderRow = stationSheet.addRow(stationHeaders);
+        stationHeaderRow.height = 34;
+        stationHeaderRow.eachCell((cell, colNumber) => {
+          cell.fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: { argb: "FFF0F0F0" },
+          };
           cell.border = {
             top: { style: "thin" },
             left: { style: "thin" },
             bottom: { style: "thin" },
             right: { style: "thin" },
           };
-          cell.alignment = {
-            vertical: "middle",
-            horizontal: "center",
-            wrapText: true,
-          };
-          if (!(cell.value && typeof cell.value === "object" && (cell.value as any).richText)) {
-            cell.font = { name: "微軟正黑體", size: 10 }; // 稍微縮小字體以適應多個名字
-          }
+          cell.alignment = { vertical: "middle", horizontal: "center" };
 
-          if (colNumber === 1) {
-            cell.font = { name: "微軟正黑體", bold: true, size: 11 };
-            let label = "";
-            if (cell.value && typeof cell.value === "object" && (cell.value as any).richText) {
-              label = (cell.value as any).richText.map((rt: any) => rt.text).join("");
-            } else {
-              label = cell.value?.toString() || "";
-            }
-            if (label.includes("MR"))
-              cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFEDD5" } };
-            else if (label.includes("US"))
-              cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFCEFFCE" } };
-            else if (label.includes("CT"))
-              cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF0F9FF" } };
-            else if (label.includes("場控"))
-              cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFFF" } };
-            else if (label.includes("遠"))
-              cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFAE8FF" } };
-            else if (label.includes("BMD") || label.includes("DX"))
-              cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFEFF6FF" } };
-            else if (label.includes("大直"))
-              cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFDDD6FF" } };
-            else if (label.includes("休"))
-              cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF1F5F9" } };
-          } else {
-            // Check weekend background
+          if (colNumber > 1) {
             const dateStr = dateRange[colNumber - 2];
-            if (dateStr) {
-              const d = new Date(dateStr);
-              const isWeekend = d.getDay() === 0 || d.getDay() === 6;
-              const isHoliday = holidays.some((h) => h.date === dateStr && h.type === DateEventType.CLOSED);
-              if (isWeekend || isHoliday) {
-                cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFF0F5" } };
+            const d = new Date(dateStr);
+            const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+            const isHoliday = holidays.some(
+              (h) => h.date === dateStr && h.type === DateEventType.CLOSED,
+            );
+
+            if (isWeekend || isHoliday) {
+              cell.font = {
+                bold: true,
+                name: "微軟正黑體",
+                color: { argb: "FFDC2626" },
+              };
+              cell.fill = {
+                type: "pattern",
+                pattern: "solid",
+                fgColor: { argb: "FFFFF0F5" },
+              };
+            } else {
+              cell.font = { bold: true, name: "微軟正黑體" };
+            }
+          } else {
+            cell.font = { bold: true, name: "微軟正黑體" };
+          }
+        });
+
+        // Data Rows (Station View)
+        const stationsToExport = rowConfigs.filter(
+          (row) =>
+            row.label !== StationDefault.UNASSIGNED &&
+            row.label !== "未分配" &&
+            row.label !== SPECIAL_ROLES.OPENING &&
+            row.label !== SPECIAL_ROLES.LATE,
+        );
+
+        stationsToExport.forEach((rowConfig) => {
+          const isOffRow = rowConfig.label.includes("休");
+          const nameFontSize = isOffRow ? 10 : 14;
+          const nameFontBold = !isOffRow;
+
+          const rowData: any[] = [rowConfig.label];
+          let maxLines = 1;
+
+          dateRange.forEach((date) => {
+            const staff = rowConfig.getData(date);
+            // Sort (Learners last)
+            staff.sort((a, b) => {
+              const isALearner = isUserLearningOnDate(
+                a.user,
+                rowConfig.label,
+                date,
+              );
+              const isBLearner = isUserLearningOnDate(
+                b.user,
+                rowConfig.label,
+                date,
+              );
+              if (isALearner === isBLearner) return 0;
+              return isALearner ? 1 : -1;
+            });
+
+            // Build Content: Name + Roles
+            const richTextChunks: any[] = [];
+
+            staff.forEach((s, idx) => {
+              let nameText = formatName(s.user?.name || "");
+              if (idx > 0) nameText = "\n" + nameText;
+
+              if (nameText) {
+                richTextChunks.push({
+                  font: {
+                    name: "微軟正黑體",
+                    size: nameFontSize,
+                    bold: nameFontBold,
+                    color: { argb: "FF222222" },
+                  },
+                  text: nameText,
+                });
+              }
+
+              if (s.shift.specialRoles.length > 0) {
+                const roleMap: Record<string, string> = {
+                  [SPECIAL_ROLES.OPENING]: "開機",
+                  [SPECIAL_ROLES.LATE]: "晚班",
+                  [SPECIAL_ROLES.ASSIST]: "輔班",
+                  [SPECIAL_ROLES.SCHEDULER]: "排班",
+                  配合銷假: "配合銷假",
+                };
+                let roleLabels = s.shift.specialRoles.map(
+                  (r) => roleMap[r] || r,
+                );
+                const noteText = `\n(${roleLabels.join(",")})`;
+                if (noteText) {
+                  richTextChunks.push({
+                    font: {
+                      name: "微軟正黑體",
+                      size: 9,
+                      color: { argb: "FFEA580C" },
+                    },
+                    text: noteText,
+                  });
+                }
+              }
+            });
+
+            const cellContentString = richTextChunks
+              .map((rt) => rt.text)
+              .join("");
+            const lineCount = cellContentString.split("\n").length;
+            if (lineCount > maxLines) maxLines = lineCount;
+
+            rowData.push(
+              richTextChunks.length > 0 ? { richText: richTextChunks } : "",
+            );
+          });
+
+          const row = stationSheet.addRow(rowData);
+          row.height = Math.max(
+            isOffRow ? 30 : 42,
+            maxLines * (isOffRow ? 15 : 21),
+          );
+          row.eachCell((cell, colNumber) => {
+            cell.border = {
+              top: { style: "thin" },
+              left: { style: "thin" },
+              bottom: { style: "thin" },
+              right: { style: "thin" },
+            };
+            cell.alignment = {
+              vertical: "middle",
+              horizontal: "center",
+              wrapText: true,
+            };
+            if (
+              !(
+                cell.value &&
+                typeof cell.value === "object" &&
+                (cell.value as any).richText
+              )
+            ) {
+              cell.font = { name: "微軟正黑體", size: 10 }; // 稍微縮小字體以適應多個名字
+            }
+
+            if (colNumber === 1) {
+              cell.font = { name: "微軟正黑體", bold: true, size: 11 };
+              let label = "";
+              if (
+                cell.value &&
+                typeof cell.value === "object" &&
+                (cell.value as any).richText
+              ) {
+                label = (cell.value as any).richText
+                  .map((rt: any) => rt.text)
+                  .join("");
+              } else {
+                label = cell.value?.toString() || "";
+              }
+              if (label.includes("MR"))
+                cell.fill = {
+                  type: "pattern",
+                  pattern: "solid",
+                  fgColor: { argb: "FFFFEDD5" },
+                };
+              else if (label.includes("US"))
+                cell.fill = {
+                  type: "pattern",
+                  pattern: "solid",
+                  fgColor: { argb: "FFCEFFCE" },
+                };
+              else if (label.includes("CT"))
+                cell.fill = {
+                  type: "pattern",
+                  pattern: "solid",
+                  fgColor: { argb: "FFF0F9FF" },
+                };
+              else if (label.includes("場控"))
+                cell.fill = {
+                  type: "pattern",
+                  pattern: "solid",
+                  fgColor: { argb: "FFFFFF" },
+                };
+              else if (label.includes("遠"))
+                cell.fill = {
+                  type: "pattern",
+                  pattern: "solid",
+                  fgColor: { argb: "FFFAE8FF" },
+                };
+              else if (label.includes("BMD") || label.includes("DX"))
+                cell.fill = {
+                  type: "pattern",
+                  pattern: "solid",
+                  fgColor: { argb: "FFEFF6FF" },
+                };
+              else if (label.includes("大直"))
+                cell.fill = {
+                  type: "pattern",
+                  pattern: "solid",
+                  fgColor: { argb: "FFDDD6FF" },
+                };
+              else if (label.includes("休"))
+                cell.fill = {
+                  type: "pattern",
+                  pattern: "solid",
+                  fgColor: { argb: "FFF1F5F9" },
+                };
+            } else {
+              // Check weekend background
+              const dateStr = dateRange[colNumber - 2];
+              if (dateStr) {
+                const d = new Date(dateStr);
+                const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+                const isHoliday = holidays.some(
+                  (h) => h.date === dateStr && h.type === DateEventType.CLOSED,
+                );
+                if (isWeekend || isHoliday) {
+                  cell.fill = {
+                    type: "pattern",
+                    pattern: "solid",
+                    fgColor: { argb: "FFFFF0F5" },
+                  };
+                }
               }
             }
-          }
+          });
         });
-      });
 
-      // Adjust Column Widths
-      if (stationSheet && stationSheet.columns) {
-        stationSheet.columns.forEach((col, index) => {
-          if (index === 0) col.width = 14;
-          else col.width = 11;
-        });
-      }
+        // Adjust Column Widths
+        if (stationSheet && stationSheet.columns) {
+          stationSheet.columns.forEach((col, index) => {
+            if (index === 0) col.width = 14;
+            else col.width = 11;
+          });
+        }
       } // end canViewStation
 
       if (workbook.worksheets.length === 0) {
@@ -1354,10 +1637,23 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
 
       if (userSheet) {
         const userColumnCount = dateRange.length + 2;
-        styleExcelTitle(userSheet, `影像醫學部-人員排班表 (${getCycleTitle()})`, userColumnCount);
-        userSheet.getCell(1, 1).font = { name: "微軟正黑體", size: 18, bold: true, color: { argb: "FFFFFFFF" } };
+        styleExcelTitle(
+          userSheet,
+          `影像醫學部-人員排班表 (${getCycleTitle()})`,
+          userColumnCount,
+        );
+        userSheet.getCell(1, 1).font = {
+          name: "微軟正黑體",
+          size: 18,
+          bold: true,
+          color: { argb: "FFFFFFFF" },
+        };
         userSheet.properties.tabColor = { argb: "FF0F4C81" };
-        styleExcelSubtitle(userSheet, "橘字＝特殊角色　｜　粉紅底＝週末／休診　｜　紅底＝配合銷假", userColumnCount);
+        styleExcelSubtitle(
+          userSheet,
+          "橘字＝特殊角色　｜　粉紅底＝週末／休診　｜　紅底＝配合銷假",
+          userColumnCount,
+        );
         finalizeExcelWorksheet(userSheet, {
           headerRows: [3],
           dataStartRow: 4,
@@ -1373,10 +1669,23 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
       }
       if (stationSheet) {
         const stationColumnCount = dateRange.length + 1;
-        styleExcelTitle(stationSheet, `影像醫學部-崗位分配表 (${getCycleTitle()})`, stationColumnCount);
-        stationSheet.getCell(1, 1).font = { name: "微軟正黑體", size: 18, bold: true, color: { argb: "FFFFFFFF" } };
+        styleExcelTitle(
+          stationSheet,
+          `影像醫學部-崗位分配表 (${getCycleTitle()})`,
+          stationColumnCount,
+        );
+        stationSheet.getCell(1, 1).font = {
+          name: "微軟正黑體",
+          size: 18,
+          bold: true,
+          color: { argb: "FFFFFFFF" },
+        };
         stationSheet.properties.tabColor = { argb: "FF5B9BD5" };
-        styleExcelSubtitle(stationSheet, "姓名置中排列　｜　橘字＝開機、晚班、輔班、排班或配合銷假　｜　粉紅底＝週末／休診", stationColumnCount);
+        styleExcelSubtitle(
+          stationSheet,
+          "姓名置中排列　｜　橘字＝開機、晚班、輔班、排班或配合銷假　｜　粉紅底＝週末／休診",
+          stationColumnCount,
+        );
         finalizeExcelWorksheet(stationSheet, {
           headerRows: [3],
           dataStartRow: 4,
@@ -1457,7 +1766,10 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
           let workDaysCount = 0;
 
           dateRange.forEach((date) => {
-            const { station, specialRoles, isOff, isNotHired } = getDayShift(user.id, date);
+            const { station, specialRoles, isOff, isNotHired } = getDayShift(
+              user.id,
+              date,
+            );
             const event = holidays.find((h) => h.date === date);
             const isClosed = event?.type === DateEventType.CLOSED;
 
@@ -1522,10 +1834,16 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
 
               // Sort: Learners (user.learningCapabilities includes row.label) go to bottom
               staff.sort((a, b) => {
-                const isALearner =
-                  isUserLearningOnDate(a.user, row.label, date);
-                const isBLearner =
-                  isUserLearningOnDate(b.user, row.label, date);
+                const isALearner = isUserLearningOnDate(
+                  a.user,
+                  row.label,
+                  date,
+                );
+                const isBLearner = isUserLearningOnDate(
+                  b.user,
+                  row.label,
+                  date,
+                );
 
                 if (isALearner === isBLearner) return 0; // Keep existing order if both same status
                 return isALearner ? 1 : -1; // Learner (true) > Non-learner (false) -> Learner goes last
@@ -1556,8 +1874,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                   staff: staff.map((s) => ({
                     name: formatName(s.user?.name || ""),
                     roles: s.shift.specialRoles,
-                    isLearner:
-                      isUserLearningOnDate(s.user, row.label, date),
+                    isLearner: isUserLearningOnDate(s.user, row.label, date),
                   })),
                 });
               }
@@ -2014,14 +2331,24 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
   // --- Data Access Helpers ---
   const getDayShift = (userId: string, dateStr: string) => {
     const user = users.find((u) => u.id === userId);
-    
+
     // 0. Check if the user is hired yet
     if (user && user.hireDate && dateStr < user.hireDate) {
-      return { station: null, specialRoles: [], isOff: false, isNotHired: true };
+      return {
+        station: null,
+        specialRoles: [],
+        isOff: false,
+        isNotHired: true,
+      };
     }
 
     if (isUserOnEmploymentPause(user, dateStr)) {
-      return { station: null, specialRoles: [], isOff: true, isNotHired: false };
+      return {
+        station: null,
+        specialRoles: [],
+        isOff: true,
+        isNotHired: false,
+      };
     }
 
     // Optimized Lookup O(1)
@@ -2067,13 +2394,30 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
     const event = holidays.find((h) => h.date === dateStr);
     const isClosed = event?.type === DateEventType.CLOSED;
 
-    if (isClosed) return { station: null, specialRoles: [], isOff: true, isNotHired: false };
-    if (!user) return { station: null, specialRoles: [], isOff: false, isNotHired: false };
+    if (isClosed)
+      return {
+        station: null,
+        specialRoles: [],
+        isOff: true,
+        isNotHired: false,
+      };
+    if (!user)
+      return {
+        station: null,
+        specialRoles: [],
+        isOff: false,
+        isNotHired: false,
+      };
 
     // Use getUserStatusOnDate for ALL group logic (A/B/C cycle + Group D rolling rotation)
     const status = db.getUserStatusOnDate(userId, dateStr);
     if (status === "OFF")
-      return { station: null, specialRoles: [], isOff: true, isNotHired: false };
+      return {
+        station: null,
+        specialRoles: [],
+        isOff: true,
+        isNotHired: false,
+      };
 
     if (override) {
       return {
@@ -2105,7 +2449,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
     station: string,
     specialRoles: string[],
     learningStation?: string,
-    learningTeacherId?: string
+    learningTeacherId?: string,
   ) => {
     // [FIX] Try to find existing shift to preserve ID (UUID)
     // This prevents creating duplicate rows with 'userId-date' IDs if a record already exists
@@ -2120,8 +2464,14 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
       station,
       specialRoles,
       workTime: existingShift?.workTime,
-      learningStation: learningStation !== undefined ? learningStation : existingShift?.learningStation,
-      learningTeacherId: learningTeacherId !== undefined ? learningTeacherId : existingShift?.learningTeacherId,
+      learningStation:
+        learningStation !== undefined
+          ? learningStation
+          : existingShift?.learningStation,
+      learningTeacherId:
+        learningTeacherId !== undefined
+          ? learningTeacherId
+          : existingShift?.learningTeacherId,
       isAutoGenerated: false,
       isRoleAutoGenerated: false,
     };
@@ -2369,15 +2719,22 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
         if (s.date !== dateStr) return false;
         if (s.station === stationName) return true;
         if (s.learningStation && stationName.includes(s.learningStation)) {
-           // If they have a teacher selected, they should ONLY appear in the teacher's station
-           if (s.learningTeacherId) {
-             const teacherShift = shifts.find(ts => ts.userId === s.learningTeacherId && ts.date === dateStr);
-             if (teacherShift && teacherShift.station === stationName) return true;
-             if (teacherShift) return false; // Teacher found but at a different station
-           }
-           // If NO teacher is selected, show them in the first matching station (alphabetically) to avoid duplicating across all
-           const allMatching = db.getStations().filter(st => st.includes(s.learningStation!)).sort();
-           if (allMatching.length > 0 && stationName === allMatching[0]) return true;
+          // If they have a teacher selected, they should ONLY appear in the teacher's station
+          if (s.learningTeacherId) {
+            const teacherShift = shifts.find(
+              (ts) => ts.userId === s.learningTeacherId && ts.date === dateStr,
+            );
+            if (teacherShift && teacherShift.station === stationName)
+              return true;
+            if (teacherShift) return false; // Teacher found but at a different station
+          }
+          // If NO teacher is selected, show them in the first matching station (alphabetically) to avoid duplicating across all
+          const allMatching = db
+            .getStations()
+            .filter((st) => st.includes(s.learningStation!))
+            .sort();
+          if (allMatching.length > 0 && stationName === allMatching[0])
+            return true;
         }
         return false;
       })
@@ -2491,7 +2848,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
       ) {
         return false;
       }
-      
+
       // Exclude if OFF due to not being hired yet
       if (user.hireDate && dateStr < user.hireDate) {
         return false;
@@ -2532,7 +2889,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
   const getAssignableCandidates = (station: string, dateStr: string) => {
     return users.filter((user) => {
       if (station === SYSTEM_OFF && user.isPartTime) return false;
-      
+
       const isCertified = isUserCertifiedOnDate(user, station, dateStr);
       const isLearning = isUserLearningOnDate(user, station, dateStr);
       const isExcluded = user.excludedCapabilities?.includes(station);
@@ -2562,8 +2919,13 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
           return false;
         }
         // If they're remote and already have the role, don't show them in the dropdown
-        if (isDualTarget && shift.specialRoles.includes(SPECIAL_ROLES.DUAL_BMD)) return false;
-        if (isDazhiTarget && shift.specialRoles.includes(SPECIAL_ROLES.DAZHI_SUPPORT)) return false;
+        if (isDualTarget && shift.specialRoles.includes(SPECIAL_ROLES.DUAL_BMD))
+          return false;
+        if (
+          isDazhiTarget &&
+          shift.specialRoles.includes(SPECIAL_ROLES.DAZHI_SUPPORT)
+        )
+          return false;
       }
       if (shift && shift.station === station) return false;
       return true;
@@ -2643,13 +3005,21 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
     const isDazhiTarget = stationLabel && stationLabel.includes("大直");
 
     // If clicking X on a Dual BMD/Dazhi badge in their respective row, only remove the role, don't clear the main station
-    if (existingShift && isDualBMDTarget && roles.includes(SPECIAL_ROLES.DUAL_BMD)) {
+    if (
+      existingShift &&
+      isDualBMDTarget &&
+      roles.includes(SPECIAL_ROLES.DUAL_BMD)
+    ) {
       roles = roles.filter((r) => r !== SPECIAL_ROLES.DUAL_BMD);
       handleUpdateShift(userId, dateStr, existingShift.station, roles);
       return;
     }
-    
-    if (existingShift && isDazhiTarget && roles.includes(SPECIAL_ROLES.DAZHI_SUPPORT)) {
+
+    if (
+      existingShift &&
+      isDazhiTarget &&
+      roles.includes(SPECIAL_ROLES.DAZHI_SUPPORT)
+    ) {
       roles = roles.filter((r) => r !== SPECIAL_ROLES.DAZHI_SUPPORT);
       handleUpdateShift(userId, dateStr, existingShift.station, roles);
       return;
@@ -2967,7 +3337,9 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                 } satisfies Shift,
               }));
               const existingNames = new Set(staff.map((s) => s.user?.name));
-              const uniqueGoogleStaff = googleStaff.filter((s) => !existingNames.has(s.user.name));
+              const uniqueGoogleStaff = googleStaff.filter(
+                (s) => !existingNames.has(s.user.name),
+              );
               staff.push(...uniqueGoogleStaff);
             }
 
@@ -3145,9 +3517,13 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
           <tbody>
             {viewMode === "user" ? (
               (() => {
-                const mainUsers = users.filter((u) => u.role !== UserRole.RADIOGRAPHER_ASSISTANT);
-                const assistants = users.filter((u) => u.role === UserRole.RADIOGRAPHER_ASSISTANT);
-                
+                const mainUsers = users.filter(
+                  (u) => u.role !== UserRole.RADIOGRAPHER_ASSISTANT,
+                );
+                const assistants = users.filter(
+                  (u) => u.role === UserRole.RADIOGRAPHER_ASSISTANT,
+                );
+
                 const renderRow = (user: User, idx: number) => (
                   <tr
                     key={user.id}
@@ -3157,10 +3533,8 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                       {user.name}
                     </td>
                     {dateRange.map((date) => {
-                      const { station, specialRoles, isOff, isNotHired } = getDayShift(
-                        user.id,
-                        date,
-                      );
+                      const { station, specialRoles, isOff, isNotHired } =
+                        getDayShift(user.id, date);
                       const event = holidays.find((h) => h.date === date);
                       const isClosed = event?.type === DateEventType.CLOSED;
 
@@ -3217,7 +3591,14 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                               <div className="w-full flex justify-center items-end bg-white/50 border-t-[0.5px] border-gray-100">
                                 <div className="flex gap-0.5 text-[12px] text-black leading-tight py-0.5 items-center">
                                   {specialRoles.map((r) => (
-                                    <span key={r} className={r === "配合銷假" ? "bg-red-100 text-red-700 font-bold px-0.5 rounded-sm border border-red-200 text-[10px]" : ""}>
+                                    <span
+                                      key={r}
+                                      className={
+                                        r === "配合銷假"
+                                          ? "bg-red-100 text-red-700 font-bold px-0.5 rounded-sm border border-red-200 text-[10px]"
+                                          : ""
+                                      }
+                                    >
                                       {r === "配合銷假" ? "銷" : r[0]}
                                     </span>
                                   ))}
@@ -3239,7 +3620,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                     })}
                   </tr>
                 );
-                
+
                 return (
                   <>
                     {mainUsers.map(renderRow)}
@@ -3253,7 +3634,9 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                             === 放射師助理 ===
                           </td>
                         </tr>
-                        {assistants.map((user, idx) => renderRow(user, mainUsers.length + idx))}
+                        {assistants.map((user, idx) =>
+                          renderRow(user, mainUsers.length + idx),
+                        )}
                       </>
                     )}
                   </>
@@ -3385,7 +3768,9 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                     onClick={() => {
                       setViewMode("daily");
                       setDailyDate(new Date());
-                      if (isMobile) db.initializeAuthData(true); if (db.currentUser) db.initializeDataForUser(db.currentUser, true);
+                      if (isMobile) db.initializeAuthData(true);
+                      if (db.currentUser)
+                        db.initializeDataForUser(db.currentUser, true);
                     }}
                     className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold transition-all ${viewMode === "daily" ? "bg-white text-teal-700 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
                   >
@@ -3847,26 +4232,60 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
             {(() => {
               const dateStr = toLocalISOString(dailyDate);
               const _dailyStatsForLoad = db.getDailyStats(dateStr);
-              const bLoad = calculateDailyLoadRate(dateStr, "beitou", shifts, users, _dailyStatsForLoad);
-              const dLoad = calculateDailyLoadRate(dateStr, "dazhi", shifts, users, _dailyStatsForLoad);
+              const bLoad = calculateDailyLoadRate(
+                dateStr,
+                "beitou",
+                shifts,
+                users,
+                _dailyStatsForLoad,
+              );
+              const dLoad = calculateDailyLoadRate(
+                dateStr,
+                "dazhi",
+                shifts,
+                users,
+                _dailyStatsForLoad,
+              );
 
-              const LoadCard = ({ title, data }: { title: string, data: any }) => (
+              const LoadCard = ({
+                title,
+                data,
+              }: {
+                title: string;
+                data: any;
+              }) => (
                 <div className="flex-1 bg-white border border-slate-200 rounded-xl p-4 shadow-sm relative overflow-hidden">
-                  <div className={`absolute top-0 left-0 w-1 h-full ${data.color.split(' ')[0].replace('text-', 'bg-')}`} />
+                  <div
+                    className={`absolute top-0 left-0 w-1 h-full ${data.color.split(" ")[0].replace("text-", "bg-")}`}
+                  />
                   <div className="flex justify-between items-start mb-2">
-                    <span className="font-bold text-slate-700 text-sm">{title}</span>
-                    <span className={`text-xs font-black px-2 py-0.5 rounded-full ${data.color}`}>
+                    <span className="font-bold text-slate-700 text-sm">
+                      {title}
+                    </span>
+                    <span
+                      className={`text-xs font-black px-2 py-0.5 rounded-full ${data.color}`}
+                    >
                       {data.rateStr}
                     </span>
                   </div>
                   <div className="flex items-end gap-3 mt-4">
                     <div className="flex flex-col">
-                      <span className="text-[10px] text-slate-400">總設備需求 (s)</span>
-                      <span className="text-lg font-bold text-slate-700">{data.demand} <span className="text-[10px] font-normal">Slots</span></span>
+                      <span className="text-[10px] text-slate-400">
+                        總設備需求 (s)
+                      </span>
+                      <span className="text-lg font-bold text-slate-700">
+                        {data.demand}{" "}
+                        <span className="text-[10px] font-normal">Slots</span>
+                      </span>
                     </div>
                     <div className="flex flex-col">
-                      <span className="text-[10px] text-slate-400">人員總供給 (t)</span>
-                      <span className="text-lg font-bold text-slate-700">{data.supply} <span className="text-[10px] font-normal">Slots</span></span>
+                      <span className="text-[10px] text-slate-400">
+                        人員總供給 (t)
+                      </span>
+                      <span className="text-lg font-bold text-slate-700">
+                        {data.supply}{" "}
+                        <span className="text-[10px] font-normal">Slots</span>
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -3931,58 +4350,58 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                     }[] = [];
 
                     allRadiographers.forEach((u) => {
-                        const s = getDayShift(u.id, dateStr);
-                        const storedShift = shifts.find(
-                          (shift) =>
-                            shift.userId === u.id && shift.date === dateStr,
-                        );
-                        let match = false;
-                        if (stationName === "遠班" && s.station?.includes("遠"))
-                          match = true;
-                        else if (
-                          stationName === StationDefault.BMD_DX &&
-                          s.specialRoles.includes(SPECIAL_ROLES.DUAL_BMD)
+                      const s = getDayShift(u.id, dateStr);
+                      const storedShift = shifts.find(
+                        (shift) =>
+                          shift.userId === u.id && shift.date === dateStr,
+                      );
+                      let match = false;
+                      if (stationName === "遠班" && s.station?.includes("遠"))
+                        match = true;
+                      else if (
+                        stationName === StationDefault.BMD_DX &&
+                        s.specialRoles.includes(SPECIAL_ROLES.DUAL_BMD)
+                      )
+                        match = true;
+                      else if (
+                        stationName === "場控" &&
+                        s.station?.includes("場控")
+                      )
+                        match = true;
+                      else if (
+                        stationName === "輔控" &&
+                        s.specialRoles.includes(SPECIAL_ROLES.ASSIST)
+                      )
+                        match = true;
+                      else if (
+                        stationName === "排班" &&
+                        s.specialRoles.includes(SPECIAL_ROLES.SCHEDULER)
+                      )
+                        match = true;
+                      else if (stationName === "大直") {
+                        if (
+                          s.station === "大直" ||
+                          s.specialRoles.includes(SPECIAL_ROLES.DAZHI_SUPPORT)
                         )
                           match = true;
-                        else if (
-                          stationName === "場控" &&
-                          s.station?.includes("場控")
-                        )
-                          match = true;
-                        else if (
-                          stationName === "輔控" &&
-                          s.specialRoles.includes(SPECIAL_ROLES.ASSIST)
-                        )
-                          match = true;
-                        else if (
-                          stationName === "排班" &&
-                          s.specialRoles.includes(SPECIAL_ROLES.SCHEDULER)
-                        )
-                          match = true;
-                        else if (stationName === "大直") {
-                          if (
-                            s.station === "大直" ||
-                            s.specialRoles.includes(SPECIAL_ROLES.DAZHI_SUPPORT)
-                          )
-                            match = true;
-                        } else if (s.station === stationName) match = true;
+                      } else if (s.station === stationName) match = true;
 
-                        if (match) {
-                          const isRemoteDualBmd =
-                            stationName === StationDefault.BMD_DX &&
-                            s.specialRoles.includes(SPECIAL_ROLES.DUAL_BMD) &&
-                            (s.station?.includes("遠") || false);
-                          assignments.push({
-                            id: u.id,
-                            name: u.name,
-                            alias: u.alias,
-                            color: u.color,
-                            workTime: storedShift?.workTime,
-                            specialRoles: s.specialRoles,
-                            note: isRemoteDualBmd ? "(遠班兼職)" : undefined,
-                          });
-                        }
-                      });
+                      if (match) {
+                        const isRemoteDualBmd =
+                          stationName === StationDefault.BMD_DX &&
+                          s.specialRoles.includes(SPECIAL_ROLES.DUAL_BMD) &&
+                          (s.station?.includes("遠") || false);
+                        assignments.push({
+                          id: u.id,
+                          name: u.name,
+                          alias: u.alias,
+                          color: u.color,
+                          workTime: storedShift?.workTime,
+                          specialRoles: s.specialRoles,
+                          note: isRemoteDualBmd ? "(遠班兼職)" : undefined,
+                        });
+                      }
+                    });
 
                     return assignments;
                   };
@@ -4047,7 +4466,8 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                           : Number.MAX_SAFE_INTEGER;
                       };
                       const timeDifference =
-                        getStartMinutes(a.workTime) - getStartMinutes(b.workTime);
+                        getStartMinutes(a.workTime) -
+                        getStartMinutes(b.workTime);
                       if (timeDifference) return timeDifference;
 
                       const aIsLate =
@@ -4069,9 +4489,8 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                     const beitouRadiographers = timeOrderedRadiographers.filter(
                       (item) => !isDazhiAssignment(item),
                     );
-                    const dazhiRadiographers = timeOrderedRadiographers.filter(
-                      isDazhiAssignment,
-                    );
+                    const dazhiRadiographers =
+                      timeOrderedRadiographers.filter(isDazhiAssignment);
 
                     const renderTimeSection = (
                       title: string,
@@ -4087,113 +4506,113 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                       }, {});
 
                       return (
-                      <div className="space-y-3">
-                        <div className="flex items-center gap-2 px-1">
-                          <Clock size={16} className={accentClass} />
-                          <span className="text-sm font-black tracking-wide text-slate-700">
-                            {title}上班時間
-                          </span>
-                          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500">
-                            {peopleForLocation.length} 人
-                          </span>
-                          <div className="h-px flex-1 bg-gradient-to-r from-slate-200 to-transparent" />
-                        </div>
-                        {Object.entries(timeGroups).map(([time, people]) => (
-                          <div
-                            key={time}
-                            className={`rounded-xl border p-3 ${
-                              time === "未設定時間"
+                        <div className="space-y-3">
+                          <div className="flex items-center gap-2 px-1">
+                            <Clock size={16} className={accentClass} />
+                            <span className="text-sm font-black tracking-wide text-slate-700">
+                              {title}上班時間
+                            </span>
+                            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500">
+                              {peopleForLocation.length} 人
+                            </span>
+                            <div className="h-px flex-1 bg-gradient-to-r from-slate-200 to-transparent" />
+                          </div>
+                          {Object.entries(timeGroups).map(([time, people]) => (
+                            <div
+                              key={time}
+                              className={`rounded-xl border p-3 ${
+                                time === "未設定時間"
                                   ? "border-dashed border-slate-300 bg-slate-50"
                                   : "border-indigo-100 bg-indigo-50/50"
-                            }`}
-                          >
-                            <div className="mb-2 flex items-center gap-2 text-sm font-black text-slate-700">
-                              <Clock
-                                size={15}
-                                className="text-indigo-600"
-                              />
-                              {time}
-                              <span className="rounded-full bg-white px-1.5 py-0.5 text-[10px] text-slate-500 ring-1 ring-slate-200">
-                                {people.length} 人
-                              </span>
-                            </div>
-                            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                              {people.map((person) => (
-                                <div
-                                  key={person.id}
-                                  className={`flex items-center gap-2 rounded-lg border bg-white px-2.5 py-2 shadow-sm ${
-                                    person.id === currentUser.id
-                                      ? "border-teal-300 ring-1 ring-teal-100"
-                                      : "border-slate-100"
-                                  }`}
-                                >
+                              }`}
+                            >
+                              <div className="mb-2 flex items-center gap-2 text-sm font-black text-slate-700">
+                                <Clock size={15} className="text-indigo-600" />
+                                {time}
+                                <span className="rounded-full bg-white px-1.5 py-0.5 text-[10px] text-slate-500 ring-1 ring-slate-200">
+                                  {people.length} 人
+                                </span>
+                              </div>
+                              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                                {people.map((person) => (
                                   <div
-                                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white shadow-inner"
-                                    style={{
-                                      backgroundColor: person.color || "#94a3b8",
-                                    }}
+                                    key={person.id}
+                                    className={`flex items-center gap-2 rounded-lg border bg-white px-2.5 py-2 shadow-sm ${
+                                      person.id === currentUser.id
+                                        ? "border-teal-300 ring-1 ring-teal-100"
+                                        : "border-slate-100"
+                                    }`}
                                   >
-                                    {person.alias || person.name[0]}
-                                  </div>
-                                  <div className="min-w-0 flex-1">
-                                    <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
-                                      <span className="truncate text-sm font-bold text-slate-700">
-                                        {person.name}
-                                      </span>
-                                      <span
-                                        className={`rounded px-1 py-0.5 text-[9px] font-bold ${getStationChipStyle(person.station)}`}
-                                      >
-                                        {person.station.includes("遠")
-                                          ? "遠班"
-                                          : person.station}
-                                      </span>
+                                    <div
+                                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white shadow-inner"
+                                      style={{
+                                        backgroundColor:
+                                          person.color || "#94a3b8",
+                                      }}
+                                    >
+                                      {person.alias || person.name[0]}
                                     </div>
-                                    {person.specialRoles.length > 0 && (
-                                      <div className="mt-1 flex flex-wrap gap-1">
-                                        {person.specialRoles.map((role) => (
-                                          <span
-                                            key={role}
-                                            className={`rounded px-1 py-0.5 text-[9px] font-bold ${
-                                              role === SPECIAL_ROLES.LATE
-                                                ? "bg-red-100 text-red-700"
-                                                : "bg-teal-50 text-teal-700"
-                                            }`}
-                                          >
-                                            {role}
-                                          </span>
-                                        ))}
+                                    <div className="min-w-0 flex-1">
+                                      <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                                        <span className="truncate text-sm font-bold text-slate-700">
+                                          {person.name}
+                                        </span>
+                                        <span
+                                          className={`rounded px-1 py-0.5 text-[9px] font-bold ${getStationChipStyle(person.station)}`}
+                                        >
+                                          {person.station.includes("遠")
+                                            ? "遠班"
+                                            : person.station}
+                                        </span>
                                       </div>
+                                      {person.specialRoles.length > 0 && (
+                                        <div className="mt-1 flex flex-wrap gap-1">
+                                          {person.specialRoles.map((role) => (
+                                            <span
+                                              key={role}
+                                              className={`rounded px-1 py-0.5 text-[9px] font-bold ${
+                                                role === SPECIAL_ROLES.LATE
+                                                  ? "bg-red-100 text-red-700"
+                                                  : "bg-teal-50 text-teal-700"
+                                              }`}
+                                            >
+                                              {role}
+                                            </span>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
+                                    {canEditRadiographerWorkTime && (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setEditingRadiographerTime({
+                                            userId: person.id,
+                                            name: person.name,
+                                            date: dateStr,
+                                            currentTime: person.workTime || "",
+                                          });
+                                          setRadiographerTimeInput(
+                                            person.workTime || "",
+                                          );
+                                        }}
+                                        className="shrink-0 rounded-md border border-slate-200 px-1.5 py-1 text-[10px] font-bold text-slate-500 hover:border-teal-300 hover:text-teal-700"
+                                        title="修改上班時間"
+                                      >
+                                        {person.workTime ? "調整" : "+ 時間"}
+                                      </button>
                                     )}
                                   </div>
-                                  {canEditRadiographerWorkTime && (
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setEditingRadiographerTime({
-                                          userId: person.id,
-                                          name: person.name,
-                                          date: dateStr,
-                                          currentTime: person.workTime || "",
-                                        });
-                                        setRadiographerTimeInput(person.workTime || "");
-                                      }}
-                                      className="shrink-0 rounded-md border border-slate-200 px-1.5 py-1 text-[10px] font-bold text-slate-500 hover:border-teal-300 hover:text-teal-700"
-                                      title="修改上班時間"
-                                    >
-                                      {person.workTime ? "調整" : "+ 時間"}
-                                    </button>
-                                  )}
-                                </div>
-                              ))}
+                                ))}
+                              </div>
                             </div>
-                          </div>
-                        ))}
-                        {peopleForLocation.length === 0 && (
-                          <div className="rounded-xl border border-dashed border-slate-200 py-5 text-center text-sm text-slate-400">
-                            當日無{title}放射師排班資料
-                          </div>
-                        )}
-                      </div>
+                          ))}
+                          {peopleForLocation.length === 0 && (
+                            <div className="rounded-xl border border-dashed border-slate-200 py-5 text-center text-sm text-slate-400">
+                              當日無{title}放射師排班資料
+                            </div>
+                          )}
+                        </div>
                       );
                     };
 
@@ -4371,7 +4790,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                 }`}
                                               >
                                                 {r ===
-                                                SPECIAL_ROLES.DAZHI_SUPPORT &&
+                                                  SPECIAL_ROLES.DAZHI_SUPPORT &&
                                                 st === "大直"
                                                   ? "遠班"
                                                   : r}
@@ -4382,7 +4801,9 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                         {u.workTime ? (
                                           <button
                                             type="button"
-                                            disabled={!canEditRadiographerWorkTime}
+                                            disabled={
+                                              !canEditRadiographerWorkTime
+                                            }
                                             onClick={() => {
                                               if (!canEditRadiographerWorkTime)
                                                 return;
@@ -4468,14 +4889,18 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                           d !== null && d.name !== "?",
                       );
 
-                    const formatWithDetails = (d: {
-                      name: string;
-                      task?: string;
-                      note?: string;
-                    }) => {
+                    const formatWithDetails = (
+                      d: {
+                        name: string;
+                        task?: string;
+                        note?: string;
+                      },
+                      extraDetail = "",
+                    ) => {
                       const details = [];
                       if (d.task) details.push(d.task);
                       if (d.note) details.push(d.note);
+                      if (extraDetail) details.push(extraDetail);
                       return details.length > 0
                         ? `${d.name}(${details.join("/")})`
                         : d.name;
@@ -4494,22 +4919,31 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                               d.location === "北投"
                             );
                           })
-                          .map(formatWithDetails)
+                          .map((d) => formatWithDetails(d))
                           .join("、") || "-",
                       remote:
                         doctorData
-                          .filter((d) => (d.station || "").includes("遠"))
-                          .map(formatWithDetails)
+                          .filter(
+                            (d) =>
+                              (d.station || "").includes("遠") &&
+                              d.location !== "台中",
+                          )
+                          .map((d) => formatWithDetails(d))
                           .join("、") || "-",
                       support:
                         doctorData
                           .filter((d) => (d.station || "").includes("支援"))
-                          .map(formatWithDetails)
+                          .map((d) => formatWithDetails(d))
                           .join("、") || "-",
                       taichung:
                         doctorData
                           .filter((d) => d.location === "台中")
-                          .map(formatWithDetails)
+                          .map((d) =>
+                            formatWithDetails(
+                              d,
+                              (d.station || "").includes("遠") ? "遠" : "",
+                            ),
+                          )
                           .join("、") || "-",
                       admin:
                         doctorData
@@ -4826,7 +5260,11 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                             ></div>
                             {station}
                             {station &&
-                              isUserLearningOnDate(currentUser, station, date) && (
+                              isUserLearningOnDate(
+                                currentUser,
+                                station,
+                                date,
+                              ) && (
                                 <span className="text-[10px] bg-sky-100 text-sky-700 font-bold px-1 rounded">
                                   學
                                 </span>
@@ -5028,22 +5466,49 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                   <div className="h-[12px]"></div>
                                 )}
                             </div>
-                            
+
                             {viewMode === "station" && (
                               <div className="mt-1 w-full flex flex-col gap-0.5 px-0.5">
                                 {(() => {
-                                  const _dailyStatsForLoad = db.getDailyStats(date);
-                                  const bLoad = calculateDailyLoadRate(date, "beitou", shifts, users, _dailyStatsForLoad);
-                                  const dLoad = calculateDailyLoadRate(date, "dazhi", shifts, users, _dailyStatsForLoad);
+                                  const _dailyStatsForLoad =
+                                    db.getDailyStats(date);
+                                  const bLoad = calculateDailyLoadRate(
+                                    date,
+                                    "beitou",
+                                    shifts,
+                                    users,
+                                    _dailyStatsForLoad,
+                                  );
+                                  const dLoad = calculateDailyLoadRate(
+                                    date,
+                                    "dazhi",
+                                    shifts,
+                                    users,
+                                    _dailyStatsForLoad,
+                                  );
                                   return (
                                     <>
-                                      <div className={`text-[9px] px-0.5 rounded flex justify-between items-center ${bLoad.color} ring-1 ring-inset ring-black/5`} title={`北投 需求:${bLoad.demand} 供給:${bLoad.supply}`}>
-                                        <span className="font-bold opacity-70">北</span>
-                                        <span className="font-black">{bLoad.rateStr.split(' ')[0]}</span>
+                                      <div
+                                        className={`text-[9px] px-0.5 rounded flex justify-between items-center ${bLoad.color} ring-1 ring-inset ring-black/5`}
+                                        title={`北投 需求:${bLoad.demand} 供給:${bLoad.supply}`}
+                                      >
+                                        <span className="font-bold opacity-70">
+                                          北
+                                        </span>
+                                        <span className="font-black">
+                                          {bLoad.rateStr.split(" ")[0]}
+                                        </span>
                                       </div>
-                                      <div className={`text-[9px] px-0.5 rounded flex justify-between items-center ${dLoad.color} ring-1 ring-inset ring-black/5`} title={`大直 需求:${dLoad.demand} 供給:${dLoad.supply}`}>
-                                        <span className="font-bold opacity-70">大</span>
-                                        <span className="font-black">{dLoad.rateStr.split(' ')[0]}</span>
+                                      <div
+                                        className={`text-[9px] px-0.5 rounded flex justify-between items-center ${dLoad.color} ring-1 ring-inset ring-black/5`}
+                                        title={`大直 需求:${dLoad.demand} 供給:${dLoad.supply}`}
+                                      >
+                                        <span className="font-bold opacity-70">
+                                          大
+                                        </span>
+                                        <span className="font-black">
+                                          {dLoad.rateStr.split(" ")[0]}
+                                        </span>
                                       </div>
                                     </>
                                   );
@@ -5180,7 +5645,9 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                           {dateRange.map((date) => {
                             const { station, specialRoles, isOff, isNotHired } =
                               getDayShift(user.id, date);
-                            const existingShift = shiftMap.get(`${user.id}-${date}`);
+                            const existingShift = shiftMap.get(
+                              `${user.id}-${date}`,
+                            );
                             const isToday =
                               toLocalISOString(new Date()) === date;
                             const pendingReq = getPendingRequest(user.id, date);
@@ -5228,92 +5695,141 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                     )}
                                   </div>
                                 ) : (
-                                    <div className="flex flex-col gap-1 h-full justify-start pt-1 items-center">
-                                      {isEditMode ? (
-                                        <div className="flex flex-col gap-1 w-full">
-                                          <select
-                                            value={station || ""}
-                                            onChange={(e) =>
-                                              handleUpdateShift(
-                                                user.id,
-                                                date,
-                                                e.target.value ||
-                                                  StationDefault.UNASSIGNED,
-                                                specialRoles,
-                                              )
-                                            }
-                                            className="w-full text-[10px] py-0.5 px-0.5 border border-blue-200 rounded-[4px] bg-blue-50 text-blue-800 hover:bg-blue-100 focus:ring-2 focus:ring-blue-400 outline-none font-bold transition-colors"
-                                          >
-                                            <option value="">...</option>
-                                            {userCapableStations.map((s) => (
-                                              <option key={s} value={s}>
-                                                {s}
-                                              </option>
-                                            ))}
-                                            <option value={SYSTEM_OFF}>休假</option>
-                                          </select>
-                                          <select
-                                            value={existingShift?.learningStation || ""}
-                                            onChange={(e) => {
-                                              handleUpdateShift(user.id, date, station || StationDefault.UNASSIGNED, specialRoles, e.target.value, "");
-                                            }}
-                                            className="w-full text-[9px] py-0.5 px-0.5 border border-amber-200 rounded-[4px] bg-amber-50 text-amber-800 outline-none font-bold"
-                                          >
-                                            <option value="">(無學習)</option>
-                                            <option value="MR">學MR</option>
-                                            <option value="CT">學CT</option>
-                                            <option value="超音波">學US</option>
-                                            <option value="DX">學DX</option>
-                                            <option value="MG">學MG</option>
-                                          </select>
-                                          {existingShift?.learningStation && (() => {
-                                            const possibleTeachers = getLearningTeacherCandidates(
-                                              users,
-                                              shifts,
+                                  <div className="flex flex-col gap-1 h-full justify-start pt-1 items-center">
+                                    {isEditMode ? (
+                                      <div className="flex flex-col gap-1 w-full">
+                                        <select
+                                          value={station || ""}
+                                          onChange={(e) =>
+                                            handleUpdateShift(
                                               user.id,
                                               date,
-                                              existingShift.learningStation,
+                                              e.target.value ||
+                                                StationDefault.UNASSIGNED,
+                                              specialRoles,
+                                            )
+                                          }
+                                          className="w-full text-[10px] py-0.5 px-0.5 border border-blue-200 rounded-[4px] bg-blue-50 text-blue-800 hover:bg-blue-100 focus:ring-2 focus:ring-blue-400 outline-none font-bold transition-colors"
+                                        >
+                                          <option value="">...</option>
+                                          {userCapableStations.map((s) => (
+                                            <option key={s} value={s}>
+                                              {s}
+                                            </option>
+                                          ))}
+                                          <option value={SYSTEM_OFF}>
+                                            休假
+                                          </option>
+                                        </select>
+                                        <select
+                                          value={
+                                            existingShift?.learningStation || ""
+                                          }
+                                          onChange={(e) => {
+                                            handleUpdateShift(
+                                              user.id,
+                                              date,
+                                              station ||
+                                                StationDefault.UNASSIGNED,
+                                              specialRoles,
+                                              e.target.value,
+                                              "",
                                             );
+                                          }}
+                                          className="w-full text-[9px] py-0.5 px-0.5 border border-amber-200 rounded-[4px] bg-amber-50 text-amber-800 outline-none font-bold"
+                                        >
+                                          <option value="">(無學習)</option>
+                                          <option value="MR">學MR</option>
+                                          <option value="CT">學CT</option>
+                                          <option value="超音波">學US</option>
+                                          <option value="DX">學DX</option>
+                                          <option value="MG">學MG</option>
+                                        </select>
+                                        {existingShift?.learningStation &&
+                                          (() => {
+                                            const possibleTeachers =
+                                              getLearningTeacherCandidates(
+                                                users,
+                                                shifts,
+                                                user.id,
+                                                date,
+                                                existingShift.learningStation,
+                                              );
                                             return (
                                               <select
-                                                value={existingShift.learningTeacherId || ""}
-                                                onChange={(e) => handleUpdateShift(user.id, date, station || StationDefault.UNASSIGNED, specialRoles, existingShift.learningStation, e.target.value)}
+                                                value={
+                                                  existingShift.learningTeacherId ||
+                                                  ""
+                                                }
+                                                onChange={(e) =>
+                                                  handleUpdateShift(
+                                                    user.id,
+                                                    date,
+                                                    station ||
+                                                      StationDefault.UNASSIGNED,
+                                                    specialRoles,
+                                                    existingShift.learningStation,
+                                                    e.target.value,
+                                                  )
+                                                }
                                                 className="w-full text-[9px] py-0.5 px-0.5 border border-amber-200 rounded-[4px] bg-white text-amber-700 outline-none"
                                               >
-                                                <option value="">(未定老師)</option>
-                                                {possibleTeachers.map(({ user: teacher, shift: teacherShift }) => (
-                                                  <option key={teacher.id} value={teacher.id}>
-                                                    {teacher.alias || teacher.name}（{teacherShift.station}）
-                                                  </option>
-                                                ))}
+                                                <option value="">
+                                                  (未定老師)
+                                                </option>
+                                                {possibleTeachers.map(
+                                                  ({
+                                                    user: teacher,
+                                                    shift: teacherShift,
+                                                  }) => (
+                                                    <option
+                                                      key={teacher.id}
+                                                      value={teacher.id}
+                                                    >
+                                                      {teacher.alias ||
+                                                        teacher.name}
+                                                      （{teacherShift.station}）
+                                                    </option>
+                                                  ),
+                                                )}
                                               </select>
                                             );
                                           })()}
-                                        </div>
-                                      ) : station ? (
-                                        <div className="flex flex-col items-center w-full max-w-[50px]">
-                                          <div
-                                            className={`flex items-center justify-center px-1 py-1 rounded-md shadow-sm border w-full ${getStationStyle(station)} `}
-                                          >
-                                            <span className="text-[10px] font-bold truncate tracking-tight">
-                                              {station}
-                                            </span>
-                                            {isLearning && !existingShift?.learningStation && (
+                                      </div>
+                                    ) : station ? (
+                                      <div className="flex flex-col items-center w-full max-w-[50px]">
+                                        <div
+                                          className={`flex items-center justify-center px-1 py-1 rounded-md shadow-sm border w-full ${getStationStyle(station)} `}
+                                        >
+                                          <span className="text-[10px] font-bold truncate tracking-tight">
+                                            {station}
+                                          </span>
+                                          {isLearning &&
+                                            !existingShift?.learningStation && (
                                               <span className="text-[9px] bg-white/50 text-slate-900 font-extrabold px-0.5 rounded-lg ml-0.5 leading-none">
                                                 學
                                               </span>
                                             )}
-                                          </div>
-                                          {existingShift?.learningStation && (
-                                            <div className="mt-0.5 text-[8.5px] font-bold text-amber-600 bg-amber-50 border border-amber-200 rounded px-0.5 truncate max-w-full text-center flex items-center leading-tight">
-                                              學{existingShift.learningStation}
-                                              {existingShift.learningTeacherId && (() => {
-                                                const t = db.users.find(u => u.id === existingShift.learningTeacherId);
-                                                return <span className="text-[8px] text-amber-500 ml-0.5 truncate">:{t?.alias || t?.name}</span>;
-                                              })()}
-                                            </div>
-                                          )}
                                         </div>
+                                        {existingShift?.learningStation && (
+                                          <div className="mt-0.5 text-[8.5px] font-bold text-amber-600 bg-amber-50 border border-amber-200 rounded px-0.5 truncate max-w-full text-center flex items-center leading-tight">
+                                            學{existingShift.learningStation}
+                                            {existingShift.learningTeacherId &&
+                                              (() => {
+                                                const t = db.users.find(
+                                                  (u) =>
+                                                    u.id ===
+                                                    existingShift.learningTeacherId,
+                                                );
+                                                return (
+                                                  <span className="text-[8px] text-amber-500 ml-0.5 truncate">
+                                                    :{t?.alias || t?.name}
+                                                  </span>
+                                                );
+                                              })()}
+                                          </div>
+                                        )}
+                                      </div>
                                     ) : (
                                       <div className="flex-1 flex items-center justify-center">
                                         <div className="text-[10px] text-slate-300 font-light">
@@ -5478,9 +5994,25 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                               const sortedStaff = [...staff].sort((a, b) => {
                                 if (!a.user || !b.user) return 0;
                                 const isALearner =
-                                  isUserLearningOnDate(a.user, row.label, date) || (a.shift?.learningStation && row.label.includes(a.shift.learningStation));
+                                  isUserLearningOnDate(
+                                    a.user,
+                                    row.label,
+                                    date,
+                                  ) ||
+                                  (a.shift?.learningStation &&
+                                    row.label.includes(
+                                      a.shift.learningStation,
+                                    ));
                                 const isBLearner =
-                                  isUserLearningOnDate(b.user, row.label, date) || (b.shift?.learningStation && row.label.includes(b.shift.learningStation));
+                                  isUserLearningOnDate(
+                                    b.user,
+                                    row.label,
+                                    date,
+                                  ) ||
+                                  (b.shift?.learningStation &&
+                                    row.label.includes(
+                                      b.shift.learningStation,
+                                    ));
 
                                 // Primary Sort: Learners go to bottom
                                 if (isALearner && !isBLearner) return 1;
@@ -5680,21 +6212,33 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                           .getLeaves()
                                           .find((l) => {
                                             if (
-                                              l.status !== LeaveStatus.APPROVED &&
+                                              l.status !==
+                                                LeaveStatus.APPROVED &&
                                               l.status !== LeaveStatus.PENDING
                                             )
                                               return false;
 
-                                            const isRequestor = l.userId === item.user!.id;
-                                            const isTarget = l.targetUserId === item.user!.id;
+                                            const isRequestor =
+                                              l.userId === item.user!.id;
+                                            const isTarget =
+                                              l.targetUserId === item.user!.id;
 
-                                            if (!isRequestor && !isTarget) return false;
+                                            if (!isRequestor && !isTarget)
+                                              return false;
 
-                                            const inDateRange = date >= l.startDate && date <= l.endDate;
-                                            const isReturnDate = l.returnDate && date === l.returnDate;
+                                            const inDateRange =
+                                              date >= l.startDate &&
+                                              date <= l.endDate;
+                                            const isReturnDate =
+                                              l.returnDate &&
+                                              date === l.returnDate;
 
-                                            if (l.type === LeaveType.SWAP_SHIFT) {
-                                              return inDateRange || isReturnDate;
+                                            if (
+                                              l.type === LeaveType.SWAP_SHIFT
+                                            ) {
+                                              return (
+                                                inDateRange || isReturnDate
+                                              );
                                             }
 
                                             return isRequestor && inDateRange;
@@ -5733,13 +6277,24 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                         );
 
                                         // Highlight imported Google Sheets data with distinct color
-                                        if (item.user?.id.startsWith("google-")) {
-                                          chipClass = "bg-orange-100 text-red-800 border-orange-200";
+                                        if (
+                                          item.user?.id.startsWith("google-")
+                                        ) {
+                                          chipClass =
+                                            "bg-orange-100 text-red-800 border-orange-200";
                                         }
 
                                         // Check if this user is a Learner for this specific station
                                         const isLearner =
-                                          isUserLearningOnDate(item.user, row.label, date) || (item.shift?.learningStation && row.label.includes(item.shift.learningStation));
+                                          isUserLearningOnDate(
+                                            item.user,
+                                            row.label,
+                                            date,
+                                          ) ||
+                                          (item.shift?.learningStation &&
+                                            row.label.includes(
+                                              item.shift.learningStation,
+                                            ));
                                         // Revert: White override logic for learners in Station View
                                         if (isLearner) {
                                           chipClass =
@@ -5939,7 +6494,10 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                         className={`mt-1 w-full px-1 ${isEditMode ? "cursor-pointer hover:bg-slate-100" : ""} rounded transition-colors`}
                                         onClick={() => {
                                           if (!isEditMode) return;
-                                          const currentNote = db.getStationNote(date, row.label);
+                                          const currentNote = db.getStationNote(
+                                            date,
+                                            row.label,
+                                          );
                                           setStationNoteModal({
                                             date,
                                             station: row.label,
@@ -6036,7 +6594,9 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                 } else if (rowLabel === "影像") {
                                   return st === "影像";
                                 } else if (rowLabel === "遠班") {
-                                  return st.includes("遠") && s.location !== "台中";
+                                  return (
+                                    st.includes("遠") && s.location !== "台中"
+                                  );
                                 } else if (rowLabel === "支援") {
                                   return st === "支援";
                                 }
@@ -6347,12 +6907,19 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                 placeholder="例如：王小明..."
                 value={stationNoteModal.content}
                 onChange={(e) =>
-                  setStationNoteModal({ ...stationNoteModal, content: e.target.value })
+                  setStationNoteModal({
+                    ...stationNoteModal,
+                    content: e.target.value,
+                  })
                 }
                 autoFocus
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
-                    db.setStationNote(stationNoteModal.date, stationNoteModal.station, stationNoteModal.content);
+                    db.setStationNote(
+                      stationNoteModal.date,
+                      stationNoteModal.station,
+                      stationNoteModal.content,
+                    );
                     setStationNoteModal(null);
                   }
                 }}
@@ -6362,7 +6929,12 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                   {frequentStationNotes.map((note, idx) => (
                     <button
                       key={idx}
-                      onClick={() => setStationNoteModal({ ...stationNoteModal, content: note })}
+                      onClick={() =>
+                        setStationNoteModal({
+                          ...stationNoteModal,
+                          content: note,
+                        })
+                      }
                       className="px-2 py-1 bg-teal-50 text-teal-700 text-xs rounded border border-teal-200 hover:bg-teal-100 transition-colors shadow-sm"
                     >
                       {note}
@@ -6379,7 +6951,11 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                 </button>
                 <button
                   onClick={() => {
-                    db.setStationNote(stationNoteModal.date, stationNoteModal.station, stationNoteModal.content);
+                    db.setStationNote(
+                      stationNoteModal.date,
+                      stationNoteModal.station,
+                      stationNoteModal.content,
+                    );
                     setStationNoteModal(null);
                   }}
                   className="px-6 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-sm font-bold shadow-md shadow-teal-200 transition-all"
@@ -6481,7 +7057,14 @@ const DailyManpowerSummary: React.FC<{
   doctorShifts: DoctorShift[];
   currentUser: User;
   stats?: DailyManpowerStats;
-}> = ({ date, users, shifts, doctorShifts, currentUser, stats: suppliedStats }) => {
+}> = ({
+  date,
+  users,
+  shifts,
+  doctorShifts,
+  currentUser,
+  stats: suppliedStats,
+}) => {
   useEffect(() => {
     void db.refreshSettings();
   }, [date]);
@@ -6508,7 +7091,6 @@ const DailyManpowerSummary: React.FC<{
     PhysicianWorkloadRow[]
   >([]);
 
-
   useEffect(() => {
     supabase
       .from("physician_workload_daily")
@@ -6519,8 +7101,6 @@ const DailyManpowerSummary: React.FC<{
       .then(({ data }) => {
         if (data) setPhysicianWorkload(data as PhysicianWorkloadRow[]);
       });
-
-
   }, [date]);
 
   // Get daily events (holidays, memos, etc.)
@@ -6594,9 +7174,17 @@ const DailyManpowerSummary: React.FC<{
       let modality = "";
       const relevantStation = s.learningStation || s.station;
       if (relevantStation.includes("MR")) modality = "MR";
-      else if (relevantStation.includes("US") || relevantStation.includes("超音波")) modality = "US";
+      else if (
+        relevantStation.includes("US") ||
+        relevantStation.includes("超音波")
+      )
+        modality = "US";
       else if (relevantStation.includes("CT")) modality = "CT";
-      else if (relevantStation.includes("BMD") || relevantStation.includes("DX") || relevantStation.includes("MG"))
+      else if (
+        relevantStation.includes("BMD") ||
+        relevantStation.includes("DX") ||
+        relevantStation.includes("MG")
+      )
         modality = "BMD";
 
       // Counts
@@ -7118,9 +7706,15 @@ BMD :{{bmd}}
     const nonPartTimeShifts = shifts.filter((s) => {
       if (s.date !== date) return false;
       if (s.station === SYSTEM_OFF) return false;
-      if (!s.learningStation && s.station === StationDefault.UNASSIGNED) return false;
+      if (!s.learningStation && s.station === StationDefault.UNASSIGNED)
+        return false;
       const u = users.find((user) => user.id === s.userId);
-      return !!u && !u.isPartTime && u.role !== UserRole.RADIOGRAPHER_ASSISTANT && !isUserOnEmploymentPause(u, date);
+      return (
+        !!u &&
+        !u.isPartTime &&
+        u.role !== UserRole.RADIOGRAPHER_ASSISTANT &&
+        !isUserOnEmploymentPause(u, date)
+      );
     });
 
     const sortedBeitou = nonPartTimeShifts
@@ -7151,7 +7745,8 @@ BMD :{{bmd}}
       .filter((s) => {
         if (s.date !== date) return false;
         if (s.station === SYSTEM_OFF) return false;
-        if (!s.learningStation && s.station === StationDefault.UNASSIGNED) return false;
+        if (!s.learningStation && s.station === StationDefault.UNASSIGNED)
+          return false;
         const u = users.find((user) => user.id === s.userId);
         return (
           !!u &&
@@ -7197,8 +7792,20 @@ BMD :{{bmd}}
     const section4 = section4Parts.join("\n\n");
 
     // We will use the component level calculateDailyLoadRate
-    const beitouLoad = calculateDailyLoadRate(date, 'beitou', shifts, users, stats);
-    const dazhiLoad = calculateDailyLoadRate(date, 'dazhi', shifts, users, stats);
+    const beitouLoad = calculateDailyLoadRate(
+      date,
+      "beitou",
+      shifts,
+      users,
+      stats,
+    );
+    const dazhiLoad = calculateDailyLoadRate(
+      date,
+      "dazhi",
+      shifts,
+      users,
+      stats,
+    );
     const names = {
       beitou: {
         leader: [] as string[],
@@ -7207,46 +7814,75 @@ BMD :{{bmd}}
         ct: { regular: [] as string[], learning: [] as string[] },
         bmd: { regular: [] as string[], learning: [] as string[] },
         dx: { regular: [] as string[], learning: [] as string[] },
-        mg: { regular: [] as string[], learning: [] as string[] }
+        mg: { regular: [] as string[], learning: [] as string[] },
       },
-      dazhi: { leader: [] as string[], us: [] as string[], bmd: [] as string[], dx: [] as string[], mg: [] as string[] }
+      dazhi: {
+        leader: [] as string[],
+        us: [] as string[],
+        bmd: [] as string[],
+        dx: [] as string[],
+        mg: [] as string[],
+      },
     };
 
-    const todayShifts = shifts.filter(s => s.date === date);
-    todayShifts.forEach(s => {
+    const todayShifts = shifts.filter((s) => s.date === date);
+    todayShifts.forEach((s) => {
       if (s.station === SYSTEM_OFF) return;
-      if (!s.learningStation && (s.station === StationDefault.UNASSIGNED || s.station === "行政")) return;
-      
-      const user = users.find(u => u.id === s.userId);
+      if (
+        !s.learningStation &&
+        (s.station === StationDefault.UNASSIGNED || s.station === "行政")
+      )
+        return;
+
+      const user = users.find((u) => u.id === s.userId);
       if (!user) return;
       const rawAlias = user.alias || "";
-      const isEnglishAlias = rawAlias.length > 0 && /^[a-zA-Z0-9]+$/.test(rawAlias);
-      let alias = (!rawAlias || isEnglishAlias) ? (user.name?.slice(-2) || user.name || "") : rawAlias;
+      const isEnglishAlias =
+        rawAlias.length > 0 && /^[a-zA-Z0-9]+$/.test(rawAlias);
+      let alias =
+        !rawAlias || isEnglishAlias
+          ? user.name?.slice(-2) || user.name || ""
+          : rawAlias;
       const isRemote = s.station.includes("遠距") || s.station.includes("遠班");
-      const isDazhiSupport = s.specialRoles?.includes(SPECIAL_ROLES.DAZHI_SUPPORT);
+      const isDazhiSupport = s.specialRoles?.includes(
+        SPECIAL_ROLES.DAZHI_SUPPORT,
+      );
       const isDazhi = s.station.includes("大直") || isDazhiSupport;
-      
+
       if (isRemote) {
-         alias += "(兼遠班)";
+        alias += "(兼遠班)";
       }
-
-
 
       let groupName = "";
       const st = s.learningStation || s.station;
       if (st.toLowerCase().includes("mr")) groupName = "mr";
-      else if (st.toLowerCase().includes("us") || st.includes("超音波")) groupName = "us";
+      else if (st.toLowerCase().includes("us") || st.includes("超音波"))
+        groupName = "us";
       else if (st.toLowerCase().includes("ct")) groupName = "ct";
-      else if (st.toLowerCase().includes("bmd") || st.includes("骨質") || st.includes("骨密") || (s.specialRoles || []).includes(SPECIAL_ROLES.DUAL_BMD)) groupName = "bmd";
-      else if (st.toLowerCase().includes("x光") || st.toLowerCase().includes("dx")) groupName = "dx";
-      else if (st.toLowerCase().includes("mg") || st.includes("乳房攝影")) groupName = "mg";
+      else if (
+        st.toLowerCase().includes("bmd") ||
+        st.includes("骨質") ||
+        st.includes("骨密") ||
+        (s.specialRoles || []).includes(SPECIAL_ROLES.DUAL_BMD)
+      )
+        groupName = "bmd";
+      else if (
+        st.toLowerCase().includes("x光") ||
+        st.toLowerCase().includes("dx")
+      )
+        groupName = "dx";
+      else if (st.toLowerCase().includes("mg") || st.includes("乳房攝影"))
+        groupName = "mg";
       else if (st.includes("場控")) groupName = "leader";
 
-      const isLearning = s.station.includes("學習") || isUserLearningStationOnDate(user, s.station, s.date) || !!s.learningStation;
+      const isLearning =
+        s.station.includes("學習") ||
+        isUserLearningStationOnDate(user, s.station, s.date) ||
+        !!s.learningStation;
 
       if (isDazhi) {
         if (groupName && (names.dazhi as any)[groupName]) {
-           (names.dazhi as any)[groupName].push(alias);
+          (names.dazhi as any)[groupName].push(alias);
         }
         // 所有大直人員都加入 leader，供標頭顯示
         if (!names.dazhi.leader.includes(alias)) {
@@ -7254,29 +7890,45 @@ BMD :{{bmd}}
         }
       } else {
         if (isLearning) {
-            const destGroup = groupName && (names.beitou as any)[groupName];
-            if (destGroup && destGroup.learning) {
-                destGroup.learning.push(alias);
-            }
+          const destGroup = groupName && (names.beitou as any)[groupName];
+          if (destGroup && destGroup.learning) {
+            destGroup.learning.push(alias);
+          }
         } else if (groupName && (names.beitou as any)[groupName]) {
-            const destGroup = (names.beitou as any)[groupName];
-            if (destGroup.regular) {
-                destGroup.regular.push(alias);
-            } else {
-                destGroup.push(alias); // For leader which is a flat array
-            }
+          const destGroup = (names.beitou as any)[groupName];
+          if (destGroup.regular) {
+            destGroup.regular.push(alias);
+          } else {
+            destGroup.push(alias); // For leader which is a flat array
+          }
         }
       }
     });
 
     const r = (val: number) => Math.round(val || 0);
-    const calcMrCustomers = (st: any) => r(st.mrLargeMale + st.mrLargeFemale + st.mrMedium + st.mrSmall);
-    const calcMrSlots = (st: any) => r(st.mrLargeMale * 7 + st.mrLargeFemale * 9 + st.mrMedium * 3 + st.mrSmall * 3);
+    const calcMrCustomers = (st: any) =>
+      r(st.mrLargeMale + st.mrLargeFemale + st.mrMedium + st.mrSmall);
+    const calcMrSlots = (st: any) =>
+      r(
+        st.mrLargeMale * 7 +
+          st.mrLargeFemale * 9 +
+          st.mrMedium * 3 +
+          st.mrSmall * 3,
+      );
     const calcUsSlots = (st: any) => {
-      const knownDetailsCount = st.usThyroid + st.usCca + st.usAbdomen + st.usBreast + st.usPelvic;
-      const remainingUsCount = Math.max(0, st.usTotal - knownDetailsCount - st.usFibrosis);
-      const knownSlots = (st.usThyroid * 1) + (st.usCca * 1) + (st.usAbdomen * 2) + (st.usBreast * 2) + (st.usPelvic * 1);
-      return r(knownSlots + (remainingUsCount * 2) + (st.usHeart * 3));
+      const knownDetailsCount =
+        st.usThyroid + st.usCca + st.usAbdomen + st.usBreast + st.usPelvic;
+      const remainingUsCount = Math.max(
+        0,
+        st.usTotal - knownDetailsCount - st.usFibrosis,
+      );
+      const knownSlots =
+        st.usThyroid * 1 +
+        st.usCca * 1 +
+        st.usAbdomen * 2 +
+        st.usBreast * 2 +
+        st.usPelvic * 1;
+      return r(knownSlots + remainingUsCount * 2 + st.usHeart * 3);
     };
     const calcCtSlots = (st: any) => r(st.ct * 1 + st.cta * 2);
     const calcBmdSlots = (st: any) => calculateBmdSlots(st.bmd);
@@ -7285,7 +7937,7 @@ BMD :{{bmd}}
 
     // --- Section 5 Calculation ---
     const rawDailyStats: DailyManpowerStats = stats;
-    
+
     const beitouStats = {
       mrLargeMale: rawDailyStats.beitou_mr_large_male || 0,
       mrLargeFemale: rawDailyStats.beitou_mr_large_female || 0,
@@ -7298,16 +7950,20 @@ BMD :{{bmd}}
       usAbdomen: rawDailyStats.beitou_ultrasound_abdomen || 0,
       usBreast: rawDailyStats.beitou_ultrasound_breast || 0,
       usPelvic: rawDailyStats.beitou_ultrasound_pelvic || 0,
-      us: Math.max(0, (rawDailyStats.beitou_ultrasound || 0) - (rawDailyStats.beitou_ultrasound_fibrosis || 0)),
+      us: Math.max(
+        0,
+        (rawDailyStats.beitou_ultrasound || 0) -
+          (rawDailyStats.beitou_ultrasound_fibrosis || 0),
+      ),
       usHeart: rawDailyStats.beitou_ultrasound_heart || 0,
       ct: rawDailyStats.beitou_ct || 0,
       cta: rawDailyStats.beitou_cta || 0,
       ctaPostProcessing: rawDailyStats.beitou_cta || 0,
       bmd: rawDailyStats.beitou_bmd || 0,
       dx: rawDailyStats.beitou_dx || 0,
-      mg: rawDailyStats.beitou_mg || 0
+      mg: rawDailyStats.beitou_mg || 0,
     };
-    
+
     const dazhiStats = {
       usTotal: rawDailyStats.dazhi_ultrasound || 0,
       usFibrosis: rawDailyStats.dazhi_ultrasound_fibrosis || 0,
@@ -7316,17 +7972,21 @@ BMD :{{bmd}}
       usAbdomen: rawDailyStats.dazhi_ultrasound_abdomen || 0,
       usBreast: rawDailyStats.dazhi_ultrasound_breast || 0,
       usPelvic: rawDailyStats.dazhi_ultrasound_pelvic || 0,
-      us: Math.max(0, (rawDailyStats.dazhi_ultrasound || 0) - (rawDailyStats.dazhi_ultrasound_fibrosis || 0)),
+      us: Math.max(
+        0,
+        (rawDailyStats.dazhi_ultrasound || 0) -
+          (rawDailyStats.dazhi_ultrasound_fibrosis || 0),
+      ),
       usHeart: rawDailyStats.dazhi_ultrasound_heart || 0,
       bmd: rawDailyStats.dazhi_bmd || 0,
       dx: rawDailyStats.dazhi_dx || 0,
-      mg: rawDailyStats.dazhi_mg || 0
+      mg: rawDailyStats.dazhi_mg || 0,
     };
 
     // Calculate slots from shifts (Demand additions like 開機, 輔班, 排班)
     let beitouDemandExtra = 0;
     let dazhiDemandExtra = 0;
-    
+
     let beitouSupplySlots = 0;
     let dazhiSupplySlots = 0;
 
@@ -7334,36 +7994,52 @@ BMD :{{bmd}}
       if (s.date !== date) return;
       if (s.station === SYSTEM_OFF) return;
       if (!s.learningStation && s.station === StationDefault.UNASSIGNED) return;
-      
+
       const u = users.find((user) => user.id === s.userId);
       if (!u || isUserOnEmploymentPause(u, date)) return;
 
-      const isDazhiSupport = s.specialRoles?.includes(SPECIAL_ROLES.DAZHI_SUPPORT);
+      const isDazhiSupport = s.specialRoles?.includes(
+        SPECIAL_ROLES.DAZHI_SUPPORT,
+      );
       const isDazhi = s.station.includes("大直") || isDazhiSupport;
       const isLeader = s.station.includes("場控");
-      const isAdmin = s.station === "行政"; 
-      const isLearning = s.station.includes("學習") || isUserLearningStationOnDate(u, s.station, date);
+      const isAdmin = s.station === "行政";
+      const isLearning =
+        s.station.includes("學習") ||
+        isUserLearningStationOnDate(u, s.station, date);
       const isRemote = s.station.includes("遠距") || s.station.includes("遠班");
       const isAssistant = s.station.includes("助理");
-      
+
       // Calculate supply (48 slots per main operator)
       if (!isLeader && !isAdmin && !isLearning && !isAssistant) {
-         if (isDazhi) {
-            dazhiSupplySlots += 48;
-         } else {
-            const isBmdStation = s.station.toLowerCase().includes("bmd") || s.station.includes("骨密") || s.station.includes("骨質") || (s.specialRoles || []).includes(SPECIAL_ROLES.DUAL_BMD);
-            if (isRemote && !isBmdStation) {
-               // 遠班在大直或骨密才算48 slot，不然不算
-            } else {
-               beitouSupplySlots += 48;
-            }
-         }
+        if (isDazhi) {
+          dazhiSupplySlots += 48;
+        } else {
+          const isBmdStation =
+            s.station.toLowerCase().includes("bmd") ||
+            s.station.includes("骨密") ||
+            s.station.includes("骨質") ||
+            (s.specialRoles || []).includes(SPECIAL_ROLES.DUAL_BMD);
+          if (isRemote && !isBmdStation) {
+            // 遠班在大直或骨密才算48 slot，不然不算
+          } else {
+            beitouSupplySlots += 48;
+          }
+        }
       }
 
       // Calculate extra demand
       let extra = 0;
-      if (s.station.includes("輔班") || s.specialRoles.includes(SPECIAL_ROLES.ASSIST)) extra += 6;
-      if (s.station.includes("排班") || s.specialRoles.includes(SPECIAL_ROLES.SCHEDULER)) extra += 9;
+      if (
+        s.station.includes("輔班") ||
+        s.specialRoles.includes(SPECIAL_ROLES.ASSIST)
+      )
+        extra += 6;
+      if (
+        s.station.includes("排班") ||
+        s.specialRoles.includes(SPECIAL_ROLES.SCHEDULER)
+      )
+        extra += 9;
       if (s.specialRoles.includes(SPECIAL_ROLES.OPENING)) extra += 12;
 
       if (isDazhi) dazhiDemandExtra += extra;
@@ -7374,7 +8050,10 @@ BMD :{{bmd}}
     const getLoadRateStr = (demand: number, supply: number) => {
       const formatStr = (rStr: string) =>
         `S/T ${rStr} ｜ Slot ${r(demand)} ｜ T值 ${r(supply)}`;
-      if (supply === 0) return demand > 0 ? { emoji: "🔴", text: formatStr("100%") } : { emoji: "🟢", text: formatStr("0%") };
+      if (supply === 0)
+        return demand > 0
+          ? { emoji: "🔴", text: formatStr("100%") }
+          : { emoji: "🟢", text: formatStr("0%") };
       const rate = (demand / supply) * 100;
       const rateStr = rate.toFixed(1) + "%";
       const text = formatStr(rateStr);
@@ -7383,22 +8062,43 @@ BMD :{{bmd}}
       return { emoji: "🔴", text };
     };
 
-    const bDemand = calcMrSlots(beitouStats) + calcUsSlots(beitouStats) + calcCtSlots(beitouStats) + beitouStats.ctaPostProcessing * 5 + calcBmdSlots(beitouStats) + calcDxSlots(beitouStats) + calcMgSlots(beitouStats) + beitouDemandExtra;
-    const dDemand = calcUsSlots(dazhiStats) + calcBmdSlots(dazhiStats) + calcDxSlots(dazhiStats) + calcMgSlots(dazhiStats) + dazhiDemandExtra;
+    const bDemand =
+      calcMrSlots(beitouStats) +
+      calcUsSlots(beitouStats) +
+      calcCtSlots(beitouStats) +
+      beitouStats.ctaPostProcessing * 5 +
+      calcBmdSlots(beitouStats) +
+      calcDxSlots(beitouStats) +
+      calcMgSlots(beitouStats) +
+      beitouDemandExtra;
+    const dDemand =
+      calcUsSlots(dazhiStats) +
+      calcBmdSlots(dazhiStats) +
+      calcDxSlots(dazhiStats) +
+      calcMgSlots(dazhiStats) +
+      dazhiDemandExtra;
 
     const bCustomers = r(rawDailyStats.beitou_clients || 0);
     const dCustomers = r(rawDailyStats.dazhi_clients || 0);
 
-    const formatNameStr = (group: { regular: string[], learning: string[] }) => {
+    const formatNameStr = (group: {
+      regular: string[];
+      learning: string[];
+    }) => {
       let str = group.regular.join("/");
       if (group.learning.length > 0) {
         if (str) str += "+";
-        str += group.learning.map(n => n + "(學)").join("/");
+        str += group.learning.map((n) => n + "(學)").join("/");
       }
       return str;
     };
-    
-    const buildLine = (station: string, names: string, stats: string, slots: number) => {
+
+    const buildLine = (
+      station: string,
+      names: string,
+      stats: string,
+      slots: number,
+    ) => {
       if (names) {
         return `${station}｜${names}：${stats}  🎯 ${slots} Slot`;
       }
@@ -7408,83 +8108,165 @@ BMD :{{bmd}}
     const out: string[] = [];
     out.push(`${workloadDateStr.replace("工作量", "").trim()}  放射師人力`);
     out.push("");
-    
+
     const bLoad = getLoadRateStr(bDemand, beitouSupplySlots);
     out.push(`${bLoad.emoji} 北投 (${bLoad.text})`);
-    
-    const bLeaderStr = names.beitou.leader.length > 0 ? `場控: ${names.beitou.leader.join("、")} ｜ ` : "";
-    out.push(`${bLeaderStr}👤客戶 ${bCustomers}位 ｜ CTA ${r(beitouStats.cta)}位`);
+
+    const bLeaderStr =
+      names.beitou.leader.length > 0
+        ? `場控: ${names.beitou.leader.join("、")} ｜ `
+        : "";
+    out.push(
+      `${bLeaderStr}👤客戶 ${bCustomers}位 ｜ CTA ${r(beitouStats.cta)}位`,
+    );
 
     const bMrCount = calcMrCustomers(beitouStats);
     if (calcMrSlots(beitouStats) > 0) {
       const mrDetails = [
-        beitouStats.mrLargeMale > 0 ? `${r(beitouStats.mrLargeMale)}大男` : null,
-        beitouStats.mrLargeFemale > 0 ? `${r(beitouStats.mrLargeFemale)}大女` : null,
+        beitouStats.mrLargeMale > 0
+          ? `${r(beitouStats.mrLargeMale)}大男`
+          : null,
+        beitouStats.mrLargeFemale > 0
+          ? `${r(beitouStats.mrLargeFemale)}大女`
+          : null,
         beitouStats.mrMedium > 0 ? `${r(beitouStats.mrMedium)}中` : null,
-        beitouStats.mrSmall > 0 ? `${r(beitouStats.mrSmall)}小` : null
-      ].filter(Boolean).join("/");
-      
-      out.push(buildLine("MR", formatNameStr(names.beitou.mr), `${bMrCount}位${mrDetails ? `(${mrDetails})` : ""}`, calcMrSlots(beitouStats)));
+        beitouStats.mrSmall > 0 ? `${r(beitouStats.mrSmall)}小` : null,
+      ]
+        .filter(Boolean)
+        .join("/");
+
+      out.push(
+        buildLine(
+          "MR",
+          formatNameStr(names.beitou.mr),
+          `${bMrCount}位${mrDetails ? `(${mrDetails})` : ""}`,
+          calcMrSlots(beitouStats),
+        ),
+      );
     }
 
     if (calcUsSlots(beitouStats) > 0) {
-      out.push(buildLine("US", formatNameStr(names.beitou.us), `${r(beitouStats.us)}醫令/${r(beitouStats.usHeart)}心超`, calcUsSlots(beitouStats)));
+      out.push(
+        buildLine(
+          "US",
+          formatNameStr(names.beitou.us),
+          `${r(beitouStats.us)}醫令/${r(beitouStats.usHeart)}心超`,
+          calcUsSlots(beitouStats),
+        ),
+      );
     }
 
     if (calcCtSlots(beitouStats) > 0) {
-      out.push(buildLine("CT", formatNameStr(names.beitou.ct), `${r(beitouStats.ct)}位/${r(beitouStats.cta)}CTA`, calcCtSlots(beitouStats)));
+      out.push(
+        buildLine(
+          "CT",
+          formatNameStr(names.beitou.ct),
+          `${r(beitouStats.ct)}位/${r(beitouStats.cta)}CTA`,
+          calcCtSlots(beitouStats),
+        ),
+      );
     }
 
     if (calcBmdSlots(beitouStats) > 0) {
-      out.push(buildLine("BMD", formatNameStr(names.beitou.bmd), `${r(beitouStats.bmd)}醫令`, calcBmdSlots(beitouStats)));
+      out.push(
+        buildLine(
+          "BMD",
+          formatNameStr(names.beitou.bmd),
+          `${r(beitouStats.bmd)}醫令`,
+          calcBmdSlots(beitouStats),
+        ),
+      );
     }
-    
+
     if (calcDxSlots(beitouStats) > 0) {
-      out.push(buildLine("DX", formatNameStr(names.beitou.dx), `${r(beitouStats.dx)}位`, calcDxSlots(beitouStats)));
+      out.push(
+        buildLine(
+          "DX",
+          formatNameStr(names.beitou.dx),
+          `${r(beitouStats.dx)}位`,
+          calcDxSlots(beitouStats),
+        ),
+      );
     }
-    
+
     if (calcMgSlots(beitouStats) > 0) {
-      out.push(buildLine("MG", formatNameStr(names.beitou.mg), `${r(beitouStats.mg)}位`, calcMgSlots(beitouStats)));
+      out.push(
+        buildLine(
+          "MG",
+          formatNameStr(names.beitou.mg),
+          `${r(beitouStats.mg)}位`,
+          calcMgSlots(beitouStats),
+        ),
+      );
     }
-    
+
     if (beitouStats.ctaPostProcessing > 0) {
-      out.push(buildLine("CTA後處理", "", `${r(beitouStats.ctaPostProcessing)}位`, r(beitouStats.ctaPostProcessing * 5)));
+      out.push(
+        buildLine(
+          "CTA後處理",
+          "",
+          `${r(beitouStats.ctaPostProcessing)}位`,
+          r(beitouStats.ctaPostProcessing * 5),
+        ),
+      );
     }
 
     if (dDemand > 0) {
-      const normalDazhi = names.dazhi.leader.filter(n => !n.includes("(兼遠班)"));
-      const remoteDazhi = names.dazhi.leader.filter(n => n.includes("(兼遠班)"));
+      const normalDazhi = names.dazhi.leader.filter(
+        (n) => !n.includes("(兼遠班)"),
+      );
+      const remoteDazhi = names.dazhi.leader.filter((n) =>
+        n.includes("(兼遠班)"),
+      );
       let dazhiNamesStr = "";
       if (normalDazhi.length > 0) dazhiNamesStr += normalDazhi.join("/");
       if (remoteDazhi.length > 0) {
-         if (dazhiNamesStr) dazhiNamesStr += "/";
-         dazhiNamesStr += remoteDazhi.join("/");
+        if (dazhiNamesStr) dazhiNamesStr += "/";
+        dazhiNamesStr += remoteDazhi.join("/");
       }
-      
+
       out.push("");
       const dLoad = getLoadRateStr(dDemand, dazhiSupplySlots);
       out.push(`${dLoad.emoji} 大直 (${dLoad.text})`);
-      
+
       const dLeaderStr = dazhiNamesStr ? `放射師: ${dazhiNamesStr} ｜ ` : "";
       out.push(`${dLeaderStr}👤客戶 ${dCustomers}位`);
-      
+
       if (calcUsSlots(dazhiStats) > 0) {
-        out.push(buildLine("US", "", `${r(dazhiStats.us)}醫令/${r(dazhiStats.usHeart)}心超`, calcUsSlots(dazhiStats)));
+        out.push(
+          buildLine(
+            "US",
+            "",
+            `${r(dazhiStats.us)}醫令/${r(dazhiStats.usHeart)}心超`,
+            calcUsSlots(dazhiStats),
+          ),
+        );
       }
-      
+
       if (calcBmdSlots(dazhiStats) > 0) {
-        out.push(buildLine("BMD", "", `${r(dazhiStats.bmd)}醫令`, calcBmdSlots(dazhiStats)));
+        out.push(
+          buildLine(
+            "BMD",
+            "",
+            `${r(dazhiStats.bmd)}醫令`,
+            calcBmdSlots(dazhiStats),
+          ),
+        );
       }
-      
+
       if (calcDxSlots(dazhiStats) > 0) {
-        out.push(buildLine("DX", "", `${r(dazhiStats.dx)}位`, calcDxSlots(dazhiStats)));
+        out.push(
+          buildLine("DX", "", `${r(dazhiStats.dx)}位`, calcDxSlots(dazhiStats)),
+        );
       }
-      
+
       if (calcMgSlots(dazhiStats) > 0) {
-        out.push(buildLine("MG", "", `${r(dazhiStats.mg)}位`, calcMgSlots(dazhiStats)));
+        out.push(
+          buildLine("MG", "", `${r(dazhiStats.mg)}位`, calcMgSlots(dazhiStats)),
+        );
       }
     }
-    
+
     const section5 = out.join("\n");
 
     // --- Section 6: future one-month MR capacity forecast ---
@@ -7502,10 +8284,13 @@ BMD :{{bmd}}
     const futureStart = addDays(reportDate, 1);
     const futureEnd = addDays(reportDate, MR_FORECAST_DAYS);
     const forecastHolidays = db.getHolidays();
-    const forecastDays = Array.from({ length: MR_FORECAST_DAYS }, (_, index) => ({
-      offset: index + 1,
-      value: addDays(reportDate, index + 1),
-    }));
+    const forecastDays = Array.from(
+      { length: MR_FORECAST_DAYS },
+      (_, index) => ({
+        offset: index + 1,
+        value: addDays(reportDate, index + 1),
+      }),
+    );
     const highlightedForecastDateLabels = forecastDays
       .filter(({ value }) => {
         const targetDate = toLocalISOString(value);
@@ -7548,6 +8333,41 @@ BMD :{{bmd}}
       return `${title} (${formatShortDate(weekStart)} - ${formatShortDate(weekEnd)})\n${lines.join("\n\n")}`;
     };
 
+    const buildCompactForecastWeek = (
+      title: string,
+      startOffset: number,
+      endOffset: number,
+    ) => {
+      const weekStart = addDays(reportDate, startOffset);
+      const weekEnd = addDays(reportDate, endOffset);
+      const lines = forecastDays
+        .filter(({ offset }) => offset >= startOffset && offset <= endOffset)
+        .map(({ value }) => {
+          const targetDate = toLocalISOString(value);
+          const targetStats = db.getDailyStats(targetDate);
+          if (!targetStats) {
+            return `${formatMrForecastDay(value)}  ⚪ 尚無排程資料`;
+          }
+
+          const scheduledSlots = calculateMrScheduledSlots(targetStats);
+          const capacitySlots = getMrCapacitySlotsForDate(
+            targetDate,
+            forecastHolidays,
+          );
+          const forecast = calculateMrCapacityForecast(
+            scheduledSlots,
+            capacitySlots,
+          );
+          const lowUtilizationMarker =
+            scheduledSlots / capacitySlots < MR_LOW_UTILIZATION_RATE
+              ? "🔥 "
+              : "";
+          return `${formatMrForecastDay(value)}  ${lowUtilizationMarker}運用率${forecast.utilizationPercent}%`;
+        });
+
+      return `${title} (${formatShortDate(weekStart)} - ${formatShortDate(weekEnd)})\n${lines.join("\n")}`;
+    };
+
     const forecastWeeks = buildMrForecastWeekRanges(
       reportDate,
       MR_FORECAST_DAYS,
@@ -7565,6 +8385,21 @@ BMD :{{bmd}}
       "",
       "備註：以上可安插數量為系統預估值，實際狀況將依現場場控動態調度為準。",
     ].join("\n");
+    const compactForecastWeeks = buildMrForecastWeekRanges(
+      reportDate,
+      MR_FORECAST_DAYS,
+    ).map(({ title, startOffset, endOffset }) =>
+      buildCompactForecastWeek(title, startOffset, endOffset),
+    );
+    const section8 = [
+      formatForecastDate(reportDate),
+      `未來1個月 (${formatShortDate(futureStart)} - ${formatShortDate(futureEnd)})`,
+      "MR 預約排程 /MR運用率",
+      "",
+      compactForecastWeeks.join("\n\n"),
+      "",
+      "備註：以上可安插數量為系統預估值，實際狀況將依現場場控動態調度為準。",
+    ].join("\n");
     const section7 = formatRadiographerDailyLineSummary(date, stats);
 
     return {
@@ -7576,6 +8411,7 @@ BMD :{{bmd}}
       section5,
       section6,
       section7,
+      section8,
       section6HighlightedDateLabels: highlightedForecastDateLabels,
     };
   }, [date, shifts, manpower, users, stats, doctorShifts, physicianWorkload]);
@@ -7731,7 +8567,7 @@ BMD :{{bmd}}
           <textarea
             className="w-full text-sm font-mono text-gray-700 bg-transparent outline-none resize-none"
             style={{
-              minHeight: '20rem',
+              minHeight: "20rem",
             }}
             readOnly
             value={(copyText as any).section5}
@@ -7804,7 +8640,9 @@ BMD :{{bmd}}
               onClick={async () => {
                 await db.refreshSettings();
                 const latestStats = db.getDailyStats(date) || stats;
-                handleCopy(formatRadiographerDailyLineSummary(date, latestStats));
+                handleCopy(
+                  formatRadiographerDailyLineSummary(date, latestStats),
+                );
               }}
               className="text-xs bg-emerald-100 hover:bg-emerald-200 text-emerald-800 px-2 py-1 rounded-lg flex items-center gap-1"
             >
@@ -7816,6 +8654,28 @@ BMD :{{bmd}}
             aria-label="每日工作量 Line 摘要"
             readOnly
             value={copyText.section7}
+          />
+        </div>
+
+        {/* Section 8: Compact MR utilization forecast */}
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mt-4">
+          <div className="flex justify-between items-center mb-2">
+            <div className="text-xs text-amber-700 font-bold">
+              區塊 8：MR 運用率精簡版
+            </div>
+            <button
+              type="button"
+              onClick={() => handleCopy(copyText.section8)}
+              className="text-xs bg-amber-100 hover:bg-amber-200 text-amber-800 px-2 py-1 rounded-lg flex items-center gap-1"
+            >
+              <Copy size={12} /> 複製
+            </button>
+          </div>
+          <textarea
+            className="w-full min-h-[26rem] text-sm font-mono text-slate-700 bg-transparent outline-none resize-none leading-relaxed"
+            aria-label="MR 運用率精簡版"
+            readOnly
+            value={copyText.section8}
           />
         </div>
       </div>
