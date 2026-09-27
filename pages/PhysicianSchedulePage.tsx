@@ -1,6 +1,11 @@
 import React, { useState, useMemo, useEffect, useRef } from "react";
 import { db } from "../services/store";
-import { addLateShiftTask, getLateShiftCandidates } from "../services/physicianLateShift";
+import {
+  addLateShiftTask,
+  getLateShiftCandidates,
+  hasLateShiftTask,
+  removeLateShiftTask,
+} from "../services/physicianLateShift";
 import {
   Doctor,
   UserRole,
@@ -919,6 +924,39 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
     setAssignModal({ station, location, date });
   };
 
+  const handleClearLateShift = async (doctorId: string) => {
+    if (!assignModal || assignModal.station !== "晚班") return;
+    const contextShifts = isSimulationMode ? simulatedShifts || [] : activeShifts;
+    const shift = contextShifts.find((s) =>
+      s.doctorId === doctorId &&
+      s.date === assignModal.date &&
+      s.location === assignModal.location &&
+      hasLateShiftTask(s),
+    );
+    if (!shift) return;
+    if (!isSimulationMode && db.isMonthLocked(assignModal.date.slice(0, 7))) {
+      alert("該月份已鎖定，無法修改排班！");
+      return;
+    }
+    const updatedShift = removeLateShiftTask(shift);
+    if (isSimulationMode) {
+      setSimulatedShifts((current) =>
+        (current || []).map((s) => s.id === shift.id ? updatedShift : s),
+      );
+    } else {
+      await db.assignDoctorSchedule(
+        doctorId,
+        assignModal.date,
+        shift.scheduled_station,
+        undefined,
+        undefined,
+        undefined,
+        updatedShift.task,
+      );
+    }
+    setAssignModal(null);
+  };
+
   const handleAssignDoctor = async (doctorId: string) => {
     if (!assignModal) return;
 
@@ -939,7 +977,7 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
         assignModal.location,
       ).find(({ doctor }) => doctor.id === doctorId);
       if (!candidate) {
-        alert(`只能指定當天在${assignModal.location}有上班的醫師。`);
+        alert(`只能指定當天在${assignModal.location}有上班的非兼職、非麻醉醫師。`);
         return;
       }
       if (!isSimulationMode && db.isMonthLocked(assignModal.date.slice(0, 7))) {
@@ -6848,25 +6886,50 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
             <div className="p-2 overflow-y-auto">
               {(() => {
                 if (assignModal.station === "晚班") {
+                  const contextShifts = isSimulationMode ? simulatedShifts || [] : activeShifts;
+                  const assignedShifts = contextShifts.filter((shift) =>
+                    shift.date === assignModal.date &&
+                    shift.location === assignModal.location &&
+                    hasLateShiftTask(shift),
+                  );
                   const candidates = getLateShiftCandidates(
                     doctors,
-                    isSimulationMode ? simulatedShifts || [] : activeShifts,
+                    contextShifts,
                     assignModal.date,
                     assignModal.location,
                   );
                   return (
                     <div className="p-1">
                       <p className="px-2 py-2 text-xs text-slate-500">
-                        當天在{assignModal.location}有上班的醫師；指定後會加上晚班任務。
+                        當天在{assignModal.location}上班的醫師（不含兼職及麻醉醫師）。
                       </p>
+                      {assignedShifts.length > 0 && (
+                        <div className="mb-3 space-y-2">
+                          <div className="px-2 text-xs font-bold text-teal-700">已指定晚班</div>
+                          {assignedShifts.map((shift) => (
+                            <div key={shift.id} className="flex items-center justify-between gap-2 rounded-lg border border-teal-100 bg-teal-50 p-2">
+                              <span className="text-sm font-bold text-gray-800">
+                                {doctors.find((doctor) => doctor.id === shift.doctorId)?.name || "醫師"}
+                              </span>
+                              <button
+                                onClick={() => handleClearLateShift(shift.doctorId)}
+                                className="shrink-0 rounded-lg px-2 py-1 text-xs font-bold text-red-600 hover:bg-red-50"
+                              >
+                                清除晚班
+                              </button>
+                            </div>
+                          ))}
+                          <p className="px-2 text-xs text-slate-500">清除晚班會保留原崗位與其他任務。</p>
+                        </div>
+                      )}
                       {candidates.length === 0 ? (
                         <p className="px-2 py-6 text-center text-sm text-gray-400">
-                          當天沒有在{assignModal.location}上班的醫師
+                          當天沒有在{assignModal.location}符合晚班條件的醫師
                         </p>
                       ) : (
                         <div className="grid grid-cols-2 gap-2">
                           {candidates.map(({ doctor, shift }) => {
-                            const assigned = shift.task?.includes("晚班");
+                            const assigned = hasLateShiftTask(shift);
                             return (
                               <button
                                 key={doctor.id}
