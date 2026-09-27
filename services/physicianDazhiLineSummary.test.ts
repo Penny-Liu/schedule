@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   formatPhysicianBeitouLineStats,
   formatPhysicianDazhiLineStaffBlock,
+  formatPhysicianDazhiLineStaffBlockThree,
   formatPhysicianDazhiLineStats,
 } from "./physicianDazhiLineSummary";
 
@@ -169,5 +170,52 @@ describe("physician Dazhi LINE summary", () => {
         ],
       ),
     ).toContain("主控：\n");
+  });
+
+  it("merges interview and blood-draw/control assignments in block three", () => {
+    const assignments = [
+      ["u1", "問一人員", "問１,問２", "大直"],
+      ["u2", "問二人員", "問２/前流動", "大直"],
+      ["u3", "問診人員", "問診@@大直", "北投"],
+      ["u4", "抽血人員", "抽１,輔控", "大直"],
+      ["u5", "輔控人員", "輔控/後流動", "大直"],
+      ["u6", "抽二人員", "抽2", "大直"],
+      ["u7", "基礎甲", "基礎Ａ", "大直"],
+      ["u8", "基礎乙", "基礎B", "大直"],
+      ["u9", "主控人員", "主控", "大直"],
+      ["u10", "排班人員", "排班", "大直"],
+      ["u11", "北投人員", "問1,輔控", "北投"],
+      ["u12", "前流動人員", "前流動", "大直"],
+      ["u13", "後流動人員", "後流動", "大直"],
+    ];
+    const staff = assignments.map(([id, name, , location]) => ({
+      id, name, location, isActive: true,
+    }));
+    const shifts = assignments.map(([userId, , task], index) => ({
+      id: String(index), userId, task, date: "2026-09-08", station: "",
+    }));
+    expect(formatPhysicianDazhiLineStaffBlockThree("2026-09-08", shifts, staff)).toBe([
+      "9/8 （二） 點位分配",
+      "問診：問一人員、問二人員、問診人員",
+      "抽１/輔控：抽血人員、輔控人員",
+      "抽２：抽二人員",
+      "基礎A ：基礎甲",
+      "基礎Ｂ：基礎乙",
+      "主控：主控人員",
+      "排班：排班人員",
+    ].join("\n"));
+  });
+
+  it("keeps all block-three fields blank when there are no assignments", () => {
+    expect(formatPhysicianDazhiLineStaffBlockThree("2026-09-08", [], [])).toBe([
+      "9/8 （二） 點位分配",
+      "問診：",
+      "抽１/輔控：",
+      "抽２：",
+      "基礎A ：",
+      "基礎Ｂ：",
+      "主控：",
+      "排班：",
+    ].join("\n"));
   });
 });

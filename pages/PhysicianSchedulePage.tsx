@@ -58,6 +58,7 @@ import { loadChineseFontToDoc } from "../services/pdfUtils";
 import {
   formatPhysicianBeitouLineStats,
   formatPhysicianDazhiLineStaffBlock,
+  formatPhysicianDazhiLineStaffBlockThree,
   formatPhysicianDazhiLineStats,
 } from "../services/physicianDazhiLineSummary";
 import {
@@ -457,12 +458,15 @@ POR：${porNames}
 ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowNames || washNames) ? "\n" : ""}${flowNames ? "流動：" + flowNames : ""}${flowNames && washNames ? "\n" : ""}${washNames ? "洗滌：" + washNames : ""}`;
   };
 
-  const generateDazhiStaffCopyText = (date: Date) => {
+  const generateDazhiStaffCopyText = (date: Date, block: 2 | 3 = 2) => {
     const dateStr = formatDateLocal(date);
     const dayHMShifts = db
       .getHealthMgmtShifts()
       .filter((shift) => shift.date === dateStr);
-    return formatPhysicianDazhiLineStaffBlock(
+    const formatter = block === 3
+      ? formatPhysicianDazhiLineStaffBlockThree
+      : formatPhysicianDazhiLineStaffBlock;
+    return formatter(
       dateStr,
       dayHMShifts,
       db.getHealthMgmtStaff(),
@@ -6166,6 +6170,30 @@ ${flowWashNames ? "流+洗：" + flowWashNames : ""}${flowWashNames && (flowName
                     readOnly
                     className="w-full h-40 p-3 text-xs font-mono border border-gray-200 rounded-lg bg-slate-50 focus:ring-2 focus:ring-green-500 outline-none resize-none"
                     value={generateDazhiStaffCopyText(currentDate)}
+                  />
+                </div>
+
+                <div className="space-y-2 md:col-start-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-bold text-gray-500">
+                      大直區塊三（點位分配）
+                    </span>
+                    <button
+                      onClick={async () => {
+                        await db.refreshSettings();
+                        navigator.clipboard.writeText(
+                          generateDazhiStaffCopyText(currentDate, 3),
+                        );
+                      }}
+                      className="px-2 py-1 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg text-xs font-bold flex items-center gap-1 transition-colors"
+                    >
+                      <Check size={12} /> 複製
+                    </button>
+                  </div>
+                  <textarea
+                    readOnly
+                    className="w-full h-40 p-3 text-xs font-mono border border-gray-200 rounded-lg bg-slate-50 focus:ring-2 focus:ring-green-500 outline-none resize-none"
+                    value={generateDazhiStaffCopyText(currentDate, 3)}
                   />
                 </div>
               </div>
