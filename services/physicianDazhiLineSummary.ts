@@ -50,27 +50,18 @@ export const formatPhysicianDazhiLineStaffBlock = (
     new Date(Number(year), Number(month) - 1, Number(day)).getDay()
   ];
   const staffById = new Map(staff.map((person) => [person.id, person]));
-  const getAssignments = (
-    target: string,
-    annotateSecondaryControl = false,
-  ): string => {
+  const getAssignments = (...targets: string[]): string => {
     const assignments = shifts
       .filter((shift) => {
         const person = staffById.get(shift.userId);
         const packedLocation = String(shift.task || "").split("@@")[1];
         const location = shift.location || packedLocation || person?.location;
         return (
-          location === "大直" && getShiftTokens(shift).includes(target)
+          location === "大直" &&
+          getShiftTokens(shift).some((token) => targets.includes(token))
         );
       })
-      .map((shift) => {
-        const name = staffById.get(shift.userId)?.name || "";
-        if (!name) return "";
-        return annotateSecondaryControl &&
-          getShiftTokens(shift).includes("輔控")
-          ? `${name}(輔控)`
-          : name;
-      })
+      .map((shift) => staffById.get(shift.userId)?.name || "")
       .filter(Boolean);
 
     return [...new Set(assignments)].join("、");
@@ -78,11 +69,13 @@ export const formatPhysicianDazhiLineStaffBlock = (
 
   return [
     `${dateLabel} （${weekday}） 點位分配`,
-    `問診：${getAssignments("問診")}`,
-    `抽１：${getAssignments("抽1", true)}`,
-    `抽２：${getAssignments("抽2")}(若抽血有空，協助問診第一順位)`,
-    `基礎A (眼科＋鼻咽鏡)：${getAssignments("基礎A")}(若基礎有空，協助問診第二順位)`,
-    `基礎Ｂ(聽肺、ABI、HRV)：${getAssignments("基礎B")}`,
+    `問１：${getAssignments("問診", "問1")}`,
+    `問２/前流動：${getAssignments("問2", "前流動", "問2/前流動")}`,
+    `抽１：${getAssignments("抽1")}`,
+    `抽２：${getAssignments("抽2")}`,
+    `基礎A ：${getAssignments("基礎A")}`,
+    `基礎Ｂ：${getAssignments("基礎B")}`,
+    `輔控/後流動：${getAssignments("輔控", "後流動", "輔控/後流動")}`,
     `主控：${getAssignments("主控")}`,
     `排班：${getAssignments("排班")}`,
   ].join("\n");
