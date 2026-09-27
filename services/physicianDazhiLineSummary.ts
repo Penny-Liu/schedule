@@ -38,11 +38,11 @@ const getShiftTokens = (shift: HealthMgmtShift): string[] => {
     .filter(Boolean);
 };
 
-export const formatPhysicianDazhiLineStaffBlock = (
+const getDazhiStaffBlockContext = (
   date: string,
   shifts: HealthMgmtShift[],
   staff: HealthMgmtStaff[],
-): string => {
+) => {
   const [year = "", month = "", day = ""] = date.split("-");
   const dateLabel = `${Number(month) || month}/${Number(day) || day}`;
   const dayNames = ["日", "一", "二", "三", "四", "五", "六"];
@@ -67,8 +67,17 @@ export const formatPhysicianDazhiLineStaffBlock = (
     return [...new Set(assignments)].join("、");
   };
 
+  return { heading: `${dateLabel} （${weekday}） 點位分配`, getAssignments };
+};
+
+export const formatPhysicianDazhiLineStaffBlock = (
+  date: string,
+  shifts: HealthMgmtShift[],
+  staff: HealthMgmtStaff[],
+): string => {
+  const { heading, getAssignments } = getDazhiStaffBlockContext(date, shifts, staff);
   return [
-    `${dateLabel} （${weekday}） 點位分配`,
+    heading,
     `問１：${getAssignments("問診", "問1")}`,
     `問２/前流動：${getAssignments("問2", "前流動", "問2/前流動")}`,
     `抽１：${getAssignments("抽1")}`,
@@ -76,6 +85,24 @@ export const formatPhysicianDazhiLineStaffBlock = (
     `基礎A ：${getAssignments("基礎A")}`,
     `基礎Ｂ：${getAssignments("基礎B")}`,
     `輔控/後流動：${getAssignments("輔控", "後流動", "輔控/後流動")}`,
+    `主控：${getAssignments("主控")}`,
+    `排班：${getAssignments("排班")}`,
+  ].join("\n");
+};
+
+export const formatPhysicianDazhiLineStaffBlockThree = (
+  date: string,
+  shifts: HealthMgmtShift[],
+  staff: HealthMgmtStaff[],
+): string => {
+  const { heading, getAssignments } = getDazhiStaffBlockContext(date, shifts, staff);
+  return [
+    heading,
+    `問診：${getAssignments("問診", "問1", "問2", "問2/前流動")}`,
+    `抽１/輔控：${getAssignments("抽1", "輔控", "抽1/輔控", "輔控/後流動")}`,
+    `抽２：${getAssignments("抽2")}`,
+    `基礎A ：${getAssignments("基礎A")}`,
+    `基礎Ｂ：${getAssignments("基礎B")}`,
     `主控：${getAssignments("主控")}`,
     `排班：${getAssignments("排班")}`,
   ].join("\n");
