@@ -403,7 +403,7 @@ class Store {
     };
   }
 
-  async loadDataForMonth(year: number, month: number) {
+  async loadDataForMonth(year: number, month: number, options?: { requireComplete?: boolean }) {
     const monthStr = `${year}-${String(month).padStart(2, '0')}`;
     if (this.loadedMonths.has(monthStr)) return;
     
@@ -467,6 +467,13 @@ class Store {
     const [shiftsRes, hmShiftsRes, dShiftsRes, aneShiftsRes, workloadsRes, leavesRes, meetingRoomsRes, assistantRes, geneRes] = await Promise.all([
       shiftsReq, hmShiftsReq, docShiftsReq, aneShiftsReq, workloadsReq, leavesReq, meetingRoomsReq, assistantReq, geneReq
     ]);
+
+    if (options?.requireComplete) {
+      const failed = [shiftsRes, dShiftsRes, leavesRes].find(
+        (result) => "error" in result && result.error,
+      );
+      if (failed) throw new Error(`${monthStr} 班表資料載入失敗，請重試。`);
+    }
 
     const merge = (existing: any[], incoming: any[]) => {
       const incomingIds = new Set(incoming.map(i => i.id));

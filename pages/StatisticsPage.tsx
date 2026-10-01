@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import {
   User,
   UserRole,
@@ -48,6 +48,7 @@ import {
 import { loadExcelJS } from "../services/exportLibraries";
 import { getEmploymentPause, isUserOnEmploymentPause, toLocalISOString } from "../services/utils";
 import { getRadiographerCycleMonthKey, getRadiographerDefaultDatesForMonth } from "../services/radiographerCycleDates";
+import { getRadiographerStatisticsMonths, loadRadiographerStatisticsMonths } from "../services/radiographerStatisticsData";
 import RadiographerWorkloadPage from "../pages/RadiographerWorkloadPage";
 import PhysicianWorkloadAnalysis from "../components/dashboard/PhysicianWorkloadAnalysis";
 
@@ -122,16 +123,16 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
   });
   const [currentDate, setCurrentDate] = useState(new Date());
 
-  useEffect(() => {
-    db.loadDataForMonth(currentDate.getFullYear(), currentDate.getMonth() + 1);
-  }, [currentDate]);
-
   // Personal Cycle Tab state
   const [selectedMonth, setSelectedMonth] = useState<string>(() => {
     const today = new Date();
     return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
   });
   const [radiographers, setRadiographers] = useState<User[]>([]);
+  const pendingCycleEdits = useRef(new Set<string>());
+  const [loadedStatisticsMonths, setLoadedStatisticsMonths] = useState("");
+  const [statisticsLoadError, setStatisticsLoadError] = useState("");
+  const [statisticsLoadAttempt, setStatisticsLoadAttempt] = useState(0);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -226,6 +227,33 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
     return buildDateRange(defaults.startDate, defaults.endDate);
   }, [selectedMonth, cycles]);
 
+  const statisticsMonthsKey = JSON.stringify(getRadiographerStatisticsMonths(
+    activeTab === "cycles"
+      ? getDefaultDatesForMonth(selectedMonth)
+      : { startDate: dateRange[0], endDate: dateRange[dateRange.length - 1] },
+    activeTab === "cycles" ? selectedMonth : cycleMonthKey,
+    db.getUsers().filter((user) => user.isRadiographer && !user.isPartTime).map(
+      (user) => activeTab === "cycles" && pendingCycleEdits.current.has(user.id)
+        ? radiographers.find((draft) => draft.id === user.id) || user
+        : user,
+    ),
+  ));
+  const statisticsReady = loadedStatisticsMonths === statisticsMonthsKey;
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoadedStatisticsMonths("");
+    setStatisticsLoadError("");
+    loadRadiographerStatisticsMonths(JSON.parse(statisticsMonthsKey), (year, month) =>
+      db.loadDataForMonth(year, month, { requireComplete: true }),
+    ).then(() => {
+      if (!cancelled) setLoadedStatisticsMonths(statisticsMonthsKey);
+    }).catch((error) => {
+      if (!cancelled) setStatisticsLoadError(error.message || "班表資料載入失敗，請重試。");
+    });
+    return () => { cancelled = true; };
+  }, [statisticsMonthsKey, statisticsLoadAttempt]);
+
   const shifts = db.getShifts("", "");
   const cloudSchedule = db.getCloudScheduleEntries();
   const doctorShifts = db.doctorShifts;
@@ -244,7 +272,7 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
   // Sync radiographers with DB and handle updates
   useEffect(() => {
     const refreshData = () => {
-      setRadiographers(
+      setRadiographers((previous) =>
         db
           .getUsers()
           .filter(
@@ -256,7 +284,9 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
                 isUserOnEmploymentPause(u, date),
               ) ||
                 hasWorkedInRange(u, selectedMonthDateRange)),
-          ),
+          ).map((user) => pendingCycleEdits.current.has(user.id)
+            ? previous.find((draft) => draft.id === user.id) || user
+            : user),
       );
     };
     refreshData();
@@ -429,6 +459,7 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
     field: "startDate" | "endDate" | "memo",
     value: string,
   ) => {
+    pendingCycleEdits.current.add(userId);
     setRadiographers((prev) =>
       prev.map((u) => {
         if (u.id === userId) {
@@ -455,6 +486,7 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
     setSaveError(null);
     try {
       await db.updateUser(user.id, { personalCycles: user.personalCycles });
+      pendingCycleEdits.current.delete(user.id);
     } catch (err: any) {
       setSaveError(`儲存失敗: ${err.message || "未知錯誤"}`);
     } finally {
@@ -921,6 +953,7 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
 
                 <button
                   onClick={() => { showTooltip("匯出 Excel"); handleExport(); }}
+                  disabled={!statisticsReady}
                   className="flex items-center gap-1.5 bg-teal-600 hover:bg-teal-700 text-white px-3 py-1.5 rounded-lg text-sm font-bold transition-colors shadow-sm shadow-teal-200"
                 >
                   <FileSpreadsheet size={16} /> <span className="hidden md:inline">匯出 Excel</span>
@@ -953,8 +986,18 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
 
       {/* Body */}
       <div className="flex-1 overflow-auto p-6 relative">
+        {(activeTab === "stats" || activeTab === "cycles") && !statisticsReady && (
+          <div role="status" className="mb-4 rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-600">
+            {statisticsLoadError || "正在載入完整週期班表，完成後顯示統計…"}
+            {statisticsLoadError && (
+              <button className="ml-3 font-bold text-indigo-600" onClick={() => setStatisticsLoadAttempt((attempt) => attempt + 1)}>
+                重新載入
+              </button>
+            )}
+          </div>
+        )}
         {/* ── Stats Tab ── */}
-        {activeTab === "stats" && (
+        {activeTab === "stats" && statisticsReady && (
           <div
             className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden"
             id="stats-table"
@@ -1328,7 +1371,7 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
                               <span
                                 className="inline-flex items-center justify-center min-w-[3rem] px-2 py-1 font-bold rounded-lg border text-sm bg-teal-50 text-teal-700 border-teal-100"
                               >
-                                {scheduledDays} 天
+                                {statisticsReady ? `${scheduledDays} 天` : "—"}
                               </span>
                             </td>
                             <td className="px-6 py-4 text-center">
