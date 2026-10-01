@@ -103,6 +103,7 @@ export const formatPhysicianDazhiLineStaffBlockThree = (
     `抽２：${getAssignments("抽2")}`,
     `基礎A ：${getAssignments("基礎A")}`,
     `基礎Ｂ：${getAssignments("基礎B")}`,
+    `外流動：${getAssignments("外流動")}`,
     `主控：${getAssignments("主控")}`,
     `排班：${getAssignments("排班")}`,
   ].join("\n");
