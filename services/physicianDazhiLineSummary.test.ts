@@ -184,9 +184,10 @@ describe("physician Dazhi LINE summary", () => {
       ["u8", "基礎乙", "基礎B", "大直"],
       ["u9", "主控人員", "主控", "大直"],
       ["u10", "排班人員", "排班", "大直"],
-      ["u11", "北投人員", "問1,輔控", "北投"],
+      ["u11", "北投人員", "問1,輔控,外流動", "北投"],
       ["u12", "前流動人員", "前流動", "大直"],
       ["u13", "後流動人員", "後流動", "大直"],
+      ["u14", "外流動人員", "外流動,CIS", "大直"],
     ];
     const staff = assignments.map(([id, name, , location]) => ({
       id, name, location, isActive: true,
@@ -201,6 +202,7 @@ describe("physician Dazhi LINE summary", () => {
       "抽２：抽二人員",
       "基礎A ：基礎甲",
       "基礎Ｂ：基礎乙",
+      "外流動：外流動人員",
       "主控：主控人員",
       "排班：排班人員",
     ].join("\n"));
@@ -214,6 +216,7 @@ describe("physician Dazhi LINE summary", () => {
       "抽２：",
       "基礎A ：",
       "基礎Ｂ：",
+      "外流動：",
       "主控：",
       "排班：",
     ].join("\n"));

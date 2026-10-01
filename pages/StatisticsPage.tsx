@@ -47,6 +47,7 @@ import {
 } from "lucide-react";
 import { loadExcelJS } from "../services/exportLibraries";
 import { getEmploymentPause, isUserOnEmploymentPause, toLocalISOString } from "../services/utils";
+import { getRadiographerCycleMonthKey, getRadiographerDefaultDatesForMonth } from "../services/radiographerCycleDates";
 import RadiographerWorkloadPage from "../pages/RadiographerWorkloadPage";
 import PhysicianWorkloadAnalysis from "../components/dashboard/PhysicianWorkloadAnalysis";
 
@@ -106,27 +107,9 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
     return diffDays > 0 ? diffDays : 0;
   };
 
-  // ── Default dates for a month: prefer roster cycle that starts (or overlaps) this month ──
-  const getDefaultDatesForMonth = (yearMonth: string) => {
-    const [year, month] = yearMonth.split("-").map(Number);
-    const monthStart = `${yearMonth}-01`;
-    const lastDay = new Date(year, month, 0);
-    const monthEnd = `${lastDay.getFullYear()}-${String(lastDay.getMonth() + 1).padStart(2, "0")}-${String(lastDay.getDate()).padStart(2, "0")}`;
-
-    // Prefer cycle that starts this month; fallback to one that overlaps
-    const startsThis = cycles.find((c) => c.startDate.startsWith(yearMonth));
-    if (startsThis)
-      return { startDate: startsThis.startDate, endDate: startsThis.endDate };
-
-    const overlapping = cycles.find(
-      (c) => c.startDate <= monthEnd && c.endDate >= monthStart,
-    );
-    if (overlapping)
-      return { startDate: overlapping.startDate, endDate: overlapping.endDate };
-
-    // Final fallback: calendar month
-    return { startDate: monthStart, endDate: monthEnd };
-  };
+  // Match the numbered roster cycle before falling back to calendar dates.
+  const getDefaultDatesForMonth = (yearMonth: string) =>
+    getRadiographerDefaultDatesForMonth(yearMonth, cycles);
 
   // Default to the current cycle (based on today) if found, otherwise first cycle (latest), otherwise 'rolling'
   const [selectedCycleId, setSelectedCycleId] = useState<string>(() => {
@@ -217,12 +200,7 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
     const cycle = cycles.find((c) => c.id === selectedCycleId);
     if (!cycle) return null;
 
-    // If name is like '2026/02', use that as the month key ('2026-02') to match personalCycles
-    if (cycle.name.match(/^\d{4}\/\d{2}$/)) {
-      return cycle.name.replace("/", "-");
-    }
-
-    return cycle.startDate.slice(0, 7);
+    return getRadiographerCycleMonthKey(cycle);
   }, [selectedCycleId, currentDate, cycles]);
 
   // ── Determine Date Range (for header display / default) ──
@@ -328,7 +306,6 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
       let effectiveRange = dateRange;
       if (cycleMonthKey) {
         const saved = user.personalCycles?.[cycleMonthKey];
-        const defaults = getDefaultDatesForMonth(cycleMonthKey);
 
         // Always use saved cycle if it exists to pick up memos even if dates are default
         if (saved) {
