@@ -78,6 +78,7 @@ import {
 } from "../components/dashboard/AutoScheduleModals";
 import { DailyStatsRows } from "../components/dashboard/DailyStatsRows";
 import { isUserOnEmploymentPause, toLocalISOString } from "../services/utils";
+import { getRadiographerCycleMonthKey } from "../services/radiographerCycleDates";
 import { loadChineseFontToDoc } from "../services/pdfUtils";
 import {
   getAutomaticRadiographerWorkTime,
@@ -539,7 +540,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
     return cycles.find((c) => c.id === selectedCycleId);
   }, [selectedCycleId, cycles]);
 
-  // Key for personalCycles lookup: YYYY-MM of cycle start, or current rolling month
+  // Use the same numbered-cycle key as StatisticsPage for personal settings.
   const cycleMonthKey = useMemo(() => {
     if (selectedCycleId === "rolling") {
       const today = new Date();
@@ -547,12 +548,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
     }
     if (!currentCycle) return null;
 
-    // Match StatisticsPage logic: prioritize YYYY/MM name format
-    if (currentCycle.name.match(/^\d{4}\/\d{2}$/)) {
-      return currentCycle.name.replace("/", "-");
-    }
-
-    return currentCycle.startDate.slice(0, 7);
+    return getRadiographerCycleMonthKey(currentCycle);
   }, [selectedCycleId, currentCycle]);
 
   // Helper: build date array between two ISO dates
