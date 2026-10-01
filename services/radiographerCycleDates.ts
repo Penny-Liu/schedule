@@ -1,11 +1,16 @@
 import type { RosterCycle } from "../types";
 
-export const getRadiographerCycleMonthKey = (cycle: RosterCycle): string => {
-  const match = cycle.name.trim().match(/^(\d{4})\/(\d{1,2})$/);
+const getNamedCycleMonthKey = (name: string): string | null => {
+  const normalized = name.trim();
+  const match = normalized.match(/^(\d{4})\/(\d{1,2})$/)
+    ?? normalized.match(/^(\d{4})年第(\d{1,2})週期$/);
   return match
     ? `${match[1]}-${match[2].padStart(2, "0")}`
-    : cycle.startDate.slice(0, 7);
+    : null;
 };
+
+export const getRadiographerCycleMonthKey = (cycle: RosterCycle): string =>
+  getNamedCycleMonthKey(cycle.name) ?? cycle.startDate.slice(0, 7);
 
 export const getRadiographerDefaultDatesForMonth = (
   yearMonth: string,
@@ -18,8 +23,7 @@ export const getRadiographerDefaultDatesForMonth = (
   // A numbered cycle can start in the preceding month. Match its name first,
   // before the legacy date fallback, so two January starts cannot swap cycles.
   const namedCycle = cycles.find(
-    (cycle) => /^\d{4}\/\d{1,2}$/.test(cycle.name.trim()) &&
-      getRadiographerCycleMonthKey(cycle) === yearMonth,
+    (cycle) => getNamedCycleMonthKey(cycle.name) === yearMonth,
   );
   const cycle = namedCycle
     ?? cycles.find((candidate) => candidate.startDate.startsWith(yearMonth))

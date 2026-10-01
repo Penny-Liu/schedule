@@ -15,6 +15,28 @@ const february: RosterCycle = {
 };
 
 describe("radiographer personal cycle defaults", () => {
+  it("matches the Chinese cycle names stored in production, including the second January start", () => {
+    const first = { ...january, name: "2027年第01週期" };
+    const second = { ...february, name: "2027年第02週期" };
+    for (const cycles of [[second, first], [first, second]]) {
+      expect(getRadiographerDefaultDatesForMonth("2027-01", cycles)).toEqual({
+        startDate: "2027-01-01", endDate: "2027-01-29",
+      });
+      expect(getRadiographerDefaultDatesForMonth("2027-02", cycles)).toEqual({
+        startDate: "2027-01-30", endDate: "2027-03-04",
+      });
+    }
+    expect(getRadiographerCycleMonthKey(second)).toBe("2027-02");
+  });
+
+  it("accepts single-digit Chinese cycle numbers and a preceding-year start", () => {
+    const cycle = { ...january, name: "2027年第1週期", startDate: "2026-12-31" };
+    expect(getRadiographerCycleMonthKey(cycle)).toBe("2027-01");
+    expect(getRadiographerDefaultDatesForMonth("2027-01", [february, cycle])).toEqual({
+      startDate: "2026-12-31", endDate: "2027-01-29",
+    });
+  });
+
   it("uses cycle 01 when two cycles start in January, regardless of ordering", () => {
     for (const cycles of [[february, january], [january, february]]) {
       expect(getRadiographerDefaultDatesForMonth("2027-01", cycles)).toEqual({
