@@ -190,6 +190,13 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
         start: todayStr,
         end: defaultEnd3,
       },
+      {
+        id: 4,
+        name: "設備人次（月彙總）",
+        selected: false,
+        start: firstDay2,
+        end: todayStr,
+      },
     ];
   });
 
@@ -733,12 +740,16 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
                     <span
                       className={`font-bold ${task.selected ? "text-indigo-900" : "text-slate-600"}`}
                     >
-                      [{task.id}/3] {task.name}
+                      [{task.id}/4] {task.name}
                     </span>
                   </label>
                   {task.selected && (
                     <div className="mt-4 pl-8 flex flex-col gap-3">
-
+                      {task.id === 4 ? (
+                        <div className="rounded-lg border border-cyan-200 bg-cyan-50 p-3 text-sm leading-6 text-cyan-900">
+                          更新今年尚未結算的設備人次；已結算月份會自動跳過，目前月份更新至 Salesforce 最新資料。
+                        </div>
+                      ) : (<>
                       <div className="flex items-center gap-3">
                         <span className="text-sm font-medium text-slate-600 w-20">
                           同步區間
@@ -803,6 +814,7 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
                         </button>
 
                       </div>
+                      </>)}
                     </div>
                   )}
                 </div>

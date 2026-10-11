@@ -29,6 +29,8 @@ jobs:
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           SALESFORCE_CLIENT_ID: ${{ secrets.SALESFORCE_CLIENT_ID }}
           SALESFORCE_CLIENT_SECRET: ${{ secrets.SALESFORCE_CLIENT_SECRET }}
           SALESFORCE_USERNAME: ${{ secrets.SALESFORCE_USERNAME }}
@@ -36,3 +38,13 @@ jobs:
           SALESFORCE_LOGIN_BASE_URL: ${{ secrets.SALESFORCE_LOGIN_BASE_URL }}
           SYNC_PAYLOAD: ${{ github.event.inputs.sync_payload || '[{"id":1,"selected":true}]' }}
         run: npm run sync-stats
+
+      - name: 更新本年度設備人次月彙總
+        if: ${{ github.event_name == 'schedule' || contains(github.event.inputs.sync_payload, '"id":4') }}
+        env:
+          SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SALESFORCE_CLIENT_ID: ${{ secrets.SALESFORCE_CLIENT_ID }}
+          SALESFORCE_CLIENT_SECRET: ${{ secrets.SALESFORCE_CLIENT_SECRET }}
+          SALESFORCE_LOGIN_BASE_URL: ${{ secrets.SALESFORCE_LOGIN_BASE_URL }}
+        run: npm run sync-equipment-visits

@@ -55,4 +55,10 @@ describe("validateSyncPayload", () => {
       validateSyncPayload(JSON.stringify([{ id: 1, selected: false }])),
     ).toThrow("At least one");
   });
+
+  it("allows the equipment monthly summary task", () => {
+    expect(
+      validateSyncPayload(JSON.stringify([{ id: 4, selected: true }])),
+    ).toBe(JSON.stringify([{ id: 4, selected: true }]));
+  });
 });
