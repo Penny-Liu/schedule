@@ -5,6 +5,12 @@
 ## 目前專案會用到（package.json 有掛 npm script）
 
 - `scripts/sync-all-to-supabase.mjs`：`npm run sync-stats`
+- `scripts/sync-equipment-visits.mjs`：`npm run sync-equipment-visits`
+  - 預設只更新本年度尚未結算的月份；前月以前標記為已結算後會自動略過。
+  - 首次回填：`npm run sync-equipment-visits -- --from-year 2023 --to-year 2026`
+  - 指定院區：加上 `--location 北投` 或 `--location 大直`。
+  - 確認要重算已結算月份時才加 `--force`。
+  - 寫入需要伺服器端 `SUPABASE_SERVICE_ROLE_KEY`，前端不具備寫入權限。
 - `scripts/sync-assistant-to-student-sheet.mjs`：`npm run sync-assistant-sheet`，英平排「助理」時將其工讀生 ID 同步到 `Shifts.ConfirmedUserID`；保留其他已確認工讀生，缺少日期時自動新增
 - `scripts/sync-salesforce-daily-stats.mjs`：`npm run sf:sync-daily-stats`
 - `scripts/salesforce-list-objects.mjs`：`npm run sf:list-objects`

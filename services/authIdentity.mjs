@@ -46,13 +46,6 @@ export const normalizeAuthEmailDomain = (domain) => {
   return normalized;
 };
 
-/** @param {string} value */
-const sha256Hex = async (value) => {
-  const bytes = new TextEncoder().encode(value);
-  const digest = await globalThis.crypto.subtle.digest("SHA-256", bytes);
-  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
-};
-
 /**
  * Supabase password login accepts email or phone rather than a native username.
  * A stable hash keeps the internal email valid without leaking the original username.
@@ -89,3 +82,5 @@ export const findAuthUsernameCollisions = (usernames) => {
       usernames: originals,
     }));
 };
+import { sha256Hex } from "./sha256.mjs";
+

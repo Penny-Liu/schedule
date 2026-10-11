@@ -51,6 +51,7 @@ import { getRadiographerCycleMonthKey, getRadiographerDefaultDatesForMonth } fro
 import { getRadiographerStatisticsMonths, loadRadiographerStatisticsMonths } from "../services/radiographerStatisticsData";
 import RadiographerWorkloadPage from "../pages/RadiographerWorkloadPage";
 import PhysicianWorkloadAnalysis from "../components/dashboard/PhysicianWorkloadAnalysis";
+import EquipmentDemandAnalysis from "../components/dashboard/EquipmentDemandAnalysis";
 
 interface StatisticsPageProps {
   currentUser: User;
@@ -66,7 +67,7 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
   };
 
   const [activeTab, setActiveTab] = useState<
-    "stats" | "cycles" | "workload" | "physician"
+    "stats" | "cycles" | "workload" | "physician" | "equipment"
   >("stats");
 
   // ── Helper: build date array for a range (Robust to timezone) ──
@@ -880,6 +881,15 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
                 <span className="hidden md:inline">個人週期</span>
               </button>
               )}
+              {isSupervisorOrAdmin && (
+                <button
+                onClick={() => { showTooltip("設備需求"); setActiveTab("equipment"); }}
+                className={`px-3 py-1.5 rounded text-sm font-bold transition-all ${activeTab === "equipment" ? "bg-white text-cyan-700 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+              >
+                <Monitor size={14} className="inline md:mr-1" />
+                <span className="hidden md:inline">設備需求</span>
+              </button>
+              )}
               {canViewWorkload && (
                 <button
                 onClick={() => { showTooltip("工作量統計"); setActiveTab("workload"); }}
@@ -1414,6 +1424,10 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
         {/* ── Physician Workload Tab ── */}
         {activeTab === "physician" && isSupervisorOrAdmin && (
           <PhysicianWorkloadAnalysis currentUser={currentUser} />
+        )}
+
+        {activeTab === "equipment" && isSupervisorOrAdmin && (
+          <EquipmentDemandAnalysis />
         )}
       </div>
     </div>
