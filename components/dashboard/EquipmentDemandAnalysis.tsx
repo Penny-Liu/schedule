@@ -40,8 +40,7 @@ const EquipmentDemandAnalysis: React.FC = () => {
   const [location, setLocation] = useState<LocationName>("北投");
   const [comparisonMonth, setComparisonMonth] = useState(Math.min(new Date().getMonth() + 1, 12));
   const [comparisonKey, setComparisonKey] = useState<ComparisonKey>("totalClients");
-  const [lineBaseYear, setLineBaseYear] = useState(2025);
-  const [lineCompareYear, setLineCompareYear] = useState(2026);
+  const [lineYears, setLineYears] = useState<number[]>([2025, 2026]);
   const [lineComparisonKey, setLineComparisonKey] = useState<ComparisonKey>("MR");
   const [copied, setCopied] = useState(false);
   const [rows, setRows] = useState<MonthlyRow[]>([]);
@@ -126,22 +125,59 @@ const EquipmentDemandAnalysis: React.FC = () => {
       : lineComparisonKey === "equipmentTotal"
         ? "設備總人次"
         : `${lineComparisonKey}檢查人次`;
-    const compareLabel = lineCompareYear === new Date().getFullYear() ? "今年" : `${lineCompareYear}`;
     const lines = [`【${location}｜${title}】`];
+    const busyMonthsByYear = new Map<number, Set<number>>();
+    lineYears.forEach((selectedYear) => {
+      const ranked = rows
+        .filter((row) => row.year === selectedYear)
+        .map((row) => ({ month: row.month, value: valueFor(row) || 0 }))
+        .filter((item) => item.value > 0)
+        .sort((a, b) => b.value - a.value)
+        .slice(0, 3);
+      busyMonthsByYear.set(selectedYear, new Set(ranked.map((item) => item.month)));
+    });
     for (let month = 1; month <= 12; month += 1) {
-      const baseRow = rows.find((row) => row.year === lineBaseYear && row.month === month);
-      const compareRow = rows.find((row) => row.year === lineCompareYear && row.month === month);
-      const baseValue = valueFor(baseRow);
-      const compareValue = valueFor(compareRow);
-      const partial = compareRow && !compareRow.is_finalized
-        ? `（統計至 ${compareRow.source_end_date.slice(5).replace("-", "/")}）`
-        : "";
-      lines.push(`${lineBaseYear}/${String(month).padStart(2, "0")}：${baseValue === null ? "" : baseValue.toLocaleString()}　${compareLabel}：${compareValue === null ? "" : compareValue.toLocaleString()}${partial}`);
+      const values = lineYears.map((selectedYear) => {
+        const row = rows.find((item) => item.year === selectedYear && item.month === month);
+        const value = valueFor(row);
+        const label = selectedYear === new Date().getFullYear() ? "今年" : `${selectedYear}`;
+        const busy = value !== null && busyMonthsByYear.get(selectedYear)?.has(month) ? "🔴" : "";
+        const partial = row && !row.is_finalized ? `（至 ${row.source_end_date.slice(5).replace("-", "/")}）` : "";
+        return `${label}：${value === null ? "" : value.toLocaleString()}${busy}${partial}`;
+      });
+      lines.push(`${String(month).padStart(2, "0")}月｜${values.join("｜")}`);
     }
     lines.push(`項目：${option.label}`);
+    lines.push("🔴：該年度人次最高的 3 個月份");
     if (lineComparisonKey === "totalClients") lines.push("註：客戶數為跨設備去重。");
     return lines.join("\n");
-  }, [location, lineBaseYear, lineCompareYear, lineComparisonKey, rows]);
+  }, [location, lineYears, lineComparisonKey, rows]);
+
+  const busyMonthRanks = useMemo(() => {
+    const valueForMonth = (row: typeof analysis.monthly[number]) => {
+      if (comparisonKey === "totalClients") return row.totalClients;
+      if (comparisonKey === "equipmentTotal") return EQUIPMENT.reduce((sum, item) => sum + row[item.key], 0);
+      return row[comparisonKey];
+    };
+    return new Map(
+      analysis.monthly
+        .map((row) => ({ month: row.month, value: valueForMonth(row) }))
+        .filter((item) => item.value > 0)
+        .sort((a, b) => b.value - a.value)
+        .slice(0, 3)
+        .map((item, index) => [item.month, index + 1]),
+    );
+  }, [analysis.monthly, comparisonKey]);
+
+  const toggleLineYear = (selectedYear: number) => {
+    setLineYears((current) => {
+      if (current.includes(selectedYear)) {
+        if (current.length <= 2) return current;
+        return current.filter((value) => value !== selectedYear);
+      }
+      return [...current, selectedYear].sort((a, b) => a - b);
+    });
+  };
 
   const copyLineSummary = async () => {
     try {
@@ -184,14 +220,13 @@ const EquipmentDemandAnalysis: React.FC = () => {
       </div>
     </div>
     <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><h4 className="mb-1 font-bold text-slate-800">{year} 每月設備人次趨勢</h4><p className="mb-4 text-xs text-slate-500">客戶數為跨設備去重，可與六種設備人次一起觀察。</p><div className="h-[320px]"><ResponsiveContainer width="100%" height="100%"><LineChart data={analysis.monthly}><CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0"/><XAxis dataKey="label"/><YAxis allowDecimals={false}/><Tooltip/><Legend/><Line type="monotone" dataKey="totalClients" name="客戶數" stroke="#0f172a" strokeWidth={3} strokeDasharray="6 3" dot={{r:3}}/>{EQUIPMENT.map(({key,label,color}) => <Line key={key} type="monotone" dataKey={key} name={label} stroke={color} strokeWidth={2} dot={{r:2}}/>)}</LineChart></ResponsiveContainer></div></div>
-    <TableCard title={`${year} 每月比較表`}><table className="w-full min-w-[820px] text-sm"><TableHead first="月份"/><tbody className="divide-y divide-slate-100">{analysis.monthly.map((row) => <tr key={row.month} className="hover:bg-slate-50"><td className="px-4 py-2.5 font-medium">{row.label}{row.sourceEnd && !row.finalized && <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] text-amber-800">更新中</span>}</td>{EQUIPMENT.map(({key}) => <td key={key} className="px-3 py-2.5 text-right tabular-nums">{row[key].toLocaleString()}</td>)}<td className="bg-slate-50 px-4 py-2.5 text-right font-bold tabular-nums">{row.totalClients.toLocaleString()}</td></tr>)}</tbody><tfoot className="border-t-2 bg-cyan-50 font-bold"><tr><td className="px-4 py-3">年度合計</td>{EQUIPMENT.map(({key}) => <td key={key} className="px-3 py-3 text-right">{analysis.current[key].toLocaleString()}</td>)}<td className="px-4 py-3 text-right">{analysis.current.totalClients.toLocaleString()}</td></tr></tfoot></table></TableCard>
+    <TableCard title={`${year} 每月比較表（${COMPARISON_OPTIONS.find((item)=>item.key===comparisonKey)?.label}最高 3 個月以紅字標示）`}><table className="w-full min-w-[820px] text-sm"><TableHead first="月份"/><tbody className="divide-y divide-slate-100">{analysis.monthly.map((row) => { const busyRank=busyMonthRanks.get(row.month); return <tr key={row.month} className={`hover:bg-slate-50 ${busyRank ? "bg-rose-50/50 text-rose-700" : ""}`}><td className="px-4 py-2.5 font-medium">{row.label}{busyRank&&<span className="ml-2 rounded bg-rose-100 px-1.5 py-0.5 text-[10px] font-bold text-rose-700">忙碌 Top {busyRank}</span>}{row.sourceEnd && !row.finalized && <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] text-amber-800">更新中</span>}</td>{EQUIPMENT.map(({key}) => <td key={key} className="px-3 py-2.5 text-right tabular-nums">{row[key].toLocaleString()}</td>)}<td className={`bg-slate-50 px-4 py-2.5 text-right font-bold tabular-nums ${busyRank ? "text-rose-700" : ""}`}>{row.totalClients.toLocaleString()}</td></tr>})}</tbody><tfoot className="border-t-2 bg-cyan-50 font-bold"><tr><td className="px-4 py-3">年度合計</td>{EQUIPMENT.map(({key}) => <td key={key} className="px-3 py-3 text-right">{analysis.current[key].toLocaleString()}</td>)}<td className="px-4 py-3 text-right">{analysis.current.totalClients.toLocaleString()}</td></tr></tfoot></table></TableCard>
     <TableCard title="排班需求參考（有量工作日）"><table className="w-full min-w-[620px] text-sm"><thead className="bg-slate-50 text-slate-600"><tr><th className="px-4 py-3 text-left">設備</th><th className="px-4 py-3 text-right">日平均</th><th className="px-4 py-3 text-right">P90 日人次</th><th className="px-4 py-3 text-right">尖峰日人次</th><th className="px-4 py-3 text-left">排班用途</th></tr></thead><tbody className="divide-y">{analysis.demand.map((item) => <tr key={item.key}><td className="px-4 py-3 font-bold" style={{color:item.color}}>{item.label}</td><td className="px-4 py-3 text-right">{item.average.toFixed(1)}</td><td className="px-4 py-3 text-right font-bold">{item.p90}</td><td className="px-4 py-3 text-right font-bold text-rose-600">{item.peak}</td><td className="px-4 py-3 text-slate-600">日常以 P90 配置；尖峰日預留跨站支援</td></tr>)}</tbody></table></TableCard>
     <div className="rounded-xl border border-emerald-200 bg-white shadow-sm">
       <div className="border-b border-emerald-100 bg-emerald-50/60 p-4">
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between"><div><h4 className="font-bold text-slate-800">LINE 逐月比較摘要</h4><p className="mt-1 text-xs text-slate-500">自由選擇兩個年度與統計項目，產生 12 個月的 LINE 比較文字。</p></div><button type="button" onClick={copyLineSummary} className={`inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-bold text-white transition ${copied ? "bg-emerald-600" : "bg-slate-800 hover:bg-slate-700"}`}>{copied ? <Check size={17}/> : <ClipboardCopy size={17}/>} {copied ? "已複製" : "複製 LINE 文字"}</button></div>
         <div className="mt-4 flex flex-wrap gap-3">
-          <label className="text-xs font-medium text-slate-600">基準年度<select value={lineBaseYear} onChange={(event)=>setLineBaseYear(Number(event.target.value))} className="ml-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">{YEARS.map((value)=><option key={value} value={value} disabled={value===lineCompareYear}>{value}</option>)}</select></label>
-          <label className="text-xs font-medium text-slate-600">比較年度<select value={lineCompareYear} onChange={(event)=>setLineCompareYear(Number(event.target.value))} className="ml-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">{YEARS.map((value)=><option key={value} value={value} disabled={value===lineBaseYear}>{value}</option>)}</select></label>
+          <fieldset className="flex flex-wrap items-center gap-2"><legend className="float-left mr-2 text-xs font-medium text-slate-600">比較年度</legend>{YEARS.map((value)=><label key={value} className={`cursor-pointer rounded-lg border px-3 py-2 text-sm font-medium transition ${lineYears.includes(value)?"border-emerald-500 bg-emerald-100 text-emerald-800":"border-slate-200 bg-white text-slate-500"}`}><input type="checkbox" checked={lineYears.includes(value)} onChange={()=>toggleLineYear(value)} className="mr-1.5 accent-emerald-600"/>{value}</label>)}</fieldset>
           <label className="text-xs font-medium text-slate-600">比較項目<select value={lineComparisonKey} onChange={(event)=>setLineComparisonKey(event.target.value as ComparisonKey)} className="ml-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">{COMPARISON_OPTIONS.map((item)=><option key={item.key} value={item.key}>{item.label}</option>)}</select></label>
         </div>
       </div>
