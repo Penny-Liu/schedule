@@ -111,25 +111,35 @@ const EquipmentDemandAnalysis: React.FC = () => {
   }, [rows, comparisonMonth, comparisonKey]);
 
   const lineSummary = useMemo(() => {
-    const lines = [
-      `【${location}｜${comparisonMonth}月 ${crossYearComparison.option.label}跨年比較】`,
-      ...crossYearComparison.data.map((item) => {
-        if (item.value === null) return `${item.year}：尚無資料`;
-        const change = item.change === null ? "" : `（較前一年 ${item.change > 0 ? "+" : ""}${item.change.toFixed(1)}%）`;
-        const partial = item.partial ? `［統計至 ${item.sourceEnd.replaceAll("-", "/")}］` : "";
-        return `${item.year}：${item.value.toLocaleString()} 人次${change}${partial}`;
-      }),
-    ];
-    const available = crossYearComparison.data.filter((item) => item.value !== null);
-    if (available.length >= 2) {
-      const first = available[0];
-      const last = available.at(-1)!;
-      const difference = last.value! - first.value!;
-      lines.push(`趨勢：${first.year} → ${last.year} ${difference > 0 ? "+" : ""}${difference.toLocaleString()} 人次`);
+    const previousYear = year - 1;
+    const option = COMPARISON_OPTIONS.find((item) => item.key === comparisonKey)!;
+    const valueFor = (row: MonthlyRow | undefined) => {
+      if (!row) return null;
+      if (comparisonKey === "totalClients") return row.total_clients;
+      if (comparisonKey === "equipmentTotal") return EQUIPMENT.reduce((sum, item) => sum + count(row, item.field), 0);
+      return count(row, EQUIPMENT.find((item) => item.key === comparisonKey)!.field);
+    };
+    const title = comparisonKey === "totalClients"
+      ? "客戶數"
+      : comparisonKey === "equipmentTotal"
+        ? "設備總人次"
+        : `${comparisonKey}檢查人次`;
+    const currentLabel = year === new Date().getFullYear() ? "今年" : `${year}`;
+    const lines = [`【${location}｜${title}】`];
+    for (let month = 1; month <= 12; month += 1) {
+      const previousRow = rows.find((row) => row.year === previousYear && row.month === month);
+      const currentRow = rows.find((row) => row.year === year && row.month === month);
+      const previousValue = valueFor(previousRow);
+      const currentValue = valueFor(currentRow);
+      const partial = currentRow && !currentRow.is_finalized
+        ? `（統計至 ${currentRow.source_end_date.slice(5).replace("-", "/")}）`
+        : "";
+      lines.push(`${previousYear}/${String(month).padStart(2, "0")}：${previousValue === null ? "" : previousValue.toLocaleString()}　${currentLabel}：${currentValue === null ? "" : currentValue.toLocaleString()}${partial}`);
     }
-    lines.push("註：總計（客戶數）為跨設備去重；設備總人次為各設備加總。");
+    lines.push(`項目：${option.label}`);
+    if (comparisonKey === "totalClients") lines.push("註：客戶數為跨設備去重。");
     return lines.join("\n");
-  }, [location, comparisonMonth, crossYearComparison]);
+  }, [location, year, comparisonKey, rows]);
 
   const copyLineSummary = async () => {
     try {
@@ -175,7 +185,7 @@ const EquipmentDemandAnalysis: React.FC = () => {
     <TableCard title={`${year} 每月比較表`}><table className="w-full min-w-[820px] text-sm"><TableHead first="月份"/><tbody className="divide-y divide-slate-100">{analysis.monthly.map((row) => <tr key={row.month} className="hover:bg-slate-50"><td className="px-4 py-2.5 font-medium">{row.label}{row.sourceEnd && !row.finalized && <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] text-amber-800">更新中</span>}</td>{EQUIPMENT.map(({key}) => <td key={key} className="px-3 py-2.5 text-right tabular-nums">{row[key].toLocaleString()}</td>)}<td className="bg-slate-50 px-4 py-2.5 text-right font-bold tabular-nums">{row.totalClients.toLocaleString()}</td></tr>)}</tbody><tfoot className="border-t-2 bg-cyan-50 font-bold"><tr><td className="px-4 py-3">年度合計</td>{EQUIPMENT.map(({key}) => <td key={key} className="px-3 py-3 text-right">{analysis.current[key].toLocaleString()}</td>)}<td className="px-4 py-3 text-right">{analysis.current.totalClients.toLocaleString()}</td></tr></tfoot></table></TableCard>
     <TableCard title="排班需求參考（有量工作日）"><table className="w-full min-w-[620px] text-sm"><thead className="bg-slate-50 text-slate-600"><tr><th className="px-4 py-3 text-left">設備</th><th className="px-4 py-3 text-right">日平均</th><th className="px-4 py-3 text-right">P90 日人次</th><th className="px-4 py-3 text-right">尖峰日人次</th><th className="px-4 py-3 text-left">排班用途</th></tr></thead><tbody className="divide-y">{analysis.demand.map((item) => <tr key={item.key}><td className="px-4 py-3 font-bold" style={{color:item.color}}>{item.label}</td><td className="px-4 py-3 text-right">{item.average.toFixed(1)}</td><td className="px-4 py-3 text-right font-bold">{item.p90}</td><td className="px-4 py-3 text-right font-bold text-rose-600">{item.peak}</td><td className="px-4 py-3 text-slate-600">日常以 P90 配置；尖峰日預留跨站支援</td></tr>)}</tbody></table></TableCard>
     <div className="rounded-xl border border-emerald-200 bg-white shadow-sm">
-      <div className="flex flex-col gap-3 border-b border-emerald-100 bg-emerald-50/60 p-4 md:flex-row md:items-center md:justify-between"><div><h4 className="font-bold text-slate-800">LINE 比較摘要</h4><p className="mt-1 text-xs text-slate-500">內容會跟著上方選擇的院區、月份與比較項目更新。</p></div><button type="button" onClick={copyLineSummary} className={`inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-bold text-white transition ${copied ? "bg-emerald-600" : "bg-slate-800 hover:bg-slate-700"}`}>{copied ? <Check size={17}/> : <ClipboardCopy size={17}/>} {copied ? "已複製" : "複製 LINE 文字"}</button></div>
+      <div className="flex flex-col gap-3 border-b border-emerald-100 bg-emerald-50/60 p-4 md:flex-row md:items-center md:justify-between"><div><h4 className="font-bold text-slate-800">LINE 逐月比較摘要</h4><p className="mt-1 text-xs text-slate-500">依上方選擇的院區、年度與比較項目，整理前一年及所選年度的 12 個月數字。</p></div><button type="button" onClick={copyLineSummary} className={`inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-bold text-white transition ${copied ? "bg-emerald-600" : "bg-slate-800 hover:bg-slate-700"}`}>{copied ? <Check size={17}/> : <ClipboardCopy size={17}/>} {copied ? "已複製" : "複製 LINE 文字"}</button></div>
       <div className="p-4"><pre className="whitespace-pre-wrap rounded-lg border border-slate-200 bg-slate-50 p-4 font-sans text-sm leading-7 text-slate-700">{lineSummary}</pre></div>
     </div>
   </div>;
