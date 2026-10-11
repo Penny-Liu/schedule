@@ -40,6 +40,9 @@ const EquipmentDemandAnalysis: React.FC = () => {
   const [location, setLocation] = useState<LocationName>("北投");
   const [comparisonMonth, setComparisonMonth] = useState(Math.min(new Date().getMonth() + 1, 12));
   const [comparisonKey, setComparisonKey] = useState<ComparisonKey>("totalClients");
+  const [lineBaseYear, setLineBaseYear] = useState(2025);
+  const [lineCompareYear, setLineCompareYear] = useState(2026);
+  const [lineComparisonKey, setLineComparisonKey] = useState<ComparisonKey>("MR");
   const [copied, setCopied] = useState(false);
   const [rows, setRows] = useState<MonthlyRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -111,35 +114,34 @@ const EquipmentDemandAnalysis: React.FC = () => {
   }, [rows, comparisonMonth, comparisonKey]);
 
   const lineSummary = useMemo(() => {
-    const previousYear = year - 1;
-    const option = COMPARISON_OPTIONS.find((item) => item.key === comparisonKey)!;
+    const option = COMPARISON_OPTIONS.find((item) => item.key === lineComparisonKey)!;
     const valueFor = (row: MonthlyRow | undefined) => {
       if (!row) return null;
-      if (comparisonKey === "totalClients") return row.total_clients;
-      if (comparisonKey === "equipmentTotal") return EQUIPMENT.reduce((sum, item) => sum + count(row, item.field), 0);
-      return count(row, EQUIPMENT.find((item) => item.key === comparisonKey)!.field);
+      if (lineComparisonKey === "totalClients") return row.total_clients;
+      if (lineComparisonKey === "equipmentTotal") return EQUIPMENT.reduce((sum, item) => sum + count(row, item.field), 0);
+      return count(row, EQUIPMENT.find((item) => item.key === lineComparisonKey)!.field);
     };
-    const title = comparisonKey === "totalClients"
+    const title = lineComparisonKey === "totalClients"
       ? "客戶數"
-      : comparisonKey === "equipmentTotal"
+      : lineComparisonKey === "equipmentTotal"
         ? "設備總人次"
-        : `${comparisonKey}檢查人次`;
-    const currentLabel = year === new Date().getFullYear() ? "今年" : `${year}`;
+        : `${lineComparisonKey}檢查人次`;
+    const compareLabel = lineCompareYear === new Date().getFullYear() ? "今年" : `${lineCompareYear}`;
     const lines = [`【${location}｜${title}】`];
     for (let month = 1; month <= 12; month += 1) {
-      const previousRow = rows.find((row) => row.year === previousYear && row.month === month);
-      const currentRow = rows.find((row) => row.year === year && row.month === month);
-      const previousValue = valueFor(previousRow);
-      const currentValue = valueFor(currentRow);
-      const partial = currentRow && !currentRow.is_finalized
-        ? `（統計至 ${currentRow.source_end_date.slice(5).replace("-", "/")}）`
+      const baseRow = rows.find((row) => row.year === lineBaseYear && row.month === month);
+      const compareRow = rows.find((row) => row.year === lineCompareYear && row.month === month);
+      const baseValue = valueFor(baseRow);
+      const compareValue = valueFor(compareRow);
+      const partial = compareRow && !compareRow.is_finalized
+        ? `（統計至 ${compareRow.source_end_date.slice(5).replace("-", "/")}）`
         : "";
-      lines.push(`${previousYear}/${String(month).padStart(2, "0")}：${previousValue === null ? "" : previousValue.toLocaleString()}　${currentLabel}：${currentValue === null ? "" : currentValue.toLocaleString()}${partial}`);
+      lines.push(`${lineBaseYear}/${String(month).padStart(2, "0")}：${baseValue === null ? "" : baseValue.toLocaleString()}　${compareLabel}：${compareValue === null ? "" : compareValue.toLocaleString()}${partial}`);
     }
     lines.push(`項目：${option.label}`);
-    if (comparisonKey === "totalClients") lines.push("註：客戶數為跨設備去重。");
+    if (lineComparisonKey === "totalClients") lines.push("註：客戶數為跨設備去重。");
     return lines.join("\n");
-  }, [location, year, comparisonKey, rows]);
+  }, [location, lineBaseYear, lineCompareYear, lineComparisonKey, rows]);
 
   const copyLineSummary = async () => {
     try {
@@ -185,7 +187,14 @@ const EquipmentDemandAnalysis: React.FC = () => {
     <TableCard title={`${year} 每月比較表`}><table className="w-full min-w-[820px] text-sm"><TableHead first="月份"/><tbody className="divide-y divide-slate-100">{analysis.monthly.map((row) => <tr key={row.month} className="hover:bg-slate-50"><td className="px-4 py-2.5 font-medium">{row.label}{row.sourceEnd && !row.finalized && <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] text-amber-800">更新中</span>}</td>{EQUIPMENT.map(({key}) => <td key={key} className="px-3 py-2.5 text-right tabular-nums">{row[key].toLocaleString()}</td>)}<td className="bg-slate-50 px-4 py-2.5 text-right font-bold tabular-nums">{row.totalClients.toLocaleString()}</td></tr>)}</tbody><tfoot className="border-t-2 bg-cyan-50 font-bold"><tr><td className="px-4 py-3">年度合計</td>{EQUIPMENT.map(({key}) => <td key={key} className="px-3 py-3 text-right">{analysis.current[key].toLocaleString()}</td>)}<td className="px-4 py-3 text-right">{analysis.current.totalClients.toLocaleString()}</td></tr></tfoot></table></TableCard>
     <TableCard title="排班需求參考（有量工作日）"><table className="w-full min-w-[620px] text-sm"><thead className="bg-slate-50 text-slate-600"><tr><th className="px-4 py-3 text-left">設備</th><th className="px-4 py-3 text-right">日平均</th><th className="px-4 py-3 text-right">P90 日人次</th><th className="px-4 py-3 text-right">尖峰日人次</th><th className="px-4 py-3 text-left">排班用途</th></tr></thead><tbody className="divide-y">{analysis.demand.map((item) => <tr key={item.key}><td className="px-4 py-3 font-bold" style={{color:item.color}}>{item.label}</td><td className="px-4 py-3 text-right">{item.average.toFixed(1)}</td><td className="px-4 py-3 text-right font-bold">{item.p90}</td><td className="px-4 py-3 text-right font-bold text-rose-600">{item.peak}</td><td className="px-4 py-3 text-slate-600">日常以 P90 配置；尖峰日預留跨站支援</td></tr>)}</tbody></table></TableCard>
     <div className="rounded-xl border border-emerald-200 bg-white shadow-sm">
-      <div className="flex flex-col gap-3 border-b border-emerald-100 bg-emerald-50/60 p-4 md:flex-row md:items-center md:justify-between"><div><h4 className="font-bold text-slate-800">LINE 逐月比較摘要</h4><p className="mt-1 text-xs text-slate-500">依上方選擇的院區、年度與比較項目，整理前一年及所選年度的 12 個月數字。</p></div><button type="button" onClick={copyLineSummary} className={`inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-bold text-white transition ${copied ? "bg-emerald-600" : "bg-slate-800 hover:bg-slate-700"}`}>{copied ? <Check size={17}/> : <ClipboardCopy size={17}/>} {copied ? "已複製" : "複製 LINE 文字"}</button></div>
+      <div className="border-b border-emerald-100 bg-emerald-50/60 p-4">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between"><div><h4 className="font-bold text-slate-800">LINE 逐月比較摘要</h4><p className="mt-1 text-xs text-slate-500">自由選擇兩個年度與統計項目，產生 12 個月的 LINE 比較文字。</p></div><button type="button" onClick={copyLineSummary} className={`inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-bold text-white transition ${copied ? "bg-emerald-600" : "bg-slate-800 hover:bg-slate-700"}`}>{copied ? <Check size={17}/> : <ClipboardCopy size={17}/>} {copied ? "已複製" : "複製 LINE 文字"}</button></div>
+        <div className="mt-4 flex flex-wrap gap-3">
+          <label className="text-xs font-medium text-slate-600">基準年度<select value={lineBaseYear} onChange={(event)=>setLineBaseYear(Number(event.target.value))} className="ml-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">{YEARS.map((value)=><option key={value} value={value} disabled={value===lineCompareYear}>{value}</option>)}</select></label>
+          <label className="text-xs font-medium text-slate-600">比較年度<select value={lineCompareYear} onChange={(event)=>setLineCompareYear(Number(event.target.value))} className="ml-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">{YEARS.map((value)=><option key={value} value={value} disabled={value===lineBaseYear}>{value}</option>)}</select></label>
+          <label className="text-xs font-medium text-slate-600">比較項目<select value={lineComparisonKey} onChange={(event)=>setLineComparisonKey(event.target.value as ComparisonKey)} className="ml-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">{COMPARISON_OPTIONS.map((item)=><option key={item.key} value={item.key}>{item.label}</option>)}</select></label>
+        </div>
+      </div>
       <div className="p-4"><pre className="whitespace-pre-wrap rounded-lg border border-slate-200 bg-slate-50 p-4 font-sans text-sm leading-7 text-slate-700">{lineSummary}</pre></div>
     </div>
   </div>;
