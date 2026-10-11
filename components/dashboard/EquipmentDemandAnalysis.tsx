@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Activity, CalendarRange, MapPin, Users } from "lucide-react";
+import { Activity, CalendarRange, Check, ClipboardCopy, MapPin, Users } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { supabase } from "../../services/supabaseClient";
 
@@ -40,6 +40,7 @@ const EquipmentDemandAnalysis: React.FC = () => {
   const [location, setLocation] = useState<LocationName>("北投");
   const [comparisonMonth, setComparisonMonth] = useState(Math.min(new Date().getMonth() + 1, 12));
   const [comparisonKey, setComparisonKey] = useState<ComparisonKey>("totalClients");
+  const [copied, setCopied] = useState(false);
   const [rows, setRows] = useState<MonthlyRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -109,6 +110,44 @@ const EquipmentDemandAnalysis: React.FC = () => {
     return { option, data };
   }, [rows, comparisonMonth, comparisonKey]);
 
+  const lineSummary = useMemo(() => {
+    const lines = [
+      `【${location}｜${comparisonMonth}月 ${crossYearComparison.option.label}跨年比較】`,
+      ...crossYearComparison.data.map((item) => {
+        if (item.value === null) return `${item.year}：尚無資料`;
+        const change = item.change === null ? "" : `（較前一年 ${item.change > 0 ? "+" : ""}${item.change.toFixed(1)}%）`;
+        const partial = item.partial ? `［統計至 ${item.sourceEnd.replaceAll("-", "/")}］` : "";
+        return `${item.year}：${item.value.toLocaleString()} 人次${change}${partial}`;
+      }),
+    ];
+    const available = crossYearComparison.data.filter((item) => item.value !== null);
+    if (available.length >= 2) {
+      const first = available[0];
+      const last = available.at(-1)!;
+      const difference = last.value! - first.value!;
+      lines.push(`趨勢：${first.year} → ${last.year} ${difference > 0 ? "+" : ""}${difference.toLocaleString()} 人次`);
+    }
+    lines.push("註：總計（客戶數）為跨設備去重；設備總人次為各設備加總。");
+    return lines.join("\n");
+  }, [location, comparisonMonth, crossYearComparison]);
+
+  const copyLineSummary = async () => {
+    try {
+      await navigator.clipboard.writeText(lineSummary);
+    } catch {
+      const textarea = document.createElement("textarea");
+      textarea.value = lineSummary;
+      textarea.style.position = "fixed";
+      textarea.style.opacity = "0";
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand("copy");
+      textarea.remove();
+    }
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1800);
+  };
+
   if (loading) return <div className="rounded-xl border border-slate-200 bg-white p-8 text-center text-slate-500">正在讀取設備人次…</div>;
   if (error) return <div className="rounded-xl border border-rose-200 bg-rose-50 p-5 text-rose-800">讀取設備人次失敗：{error}</div>;
 
@@ -132,9 +171,13 @@ const EquipmentDemandAnalysis: React.FC = () => {
         <div className="overflow-hidden rounded-lg border border-slate-200"><table className="w-full text-sm"><thead className="bg-slate-50 text-slate-600"><tr><th className="px-3 py-2.5 text-left">年度</th><th className="px-3 py-2.5 text-right">{crossYearComparison.option.label}</th><th className="px-3 py-2.5 text-right">較前一年</th></tr></thead><tbody className="divide-y divide-slate-100">{crossYearComparison.data.map((item)=><tr key={item.year}><td className="px-3 py-3 font-bold text-slate-700">{item.year}{item.partial&&<span className="ml-1.5 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800">統計至 {item.sourceEnd.slice(5).replace("-","/")}</span>}</td><td className="px-3 py-3 text-right font-bold tabular-nums">{item.value===null?"—":item.value.toLocaleString()}</td><td className={`px-3 py-3 text-right font-medium tabular-nums ${item.change===null?"text-slate-400":item.change>0?"text-rose-600":item.change<0?"text-emerald-600":"text-slate-500"}`}>{item.change===null?"—":`${item.change>0?"+":""}${item.change.toFixed(1)}%`}</td></tr>)}</tbody></table></div>
       </div>
     </div>
-    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><h4 className="mb-4 font-bold text-slate-800">{year} 每月設備人次趨勢</h4><div className="h-[320px]"><ResponsiveContainer width="100%" height="100%"><LineChart data={analysis.monthly}><CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0"/><XAxis dataKey="label"/><YAxis allowDecimals={false}/><Tooltip/><Legend/>{EQUIPMENT.map(({key,label,color}) => <Line key={key} type="monotone" dataKey={key} name={label} stroke={color} strokeWidth={2} dot={{r:2}}/>)}</LineChart></ResponsiveContainer></div></div>
+    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><h4 className="mb-1 font-bold text-slate-800">{year} 每月設備人次趨勢</h4><p className="mb-4 text-xs text-slate-500">客戶數為跨設備去重，可與六種設備人次一起觀察。</p><div className="h-[320px]"><ResponsiveContainer width="100%" height="100%"><LineChart data={analysis.monthly}><CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0"/><XAxis dataKey="label"/><YAxis allowDecimals={false}/><Tooltip/><Legend/><Line type="monotone" dataKey="totalClients" name="客戶數" stroke="#0f172a" strokeWidth={3} strokeDasharray="6 3" dot={{r:3}}/>{EQUIPMENT.map(({key,label,color}) => <Line key={key} type="monotone" dataKey={key} name={label} stroke={color} strokeWidth={2} dot={{r:2}}/>)}</LineChart></ResponsiveContainer></div></div>
     <TableCard title={`${year} 每月比較表`}><table className="w-full min-w-[820px] text-sm"><TableHead first="月份"/><tbody className="divide-y divide-slate-100">{analysis.monthly.map((row) => <tr key={row.month} className="hover:bg-slate-50"><td className="px-4 py-2.5 font-medium">{row.label}{row.sourceEnd && !row.finalized && <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] text-amber-800">更新中</span>}</td>{EQUIPMENT.map(({key}) => <td key={key} className="px-3 py-2.5 text-right tabular-nums">{row[key].toLocaleString()}</td>)}<td className="bg-slate-50 px-4 py-2.5 text-right font-bold tabular-nums">{row.totalClients.toLocaleString()}</td></tr>)}</tbody><tfoot className="border-t-2 bg-cyan-50 font-bold"><tr><td className="px-4 py-3">年度合計</td>{EQUIPMENT.map(({key}) => <td key={key} className="px-3 py-3 text-right">{analysis.current[key].toLocaleString()}</td>)}<td className="px-4 py-3 text-right">{analysis.current.totalClients.toLocaleString()}</td></tr></tfoot></table></TableCard>
     <TableCard title="排班需求參考（有量工作日）"><table className="w-full min-w-[620px] text-sm"><thead className="bg-slate-50 text-slate-600"><tr><th className="px-4 py-3 text-left">設備</th><th className="px-4 py-3 text-right">日平均</th><th className="px-4 py-3 text-right">P90 日人次</th><th className="px-4 py-3 text-right">尖峰日人次</th><th className="px-4 py-3 text-left">排班用途</th></tr></thead><tbody className="divide-y">{analysis.demand.map((item) => <tr key={item.key}><td className="px-4 py-3 font-bold" style={{color:item.color}}>{item.label}</td><td className="px-4 py-3 text-right">{item.average.toFixed(1)}</td><td className="px-4 py-3 text-right font-bold">{item.p90}</td><td className="px-4 py-3 text-right font-bold text-rose-600">{item.peak}</td><td className="px-4 py-3 text-slate-600">日常以 P90 配置；尖峰日預留跨站支援</td></tr>)}</tbody></table></TableCard>
+    <div className="rounded-xl border border-emerald-200 bg-white shadow-sm">
+      <div className="flex flex-col gap-3 border-b border-emerald-100 bg-emerald-50/60 p-4 md:flex-row md:items-center md:justify-between"><div><h4 className="font-bold text-slate-800">LINE 比較摘要</h4><p className="mt-1 text-xs text-slate-500">內容會跟著上方選擇的院區、月份與比較項目更新。</p></div><button type="button" onClick={copyLineSummary} className={`inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-bold text-white transition ${copied ? "bg-emerald-600" : "bg-slate-800 hover:bg-slate-700"}`}>{copied ? <Check size={17}/> : <ClipboardCopy size={17}/>} {copied ? "已複製" : "複製 LINE 文字"}</button></div>
+      <div className="p-4"><pre className="whitespace-pre-wrap rounded-lg border border-slate-200 bg-slate-50 p-4 font-sans text-sm leading-7 text-slate-700">{lineSummary}</pre></div>
+    </div>
   </div>;
 };
 
