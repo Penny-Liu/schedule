@@ -26,8 +26,8 @@ export const validateSyncPayload = (payloadStr) => {
     throw new Error("syncPayload must contain valid JSON");
   }
 
-  if (!Array.isArray(tasks) || tasks.length === 0 || tasks.length > 3) {
-    throw new Error("syncPayload must contain between 1 and 3 tasks");
+  if (!Array.isArray(tasks) || tasks.length === 0 || tasks.length > 4) {
+    throw new Error("syncPayload must contain between 1 and 4 tasks");
   }
 
   const seenIds = new Set();
@@ -36,8 +36,8 @@ export const validateSyncPayload = (payloadStr) => {
       throw new Error("Each sync task must be an object");
     }
 
-    if (!Number.isInteger(task.id) || task.id < 1 || task.id > 3 || seenIds.has(task.id)) {
-      throw new Error("Task ids must be unique integers between 1 and 3");
+    if (!Number.isInteger(task.id) || task.id < 1 || task.id > 4 || seenIds.has(task.id)) {
+      throw new Error("Task ids must be unique integers between 1 and 4");
     }
     seenIds.add(task.id);
 
