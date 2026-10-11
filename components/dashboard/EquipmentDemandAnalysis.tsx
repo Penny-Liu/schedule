@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Activity, CalendarRange, MapPin, Users } from "lucide-react";
-import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { supabase } from "../../services/supabaseClient";
 
 type EquipmentKey = "MR" | "CT" | "US" | "BMD" | "DX" | "MG";
 type LocationName = "北投" | "大直";
+type ComparisonKey = EquipmentKey | "totalClients" | "equipmentTotal";
 type Metric = { average: number; p90: number; peak: number; activeDays: number; values?: number[] };
 type MonthlyRow = {
   year: number; month: number; location: LocationName;
@@ -22,6 +23,11 @@ const EQUIPMENT: Array<{ key: EquipmentKey; field: keyof MonthlyRow; label: stri
   { key: "MG", field: "mg_count", label: "乳房攝影", color: "#ec4899" },
 ];
 const YEARS = [2023, 2024, 2025, 2026];
+const COMPARISON_OPTIONS: Array<{ key: ComparisonKey; label: string; color: string }> = [
+  { key: "totalClients", label: "總計（客戶數）", color: "#0891b2" },
+  { key: "equipmentTotal", label: "設備總人次", color: "#475569" },
+  ...EQUIPMENT.map(({ key, label, color }) => ({ key, label, color })),
+];
 const count = (row: MonthlyRow, field: keyof MonthlyRow) => Number(row[field] || 0);
 const percentile90 = (values: number[]) => {
   if (!values.length) return 0;
@@ -32,6 +38,8 @@ const percentile90 = (values: number[]) => {
 const EquipmentDemandAnalysis: React.FC = () => {
   const [year, setYear] = useState(2026);
   const [location, setLocation] = useState<LocationName>("北投");
+  const [comparisonMonth, setComparisonMonth] = useState(Math.min(new Date().getMonth() + 1, 12));
+  const [comparisonKey, setComparisonKey] = useState<ComparisonKey>("totalClients");
   const [rows, setRows] = useState<MonthlyRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -76,6 +84,31 @@ const EquipmentDemandAnalysis: React.FC = () => {
     return { monthly, yearly, current, equipmentTotal, busiestMonth, demand, latest: selected.at(-1) };
   }, [rows, year]);
 
+  const crossYearComparison = useMemo(() => {
+    const option = COMPARISON_OPTIONS.find((item) => item.key === comparisonKey)!;
+    const data = YEARS.map((comparisonYear, index) => {
+      const row = rows.find((item) => item.year === comparisonYear && item.month === comparisonMonth);
+      let value: number | null = null;
+      if (row) {
+        if (comparisonKey === "totalClients") value = row.total_clients;
+        else if (comparisonKey === "equipmentTotal") value = EQUIPMENT.reduce((sum, item) => sum + count(row, item.field), 0);
+        else value = count(row, EQUIPMENT.find((item) => item.key === comparisonKey)!.field);
+      }
+      const previousRow = index > 0 ? rows.find((item) => item.year === YEARS[index - 1] && item.month === comparisonMonth) : undefined;
+      let previousValue: number | null = null;
+      if (previousRow) {
+        if (comparisonKey === "totalClients") previousValue = previousRow.total_clients;
+        else if (comparisonKey === "equipmentTotal") previousValue = EQUIPMENT.reduce((sum, item) => sum + count(previousRow, item.field), 0);
+        else previousValue = count(previousRow, EQUIPMENT.find((item) => item.key === comparisonKey)!.field);
+      }
+      const change = value !== null && previousValue !== null && previousValue > 0
+        ? ((value - previousValue) / previousValue) * 100
+        : null;
+      return { year: comparisonYear, label: `${comparisonYear} 年`, value, change, partial: Boolean(row && !row.is_finalized), sourceEnd: row?.source_end_date || "" };
+    });
+    return { option, data };
+  }, [rows, comparisonMonth, comparisonKey]);
+
   if (loading) return <div className="rounded-xl border border-slate-200 bg-white p-8 text-center text-slate-500">正在讀取設備人次…</div>;
   if (error) return <div className="rounded-xl border border-rose-200 bg-rose-50 p-5 text-rose-800">讀取設備人次失敗：{error}</div>;
 
@@ -86,6 +119,19 @@ const EquipmentDemandAnalysis: React.FC = () => {
     </div>
     <div className="grid gap-3 md:grid-cols-4"><SummaryCard icon={<Users size={19}/>} label="總計（客戶數）" value={analysis.current.totalClients.toLocaleString()} note="跨設備去重"/><SummaryCard icon={<Activity size={19}/>} label="設備總人次" value={analysis.equipmentTotal.toLocaleString()} note="六種設備加總"/><SummaryCard icon={<CalendarRange size={19}/>} label="最多客戶月份" value={analysis.busiestMonth?.label || "—"} note={`${analysis.busiestMonth?.totalClients?.toLocaleString() || 0} 位`}/><SummaryCard icon={<MapPin size={19}/>} label="資料更新至" value={analysis.latest?.source_end_date || "—"} note={`${year} 年・${location}`}/></div>
     <TableCard title="2023–2026 年度比較"><table className="w-full min-w-[820px] text-sm"><TableHead first="年度"/><tbody className="divide-y divide-slate-100">{analysis.yearly.map((row) => <tr key={row.year} className={row.year === year ? "bg-cyan-50" : "hover:bg-slate-50"}><td className="px-4 py-3 font-bold">{row.year} 年 <span className="text-xs font-normal text-slate-400">({row.months} 個月)</span></td>{EQUIPMENT.map(({key}) => <td key={key} className="px-3 py-3 text-right tabular-nums">{row[key].toLocaleString()}</td>)}<td className="bg-slate-50 px-4 py-3 text-right font-bold tabular-nums">{row.totalClients.toLocaleString()}</td></tr>)}</tbody></table></TableCard>
+    <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
+      <div className="flex flex-col gap-3 border-b border-slate-100 p-4 md:flex-row md:items-end md:justify-between">
+        <div><h4 className="font-bold text-slate-800">同月跨年度比較</h4><p className="mt-1 text-xs text-slate-500">固定同一月份，比較不同年度的客戶量或指定設備人次。</p></div>
+        <div className="flex flex-wrap gap-2">
+          <label className="text-xs font-medium text-slate-500">月份<select value={comparisonMonth} onChange={(event) => setComparisonMonth(Number(event.target.value))} className="ml-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">{Array.from({length:12},(_,index)=><option key={index+1} value={index+1}>{index+1} 月</option>)}</select></label>
+          <label className="text-xs font-medium text-slate-500">比較項目<select value={comparisonKey} onChange={(event) => setComparisonKey(event.target.value as ComparisonKey)} className="ml-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">{COMPARISON_OPTIONS.map((item)=><option key={item.key} value={item.key}>{item.label}</option>)}</select></label>
+        </div>
+      </div>
+      <div className="grid gap-5 p-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(360px,1fr)]">
+        <div className="h-[300px]"><ResponsiveContainer width="100%" height="100%"><BarChart data={crossYearComparison.data}><CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0"/><XAxis dataKey="label"/><YAxis allowDecimals={false}/><Tooltip formatter={(value:number)=>[`${Number(value).toLocaleString()} 人次`,crossYearComparison.option.label]}/><Bar dataKey="value" name={crossYearComparison.option.label} fill={crossYearComparison.option.color} radius={[6,6,0,0]}/></BarChart></ResponsiveContainer></div>
+        <div className="overflow-hidden rounded-lg border border-slate-200"><table className="w-full text-sm"><thead className="bg-slate-50 text-slate-600"><tr><th className="px-3 py-2.5 text-left">年度</th><th className="px-3 py-2.5 text-right">{crossYearComparison.option.label}</th><th className="px-3 py-2.5 text-right">較前一年</th></tr></thead><tbody className="divide-y divide-slate-100">{crossYearComparison.data.map((item)=><tr key={item.year}><td className="px-3 py-3 font-bold text-slate-700">{item.year}{item.partial&&<span className="ml-1.5 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800">統計至 {item.sourceEnd.slice(5).replace("-","/")}</span>}</td><td className="px-3 py-3 text-right font-bold tabular-nums">{item.value===null?"—":item.value.toLocaleString()}</td><td className={`px-3 py-3 text-right font-medium tabular-nums ${item.change===null?"text-slate-400":item.change>0?"text-rose-600":item.change<0?"text-emerald-600":"text-slate-500"}`}>{item.change===null?"—":`${item.change>0?"+":""}${item.change.toFixed(1)}%`}</td></tr>)}</tbody></table></div>
+      </div>
+    </div>
     <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><h4 className="mb-4 font-bold text-slate-800">{year} 每月設備人次趨勢</h4><div className="h-[320px]"><ResponsiveContainer width="100%" height="100%"><LineChart data={analysis.monthly}><CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0"/><XAxis dataKey="label"/><YAxis allowDecimals={false}/><Tooltip/><Legend/>{EQUIPMENT.map(({key,label,color}) => <Line key={key} type="monotone" dataKey={key} name={label} stroke={color} strokeWidth={2} dot={{r:2}}/>)}</LineChart></ResponsiveContainer></div></div>
     <TableCard title={`${year} 每月比較表`}><table className="w-full min-w-[820px] text-sm"><TableHead first="月份"/><tbody className="divide-y divide-slate-100">{analysis.monthly.map((row) => <tr key={row.month} className="hover:bg-slate-50"><td className="px-4 py-2.5 font-medium">{row.label}{row.sourceEnd && !row.finalized && <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] text-amber-800">更新中</span>}</td>{EQUIPMENT.map(({key}) => <td key={key} className="px-3 py-2.5 text-right tabular-nums">{row[key].toLocaleString()}</td>)}<td className="bg-slate-50 px-4 py-2.5 text-right font-bold tabular-nums">{row.totalClients.toLocaleString()}</td></tr>)}</tbody><tfoot className="border-t-2 bg-cyan-50 font-bold"><tr><td className="px-4 py-3">年度合計</td>{EQUIPMENT.map(({key}) => <td key={key} className="px-3 py-3 text-right">{analysis.current[key].toLocaleString()}</td>)}<td className="px-4 py-3 text-right">{analysis.current.totalClients.toLocaleString()}</td></tr></tfoot></table></TableCard>
     <TableCard title="排班需求參考（有量工作日）"><table className="w-full min-w-[620px] text-sm"><thead className="bg-slate-50 text-slate-600"><tr><th className="px-4 py-3 text-left">設備</th><th className="px-4 py-3 text-right">日平均</th><th className="px-4 py-3 text-right">P90 日人次</th><th className="px-4 py-3 text-right">尖峰日人次</th><th className="px-4 py-3 text-left">排班用途</th></tr></thead><tbody className="divide-y">{analysis.demand.map((item) => <tr key={item.key}><td className="px-4 py-3 font-bold" style={{color:item.color}}>{item.label}</td><td className="px-4 py-3 text-right">{item.average.toFixed(1)}</td><td className="px-4 py-3 text-right font-bold">{item.p90}</td><td className="px-4 py-3 text-right font-bold text-rose-600">{item.peak}</td><td className="px-4 py-3 text-slate-600">日常以 P90 配置；尖峰日預留跨站支援</td></tr>)}</tbody></table></TableCard>
