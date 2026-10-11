@@ -148,8 +148,8 @@ export const assertPasswordMigrationReadyForRole = (password, role) => {
  */
 export const passwordForSupabaseAuth = async (password, role) => {
   if (role !== PUBLIC_VIEWER_ROLE) return password;
-  const bytes = new TextEncoder().encode(`schedule-public-viewer-v1:${password}`);
-  const digest = await globalThis.crypto.subtle.digest("SHA-256", bytes);
-  const hex = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+  const hex = await sha256Hex(`schedule-public-viewer-v1:${password}`);
   return `v_${hex}`;
 };
+import { sha256Hex } from "./sha256.mjs";
+

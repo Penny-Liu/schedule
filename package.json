@@ -21,7 +21,8 @@
     "cap:open": "cap open ios",
     "predeploy": "vite build --base=/schedule/",
     "deploy": "gh-pages -d dist",
-    "sync-stats": "node scripts/sync-all-to-supabase.mjs"
+    "sync-stats": "node scripts/sync-all-to-supabase.mjs",
+    "sync-equipment-visits": "node scripts/sync-equipment-visits.mjs"
   },
   "dependencies": {
     "@capacitor/app": "^8.0.0",
