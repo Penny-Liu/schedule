@@ -9,6 +9,7 @@ import {
 } from "../types";
 import { db } from "../services/store";
 import { generateUUID } from "../services/utils";
+import { isEligibleLeaveSwapCandidate } from "../services/leaveSwapCandidates";
 import {
   Calendar,
   Clock,
@@ -321,7 +322,7 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
           // Find candidates OFF
           const candidates = db
             .getUsersOffOnDate(formData.startDate)
-            .filter((u) => u.id !== currentUser.id && u.isRadiographer);
+            .filter((u) => isEligibleLeaveSwapCandidate(u, currentUser.id, [formData.startDate]));
           setSwapCandidates(candidates);
           if (candidates.length === 0)
             setValidationMsg("該日期無人休假可供代班。");
@@ -355,7 +356,7 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
       // 2. Identify Candidates for Date 1 (Must be OFF)
       const candidatesD1 = db
         .getUsersOffOnDate(formData.startDate)
-        .filter((u) => u.id !== currentUser.id && u.isRadiographer);
+        .filter((u) => isEligibleLeaveSwapCandidate(u, currentUser.id, [formData.startDate]));
 
       // 3. If Date 2 is selected, filter candidates further
       if (formData.returnDate) {
@@ -381,7 +382,7 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
         // Filter candidates who are working on D2
         const candidatesD2 = db
           .getUsersWorkingOnDate(formData.returnDate)
-          .filter((u) => u.id !== currentUser.id && u.isRadiographer);
+          .filter((u) => isEligibleLeaveSwapCandidate(u, currentUser.id, [formData.startDate, formData.returnDate]));
 
         // Intersection: Users present in BOTH lists
         const validCandidates = candidatesD1.filter((c1) =>
@@ -425,7 +426,7 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
         // 2. Find eligible candidates (Must be WORKING that day + Have Capability + NOT have conflicting role)
         const workers = db
           .getUsersWorkingOnDate(formData.startDate)
-          .filter((u) => u.id !== currentUser.id && u.isRadiographer);
+          .filter((u) => isEligibleLeaveSwapCandidate(u, currentUser.id, [formData.startDate]));
         const roleToCheck = formData.roleToSwap || myRoles[0]; // Use selected or first for initial filtering
 
         const validCandidates = workers.filter((u) => {
@@ -508,6 +509,12 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
     currentUser.id,
   ]);
 
+  useEffect(() => {
+    if (formData.targetUserId && !swapCandidates.some((user) => user.id === formData.targetUserId)) {
+      setFormData((previous) => ({ ...previous, targetUserId: "" }));
+    }
+  }, [swapCandidates, formData.targetUserId]);
+
   const handleCreateLeave = (e: React.FormEvent) => {
     e.preventDefault();
     if (validationMsg) return;
@@ -558,6 +565,16 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
       }
       if (formData.type === LeaveType.SWAP_SHIFT && !formData.returnDate) {
         setValidationMsg("雙向換假必須選擇「換假日期」。");
+        return;
+      }
+      const target = db.getUsers().find((user) => user.id === formData.targetUserId);
+      const swapDates = formData.type === LeaveType.SWAP_SHIFT
+        ? [formData.startDate, formData.returnDate]
+        : [formData.startDate];
+      if (!target || !isEligibleLeaveSwapCandidate(target, currentUser.id, swapDates) ||
+          !swapCandidates.some((user) => user.id === target.id)) {
+        setValidationMsg("該對象已不符合換班資格，請重新選擇在職人員。");
+        setFormData((previous) => ({ ...previous, targetUserId: "" }));
         return;
       }
     }

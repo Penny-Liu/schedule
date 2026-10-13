@@ -1198,7 +1198,7 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
         {activeTab === "cycles" && isSupervisorOrAdmin && (
           <div className="max-w-6xl mx-auto flex flex-col gap-4">
             <p className="text-sm text-gray-500">
-              設定每位放射師在選定月份的工作週期起訖日期與備忘。預設使用該月份對應的排班週期；有微調的人員會以琥珀色標示。
+              設定每位放射師在選定月份的工作週期起訖日期與備忘。預設使用該月份對應的排班週期；有微調的人員會以琥珀色標示。排班天數依班表狀態計算，未顯示「休」的日期皆算上班，包含未分配點位的日期。
             </p>
 
             {saveError && (
@@ -1277,15 +1277,8 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
                           currentMonthData.startDate,
                           currentMonthData.endDate
                         );
-                        const scheduledDays = shifts.filter(
-                          (s) =>
-                            s.userId === user.id &&
-                            cycleDates.includes(s.date) &&
-                            s.station !== "OFF" &&
-                            s.station !== "休假" &&
-                            s.station !== StationDefault.UNASSIGNED &&
-                            s.station !== "未指派" &&
-                            s.station !== ""
+                        const scheduledDays = cycleDates.filter(
+                          (date) => db.getUserStatusOnDate(user.id, date) !== "OFF",
                         ).length;
 
                         return (
