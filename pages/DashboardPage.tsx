@@ -79,6 +79,8 @@ import {
 import { DailyStatsRows } from "../components/dashboard/DailyStatsRows";
 import { isUserOnEmploymentPause, toLocalISOString } from "../services/utils";
 import { getRadiographerCycleMonthKey } from "../services/radiographerCycleDates";
+import { getConsecutiveWorkCheckDates, getConsecutiveWorkWarnings } from "../services/radiographerConsecutiveWork";
+import { loadRadiographerStatisticsMonths } from "../services/radiographerStatisticsData";
 import { loadChineseFontToDoc } from "../services/pdfUtils";
 import {
   getAutomaticRadiographerWorkTime,
@@ -770,6 +772,24 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
     mobileOffset,
     viewMode,
   ]);
+
+  const workCheckDates = getConsecutiveWorkCheckDates(dateRange);
+  const workCheckMonthsKey = JSON.stringify([...new Set(workCheckDates.map((date) => date.slice(0, 7)))]);
+  const [loadedWorkCheckMonths, setLoadedWorkCheckMonths] = useState("");
+  const [workCheckError, setWorkCheckError] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    setLoadedWorkCheckMonths("");
+    setWorkCheckError(false);
+    loadRadiographerStatisticsMonths(JSON.parse(workCheckMonthsKey), (year, month) =>
+      db.loadDataForMonth(year, month, { requireComplete: true }),
+    ).then(() => {
+      if (!cancelled) setLoadedWorkCheckMonths(workCheckMonthsKey);
+    }).catch(() => {
+      if (!cancelled) setWorkCheckError(true);
+    });
+    return () => { cancelled = true; };
+  }, [workCheckMonthsKey]);
 
   // Filter users: Active OR (Inactive but has shift in current view)
   // This list determines who is "valid" for the dashboard logic (lookups, etc)
@@ -2428,6 +2448,26 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
     return { station: null, specialRoles: [], isOff: false, isNotHired: false };
   };
 
+  const consecutiveWorkWarnings = new Map(users.map((user) => [
+    user.id,
+    loadedWorkCheckMonths === workCheckMonthsKey
+      ? getConsecutiveWorkWarnings(workCheckDates, (date) => {
+          const day = getDayShift(user.id, date);
+          return !day.isOff && !day.isNotHired;
+        })
+      : new Set<string>(),
+  ]));
+  const renderConsecutiveWorkWarning = (userId: string, date: string) =>
+    consecutiveWorkWarnings.get(userId)?.has(date) ? (
+      <span
+        className="inline-flex items-center justify-center gap-0.5 rounded bg-black px-1 py-0.5 text-[9px] font-bold text-white shadow-sm"
+        title="已連續上班超過 6 天（包含未分配點位的上班日），請確認休假安排"
+        aria-label="警示：已連續上班超過 6 天，請確認休假安排"
+      >
+        <AlertTriangle size={10} aria-hidden="true" />連班 &gt;6
+      </span>
+    ) : null;
+
   const getPendingRequest = (userId: string, dateStr: string) => {
     return pendingLeaves.find((l) => {
       const isDateInRange = dateStr >= l.startDate && dateStr <= l.endDate;
@@ -4076,6 +4116,20 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
 
       {/* ... (Rest of the table UI) ... */}
       <div className="flex-1 overflow-auto bg-slate-50 p-4">
+        {(viewMode === "user" || viewMode === "personal") && (
+          <div className="mb-3 flex items-center gap-2 text-xs text-slate-600" role="status">
+            <span className="inline-flex items-center gap-1 rounded bg-black px-2 py-1 font-bold text-white">
+              <AlertTriangle size={13} aria-hidden="true" />連班 &gt;6
+            </span>
+            <span>
+              {workCheckError
+                ? "連班檢查資料載入失敗，請重新整理。"
+                : loadedWorkCheckMonths !== workCheckMonthsKey
+                  ? "正在檢查連續上班天數…"
+                  : "黑色警示：連續上班第 7 天起標示，包含未分配點位的上班日。"}
+            </span>
+          </div>
+        )}
         {viewMode === "daily" ? (
           // --- Daily View Implementation ---
           <div className="max-w-4xl mx-auto space-y-6">
@@ -5230,6 +5284,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
 
                   {/* Content Column */}
                   <div className="flex-1 flex flex-col justify-center">
+                    {renderConsecutiveWorkWarning(currentUser.id, date)}
                     {pendingReq && (
                       <div className="mb-2">
                         {getLeaveBadge(pendingReq.type)}
@@ -5661,6 +5716,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                 key={date}
                                 className={`p-0.5 border-r border-slate-100 align-top h-16 ${isToday ? "bg-teal-50/10" : ""} ${isOff ? "bg-slate-100/60" : isClosed ? "bg-slate-100/30" : isCoopCancel ? "bg-pink-50" : ""} relative`}
                               >
+                                {renderConsecutiveWorkWarning(user.id, date)}
                                 {pendingReq && getLeaveBadge(pendingReq.type)}
                                 {isNotHired ? (
                                   <div className="h-full w-full flex flex-col items-center justify-center">
