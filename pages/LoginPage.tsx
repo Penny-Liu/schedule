@@ -54,11 +54,12 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
         u.role === UserRole.RADIOGRAPHER_STAFF || 
         (u as any).role === 'EMPLOYEE' ||
         u.role === UserRole.SUPERVISOR || 
-        u.role === UserRole.SYSTEM_ADMIN ||
         u.role === UserRole.VIEWER // Add Viewer to radiology portal too
     ).sort(sortByRole);
 
     const leftPortalUsers = activeUsers.filter(u => 
+        // Non-radiographer administrators belong to the administration entrance.
+        (u.role === UserRole.SYSTEM_ADMIN && u.isRadiographer !== true) ||
         u.role === UserRole.VIEWER || // Explicitly include Viewer in Left Portal
         !radiologyPortalUsers.some(ru => ru.id === u.id && ru.role !== UserRole.VIEWER)
     );
