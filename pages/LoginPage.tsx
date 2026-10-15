@@ -5,6 +5,7 @@ import { LogIn, User as UserIcon, Lock, ChevronLeft, Shield, Calendar, Activity,
 import { getRoleLabel, isUserOnEmploymentPause, toLocalISOString } from '../services/utils';
 import { getDefaultPasswordForRole, getTemporaryPasswordHint, isDefaultOrMissingPassword } from '../services/passwordPolicy.mjs';
 import { signInProtectedEditor } from '../services/supabaseAuth';
+import { isLoginEligible } from '../services/loginEligibility';
 
 interface LoginPageProps {
     onLogin: (user: User) => void | Promise<void>;
@@ -18,24 +19,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const todayStr = toLocalISOString(new Date());
-    const activeUsers = users.filter(u => {
-        // If they are on employment pause, block them
-        if (isUserOnEmploymentPause(u, todayStr)) return false;
-        // If they are part time, block them from logging in here (maybe intentional in legacy code)
-        if (u.isPartTime === true) return false;
-
-        // Check resignation date
-        if (u.resignationDate) {
-            // If the resignation date is strictly before today, block them
-            // (meaning on the resignation day, they are still allowed to log in)
-            if (u.resignationDate < todayStr) return false;
-            // Otherwise, they have a future or current resignation date, so they are allowed to log in!
-            return true;
-        }
-
-        // If no resignation date, just rely on isActive
-        return u.isActive !== false;
-    });
+    const activeUsers = users.filter(u => isLoginEligible(u, todayStr));
 
     // Sort function: Viewer (位居最上方)
     const sortByRole = (a: any, b: any) => {
