@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from "react";
+import { isDeveloperSandboxActive, SANDBOX_BLOCKED, sandboxFetch as fetch } from '../services/developerSandbox';
 import {
   User,
   UserRole,
@@ -532,6 +533,7 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
 
   // ── Trigger Backend Sync ──
   const executeSync = async () => {
+    if (isDeveloperSandboxActive()) { alert(SANDBOX_BLOCKED); return; }
     const selectedTasks = syncTasks.filter((t) => t.selected);
     if (selectedTasks.length === 0) {
       alert("請至少選擇一個要同步的區塊！");

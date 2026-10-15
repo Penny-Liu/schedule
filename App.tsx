@@ -7,6 +7,7 @@ import { AlertTriangle, Loader2 } from "lucide-react";
 import ChangePasswordPage from "./pages/ChangePasswordPage";
 import { isPasswordMigrationReadyForRole } from "./services/passwordPolicy.mjs";
 import { signOutSupabaseAuth } from "./services/supabaseAuth";
+import { isDeveloperSandboxActive, startDeveloperSandbox } from "./services/developerSandbox";
 
 const DashboardPage = lazy(() => import("./pages/DashboardPage"));
 const LeavePage = lazy(() => import("./pages/LeavePage"));
@@ -97,6 +98,7 @@ const App: React.FC = () => {
   }, []);
 
   const handleLogin = async (user: User) => {
+    startDeveloperSandbox(user);
     setIsLoading(true);
     setCurrentUser(user);
     db.currentUser = user;
@@ -144,6 +146,11 @@ const App: React.FC = () => {
   };
 
   const handleLogout = () => {
+    if (isDeveloperSandboxActive()) {
+      // Reload clears both the simulation journal and all module caches.
+      window.location.reload();
+      return;
+    }
     void signOutSupabaseAuth();
     db.logout();
     setCurrentUser(null);
@@ -297,6 +304,11 @@ const App: React.FC = () => {
   return (
     <ErrorBoundary>
       <div className="flex flex-col h-screen bg-gray-50 text-gray-900 font-sans overflow-hidden">
+        {isDeveloperSandboxActive() && (
+          <div role="status" className="shrink-0 bg-amber-100 text-amber-950 border-b border-amber-300 px-4 py-2 text-sm">
+            <strong>開發沙盒｜本機模擬</strong>　新增、修改、刪除只在本次操作生效，不會儲存到正式資料庫。重新整理或登出即清除；對外同步與上傳停用。
+          </div>
+        )}
         {/* Top Navigation */}
         <Sidebar
           currentUser={currentUser}
