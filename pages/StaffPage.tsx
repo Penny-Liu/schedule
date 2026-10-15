@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { DEVELOPER_SANDBOX } from '../services/developerSandbox';
 import {
   User,
   UserRole,
@@ -928,7 +929,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                         setFormData({
                           ...formData,
                           role: newRole,
-                          permissions: getPermissionsByRole(newRole),
+                          permissions: [...getPermissionsByRole(newRole), ...formData.permissions.filter(permission => permission === DEVELOPER_SANDBOX)],
                           isHealthMgmt: isHM || formData.isHealthMgmt,
                           isRadiographer: isRadio || formData.isRadiographer,
                         });
@@ -1292,6 +1293,28 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                         </div>
                       </div>
                     )}
+                  </div>
+                )}
+
+                {currentUser.role === UserRole.SYSTEM_ADMIN && (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                    <label className="flex items-center gap-2 text-sm font-bold text-amber-950">
+                      <input
+                        type="checkbox"
+                        checked={formData.permissions.includes(DEVELOPER_SANDBOX)}
+                        onChange={e => setFormData(prev => ({
+                          ...prev,
+                          permissions: e.target.checked
+                            ? [...new Set([...prev.permissions, DEVELOPER_SANDBOX])]
+                            : prev.permissions.filter(permission => permission !== DEVELOPER_SANDBOX),
+                        }))}
+                      />
+                      開發沙盒（僅本機模擬）
+                    </label>
+                    <p className="mt-2 text-xs text-amber-900">
+                      下次登入生效。可依下方權限查看及操作，儲存後只改變本次操作的模擬資料，不寫入正式資料庫；重新整理或登出即清除。對外同步、上傳及無法模擬的操作停用。
+                      此模式用於防止網站操作誤寫，不取代獨立測試資料庫或 API 權限隔離。
+                    </p>
                   </div>
                 )}
 
