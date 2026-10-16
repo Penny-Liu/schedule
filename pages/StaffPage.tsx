@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { DEVELOPER_SANDBOX } from '../services/developerSandbox';
+import { DEVELOPER_SANDBOX, isDeveloperSandboxActive } from '../services/developerSandbox';
 import {
   User,
   UserRole,
@@ -378,7 +378,13 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
   const resetTargetPassword = getDefaultPasswordForRole(resetTargetUser?.role);
 
   const handleResetPasswordClick = () => {
-    if (editingId) setResetTargetId(editingId);
+    if (!editingId) return;
+    const target = users.find(user => user.id === editingId);
+    if (target?.authUserId && !isDeveloperSandboxActive()) {
+      alert('此帳號已啟用安全登入，目前不支援由人員管理重設密碼。請由本人登入後至個人設定修改密碼；若已忘記密碼，需由系統維護人員處理安全登入帳號。');
+      return;
+    }
+    setResetTargetId(editingId);
   };
 
   const confirmResetPassword = async () => {
@@ -387,11 +393,15 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
         const temporaryPassword = await db.resetPassword(resetTargetId);
         setResetTargetId(null);
         alert(
-          `密碼已重設。\n\n臨時密碼：${temporaryPassword}\n請通知本人使用此密碼登入，並依畫面提示設定個人密碼。`,
+          isDeveloperSandboxActive()
+            ? `沙盒密碼已模擬重設。\n\n模擬臨時密碼：${temporaryPassword}\n正式登入密碼未變更，重新整理即清除模擬結果。`
+            : `密碼已重設。\n\n臨時密碼：${temporaryPassword}\n請通知本人使用此密碼登入，並依畫面提示設定個人密碼。`,
         );
       } catch (error) {
         console.error("Password reset failed:", error);
-        alert("密碼重設失敗，請檢查網路後再試。");
+        const message = error instanceof Error ? error.message :
+          (error && typeof error === 'object' && 'message' in error ? String(error.message) : '無法完成重設，請稍後再試。');
+        alert(`密碼重設失敗：${message}`);
       }
     }
   };
@@ -525,7 +535,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
   ).length;
 
   return (
-    <div className="p-4 md:p-6 max-w-7xl mx-auto h-screen overflow-y-auto overflow-x-hidden">
+    <div className="p-4 md:p-6 max-w-7xl mx-auto h-full min-h-0 flex flex-col overflow-hidden">
       <ConfirmModal
         isOpen={!!deleteTargetId}
         onClose={() => setDeleteTargetId(null)}
@@ -546,7 +556,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
         confirmColor="red"
       />
 
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-4 shrink-0 flex items-center justify-between">
         <div>
           <h2 className="text-xl font-bold text-gray-800">人員管理</h2>
           <p className="text-sm text-gray-500">
@@ -571,14 +581,14 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 flex-1 min-h-0 overflow-y-auto xl:overflow-hidden">
         {/* Form Section (Sticky) - Only show if has EDIT_STAFF permission */}
         {currentUser.permissions?.includes(PERMISSIONS.EDIT_STAFF) && (
-          <div className="xl:col-span-1">
+          <div className="xl:col-span-1 min-h-0 h-[min(52rem,calc(100dvh-14rem))] xl:h-full">
             <div
-              className={`bg-white p-5 rounded-xl shadow-[0_2px_12px_rgba(0,0,0,0.03)] border transition-all duration-300 overflow-x-hidden ${editingId ? "border-teal-400 ring-1 ring-teal-100" : "border-gray-100"}`}
+              className={`bg-white p-5 rounded-xl shadow-[0_2px_12px_rgba(0,0,0,0.03)] border transition-all duration-300 h-full min-h-0 flex flex-col overflow-hidden ${editingId ? "border-teal-400 ring-1 ring-teal-100" : "border-gray-100"}`}
             >
-              <div className="flex justify-between items-center mb-4">
+              <div className="flex shrink-0 justify-between items-center mb-4">
                 <h3
                   className={`text-sm font-bold flex items-center gap-2 ${editingId ? "text-teal-700" : "text-gray-800"}`}
                 >
@@ -610,7 +620,8 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                 )}
               </div>
 
-              <form onSubmit={handleSubmit} className="space-y-4">
+              <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
+                <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden space-y-4 px-1">
                 {error && (
                   <div className="bg-red-50 text-red-600 p-3 rounded-lg text-xs flex items-center gap-2 border border-red-100 animate-pulse">
                     <AlertCircle size={14} className="shrink-0" />
@@ -1469,7 +1480,8 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                   </div>
                 </div>
 
-                <div className="pt-2 flex flex-col gap-2">
+                </div>
+                <div className="pt-3 mt-3 border-t border-gray-100 shrink-0 flex flex-col gap-2 bg-white">
                   <div className="flex gap-2">
                     {editingId && (
                       <button
@@ -1525,7 +1537,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
 
         {/* User List */}
         <div
-          className={`${currentUser.permissions?.includes(PERMISSIONS.EDIT_STAFF) ? "xl:col-span-2" : "xl:col-span-3"} grid grid-cols-1 md:grid-cols-2 gap-4 auto-rows-min pb-20`}
+          className={`${currentUser.permissions?.includes(PERMISSIONS.EDIT_STAFF) ? "xl:col-span-2" : "xl:col-span-3"} grid grid-cols-1 md:grid-cols-2 gap-4 auto-rows-min pb-6 min-h-0 xl:overflow-y-auto`}
         >
           {users
             .filter((user) => {

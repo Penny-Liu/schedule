@@ -2096,7 +2096,7 @@ class Store {
   async resetPassword(userId: string) {
     const u = this.users.find((u) => u.id === userId);
     if (!u) throw new Error("User not found");
-    if (u.authUserId) {
+    if (u.authUserId && !isDeveloperSandboxActive()) {
       throw new Error("此帳號已啟用安全登入，請由使用者登入後自行修改密碼");
     }
     const temporaryPassword = getDefaultPasswordForRole(u.role);
