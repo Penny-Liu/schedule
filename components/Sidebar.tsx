@@ -253,7 +253,8 @@ const Sidebar: React.FC<SidebarProps> = ({
             if (
               "isRadiographerOnly" in item &&
               item.isRadiographerOnly &&
-              !currentUser.isRadiographer
+              !currentUser.isRadiographer &&
+              currentUser.role !== UserRole.SYSTEM_ADMIN
             )
               return false;
             if (
