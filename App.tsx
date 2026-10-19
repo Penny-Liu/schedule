@@ -306,7 +306,7 @@ const App: React.FC = () => {
       <div className="flex flex-col h-screen bg-gray-50 text-gray-900 font-sans overflow-hidden">
         {isDeveloperSandboxActive() && (
           <div role="status" className="shrink-0 bg-amber-100 text-amber-950 border-b border-amber-300 px-4 py-2 text-sm">
-            <strong>開發沙盒｜本機模擬</strong>　新增、修改、刪除只在本次操作生效，不會儲存到正式資料庫。重新整理或登出即清除；對外同步與上傳停用。
+            <strong>開發沙盒｜本機模擬</strong>　除本人個人密碼會正式儲存外，新增、修改、刪除僅在本次操作生效。重新整理或登出即清除模擬資料；對外同步與上傳停用。
           </div>
         )}
         {/* Top Navigation */}
