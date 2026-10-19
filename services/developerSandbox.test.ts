@@ -31,6 +31,17 @@ function setup() {
 }
 
 describe('developer sandbox through the actual Supabase client', () => {
+  it('keeps a saved personal password while preserving other simulated edits', async () => {
+    const { client, sandbox, remote } = setup();
+    await client.from('users').update({ name: '模擬改名', password: 'temporary', must_change_password: true }).eq('id', '1');
+    sandbox.syncPersonalPassword('1', 'NewPersonal2026');
+    const result = await client.from('users').select().eq('id', '1').single();
+    expect(result.data).toMatchObject({ name: '模擬改名', password: 'NewPersonal2026', must_change_password: false });
+    await client.from('users').update({ name: '繼續模擬' }).eq('id', '1');
+    expect((await client.from('users').select().eq('id', '1').single()).data.name).toBe('繼續模擬');
+    expect(remote[0].name).toBe('原有人員');
+  });
+
   it('preserves ordinary network requests until sandbox login', async () => {
     const network = vi.fn<typeof fetch>(async () => new Response(null, { status: 204 }));
     const sandbox = new DeveloperSandbox(network, origin);

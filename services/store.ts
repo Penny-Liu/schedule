@@ -32,6 +32,7 @@ import {
   GeneAppointment,
 } from "../types";
 import { supabase } from "./supabaseClient";
+import { saveSandboxPersonalPassword } from "./personalPassword";
 import {
   assertPasswordMigrationReadyForRole,
   getDefaultPasswordForRole,
@@ -128,7 +129,7 @@ export const normalizeUserPermissions = (
     : permissions || getPermissionsByRole(role);
 
 import { fetchAssistantData, AssistantData } from "./assistantService";
-import { DEVELOPER_SANDBOX, isDeveloperSandboxActive } from './developerSandbox';
+import { DEVELOPER_SANDBOX, isDeveloperSandboxActive, syncSandboxPersonalPassword } from './developerSandbox';
 
 const isUserCertifiedOnDate = (user: User | undefined | null, cap: string, date: string): boolean => {
   if (!user) return false;
@@ -2066,31 +2067,7 @@ class Store {
   }
 
   async changePassword(userId: string, newPass: string) {
-    const u = this.users.find((u) => u.id === userId);
-    if (!u) throw new Error("User not found");
-    assertPasswordMigrationReadyForRole(newPass, u.role);
-
-    if (u.authUserId && !isDeveloperSandboxActive()) {
-      const { data: authData } = await supabase.auth.getUser();
-      if (authData.user?.id !== u.authUserId) {
-        throw new Error("安全登入已失效，請重新登入後再修改密碼");
-      }
-      const authPassword = await passwordForSupabaseAuth(newPass, u.role);
-      const { error: authError } = await supabase.auth.updateUser({
-        password: authPassword,
-      });
-      if (authError) throw authError;
-    }
-
-    const { error } = await supabase
-      .from("users")
-      .update({ password: newPass, must_change_password: false })
-      .eq("id", userId);
-    if (error) throw error;
-
-    u.password = newPass;
-    u.mustChangePassword = false;
-    this.notifyListeners();
+    return this.updateUserPassword(userId, newPass);
   }
 
   async resetPassword(userId: string) {
@@ -2117,6 +2094,22 @@ class Store {
     const u = this.users.find((u) => u.id === userId);
     if (!u) throw new Error("User not found");
     assertPasswordMigrationReadyForRole(newPass, u.role);
+
+    if (isDeveloperSandboxActive()) {
+      if (this.currentUser?.id !== userId) {
+        throw new Error("只能修改目前登入帳號的個人密碼");
+      }
+      await saveSandboxPersonalPassword(u, newPass);
+      syncSandboxPersonalPassword(userId, newPass);
+      u.password = newPass;
+      u.mustChangePassword = false;
+      if (this.currentUser) {
+        this.currentUser.password = newPass;
+        this.currentUser.mustChangePassword = false;
+      }
+      this.notifyListeners();
+      return;
+    }
 
     if (u.authUserId && !isDeveloperSandboxActive()) {
       const { data: authData } = await supabase.auth.getUser();

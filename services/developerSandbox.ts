@@ -88,6 +88,15 @@ export class DeveloperSandbox {
   get enabled() { return this.active; }
   enable() { this.active = true; }
 
+  syncPersonalPassword(userId: string, password: string) {
+    const change = this.changes.get('users')?.get(`id:${userId}`);
+    // Preserve all other simulated fields, including a simulated deletion.
+    if (change?.after) {
+      change.after.password = password;
+      change.after.must_change_password = false;
+    }
+  }
+
   private merge(table: string, rows: Row[]): Row[] {
     const changes = this.changes.get(table);
     if (!changes) return rows;
@@ -249,4 +258,8 @@ export const isDeveloperSandboxActive = () => sandbox?.enabled === true;
 export const sandboxFetch: typeof fetch = (input, init) => sandbox ? sandbox.fetch(input, init) : remoteFetch(input, init);
 export function assertExternalWritesAllowed() {
   if (isDeveloperSandboxActive()) throw new Error(SANDBOX_BLOCKED);
+}
+
+export function syncSandboxPersonalPassword(userId: string, password: string) {
+  sandbox?.syncPersonalPassword(userId, password);
 }
