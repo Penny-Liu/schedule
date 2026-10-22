@@ -1,3 +1,5 @@
+import { MrUtilizationChart } from "../components/dashboard/MrUtilizationChart";
+import { copyTextToClipboard } from "../services/clipboard";
 import React, { useState, useMemo, useEffect } from "react";
 import type {
   User,
@@ -102,6 +104,7 @@ import { getLearningTeacherCandidates } from "../services/radiographerLearning";
 import { formatRadiographerDailyLineSummary } from "../services/radiographerDailyLineSummary";
 import {
   formatImagingDoctorWorkloadLine,
+  formatMrLowUtilizationSummary,
   normalizeRadiographerTodaySectionTemplate,
 } from "../services/radiographerTodayLineSummary";
 
@@ -8452,6 +8455,20 @@ BMD :{{bmd}}
       "",
       "備註：以上可安插數量為系統預估值，實際狀況將依現場場控動態調度為準。",
     ].join("\n");
+    const section9 = formatMrLowUtilizationSummary(
+      forecastDays.filter(({ offset, value }) =>
+        offset <= 20 && value.getDay() !== 0,
+      ).flatMap(({ value }) => {
+        const targetDate = toLocalISOString(value);
+        const targetStats = db.getDailyStats(targetDate);
+        if (!targetStats) return [];
+        const forecast = calculateMrCapacityForecast(
+          calculateMrScheduledSlots(targetStats),
+          getMrCapacitySlotsForDate(targetDate, forecastHolidays),
+        );
+        return [{ date: targetDate, utilizationPercent: forecast.utilizationPercent }];
+      }),
+    );
     const section7 = formatRadiographerDailyLineSummary(date, stats);
 
     return {
@@ -8464,15 +8481,15 @@ BMD :{{bmd}}
       section6,
       section7,
       section8,
+      section9,
       section6HighlightedDateLabels: highlightedForecastDateLabels,
     };
   }, [date, shifts, manpower, users, stats, doctorShifts, physicianWorkload]);
 
-  const handleCopy = (text: string) => {
-    navigator.clipboard.writeText(text).catch((err) => {
-      console.error("Failed to copy: ", err);
-      alert("複製失敗");
-    });
+  const handleCopy = async (text: string) => {
+    if (!(await copyTextToClipboard(text))) {
+      alert("瀏覽器未允許自動複製，請選取下方文字後手動複製。");
+    }
   };
 
   return (
@@ -8730,6 +8747,32 @@ BMD :{{bmd}}
             value={copyText.section8}
           />
         </div>
+
+        <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 mt-4">
+          <div className="flex justify-between items-center mb-2">
+            <div className="text-xs text-orange-700 font-bold">
+              區塊 9：未來20天 MR 低運用率日期
+            </div>
+            <button
+              type="button"
+              onClick={() => handleCopy(copyText.section9)}
+              className="text-xs bg-orange-100 hover:bg-orange-200 text-orange-800 px-2 py-1 rounded-lg flex items-center gap-1"
+            >
+              <Copy size={12} /> 複製
+            </button>
+          </div>
+          <p className="text-xs text-orange-700 mb-2">
+            僅排除週日，週六及國定假日納入，取運用率最低的5天並依日期排列；無排程資料的日期不列入。
+          </p>
+          <textarea
+            className="w-full min-h-[22rem] text-sm font-mono text-slate-700 bg-transparent outline-none resize-none leading-relaxed"
+            aria-label="未來20天 MR 低運用率日期"
+            readOnly
+            value={copyText.section9}
+          />
+        </div>
+
+        <MrUtilizationChart date={date} />
       </div>
     </div>
   );
