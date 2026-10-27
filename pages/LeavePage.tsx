@@ -9,6 +9,7 @@ import {
 } from "../types";
 import { db } from "../services/store";
 import { generateUUID } from "../services/utils";
+import { getLongLeaveApplicationMinDate, getLongLeaveApplicationError, isLongLeaveBeyondReviewWindow } from "../services/longLeavePolicy";
 import { isEligibleLeaveSwapCandidate } from "../services/leaveSwapCandidates";
 import {
   Calendar,
@@ -489,17 +490,7 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
         }
       }
     } else if (formData.type === LeaveType.LONG_LEAVE) {
-      // Enforce 60-Day Advance Rule
-      const start = new Date(formData.startDate);
-      const today = new Date();
-      const diffTime = start.getTime() - today.getTime();
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-      if (diffDays < 60) {
-        setValidationMsg(
-          `長假依照規定必需於 60 天前提出申請 (目前距今僅 ${diffDays} 天)。`,
-        );
-      }
+      setValidationMsg(getLongLeaveApplicationError(formData.startDate, db.getCycles()) || "");
     }
   }, [
     formData.startDate,
@@ -527,6 +518,12 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
 
     // Long Leave Validation (4-12 days)
     if (formData.type === LeaveType.LONG_LEAVE) {
+      // 送出時重新檢查，避免跨週期開啟表單後沿用舊期限。
+      const deadlineError = getLongLeaveApplicationError(formData.startDate, db.getCycles());
+      if (deadlineError) {
+        setValidationMsg(deadlineError);
+        return;
+      }
       if (!formData.startDate || !formData.endDate) {
         setValidationMsg("長假需選擇開始與結束日期。");
         return;
@@ -853,14 +850,10 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
   cutoffDate.setMonth(cutoffDate.getMonth() - 3);
   cutoffDate.setHours(0, 0, 0, 0);
 
-  // Helper to determine if a leave is a "Future Long Leave" (Policy: Review 2 months prior)
+  // 已截止新申請的週期可進入審核；更遠期的申請仍保留提醒。
   const isFutureLongLeave = (leave: LeaveRequest) => {
     if (leave.type !== LeaveType.LONG_LEAVE) return false;
-    const daysUntilStart = Math.ceil(
-      (new Date(leave.startDate).getTime() - new Date().getTime()) /
-        (1000 * 3600 * 24),
-    );
-    return daysUntilStart > 60;
+    return isLongLeaveBeyondReviewWindow(leave.startDate, db.getCycles());
   };
 
   const displayedLeaves = roleFilteredLeaves
@@ -1104,13 +1097,7 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
                     <div className="bg-orange-50 text-orange-700 px-3 py-2 rounded-lg text-xs flex items-center gap-2 border border-orange-100">
                       <AlertTriangle size={14} className="shrink-0" />
                       <span>
-                        此為遠期長假 (距今{" "}
-                        {Math.ceil(
-                          (new Date(leave.startDate).getTime() -
-                            new Date().getTime()) /
-                            (1000 * 3600 * 24),
-                        )}{" "}
-                        天)，建議於兩個月前再行核准。
+                        此為遠期長假，建議於開始週期的前兩個週期核准，以利提前排班。
                       </span>
                     </div>
                   )}
@@ -1351,6 +1338,15 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
 
               {/* Dynamic Calendar Inputs */}
               <div className="space-y-4">
+                {formData.type === LeaveType.LONG_LEAVE && (
+                  <p className="text-xs text-teal-700 bg-teal-50 border border-teal-100 rounded-lg p-3">
+                    目前週期及後兩個週期已截止新長假申請。
+                    {getLongLeaveApplicationMinDate(db.getCycles())
+                      ? `目前可申請 ${getLongLeaveApplicationMinDate(db.getCycles())} 起的長假（4～12 天）。`
+                      : "請先由管理者確認目前及後兩個週期的完整設定。"}
+                    既有長假申請仍可審核。
+                  </p>
+                )}
                 {/* Calculate Tomorrow for minDate restriction */}
                 {(() => {
                   const t = new Date();
@@ -1382,7 +1378,9 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
                               : undefined
                       }
                       // RESTRICTION: Start Date must be Tomorrow or later for planning types
-                      minDate={isPlanningType ? tomorrowStr : undefined}
+                      minDate={formData.type === LeaveType.LONG_LEAVE
+                        ? getLongLeaveApplicationMinDate(db.getCycles()) || undefined
+                        : isPlanningType ? tomorrowStr : undefined}
                     />
                   );
                 })()}
