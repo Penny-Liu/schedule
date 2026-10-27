@@ -1,6 +1,26 @@
 import type { Shift, User } from "../types";
 import { StationDefault } from "../types";
 
+// 超音波各站分別認定學習資格，不能把 US1 的學習設定套用到 US4。
+export const isUltrasoundStationLearning = (
+  user: Pick<User, "learningCapabilities" | "capabilities" | "learningSchedules">,
+  station: string,
+  date: string,
+): boolean => {
+  const normalize = (value: string) => String(value || "").trim().toUpperCase();
+  const assignedStation = normalize(station);
+  if (!/^US\d+$/.test(assignedStation)) return false;
+
+  return [...(user.learningCapabilities || []), ...(user.capabilities || [])]
+    .filter((capability) => normalize(capability) === assignedStation)
+    .some((capability) => {
+      const endDate = user.learningSchedules?.[capability];
+      return user.learningCapabilities?.includes(capability)
+        ? !endDate || date <= endDate
+        : Boolean(endDate && date <= endDate);
+    });
+};
+
 const getLearningCategory = (value: string): string => {
   const normalized = String(value || "").trim().toUpperCase();
   if (normalized.startsWith("MR")) return "MR";
