@@ -31,6 +31,7 @@ import { loadPdfLibraries } from "../services/exportLibraries";
 import ConfirmModal from "../components/ConfirmModal";
 import { toLocalISOString, generateUUID } from "../services/utils";
 import { loadChineseFontToDoc } from "../services/pdfUtils";
+import { isGeneCategory, isStaffSchedulingPaused, getAvailableAdministrativeNames, getNewPausedAssignments } from "../services/administrativeStaffAvailability";
 
 interface AdministrativeSchedulePageProps {
   currentUser: any;
@@ -51,6 +52,7 @@ export interface AdministrativeStaff {
   name: string;
   category: AdministrativeCategory;
   is_active: boolean;
+  scheduling_paused?: boolean;
 }
 
 // 行政排班接口 - 修改為部門為主
@@ -120,6 +122,7 @@ const AdministrativeSchedulePage: React.FC<AdministrativeSchedulePageProps> = ({
   const [newStaffCategory, setNewStaffCategory] =
     useState<AdministrativeCategory>(displayCategories[0]);
   const [isSubmittingStaff, setIsSubmittingStaff] = useState(false);
+  const [updatingStaffId, setUpdatingStaffId] = useState<string | null>(null);
 
   const [editingCell, setEditingCell] = useState<{
     category: AdministrativeCategory;
@@ -199,7 +202,7 @@ const AdministrativeSchedulePage: React.FC<AdministrativeSchedulePageProps> = ({
   const loadStaff = async () => {
     let query = supabase
       .from("administrative_staff")
-      .select("id, name, category, is_active")
+      .select("id, name, category, is_active, scheduling_paused")
       .eq("is_active", true);
     if (categories) {
       query = query.in("category", categories);
@@ -460,6 +463,11 @@ const AdministrativeSchedulePage: React.FC<AdministrativeSchedulePageProps> = ({
     dateStr: string,
     targetLoc: "北投" | "大直" | null,
   ) => {
+    if (!canEdit) return;
+    if (targetLoc && isStaffSchedulingPaused(staff)) {
+      alert(`${staff.name} 已暫停基因排班，請先在人員管理解除暫停。`);
+      return;
+    }
     setShifts((prev) => {
       let newShifts = [...prev];
 
@@ -535,7 +543,7 @@ const AdministrativeSchedulePage: React.FC<AdministrativeSchedulePageProps> = ({
 
       let fetchQuery = supabase
         .from("administrative_shifts")
-        .select("id")
+        .select("id, category, date, staff_names, location, notes")
         .gte("date", startDate)
         .lte("date", endDate);
       if (categories) {
@@ -545,6 +553,15 @@ const AdministrativeSchedulePage: React.FC<AdministrativeSchedulePageProps> = ({
       const { data: existingData, error: fetchError } = await fetchQuery;
 
       if (fetchError) throw fetchError;
+
+      // 再讀取最新狀態，防止開啟編輯器後人員才被暫停；也攔截手動輸入姓名。
+      const { data: latestStaff, error: staffError } = await supabase
+        .from("administrative_staff")
+        .select("id, name, category, is_active, scheduling_paused")
+        .eq("is_active", true);
+      if (staffError) throw staffError;
+      const blocked = getNewPausedAssignments(shifts, (existingData || []).map(mapShiftFromDb), latestStaff || []);
+      if (blocked.length) throw new Error(`${blocked.join("、")} 已暫停基因排班，請移除新增班次或先解除暫停。`);
 
       const existingIds = existingData?.map((d) => d.id) || [];
       const currentIds = shifts.map((s) => s.id);
@@ -601,6 +618,25 @@ const AdministrativeSchedulePage: React.FC<AdministrativeSchedulePageProps> = ({
   };
 
   // 停用/刪除人員
+  const handleToggleSchedulingPause = async (staff: AdministrativeStaff) => {
+    if (!canEdit || !isGeneCategory(staff.category) || updatingStaffId) return;
+    setUpdatingStaffId(staff.id);
+    try {
+      const { data, error } = await supabase.from("administrative_staff")
+        .update({ scheduling_paused: !staff.scheduling_paused })
+        .eq("id", staff.id)
+        .select("id, name, category, is_active, scheduling_paused")
+        .single();
+      if (error) throw error;
+      if (!data) throw new Error("未能儲存人員狀態，請重新載入後再試。");
+      setStaffList((previous) => previous.map((person) => person.id === staff.id ? data : person));
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "暫停排班設定儲存失敗，請稍後再試。");
+    } finally {
+      setUpdatingStaffId(null);
+    }
+  };
+
   const handleDeleteStaff = async (id: string) => {
     if (!window.confirm("確定要移除此固定人員嗎？")) return;
     const { error } = await supabase
@@ -926,6 +962,7 @@ const AdministrativeSchedulePage: React.FC<AdministrativeSchedulePageProps> = ({
                               </div>
                               <div className="text-[10px] text-gray-500">
                                 {staff.category}
+                                {isStaffSchedulingPaused(staff) && <span className="ml-1 text-amber-700">暫停排班</span>}
                               </div>
                             </td>
                             {Array.from({ length: daysInMonth }, (_, i) => {
@@ -1053,15 +1090,10 @@ const AdministrativeSchedulePage: React.FC<AdministrativeSchedulePageProps> = ({
 
                   {/* 常用人員快速點擊區 */}
                   {(() => {
-                    const currentCategoryNames = new Set([
-                      ...(historicalNames[editingCell.category] || []),
-                      ...staffList
-                        .filter((s) => s.category === editingCell.category)
-                        .map((s) => s.name),
-                    ]);
                     // 只用歷史名單 + 固定人員，不依賴當月 shifts（避免換月 reset）
-                    const availableNames =
-                      Array.from(currentCategoryNames).sort();
+                    const availableNames = getAvailableAdministrativeNames(
+                      editingCell.category, historicalNames[editingCell.category] || [], staffList,
+                    );
 
                     if (availableNames.length === 0) return null;
 
@@ -1142,6 +1174,15 @@ const AdministrativeSchedulePage: React.FC<AdministrativeSchedulePageProps> = ({
                     </button>
                     <button
                       onClick={() => {
+                        const proposed = [
+                          { category: editingCell.category, date: editingCell.date, location: "北投", staffNames: editStaffBeitou },
+                          { category: editingCell.category, date: editingCell.date, location: "大直", staffNames: editStaffDazhi },
+                        ];
+                        const blocked = getNewPausedAssignments(proposed, shifts, staffList);
+                        if (blocked.length) {
+                          alert(`${blocked.join("、")} 已暫停基因排班，請先在人員管理解除暫停。`);
+                          return;
+                        }
                         setShifts((prev) => {
                           const next = prev.filter(
                             (s) =>
@@ -1286,6 +1327,9 @@ const AdministrativeSchedulePage: React.FC<AdministrativeSchedulePageProps> = ({
                   </button>
                 </div>
                 <div className="p-6 overflow-y-auto custom-scrollbar">
+                  {displayCategories.some(isGeneCategory) && (
+                    <p className="text-xs text-gray-600 mb-4">暫停排班後不再新增該人員的基因／H 班，既有班表保留；點選「解除暫停」後恢復排班。</p>
+                  )}
                   <form
                     onSubmit={handleAddStaff}
                     className="flex flex-wrap md:flex-nowrap gap-2 mb-6 bg-gray-50 p-4 rounded-lg border border-gray-100"
@@ -1347,7 +1391,19 @@ const AdministrativeSchedulePage: React.FC<AdministrativeSchedulePageProps> = ({
                               >
                                 <span className="text-sm font-medium text-gray-700">
                                   {staff.name}
+                                  {isStaffSchedulingPaused(staff) && <span className="block text-[10px] text-amber-700">暫停排班</span>}
                                 </span>
+                                <div className="flex items-center gap-1">
+                                  {isGeneCategory(staff.category) && (
+                                    <button type="button"
+                                      disabled={!!updatingStaffId || !canEdit}
+                                      onClick={() => handleToggleSchedulingPause(staff)}
+                                      className="text-xs text-amber-700 border border-amber-200 rounded px-2 py-1 disabled:opacity-50"
+                                      aria-label={`${staff.name}${isStaffSchedulingPaused(staff) ? "解除暫停" : "暫停排班"}`}
+                                    >
+                                      {updatingStaffId === staff.id ? "儲存中…" : isStaffSchedulingPaused(staff) ? "解除暫停" : "暫停排班"}
+                                    </button>
+                                  )}
                                 <button
                                   onClick={() => handleDeleteStaff(staff.id)}
                                   className="text-red-400 hover:text-red-600 p-1"
@@ -1355,6 +1411,7 @@ const AdministrativeSchedulePage: React.FC<AdministrativeSchedulePageProps> = ({
                                 >
                                   <Trash2 size={14} />
                                 </button>
+                                </div>
                               </div>
                             ))}
                           </div>
