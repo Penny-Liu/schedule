@@ -1,5 +1,6 @@
 import { MrUtilizationChart } from "../components/dashboard/MrUtilizationChart";
 import { copyTextToClipboard } from "../services/clipboard";
+import { getFloorControlRoleDecision } from "../services/floorControlSchedulerOverride";
 import React, { useState, useMemo, useEffect } from "react";
 import type {
   User,
@@ -2676,22 +2677,20 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
     let newRoles = [...currentRoles];
 
     // 0. Validation Constraints
-    // 場控不能有任務，但「配合銷假」是純標記例外；星期日或國定假日除外
+    // 場控一般不派任務；手動排班可確認單日臨時支援，並保留銷假標記與假日例外。
     const _d0 = new Date(dateStr);
     const _isSunday0 = _d0.getDay() === 0;
     const _isNational0 = holidays.some(
       (h) => h.date === dateStr && h.type === DateEventType.NATIONAL,
     );
-    if (
-      currentStation.includes("場控") &&
-      role !== "配合銷假" &&
-      !currentRoles.includes(role) &&
-      !_isSunday0 &&
-      !_isNational0
-    ) {
+    const decision = getFloorControlRoleDecision(currentStation, role, currentRoles, _isSunday0 || _isNational0);
+    if (decision === "BLOCK") {
       alert("此崗位(場控)不需選擇特殊任務");
       return;
     }
+    if (decision === "CONFIRM_SCHEDULER" && !window.confirm(
+      `${dateStr}：確認讓此場控臨時兼任「排班」？僅計入當天排班點值，其他日期與自動排班限制維持原規則。`,
+    )) return;
 
     // 1. Toggle Selection
     if (newRoles.includes(role)) {
@@ -3404,21 +3403,20 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
       : StationDefault.UNASSIGNED;
     const currentRoles = existingShift ? existingShift.specialRoles : [];
 
-    // 場控不能有任務，但「配合銷假」是純標記例外；星期日或國定假日除外
+    // 場控一般不派任務；手動排班可確認單日臨時支援，並保留銷假標記與假日例外。
     const _d1 = new Date(dateStr);
     const _isSunday1 = _d1.getDay() === 0;
     const _isNational1 = holidays.some(
       (h) => h.date === dateStr && h.type === DateEventType.NATIONAL,
     );
-    if (
-      station.includes("場控") &&
-      role !== "配合銷假" &&
-      !_isSunday1 &&
-      !_isNational1
-    ) {
+    const decision = getFloorControlRoleDecision(station, role, currentRoles, _isSunday1 || _isNational1);
+    if (decision === "BLOCK") {
       alert("此崗位(場控)不需選擇特殊任務");
       return;
     }
+    if (decision === "CONFIRM_SCHEDULER" && !window.confirm(
+      `${dateStr}：確認讓此場控臨時兼任「排班」？僅計入當天排班點值，其他日期與自動排班限制維持原規則。`,
+    )) return;
 
     if (!currentRoles.includes(role)) {
       handleUpdateShift(userId, dateStr, station, [...currentRoles, role]);
@@ -5961,7 +5959,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                               )
                                               .map((r) => (
                                                 <option key={r} value={r}>
-                                                  {r}
+                                                  {station?.includes("場控") && r === SPECIAL_ROLES.SCHEDULER ? "排班（臨時支援）" : r}
                                                 </option>
                                               ))}
                                           </select>
