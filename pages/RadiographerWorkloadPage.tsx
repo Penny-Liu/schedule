@@ -36,7 +36,7 @@ import { isUserOnEmploymentPause, generateUUID } from "../services/utils";
 import { calculateAgeOnDate } from "../services/radiographerAge";
 import { fetchRadiographerBirthDates } from "../services/radiographerPrivateProfile";
 import { DailyDetailsModal } from "../components/dashboard/DailyDetailsModal";
-import { canTeachLearningCategory } from "../services/radiographerLearning";
+import { canTeachLearningCategory, isUltrasoundStationLearning } from "../services/radiographerLearning";
 import {
   getAutomaticMrTeachingAmount,
   normalizeMrTeachingAmount,
@@ -646,7 +646,10 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
     const preciselyAllocatedStudentDays = new Set<string>();
     const manualMrAssignments = new Map<string, RadiographerTeachingAllocation[]>();
 
-    const isLearningCat = (user: any, cat: string, shiftDate: string) => {
+    const isLearningCat = (user: any, cat: string, shiftDate: string, station: string) => {
+      if (cat === "超音波") {
+        return isUltrasoundStationLearning(user, station, shiftDate);
+      }
       const allCaps = [
         ...(user.learningCapabilities || []),
         ...(user.capabilities || []),
@@ -654,11 +657,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
       if (allCaps.length === 0) return false;
 
       let matches = [];
-      if (cat === "超音波")
-        matches = allCaps.filter(
-          (c: string) => c && (c.startsWith("US") || c === "超音波"),
-        );
-      else if (cat === "MR")
+      if (cat === "MR")
         matches = allCaps.filter((c: string) => c && c.startsWith("MR"));
       else if (cat === "CT")
         matches = allCaps.filter((c: string) => c && c.startsWith("CT"));
@@ -771,7 +770,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
             processedDates.add(shift.date);
 
             const explicitLearning = shift.learningStation && isStationCat(shift.learningStation, cat);
-            const isLearning = explicitLearning || isLearningCat(student, cat, shift.date);
+            const isLearning = explicitLearning || isLearningCat(student, cat, shift.date, shift.station);
 
             if (isLearning) {
               const inStudentCycle = studentDates.includes(shift.date);
@@ -837,7 +836,7 @@ const RadiographerWorkloadPage: React.FC<RadiographerWorkloadPageProps> = ({
                   );
                   if (!hasMatchingStation) return false;
 
-                  const teacherIsLearning = isLearningCat(r, cat, shift.date);
+                  const teacherIsLearning = isLearningCat(r, cat, shift.date, shift.station);
                   return !teacherIsLearning &&
                     (cat !== "MR" || canTeachLearningCategory(r, cat, shift.date));
                 });

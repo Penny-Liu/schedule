@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   formatImagingDoctorWorkloadLine,
+  formatMrLowUtilizationSummary,
   normalizeRadiographerTodaySectionTemplate,
 } from "./radiographerTodayLineSummary";
 
@@ -55,5 +56,33 @@ US：{{us}}
 CT: {{ct}}
 BMD :{{bmd}}
 {{support_section}}{{learning_section}}`);
+  });
+});
+
+describe("MR low utilization promotion", () => {
+  it("selects the lowest five and presents them chronologically with the requested copy", () => {
+    const result = formatMrLowUtilizationSummary([
+      { date: "2026-11-20", utilizationPercent: 39 },
+      { date: "2026-11-11", utilizationPercent: 42 },
+      { date: "2026-11-18", utilizationPercent: 42 },
+      { date: "2026-11-10", utilizationPercent: 90 },
+      { date: "2026-11-12", utilizationPercent: 0 },
+      { date: "2026-11-13", utilizationPercent: 20 },
+    ]);
+    expect(result.split("\n").filter((line) => line.startsWith("👉"))).toEqual([
+      "👉 11/11 (三) 42%",
+      "👉 11/12 (四) 0%",
+      "👉 11/13 (五) 20%",
+      "👉 11/18 (三) 42%",
+      "👉 11/20 (五) 39%",
+    ]);
+    expect(result).toContain("優先引導至「🔥 或上述日期」");
+    expect(result).toContain("大家一起幫忙把離峰時段填滿、拉高整體MR運用率！謝謝大家！");
+  });
+
+  it("does not generate a booking appeal when there is no data", () => {
+    expect(formatMrLowUtilizationSummary([])).toBe("未來20天內，排除週日後尚無可用的 MR 排程資料。");
+    expect(formatMrLowUtilizationSummary([{ date: "2026-11-11", utilizationPercent: 42 }])
+      .split("\n").filter((line) => line.startsWith("👉"))).toHaveLength(1);
   });
 });

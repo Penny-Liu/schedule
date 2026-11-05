@@ -1,6 +1,7 @@
 /// <reference types="vite/client" />
 
 import { createClient } from '@supabase/supabase-js';
+import { configureDeveloperSandbox, sandboxFetch } from './developerSandbox';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -28,4 +29,7 @@ if (
   throw new Error('A Supabase secret key must never be used in browser code. Use a publishable or legacy anon key.');
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+configureDeveloperSandbox(supabaseUrl);
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  global: { fetch: sandboxFetch },
+});

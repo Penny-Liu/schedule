@@ -1,4 +1,6 @@
+import { validateSyncPayload } from "./syncValidation";
 import React, { useState, useMemo, useEffect, useRef } from "react";
+import { isDeveloperSandboxActive, SANDBOX_BLOCKED, sandboxFetch as fetch } from '../services/developerSandbox';
 import {
   User,
   UserRole,
@@ -49,6 +51,7 @@ import { loadExcelJS } from "../services/exportLibraries";
 import { getEmploymentPause, isUserOnEmploymentPause, toLocalISOString } from "../services/utils";
 import { getRadiographerCycleMonthKey, getRadiographerDefaultDatesForMonth } from "../services/radiographerCycleDates";
 import { getRadiographerStatisticsMonths, loadRadiographerStatisticsMonths } from "../services/radiographerStatisticsData";
+import ExamDurationAnalysis from "../components/dashboard/ExamDurationAnalysis";
 import RadiographerWorkloadPage from "../pages/RadiographerWorkloadPage";
 import PhysicianWorkloadAnalysis from "../components/dashboard/PhysicianWorkloadAnalysis";
 import EquipmentDemandAnalysis from "../components/dashboard/EquipmentDemandAnalysis";
@@ -67,7 +70,7 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
   };
 
   const [activeTab, setActiveTab] = useState<
-    "stats" | "cycles" | "workload" | "physician" | "equipment"
+    "stats" | "cycles" | "workload" | "physician" | "equipment" | "duration"
   >("stats");
 
   // ── Helper: build date array for a range (Robust to timezone) ──
@@ -195,6 +198,13 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
         name: "設備人次（月彙總）",
         selected: false,
         start: firstDay2,
+        end: todayStr,
+      },
+      {
+        id: 5,
+        name: "檢查耗時（均攤估計與來源流程）",
+        selected: false,
+        start: new Date(Date.parse(todayStr) - 44 * 86400000).toISOString().slice(0, 10),
         end: todayStr,
       },
     ];
@@ -532,6 +542,7 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
 
   // ── Trigger Backend Sync ──
   const executeSync = async () => {
+    if (isDeveloperSandboxActive()) { alert(SANDBOX_BLOCKED); return; }
     const selectedTasks = syncTasks.filter((t) => t.selected);
     if (selectedTasks.length === 0) {
       alert("請至少選擇一個要同步的區塊！");
@@ -539,12 +550,18 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
     }
 
     setIsSyncing(true);
-    const payloadStr = JSON.stringify(selectedTasks);
+    let payloadStr: string;
+    try {
+      payloadStr = validateSyncPayload(JSON.stringify(selectedTasks));
+    } catch {
+      alert("請確認同步日期有效、開始日不晚於結束日，且範圍最多 367 天。");
+      setIsSyncing(false);
+      return;
+    }
 
     try {
-      // 判斷是否為本地端開發環境
-      // 測試 GitHub 同步，強制設為 false
-      const isLocalhost = false;
+      // 開發版透過 Vite proxy 呼叫本機後端；正式版沿用 GitHub Actions。
+      const isLocalhost = Boolean(import.meta.env.DEV);
 
       if (isLocalhost) {
         // 本地端維持原本打本機排程伺服器的邏輯
@@ -553,8 +570,11 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ syncPayload: payloadStr }),
         });
-        if (!response.ok) throw new Error("同步請求失敗，請確認後端服務狀態。");
-        alert(`[本地端] 已成功觸發後台同步！`);
+        if (!response.ok) {
+          const result = await response.json().catch(() => null);
+          throw new Error(result?.error || "同步請求失敗，請確認後端服務狀態。");
+        }
+        alert(`[本地端] 後台同步已完成！可至檢查耗時按「重新讀取」查看最新資料。`);
         setSyncModalOpen(false);
       } else {
         // 線上版觸發 GitHub Actions
@@ -723,6 +743,7 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
               </button>
             </div>
             <div className="p-6 flex flex-col gap-6 max-h-[70vh] overflow-y-auto">
+              <button type="button" onClick={()=>setSyncTasks(prev=>prev.map(task=>({...task,selected:task.id===5})))} className="self-start text-sm border border-cyan-300 bg-cyan-50 text-cyan-900 rounded-lg px-3 py-2">僅選檢查耗時</button>
               {syncTasks.map((task) => (
                 <div
                   key={task.id}
@@ -740,7 +761,7 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
                     <span
                       className={`font-bold ${task.selected ? "text-indigo-900" : "text-slate-600"}`}
                     >
-                      [{task.id}/4] {task.name}
+                      [{task.id}/{syncTasks.length}] {task.name}
                     </span>
                   </label>
                   {task.selected && (
@@ -750,7 +771,8 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
                           更新今年尚未結算的設備人次；已結算月份會自動跳過，目前月份更新至 Salesforce 最新資料。
                         </div>
                       ) : (<>
-                      <div className="flex items-center gap-3">
+                      {task.id===5&&<p className="text-sm text-cyan-900 bg-cyan-50 border border-cyan-200 rounded-lg p-3">同步已完成檢查的原始耗時、均攤估計、來源流程與資料品質。預設最近 45 天，最多 367 天；完成後到「檢查耗時」按「重新讀取」。</p>}
+                      <div className="flex items-center gap-3 flex-wrap">
                         <span className="text-sm font-medium text-slate-600 w-20">
                           同步區間
                         </span>
@@ -774,6 +796,8 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
                       </div>
                       
                       <div className="flex items-center gap-2 mt-1 ml-[92px] flex-wrap">
+                        {task.id===5&&<><button className="text-xs bg-cyan-50 text-cyan-800 px-2 py-1 rounded" onClick={()=>{const end=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Taipei',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());updateSyncTask(5,'start',new Date(Date.parse(end)-44*86400000).toISOString().slice(0,10));updateSyncTask(5,'end',end);}}>最近45天</button><button className="text-xs bg-cyan-50 text-cyan-800 px-2 py-1 rounded" onClick={()=>{const cycle=cycles.find(c=>c.id===selectedCycleId);if(cycle){updateSyncTask(5,'start',cycle.startDate);updateSyncTask(5,'end',cycle.endDate);}else{alert('請先在統計頁選擇一個週期。');}}}>目前所選週期</button></>}
+
                         <button
                           onClick={() => {
                             const d = new Date();
@@ -910,6 +934,13 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
                 <Activity size={14} className="inline md:mr-1" />
                 <span className="hidden md:inline">工作量統計</span>
               </button>
+              )}
+              {canViewWorkload && (
+                <button onClick={() => { showTooltip("檢查耗時"); setActiveTab("duration"); }}
+                  aria-label="檢查耗時"
+                  className={`px-3 py-1.5 rounded text-sm font-bold transition-all ${activeTab === "duration" ? "bg-white text-sky-700 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>
+                  <Clock size={14} className="inline md:mr-1" /><span className="hidden md:inline">檢查耗時</span>
+                </button>
               )}
               {isSupervisorOrAdmin && (
                 <button
@@ -1198,7 +1229,7 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
         {activeTab === "cycles" && isSupervisorOrAdmin && (
           <div className="max-w-6xl mx-auto flex flex-col gap-4">
             <p className="text-sm text-gray-500">
-              設定每位放射師在選定月份的工作週期起訖日期與備忘。預設使用該月份對應的排班週期；有微調的人員會以琥珀色標示。
+              設定每位放射師在選定月份的工作週期起訖日期與備忘。預設使用該月份對應的排班週期；有微調的人員會以琥珀色標示。排班天數依班表狀態計算，未顯示「休」的日期皆算上班，包含未分配點位的日期。
             </p>
 
             {saveError && (
@@ -1277,15 +1308,8 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
                           currentMonthData.startDate,
                           currentMonthData.endDate
                         );
-                        const scheduledDays = shifts.filter(
-                          (s) =>
-                            s.userId === user.id &&
-                            cycleDates.includes(s.date) &&
-                            s.station !== "OFF" &&
-                            s.station !== "休假" &&
-                            s.station !== StationDefault.UNASSIGNED &&
-                            s.station !== "未指派" &&
-                            s.station !== ""
+                        const scheduledDays = cycleDates.filter(
+                          (date) => db.getUserStatusOnDate(user.id, date) !== "OFF",
                         ).length;
 
                         return (
@@ -1432,6 +1456,8 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
             <RadiographerWorkloadPage currentUser={currentUser} />
           </div>
         )}
+
+        {activeTab === "duration" && canViewWorkload && <ExamDurationAnalysis currentUser={currentUser} />}
 
         {/* ── Physician Workload Tab ── */}
         {activeTab === "physician" && isSupervisorOrAdmin && (

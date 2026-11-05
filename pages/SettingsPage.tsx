@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from "react";
+import { isDeveloperSandboxActive, SANDBOX_BLOCKED, sandboxFetch as fetch } from '../services/developerSandbox';
 import {
   User,
   UserRole,
@@ -913,6 +914,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ currentUser }) => {
   }
 
   const handleSync = async () => {
+    if (isDeveloperSandboxActive()) { alert(SANDBOX_BLOCKED); return; }
     if (!syncStart || !syncEnd) {
       alert("請輸入完整的同步區間！");
       return;

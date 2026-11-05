@@ -1,3 +1,6 @@
+import { MrUtilizationChart } from "../components/dashboard/MrUtilizationChart";
+import { copyTextToClipboard } from "../services/clipboard";
+import { getFloorControlRoleDecision } from "../services/floorControlSchedulerOverride";
 import React, { useState, useMemo, useEffect } from "react";
 import type {
   User,
@@ -79,6 +82,8 @@ import {
 import { DailyStatsRows } from "../components/dashboard/DailyStatsRows";
 import { isUserOnEmploymentPause, toLocalISOString } from "../services/utils";
 import { getRadiographerCycleMonthKey } from "../services/radiographerCycleDates";
+import { getConsecutiveWorkCheckDates, getConsecutiveWorkWarnings } from "../services/radiographerConsecutiveWork";
+import { loadRadiographerStatisticsMonths } from "../services/radiographerStatisticsData";
 import { loadChineseFontToDoc } from "../services/pdfUtils";
 import {
   getAutomaticRadiographerWorkTime,
@@ -100,6 +105,7 @@ import { getLearningTeacherCandidates } from "../services/radiographerLearning";
 import { formatRadiographerDailyLineSummary } from "../services/radiographerDailyLineSummary";
 import {
   formatImagingDoctorWorkloadLine,
+  formatMrLowUtilizationSummary,
   normalizeRadiographerTodaySectionTemplate,
 } from "../services/radiographerTodayLineSummary";
 
@@ -770,6 +776,24 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
     mobileOffset,
     viewMode,
   ]);
+
+  const workCheckDates = getConsecutiveWorkCheckDates(dateRange);
+  const workCheckMonthsKey = JSON.stringify([...new Set(workCheckDates.map((date) => date.slice(0, 7)))]);
+  const [loadedWorkCheckMonths, setLoadedWorkCheckMonths] = useState("");
+  const [workCheckError, setWorkCheckError] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    setLoadedWorkCheckMonths("");
+    setWorkCheckError(false);
+    loadRadiographerStatisticsMonths(JSON.parse(workCheckMonthsKey), (year, month) =>
+      db.loadDataForMonth(year, month, { requireComplete: true }),
+    ).then(() => {
+      if (!cancelled) setLoadedWorkCheckMonths(workCheckMonthsKey);
+    }).catch(() => {
+      if (!cancelled) setWorkCheckError(true);
+    });
+    return () => { cancelled = true; };
+  }, [workCheckMonthsKey]);
 
   // Filter users: Active OR (Inactive but has shift in current view)
   // This list determines who is "valid" for the dashboard logic (lookups, etc)
@@ -2428,6 +2452,26 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
     return { station: null, specialRoles: [], isOff: false, isNotHired: false };
   };
 
+  const consecutiveWorkWarnings = new Map(users.map((user) => [
+    user.id,
+    loadedWorkCheckMonths === workCheckMonthsKey
+      ? getConsecutiveWorkWarnings(workCheckDates, (date) => {
+          const day = getDayShift(user.id, date);
+          return !day.isOff && !day.isNotHired;
+        })
+      : new Set<string>(),
+  ]));
+  const renderConsecutiveWorkWarning = (userId: string, date: string) =>
+    consecutiveWorkWarnings.get(userId)?.has(date) ? (
+      <span
+        className="inline-flex items-center justify-center gap-0.5 rounded bg-black px-1 py-0.5 text-[9px] font-bold text-white shadow-sm"
+        title="已連續上班超過 6 天（包含未分配點位的上班日），請確認休假安排"
+        aria-label="警示：已連續上班超過 6 天，請確認休假安排"
+      >
+        <AlertTriangle size={10} aria-hidden="true" />連班 &gt;6
+      </span>
+    ) : null;
+
   const getPendingRequest = (userId: string, dateStr: string) => {
     return pendingLeaves.find((l) => {
       const isDateInRange = dateStr >= l.startDate && dateStr <= l.endDate;
@@ -2633,22 +2677,20 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
     let newRoles = [...currentRoles];
 
     // 0. Validation Constraints
-    // 場控不能有任務，但「配合銷假」是純標記例外；星期日或國定假日除外
+    // 場控一般不派任務；手動排班可確認單日臨時支援，並保留銷假標記與假日例外。
     const _d0 = new Date(dateStr);
     const _isSunday0 = _d0.getDay() === 0;
     const _isNational0 = holidays.some(
       (h) => h.date === dateStr && h.type === DateEventType.NATIONAL,
     );
-    if (
-      currentStation.includes("場控") &&
-      role !== "配合銷假" &&
-      !currentRoles.includes(role) &&
-      !_isSunday0 &&
-      !_isNational0
-    ) {
+    const decision = getFloorControlRoleDecision(currentStation, role, currentRoles, _isSunday0 || _isNational0);
+    if (decision === "BLOCK") {
       alert("此崗位(場控)不需選擇特殊任務");
       return;
     }
+    if (decision === "CONFIRM_SCHEDULER" && !window.confirm(
+      `${dateStr}：確認讓此場控臨時兼任「排班」？僅計入當天排班點值，其他日期與自動排班限制維持原規則。`,
+    )) return;
 
     // 1. Toggle Selection
     if (newRoles.includes(role)) {
@@ -3361,21 +3403,20 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
       : StationDefault.UNASSIGNED;
     const currentRoles = existingShift ? existingShift.specialRoles : [];
 
-    // 場控不能有任務，但「配合銷假」是純標記例外；星期日或國定假日除外
+    // 場控一般不派任務；手動排班可確認單日臨時支援，並保留銷假標記與假日例外。
     const _d1 = new Date(dateStr);
     const _isSunday1 = _d1.getDay() === 0;
     const _isNational1 = holidays.some(
       (h) => h.date === dateStr && h.type === DateEventType.NATIONAL,
     );
-    if (
-      station.includes("場控") &&
-      role !== "配合銷假" &&
-      !_isSunday1 &&
-      !_isNational1
-    ) {
+    const decision = getFloorControlRoleDecision(station, role, currentRoles, _isSunday1 || _isNational1);
+    if (decision === "BLOCK") {
       alert("此崗位(場控)不需選擇特殊任務");
       return;
     }
+    if (decision === "CONFIRM_SCHEDULER" && !window.confirm(
+      `${dateStr}：確認讓此場控臨時兼任「排班」？僅計入當天排班點值，其他日期與自動排班限制維持原規則。`,
+    )) return;
 
     if (!currentRoles.includes(role)) {
       handleUpdateShift(userId, dateStr, station, [...currentRoles, role]);
@@ -4076,6 +4117,20 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
 
       {/* ... (Rest of the table UI) ... */}
       <div className="flex-1 overflow-auto bg-slate-50 p-4">
+        {(viewMode === "user" || viewMode === "personal") && (
+          <div className="mb-3 flex items-center gap-2 text-xs text-slate-600" role="status">
+            <span className="inline-flex items-center gap-1 rounded bg-black px-2 py-1 font-bold text-white">
+              <AlertTriangle size={13} aria-hidden="true" />連班 &gt;6
+            </span>
+            <span>
+              {workCheckError
+                ? "連班檢查資料載入失敗，請重新整理。"
+                : loadedWorkCheckMonths !== workCheckMonthsKey
+                  ? "正在檢查連續上班天數…"
+                  : "黑色警示：連續上班第 7 天起標示，包含未分配點位的上班日。"}
+            </span>
+          </div>
+        )}
         {viewMode === "daily" ? (
           // --- Daily View Implementation ---
           <div className="max-w-4xl mx-auto space-y-6">
@@ -5230,6 +5285,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
 
                   {/* Content Column */}
                   <div className="flex-1 flex flex-col justify-center">
+                    {renderConsecutiveWorkWarning(currentUser.id, date)}
                     {pendingReq && (
                       <div className="mb-2">
                         {getLeaveBadge(pendingReq.type)}
@@ -5661,6 +5717,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                 key={date}
                                 className={`p-0.5 border-r border-slate-100 align-top h-16 ${isToday ? "bg-teal-50/10" : ""} ${isOff ? "bg-slate-100/60" : isClosed ? "bg-slate-100/30" : isCoopCancel ? "bg-pink-50" : ""} relative`}
                               >
+                                {renderConsecutiveWorkWarning(user.id, date)}
                                 {pendingReq && getLeaveBadge(pendingReq.type)}
                                 {isNotHired ? (
                                   <div className="h-full w-full flex flex-col items-center justify-center">
@@ -5902,7 +5959,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                               )
                                               .map((r) => (
                                                 <option key={r} value={r}>
-                                                  {r}
+                                                  {station?.includes("場控") && r === SPECIAL_ROLES.SCHEDULER ? "排班（臨時支援）" : r}
                                                 </option>
                                               ))}
                                           </select>
@@ -8396,6 +8453,20 @@ BMD :{{bmd}}
       "",
       "備註：以上可安插數量為系統預估值，實際狀況將依現場場控動態調度為準。",
     ].join("\n");
+    const section9 = formatMrLowUtilizationSummary(
+      forecastDays.filter(({ offset, value }) =>
+        offset <= 20 && value.getDay() !== 0,
+      ).flatMap(({ value }) => {
+        const targetDate = toLocalISOString(value);
+        const targetStats = db.getDailyStats(targetDate);
+        if (!targetStats) return [];
+        const forecast = calculateMrCapacityForecast(
+          calculateMrScheduledSlots(targetStats),
+          getMrCapacitySlotsForDate(targetDate, forecastHolidays),
+        );
+        return [{ date: targetDate, utilizationPercent: forecast.utilizationPercent }];
+      }),
+    );
     const section7 = formatRadiographerDailyLineSummary(date, stats);
 
     return {
@@ -8408,15 +8479,15 @@ BMD :{{bmd}}
       section6,
       section7,
       section8,
+      section9,
       section6HighlightedDateLabels: highlightedForecastDateLabels,
     };
   }, [date, shifts, manpower, users, stats, doctorShifts, physicianWorkload]);
 
-  const handleCopy = (text: string) => {
-    navigator.clipboard.writeText(text).catch((err) => {
-      console.error("Failed to copy: ", err);
-      alert("複製失敗");
-    });
+  const handleCopy = async (text: string) => {
+    if (!(await copyTextToClipboard(text))) {
+      alert("瀏覽器未允許自動複製，請選取下方文字後手動複製。");
+    }
   };
 
   return (
@@ -8674,6 +8745,32 @@ BMD :{{bmd}}
             value={copyText.section8}
           />
         </div>
+
+        <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 mt-4">
+          <div className="flex justify-between items-center mb-2">
+            <div className="text-xs text-orange-700 font-bold">
+              區塊 9：未來20天 MR 低運用率日期
+            </div>
+            <button
+              type="button"
+              onClick={() => handleCopy(copyText.section9)}
+              className="text-xs bg-orange-100 hover:bg-orange-200 text-orange-800 px-2 py-1 rounded-lg flex items-center gap-1"
+            >
+              <Copy size={12} /> 複製
+            </button>
+          </div>
+          <p className="text-xs text-orange-700 mb-2">
+            僅排除週日，週六及國定假日納入，取運用率最低的5天並依日期排列；無排程資料的日期不列入。
+          </p>
+          <textarea
+            className="w-full min-h-[22rem] text-sm font-mono text-slate-700 bg-transparent outline-none resize-none leading-relaxed"
+            aria-label="未來20天 MR 低運用率日期"
+            readOnly
+            value={copyText.section9}
+          />
+        </div>
+
+        <MrUtilizationChart date={date} />
       </div>
     </div>
   );

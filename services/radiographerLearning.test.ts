@@ -4,6 +4,7 @@ import {
   canTeachLearningCategory,
   getLearningTeacherCandidates,
   matchesLearningCategory,
+  isUltrasoundStationLearning,
 } from "./radiographerLearning";
 
 const user = (overrides: Partial<User>): User => ({
@@ -26,6 +27,38 @@ const shift = (overrides: Partial<Shift>): Shift => ({
   station: "US1",
   specialRoles: [],
   ...overrides,
+});
+
+describe("ultrasound workload learning days", () => {
+  const learner = user({
+    capabilities: ["US1", "US2", "US3", "US4", "US5"],
+    learningCapabilities: ["US1"],
+    learningSchedules: {},
+  });
+
+  it("counts US1 learning while treating the other US stations as independent", () => {
+    expect(isUltrasoundStationLearning(learner, "US1", "2026-10-13")).toBe(true);
+    for (const station of ["US2", "US3", "US4", "US5"]) {
+      expect(isUltrasoundStationLearning(learner, station, "2026-10-13")).toBe(false);
+    }
+  });
+
+  it("does not count the seven US4 shifts from cycle ten as learning", () => {
+    const dates = ["13", "14", "16", "17", "20", "22", "23"];
+    expect(dates.filter((day) =>
+      isUltrasoundStationLearning(learner, "US4", `2026-10-${day}`),
+    )).toHaveLength(0);
+  });
+
+  it("preserves historical learning only for the matching station", () => {
+    const graduate = user({
+      capabilities: ["US1", "US4"],
+      learningSchedules: { US1: "2026-10-15" },
+    });
+    expect(isUltrasoundStationLearning(graduate, "US1", "2026-10-15")).toBe(true);
+    expect(isUltrasoundStationLearning(graduate, "US1", "2026-10-16")).toBe(false);
+    expect(isUltrasoundStationLearning(graduate, "US4", "2026-10-13")).toBe(false);
+  });
 });
 
 describe("radiographer learning teacher candidates", () => {

@@ -72,3 +72,33 @@ export const normalizeRadiographerTodaySectionTemplate = (
     })
     .join("\n")
     .replace(/\n{3,}/g, "\n\n");
+
+export interface MrPromotionDay {
+  date: string;
+  utilizationPercent: number;
+}
+
+export const formatMrLowUtilizationSummary = (days: MrPromotionDay[]): string => {
+  const selected = [...days]
+    .sort((a, b) => a.utilizationPercent - b.utilizationPercent || a.date.localeCompare(b.date))
+    .slice(0, 5)
+    .sort((a, b) => a.date.localeCompare(b.date));
+  if (selected.length === 0) {
+    return "未來20天內，排除週日後尚無可用的 MR 排程資料。";
+  }
+  const lines = selected.map(({ date, utilizationPercent }) => {
+    const [year, month, day] = date.split("-").map(Number);
+    const weekday = "日一二三四五六"[new Date(year, month - 1, day).getDay()];
+    return `👉 ${month}/${day} (${weekday}) ${utilizationPercent}%`;
+  });
+  return [
+    "各位夥伴，對照未來20天，以下是MR運用率較低的日期：",
+    "",
+    ...lines,
+    "",
+    "🎯 ",
+    "請業務夥伴這幾天若有新客戶要預約，優先引導至「🔥 或上述日期」；或是協助詢問手上有彈性時間的客戶，看是否能調整至這些時段。",
+    "",
+    "大家一起幫忙把離峰時段填滿、拉高整體MR運用率！謝謝大家！",
+  ].join("\n");
+};

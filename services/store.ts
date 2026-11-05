@@ -32,6 +32,7 @@ import {
   GeneAppointment,
 } from "../types";
 import { supabase } from "./supabaseClient";
+import { saveSandboxPersonalPassword } from "./personalPassword";
 import {
   assertPasswordMigrationReadyForRole,
   getDefaultPasswordForRole,
@@ -124,10 +125,11 @@ export const normalizeUserPermissions = (
   permissions?: string[] | null,
 ): string[] =>
   role === UserRole.VIEWER
-    ? getPermissionsByRole(UserRole.VIEWER)
+    ? [...getPermissionsByRole(UserRole.VIEWER), ...(permissions || []).filter(permission => permission === DEVELOPER_SANDBOX)]
     : permissions || getPermissionsByRole(role);
 
 import { fetchAssistantData, AssistantData } from "./assistantService";
+import { DEVELOPER_SANDBOX, isDeveloperSandboxActive, syncSandboxPersonalPassword } from './developerSandbox';
 
 const isUserCertifiedOnDate = (user: User | undefined | null, cap: string, date: string): boolean => {
   if (!user) return false;
@@ -226,10 +228,9 @@ class Store {
 
     // 儲存到 localStorage
     try {
-      localStorage.setItem(
-        "operation_logs",
-        JSON.stringify(this.operationLogs),
-      );
+      if (!isDeveloperSandboxActive()) {
+        localStorage.setItem("operation_logs", JSON.stringify(this.operationLogs));
+      }
     } catch (e) {
       console.warn("Failed to save operation logs to localStorage:", e);
     }
@@ -296,10 +297,9 @@ class Store {
           details: row.details,
         }));
         try {
-          localStorage.setItem(
-            "operation_logs",
-            JSON.stringify(this.operationLogs),
-          );
+          if (!isDeveloperSandboxActive()) {
+            localStorage.setItem("operation_logs", JSON.stringify(this.operationLogs));
+          }
         } catch (e) {
           console.warn("Failed to cache operation logs to localStorage:", e);
         }
@@ -644,7 +644,7 @@ class Store {
               mappedUser.capabilities = updatedCapabilities;
               
               // Asynchronously update DB
-              supabase.from("users").update({
+              if (this.currentUser && !isDeveloperSandboxActive()) supabase.from("users").update({
                 capabilities: mappedUser.capabilities,
                 learning_capabilities: mappedUser.learningCapabilities,
                 learning_schedules: mappedUser.learningSchedules
@@ -692,7 +692,7 @@ class Store {
           // The announced VIEWER credential is public. Never honor custom or
           // legacy permissions that could expand it beyond the approved views.
           if (mappedUser.role === UserRole.VIEWER) {
-            permissions = getPermissionsByRole(UserRole.VIEWER);
+            permissions = [...getPermissionsByRole(UserRole.VIEWER), ...(mappedUser.permissions || []).filter((permission: string) => permission === DEVELOPER_SANDBOX)];
           }
 
           return { ...mappedUser, permissions: Array.from(new Set(permissions)) };
@@ -732,6 +732,10 @@ class Store {
   }
 
   async initializeDataForUser(user: User, force: boolean = false) {
+    if (isDeveloperSandboxActive() && this.subscription) {
+      await supabase.removeChannel(this.subscription);
+      this.subscription = null;
+    }
     console.log(`[Store] Loading module data for user ${user.name}...`);
     const now = new Date();
     const { startDate, endDate, startMonth, endMonth } = this.getWindowDates(now);
@@ -1265,6 +1269,7 @@ class Store {
 
   // Realtime Listener Setup
   private setupRealtimeSubscription() {
+    if (isDeveloperSandboxActive()) return;
     if (this.subscription) return;
 
     this.subscription = supabase
@@ -1911,7 +1916,7 @@ class Store {
       }
     }
     
-    if (needSave && this.isLoaded) {
+    if (needSave && this.isLoaded && this.currentUser) {
       this.saveSettings();
     }
     if (!this.settings.holidays) {
@@ -2062,37 +2067,13 @@ class Store {
   }
 
   async changePassword(userId: string, newPass: string) {
-    const u = this.users.find((u) => u.id === userId);
-    if (!u) throw new Error("User not found");
-    assertPasswordMigrationReadyForRole(newPass, u.role);
-
-    if (u.authUserId) {
-      const { data: authData } = await supabase.auth.getUser();
-      if (authData.user?.id !== u.authUserId) {
-        throw new Error("安全登入已失效，請重新登入後再修改密碼");
-      }
-      const authPassword = await passwordForSupabaseAuth(newPass, u.role);
-      const { error: authError } = await supabase.auth.updateUser({
-        password: authPassword,
-      });
-      if (authError) throw authError;
-    }
-
-    const { error } = await supabase
-      .from("users")
-      .update({ password: newPass, must_change_password: false })
-      .eq("id", userId);
-    if (error) throw error;
-
-    u.password = newPass;
-    u.mustChangePassword = false;
-    this.notifyListeners();
+    return this.updateUserPassword(userId, newPass);
   }
 
   async resetPassword(userId: string) {
     const u = this.users.find((u) => u.id === userId);
     if (!u) throw new Error("User not found");
-    if (u.authUserId) {
+    if (u.authUserId && !isDeveloperSandboxActive()) {
       throw new Error("此帳號已啟用安全登入，請由使用者登入後自行修改密碼");
     }
     const temporaryPassword = getDefaultPasswordForRole(u.role);
@@ -2114,7 +2095,23 @@ class Store {
     if (!u) throw new Error("User not found");
     assertPasswordMigrationReadyForRole(newPass, u.role);
 
-    if (u.authUserId) {
+    if (isDeveloperSandboxActive()) {
+      if (this.currentUser?.id !== userId) {
+        throw new Error("只能修改目前登入帳號的個人密碼");
+      }
+      await saveSandboxPersonalPassword(u, newPass);
+      syncSandboxPersonalPassword(userId, newPass);
+      u.password = newPass;
+      u.mustChangePassword = false;
+      if (this.currentUser) {
+        this.currentUser.password = newPass;
+        this.currentUser.mustChangePassword = false;
+      }
+      this.notifyListeners();
+      return;
+    }
+
+    if (u.authUserId && !isDeveloperSandboxActive()) {
       const { data: authData } = await supabase.auth.getUser();
       if (authData.user?.id !== u.authUserId) {
         throw new Error("安全登入已失效，請重新登入後再修改密碼");

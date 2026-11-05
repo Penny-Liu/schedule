@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { User } from '../types';
 import { db } from '../services/store';
+import { isDeveloperSandboxActive } from '../services/developerSandbox';
 import { Lock, Check, AlertTriangle, LogOut, CheckCircle2 } from 'lucide-react';
 import {
     getDefaultPasswordForRole,
@@ -83,6 +84,11 @@ const ChangePasswordPage: React.FC<ChangePasswordPageProps> = ({ currentUser, on
 
                 {/* Content */}
                 <div className="p-8">
+                    {isDeveloperSandboxActive() && (
+                        <p className="mb-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-900">
+                            開發沙盒：本人密碼會正式儲存，其他操作仍維持本機模擬。
+                        </p>
+                    )}
                     {success ? (
                         <div className="text-center py-8 animate-in fade-in zoom-in duration-300">
                             <div className="w-20 h-20 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
