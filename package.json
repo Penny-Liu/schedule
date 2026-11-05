@@ -21,7 +21,9 @@
     "cap:open": "cap open ios",
     "predeploy": "vite build --base=/schedule/",
     "deploy": "gh-pages -d dist",
+    "sync-tasks": "node scripts/run-sync-tasks.mjs",
     "sync-stats": "node scripts/sync-all-to-supabase.mjs",
+    "sync-exam-duration": "node scripts/sync-exam-duration.mjs",
     "sync-equipment-visits": "node scripts/sync-equipment-visits.mjs"
   },
   "dependencies": {
