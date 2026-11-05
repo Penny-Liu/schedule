@@ -62,3 +62,13 @@ describe("validateSyncPayload", () => {
     ).toBe(JSON.stringify([{ id: 4, selected: true }]));
   });
 });
+
+it('accepts duration as the fifth task and rejects unknown task ids', () => {
+ const payload=JSON.stringify([1,2,3,4,5].map(id=>({id,selected:true})));
+ expect(JSON.parse(validateSyncPayload(payload))).toHaveLength(5);
+ expect(()=>validateSyncPayload('[{"id":6,"selected":true}]')).toThrow('between 1 and 5');
+});
+it('validates real dates and paired duration dates',()=>{
+ expect(()=>validateSyncPayload('[{"id":5,"selected":true,"start":"2026-02-30","end":"2026-03-02"}]')).toThrow('valid date');
+ expect(()=>validateSyncPayload('[{"id":5,"selected":true,"end":"2026-11-05"}]')).toThrow('both start and end');
+});

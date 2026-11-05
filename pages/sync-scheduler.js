@@ -18,7 +18,7 @@ const runSyncBlocks = (payloadStr) => {
 
     // 移除 shell: true 避免 Node 24 跳出警告，並支援跨平台 npm 指令
     const npmCmd = /^win/.test(process.platform) ? "npm.cmd" : "npm";
-    const child = spawn(npmCmd, ["run", "sync-stats"], {
+    const child = spawn(npmCmd, ["run", "sync-tasks"], {
       env: envObj,
       stdio: "inherit", // 將輸出導向目前的終端機介面
     });
