@@ -16,6 +16,8 @@ export function dateRange(from, to) {
 export async function assertDurationWriteCompatibility(db) {
  const {data,error}=await db.rpc('supports_exam_duration_algorithm',{p_algorithm:DURATION_ALGORITHM});
  if(error||data!==true)throw new Error('US 比例算法尚未完成資料庫部署，請先套用對應 migration，再重新同步；未寫入任何統計資料。');
+ const care=await db.rpc('supports_exam_duration_care_notes');
+ if(care.error||care.data!==true)throw new Error('關懷註記尚未完成資料庫部署，請先套用對應 migration；未寫入任何統計資料。');
 }
 
 export async function syncExamDuration({ from, to, write = false }) {
@@ -31,7 +33,7 @@ export async function syncExamDuration({ from, to, write = false }) {
   const capturedAt = new Date().toISOString();
   const session = await getSalesforceSession();
   const { records } = await runSoqlQuery({ ...session, soql: `
-    SELECT Id, Order__c, Checkup__c, CheckupReservationId__c, ProcessType__c, Gender__c, CheckStartDate__c, Radiologist__c, Radiologist__r.Name,
+    SELECT Id, Order__c, Order__r.Care__c, Checkup__c, CheckupReservationId__c, ProcessType__c, Gender__c, CheckStartDate__c, Radiologist__c, Radiologist__r.Name,
       ResourceCategory__c, CheckupName__c, Resource__c, Resource__r.Name, Location__c,
       examination_StartTime1__c, examination_EndTime1__c, StartTime__c, EndTime__c, End__c,
       CTAUseTime__c, CTA_Further_Rad__c, CTA_Further_Rad__r.Name, CTA_Further_StartTime__c, CTA_Further_EndTime__c

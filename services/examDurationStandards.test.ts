@@ -4,7 +4,7 @@ import type {ExamDurationRow} from './radiographerExamDuration';
 import {buildDurationComparison} from './examDurationComparison';
 const row=(changes:Partial<ExamDurationRow>={}):ExamDurationRow=>({metric_scope:'allocated',exam_date:'2026-11-05',radiographer_id:'a',radiographer_name:'甲',category:'US',exam_name:'US 均攤｜單次流程｜腹部',location:'北投',resource_name:'US1',total_count:1,valid_count:1,missing_time_count:0,invalid_time_count:0,zero_count:0,negative_count:0,shared_interval_count:0,duplicate_count:0,outlier_count:0,missing_staff_count:0,duration_histogram:{'300':1},synced_at:'2026-11-06',algorithm:'actual-flow-v3',...changes});
 it('stores all 21 user-provided standards exactly',()=>{
- expect(examDurationStandards.map(s=>s.minutes)).toEqual([70,90,55,55,30,10,15,15,25,10,10,10,7,5,3,5,15,45,5,15,7]);
+ expect(examDurationStandards.map(s=>s.minutes)).toEqual([75,90,60,55,40,10,15,15,25,10,10,10,7,5,3,5,15,45,5,15,7]);
  expect(new Set(examDurationStandards.map(s=>s.key)).size).toBe(21);
  expect(getExamStandardMinutes('mr')).toBeNull();expect(getExamStandardMinutes('us')).toBeNull();expect(getExamStandardMinutes('ct')).toBeNull();
 });

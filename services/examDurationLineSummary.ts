@@ -1,3 +1,4 @@
+import {formatDurationCareNote} from './examDurationCareNote';
 import type { DurationComparison } from './examDurationComparison';
 import { workloadDurationDefinitions } from './workloadDurationGroups';
 export type DurationSortKey = 'name'|'value'|'quantity'|'sampleCount'|'flowCount'|'coverage';
@@ -35,7 +36,7 @@ export function formatExamDurationLineSummary({rows,period,filters,rankingRows=r
    lines.push('',`${field.category}・${field.label}｜排程標準 ${new Set(shown.map(r=>r.standardMinutes)).size>1?'依各人檢查組合加權':`${fmt(shown[0].standardMinutes)}${shown[0].comparisonUnit}`}`);
   for(const r of shown) {
     const zone=r.durationZone==='slower'?'超出標準，建議了解':'標準時間內';
-    lines.push(`・${r.radiographer_name} ${fmt(r.value)}分｜標準${fmt(r.standardMinutes)}分｜${zone}`);
+    lines.push(`・${r.radiographer_name} ${fmt(r.value)}分｜標準${fmt(r.standardMinutes)}分｜${zone}${formatDurationCareNote(r)?`｜${formatDurationCareNote(r)}`:''}`);
   }
  }
  return lines.join('\n');

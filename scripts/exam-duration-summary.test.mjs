@@ -145,7 +145,7 @@ test('blocks a weighted write until the matching database migration is available
  const {assertDurationWriteCompatibility}=await import('./sync-exam-duration.mjs');
  await assert.rejects(()=>assertDurationWriteCompatibility({rpc:async()=>({data:null,error:{message:'missing function'}})}),/未寫入任何統計資料/);
  await assert.rejects(()=>assertDurationWriteCompatibility({rpc:async()=>({data:false,error:null})}),/尚未完成資料庫部署/);
- await assertDurationWriteCompatibility({rpc:async(name,args)=>{assert.equal(name,'supports_exam_duration_algorithm');assert.equal(args.p_algorithm,'actual-flow-v4');return {data:true,error:null};}});
+ await assertDurationWriteCompatibility({rpc:async(name,args)=>{assert.ok(['supports_exam_duration_algorithm','supports_exam_duration_care_notes'].includes(name));if(args)assert.equal(args.p_algorithm,'actual-flow-v4');return {data:true,error:null};}});
 });
 
 test('includes neck weight 1 and heart weight 3 in mixed US while conserving the full interval',()=>{
@@ -156,4 +156,23 @@ test('includes neck weight 1 and heart weight 3 in mixed US while conserving the
  for(const [i,seconds]of [600,600,1200,600,1200,600,1800].entries())assert.deepEqual(rows.find(r=>r.exam_name.endsWith(names[i])).duration_histogram,{[seconds]:1});
  assert.equal(rows.reduce((n,r)=>n+Object.entries(r.duration_histogram).reduce((sum,[seconds,count])=>sum+Number(seconds)*count,0),0),6600);
  assert.equal(rows.some(r=>r.exam_name.includes('肝纖維')),false);
+});
+
+test('counts explicit current-order claustrophobia care only for deduplicated valid MR samples',()=>{
+ const base=record({ResourceCategory__c:'MR',Order__r:{Care__c:'其他;幽閉'},CheckupName__c:'MR頭部'});
+ const rows=buildExamDurationSummaries([base,{...base,Id:'duplicate'},record({Id:'bad',ResourceCategory__c:'MR',Order__r:{Care__c:'幽閉'},examination_StartTime1__c:null}),record({Id:'negative',Order__c:'v2',ResourceCategory__c:'MR',CheckupName__c:'MR頭部',Order__r:{Care__c:'無幽閉'}})]);
+ assert.equal(rows.reduce((n,r)=>n+r.claustrophobia_count,0),1);
+ assert.ok(!JSON.stringify(rows).includes('Order__r'));assert.ok(!JSON.stringify(rows).includes('其他;幽閉'));
+});
+test('counts a segmented MR session once instead of once per segment or allocated order',async()=>{
+ const {buildAllExamDurationSummaries}=await import('./exam-duration-summary.mjs');
+ const roots=[record({Id:'root1',ResourceCategory__c:'MR',ProcessType__c:'報到',CheckupName__c:'MR報到',Gender__c:'男'}),record({Id:'root2',ResourceCategory__c:'MR',ProcessType__c:'報到',CheckupName__c:'MR報到',Gender__c:'男',Order__r:{Care__c:'幽閉'}})];
+ const items=Array.from({length:7},(_,i)=>record({Id:'i'+i,Checkup__c:'c'+i,ResourceCategory__c:'MR',CheckupName__c:'部位'+i,CheckupReservationId__c:i<3?'root1':'root2'}));
+ const rows=buildAllExamDurationSummaries([...roots,...items]);
+ assert.equal(rows.filter(r=>r.metric_scope==='flow').reduce((n,r)=>n+r.claustrophobia_count,0),1);
+ assert.equal(rows.filter(r=>r.metric_scope==='allocation_flow').reduce((n,r)=>n+r.claustrophobia_count,0),1);
+});
+test('stops before writes when care-note schema capability is missing',async()=>{
+ const {assertDurationWriteCompatibility}=await import('./sync-exam-duration.mjs');
+ await assert.rejects(()=>assertDurationWriteCompatibility({rpc:async name=>name==='supports_exam_duration_algorithm'?{data:true,error:null}:{data:null,error:{message:'missing'}}}),/關懷註記尚未完成資料庫部署/);
 });
