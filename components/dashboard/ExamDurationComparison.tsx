@@ -1,3 +1,4 @@
+import {formatDurationChartLabel} from '../../services/examDurationReportCard';
 import {formatDurationCareNote,durationCareNoteClass} from '../../services/examDurationCareNote';
 import React, { useState } from 'react';
 import { workloadDurationDefinitions } from '../../services/workloadDurationGroups';
@@ -24,6 +25,7 @@ export default function ExamDurationComparison({entries,staff,onStaff,view,perio
  const unsorted=view==='person'?entries.filter(e=>e.radiographer_name===staff):entries;
  const visible=sortDurationRows(unsorted,'name','asc');
  const defs=workloadDurationDefinitions.filter(d=>visible.some(e=>e.fieldKey===d.key));
+ const chartLabel=defs[0]?formatDurationChartLabel(defs[0]):'檢查耗時';
  const people=sortDurationPeople(visible,'','name','asc');
  const lineText=view==='overview'?formatDurationOverviewReport(visible,period,filters):formatExamDurationLineSummary({rows:visible,rankingRows:entries,period,filters});
  const hasLineComparison=view==='overview'?Boolean(lineText):visible.some(r=>r.comparable);
@@ -39,7 +41,7 @@ export default function ExamDurationComparison({entries,staff,onStaff,view,perio
     return;
    }
    const canvas=document.createElement('canvas');
-   drawExamDurationChart(canvas,chartRows,`${defs[0]?.label||'檢查耗時'} · 同仁比較`,period);
+   drawExamDurationChart(canvas,chartRows,`${chartLabel} · 同仁比較`,period);
    const blob=await examDurationChartPng(canvas);
    if(copy){
     await navigator.clipboard.write([new ClipboardItem({'image/png':blob})]);
@@ -48,7 +50,7 @@ export default function ExamDurationComparison({entries,staff,onStaff,view,perio
     const url=URL.createObjectURL(blob);
     const link=document.createElement('a');
     link.href=url;
-    link.download=`檢查耗時-${defs[0]?.label||'統計'}-${period}.png`;
+    link.download=`檢查耗時-${chartLabel}-${period}.png`;
     document.body.appendChild(link);
     link.click();
     link.remove();
@@ -71,7 +73,7 @@ export default function ExamDurationComparison({entries,staff,onStaff,view,perio
   </div>}
   {view==='department'&&defs.length===1&&(()=>{
    const max=Math.ceil(Math.max(...chartRows.flatMap(r=>[r.value||0,r.standardMinutes||0]),1)*1.12);
-   return <div className="p-4 bg-white border rounded-xl space-y-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><h4 className="font-semibold">{defs[0].label} · 耗時區間圖</h4><p className="text-xs text-slate-500 mt-1">圓點為目前平均耗時，直線為排程標準；中位數只作輔助。彙總列標準依各人檢查組合加權。</p></div><div className="flex gap-2"><button type="button" disabled={chartBusy||!chartRows.length} onClick={()=>exportChart(true)} className="border rounded-lg px-3 py-2 bg-sky-700 text-white text-sm disabled:opacity-50">複製圖表圖片</button><button type="button" disabled={chartBusy||!chartRows.length} onClick={()=>exportChart(false)} className="border rounded-lg px-3 py-2 text-sm disabled:opacity-50">下載 PNG</button></div></div><div className="flex flex-wrap gap-4 text-xs"><span className="flex items-center gap-1"><i className="w-0.5 h-3 bg-slate-700"/>排程標準</span><span className="flex items-center gap-1"><i className="w-3 h-3 rounded-full bg-sky-600"/>個人耗時</span></div><div className="relative"><div className="absolute left-[80px] right-[100px] top-0 flex justify-between text-[11px] text-slate-400"><span>0</span><span>{fmt(max/2)}分</span><span>{fmt(max)}分</span></div><div className="pt-5 space-y-1">{chartRows.map(r=>{const zone=r.durationZone==='faster'?'bg-teal-500':r.durationZone==='slower'?'bg-amber-500':'bg-sky-600';return <div key={r.key} className={`grid grid-cols-[80px_1fr_100px] gap-3 items-center min-h-8 rounded px-2 ${zoneStyle(r)}`}><button className="text-left text-sm underline text-sky-800" onClick={()=>onStaff(r.radiographer_name)}>{r.radiographer_name}</button><div className="relative h-3 bg-slate-100 rounded">{r.standardMinutes!==null&&<span title={`排程標準 ${fmt(r.standardMinutes)} 分`} className="absolute inset-y-[-5px] border-l-2 border-slate-700" style={{left:chartPosition(r.standardMinutes,max)}}/>}{r.eligible&&<span title={`${fmt(r.value)} 分`} className={`absolute top-1/2 h-4 w-4 -translate-y-1/2 -translate-x-1/2 rounded-full border-2 border-white shadow ${zone}`} style={{left:chartPosition(r.value,max)}}/>}</div><span className="text-sm">{fmt(r.value)}分<small className="block">{r.eligible?(r.comparable?formatDurationDifference(r):'排程標準待設定'):r.reference}</small></span></div>;})}</div></div><p role="status" className="text-sm text-sky-800">{copyStatus}</p></div>;
+   return <div className="p-4 bg-white border rounded-xl space-y-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><h4 className="font-semibold">{chartLabel} · 耗時區間圖</h4><p className="text-xs text-slate-500 mt-1">圓點為目前平均耗時，直線為排程標準；中位數只作輔助。彙總列標準依各人檢查組合加權。</p></div><div className="flex gap-2"><button type="button" disabled={chartBusy||!chartRows.length} onClick={()=>exportChart(true)} className="border rounded-lg px-3 py-2 bg-sky-700 text-white text-sm disabled:opacity-50">複製圖表圖片</button><button type="button" disabled={chartBusy||!chartRows.length} onClick={()=>exportChart(false)} className="border rounded-lg px-3 py-2 text-sm disabled:opacity-50">下載 PNG</button></div></div><div className="flex flex-wrap gap-4 text-xs"><span className="flex items-center gap-1"><i className="w-0.5 h-3 bg-slate-700"/>排程標準</span><span className="flex items-center gap-1"><i className="w-3 h-3 rounded-full bg-sky-600"/>個人耗時</span></div><div className="relative"><div className="absolute left-[80px] right-[100px] top-0 flex justify-between text-[11px] text-slate-400"><span>0</span><span>{fmt(max/2)}分</span><span>{fmt(max)}分</span></div><div className="pt-5 space-y-1">{chartRows.map(r=>{const zone=r.durationZone==='faster'?'bg-teal-500':r.durationZone==='slower'?'bg-amber-500':'bg-sky-600';return <div key={r.key} className={`grid grid-cols-[80px_1fr_100px] gap-3 items-center min-h-8 rounded px-2 ${zoneStyle(r)}`}><button className="text-left text-sm underline text-sky-800" onClick={()=>onStaff(r.radiographer_name)}>{r.radiographer_name}</button><div className="relative h-3 bg-slate-100 rounded">{r.standardMinutes!==null&&<span title={`排程標準 ${fmt(r.standardMinutes)} 分`} className="absolute inset-y-[-5px] border-l-2 border-slate-700" style={{left:chartPosition(r.standardMinutes,max)}}/>}{r.eligible&&<span title={`${fmt(r.value)} 分`} className={`absolute top-1/2 h-4 w-4 -translate-y-1/2 -translate-x-1/2 rounded-full border-2 border-white shadow ${zone}`} style={{left:chartPosition(r.value,max)}}/>}</div><span className="text-sm">{fmt(r.value)}分<small className="block">{r.eligible?(r.comparable?formatDurationDifference(r):'排程標準待設定'):r.reference}</small></span></div>;})}</div></div><p role="status" className="text-sm text-sky-800">{copyStatus}</p></div>;
   })()}
   <section aria-label="檢查耗時 LINE 複製預覽" className="bg-white rounded-xl border p-4 space-y-3">
    <div className="flex justify-between items-center gap-3"><h4 className="font-semibold">{view==='overview'?'主管報告摘要／LINE 預覽':'LINE 複製預覽'}</h4><button type="button" disabled={!hasLineComparison} onClick={async()=>{const ok=await copyTextToClipboard(lineText);setCopiedFor(lineText);setCopyStatus(ok?'已複製目前摘要':'複製未成功，請選取下方文字手動複製。');}} className="border rounded-lg px-4 py-2 bg-sky-700 text-white text-sm disabled:opacity-50">{view==='overview'?'複製報告摘要':'複製 LINE 文字'}</button></div>

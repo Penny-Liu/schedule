@@ -1,5 +1,5 @@
 import {it,expect} from 'vitest';
-import {buildDurationCardPages} from './examDurationReportCard';
+import {buildDurationCardPages,formatDurationChartLabel} from './examDurationReportCard';
 import type {DurationComparison} from './examDurationComparison';
 const row=(changes:Partial<DurationComparison>={}):DurationComparison=>({key:'a',radiographer_id:'a',radiographer_name:'同仁甲',fieldKey:'usA',category:'US',label:'腹',value:12,standardMinutes:15,standardDifferenceMinutes:-3,sampleCount:20,sampleUnit:'項',flowCount:18,coverage:1,basis:'比例分攤估計',eligible:true,comparable:true,durationZone:'normal',comparisonUnit:'分／醫令',reference:'樣本較充足',...changes} as DurationComparison);
 const opts={mode:'category' as const,fieldKey:'usA',staff:'',period:'2026-10-04～2026-11-02',filters:'北投｜US1｜2天未同步'};
@@ -28,4 +28,14 @@ it('filters chart colleagues by id without changing values or the source data',(
  expect(pages).toHaveLength(1);expect(pages[0].rows).toHaveLength(1);expect(pages[0].rows[0].value).toBe(18);expect(pages[0].rows[0].standard).toBe(15);expect(rows).toHaveLength(2);
  expect(buildDurationCardPages(rows,{...opts,excludedStaffIds:['a','b']})).toEqual([]);
  expect(buildDurationCardPages(rows,{...opts,mode:'person',staff:'同名',excludedStaffIds:['a','b']})[0].rows).toHaveLength(2);
+});
+
+it('includes US in every body-part chart title without duplicating modality labels',()=>{
+ const parts=[['usA','腹'],['usBreast','乳'],['usHeart','心'],['usThy','甲'],['usCCA','頸動脈'],['usNeck','頸部'],['usPelvisFemale','P女'],['usPelvisMale','P男']];
+ for(const [fieldKey,label] of parts){
+  expect(buildDurationCardPages([row({fieldKey,label})],{...opts,fieldKey})[0].title).toBe(`US・${label}｜作業概況`);
+ }
+ expect(formatDurationChartLabel({category:'US',label:'US'})).toBe('US');
+ expect(formatDurationChartLabel({category:'US',label:'US・腹'})).toBe('US・腹');
+ expect(formatDurationChartLabel({category:'MR',label:'MR大男'})).toBe('MR大男');
 });
