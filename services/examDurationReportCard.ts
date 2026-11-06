@@ -4,6 +4,7 @@ import type {DurationComparison} from './examDurationComparison';
 import {getDurationWorkState,durationWorkLabels,type DurationWorkState} from './examDurationOverview';
 export interface DurationCardRow {name:string;label:string;value:number|null;standard:number|null;unit:string;difference:number|null;sampleCount:number;sampleUnit:string;flowCount:number;coverage:number;basis:string;state:DurationWorkState;status:string;careNote?:string;}
 export interface DurationCardPage {title:string;period:string;filters:string;page:number;pageCount:number;rows:DurationCardRow[];}
+export const formatDurationChartLabel=(entry:{category:string;label:string})=>entry.category==='US'&&!entry.label.startsWith('US')?`US・${entry.label}`:entry.label;
 export function buildDurationCardPages(entries:DurationComparison[],options:{mode:'category'|'person';fieldKey:string;staff:string;period:string;filters:string;excludedStaffIds?:string[]}) {
  const selected=entries.filter(r=>r.radiographer_id&&r.fieldKey!=='usFibrosis'&&(options.mode==='category'?r.fieldKey===options.fieldKey&&!options.excludedStaffIds?.includes(r.radiographer_id):r.radiographer_name===options.staff));
  // 分類依原本工作量順序；人員固定姓名順序，不按時間／狀態重排。
@@ -11,7 +12,7 @@ export function buildDurationCardPages(entries:DurationComparison[],options:{mod
  else selected.sort((a,b)=>workloadDurationDefinitions.findIndex(d=>d.key===a.fieldKey)-workloadDurationDefinitions.findIndex(d=>d.key===b.fieldKey));
  const rows=selected.map(r=>{const state=getDurationWorkState(r);return {name:r.radiographer_name,label:`${r.category}・${r.label}`,value:r.value,standard:r.standardMinutes,unit:r.comparisonUnit,difference:r.standardDifferenceMinutes,sampleCount:r.sampleCount,sampleUnit:r.sampleUnit,flowCount:r.flowCount,coverage:r.coverage,basis:r.basis,state,status:durationWorkLabels[state],careNote:formatDurationCareNote(r)};});
  if(!rows.length)return [];
- return [{title:options.mode==='person'?`${options.staff}｜作業概況`:`${selected[0]?.label||'檢查耗時'}｜作業概況`,period:options.period,filters:options.filters,page:1,pageCount:1,rows}];
+ return [{title:options.mode==='person'?`${options.staff}｜作業概況`:`${selected[0]?formatDurationChartLabel(selected[0]):'檢查耗時'}｜作業概況`,period:options.period,filters:options.filters,page:1,pageCount:1,rows}];
 }
 const C={navy:'#102b46',blue:'#2563eb',ink:'#16324b',muted:'#64778c',line:'#dce5ee',bg:'#f0f5fa',white:'#ffffff'};
 const palettes:Record<DurationWorkState,{ink:string;bg:string;bar:string}>={normal:{ink:'#06745b',bg:'#e8f7f1',bar:'#19a883'},attention:{ink:'#a05c13',bg:'#fff4df',bar:'#e8a541'},observe:{ink:'#376b9b',bg:'#ebf3fc',bar:'#81a9d6'},data:{ink:'#6b7788',bg:'#eef1f5',bar:'#a8b3c1'}};
