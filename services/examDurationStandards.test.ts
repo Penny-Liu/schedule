@@ -43,3 +43,15 @@ it('keeps fibrosis out of timing comparison and report entries',()=>{
  const entries=buildDurationComparison([row({metric_scope:'item',exam_name:'肝纖維超音波'})]);
  expect(entries.some(r=>r.fieldKey==='usFibrosis')).toBe(false);
 });
+
+it('applies shared edits to both direct standards and weighted MR/US/CT comparisons',()=>{
+ expect(getExamStandardMinutes('mrSmall',{mrSmall:45})).toBe(45);
+ expect(getExamStandardMinutes('usFibrosis',{usFibrosis:10})).toBeNull();
+ const mr=[row({category:'MR',total_count:9,valid_count:9,exam_name:'MR 均攤｜大型套（7 項以上）・女｜部位'}),row({category:'MR',metric_scope:'allocation_flow',exam_name:'MR 來源｜大型套（7 項以上）・女｜全部'})];
+ expect(resolveDurationStandard(mr,'mr',9,{mrLargeFemale:99}).standardMinutes).toBe(11);
+ expect(resolveDurationStandard([row()],'us',1,{usA:20}).standardMinutes).toBe(20);
+ const ct=[row({category:'CT',exam_name:'CT 均攤｜單次流程｜肺部'})];
+ expect(resolveDurationStandard(ct,'ct',1,{ctGeneral:6}).standardMinutes).toBe(6);
+ const entry=buildDurationComparison([row({duration_histogram:{'1200':1}})],'usA',false,{usA:25})[0];
+ expect(entry.standardMinutes).toBe(25);expect(entry.durationZone).toBe('normal');expect(entry.standardDifferenceMinutes).toBe(-5);
+});

@@ -49,7 +49,7 @@ export function drawDurationReportCard(canvas:HTMLCanvasElement,page:DurationCar
   box(plotX,y+56,plotWidth,16,'#edf2f7',8);
   if(row.value!==null&&row.standard!==null&&row.standard>0){const ratio=row.value/row.standard;box(plotX,y+56,Math.max(2,position(ratio)-plotX),16,p.bar,8);text(`${Math.round(ratio*100)}%`,plotX,y+40,20,p.ink,true);}
   if(row.standard!==null){ctx.strokeStyle=C.navy;ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(position(1),y+48);ctx.lineTo(position(1),y+82);ctx.stroke();}
-  if(row.careNote)text(fit(row.careNote,490,18),plotX,y+96,18,'#705394');
+  if(row.careNote)text(fit(row.careNote,490,18),plotX,y+96,18,row.careNote.startsWith('關懷：幽閉')?'#b91c1c':C.muted,row.careNote.startsWith('關懷：幽閉'));
   text(fit(`有效 ${row.sampleCount}${row.sampleUnit} · 來源 ${row.flowCount} 次 · 覆蓋 ${Math.round(row.coverage*100)}%`,490,18),plotX,y+117,18,C.muted);
   box(920,y+22,220,42,p.bg,12);text(row.state==='attention'?'超出標準，建議了解':row.status,934,y+50,row.state==='attention'?18:20,p.ink,true);
   text(row.difference===null?'暫不判定差異':`${row.difference>0?'+':''}${row.difference.toFixed(1)} 分`,936,y+94,27,p.ink,true);

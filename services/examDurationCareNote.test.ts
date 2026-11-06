@@ -29,3 +29,9 @@ it('includes the care annotation in both the image model and LINE text',()=>{
  expect(pages[0].rows[0].careNote).toBe('關懷：幽閉 1 次');
  expect(formatExamDurationLineSummary({rows:entries,period:'本期',filters:''})).toContain('關懷：幽閉 1 次');
 });
+
+it('highlights actual claustrophobia notes red while pending synchronization stays gray',async()=>{
+ const {durationCareNoteClass}=await import('./examDurationCareNote');
+ expect(durationCareNoteClass({claustrophobiaCount:2})).toContain('text-red-700');
+ expect(durationCareNoteClass({claustrophobiaCount:null})).toBe('text-slate-500');
+});

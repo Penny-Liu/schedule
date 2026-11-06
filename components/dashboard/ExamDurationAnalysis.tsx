@@ -5,7 +5,9 @@ import { db } from '../../services/store';
 import { fetchExamDuration, type ExamDurationRow, type DurationSyncDay } from '../../services/radiographerExamDuration';
 import { summarizeExamDurations } from '../../services/examDurationMetrics';
 import { groupWorkloadDurations, workloadDurationDefinitions } from '../../services/workloadDurationGroups';
-import {examDurationStandards,EXAM_DURATION_STANDARD_VERSION,getExamStandardMinutes} from '../../services/examDurationStandards';
+import type {DurationStandardOverrides} from '../../services/examDurationStandards';
+import {fetchSharedDurationStandards,subscribeDurationStandards} from '../../services/sharedExamDurationStandards';
+import ExamDurationStandardSettings from './ExamDurationStandardSettings';
 import ExamDurationComparison from './ExamDurationComparison';
 import { buildDurationComparison } from '../../services/examDurationComparison';
 import { getRadiographerCycleMonthKey } from '../../services/radiographerCycleDates';
@@ -15,6 +17,17 @@ const fmt = (value: number | null) => value === null ? '—' : value.toFixed(1);
 const reasons = [['missing_time_count','缺少時間'],['zero_count','開始＝完成'],['negative_count','完成早於開始'],['shared_interval_count','時間無法獨立歸屬'],['duplicate_count','重複區間'],['outlier_count','超過 4 小時待確認'],['missing_staff_count','無法唯一歸屬人員'],['invalid_time_count','時間格式錯誤']] as const;
 
 export default function ExamDurationAnalysis({ currentUser }: { currentUser: User }) {
+  const [refresh,setRefresh]=useState(0);
+  const [standards,setStandards]=useState<DurationStandardOverrides>({});
+  const [standardsError,setStandardsError]=useState('');
+  const [standardsLoading,setStandardsLoading]=useState(true);
+  const reloadStandards=async()=>{const values=await fetchSharedDurationStandards();setStandards(values);setStandardsError('');};
+  useEffect(()=>{
+    let active=true;setStandards({});setStandardsLoading(true);setStandardsError('');
+    const reload=()=>{fetchSharedDurationStandards().then(values=>{if(active){setStandards(values);setStandardsError('');}}).catch(()=>{if(active)setStandardsError('無法取得最新全科標準，已暫停比較與圖卡輸出；請重新整理後再確認。');}).finally(()=>{if(active)setStandardsLoading(false);});};
+    reload();const unsubscribe=subscribeDurationStandards(reload);window.addEventListener('focus',reload);
+    return()=>{active=false;unsubscribe();window.removeEventListener('focus',reload);};
+  },[currentUser.authUserId,refresh]);
   const today = todayTaipei();
   const cycles = [...db.getCycles()].sort((a,b)=>b.startDate.localeCompare(a.startDate));
   const current = cycles.find(c=>c.startDate<=today&&today<=c.endDate);
@@ -32,7 +45,6 @@ export default function ExamDurationAnalysis({ currentUser }: { currentUser: Use
   const [days,setDays]=useState<DurationSyncDay[]>([]);
   const [loading,setLoading]=useState(false);
   const [error,setError]=useState('');
-  const [refresh,setRefresh]=useState(0);
   const cycle=cycles.find(c=>c.id===cycleId);
   const from=cycle?.startDate||customFrom,to=cycle?.endDate||customTo;
   const cycleMonth=cycle?getRadiographerCycleMonthKey(cycle):'';
@@ -62,7 +74,7 @@ export default function ExamDurationAnalysis({ currentUser }: { currentUser: Use
   const expected:string[]=[];
   if(rangeValid)for(let t=Date.parse(queryFrom);t<=Math.min(Date.parse(queryTo),Date.parse(today));t+=86400000)expected.push(new Date(t).toISOString().slice(0,10));
   const missing=expected.filter(d=>!synced.has(d));
-  const comparison=buildDurationComparison(scopedRows.filter(row=>(!category||row.category===category)&&(!location||row.location===location)&&(!resource||row.resource_name===resource)),field,missing.length>0).filter(r=>r.quantity>0||r.sampleCount>0);
+  const comparison=buildDurationComparison(scopedRows.filter(row=>(!category||row.category===category)&&(!location||row.location===location)&&(!resource||row.resource_name===resource)),field,missing.length>0,standards).filter(r=>r.quantity>0||r.sampleCount>0);
   const displayed=view==='details'?groups:comparison.filter(r=>view!=='person'||r.radiographer_name===staff);
   const lastSync=days.length?[...days].sort((a,b)=>b.synced_at.localeCompare(a.synced_at))[0].synced_at:'';
   const fieldClass='border border-slate-300 rounded-lg px-3 py-2 bg-white text-sm min-w-0';
@@ -94,9 +106,12 @@ export default function ExamDurationAnalysis({ currentUser }: { currentUser: Use
         {lastSync&&<p className="text-xs">最近同步：{new Date(lastSync).toLocaleString('zh-TW',{timeZone:'Asia/Taipei',hour12:false})}。US 比例新制須重新同步；尚未同步不沿用舊的等分資料。零值、負值、共用區間與超過 4 小時的紀錄不列入平均。</p>}
       </div>
       {view!=='overview'&&<div className="grid grid-cols-2 lg:grid-cols-4 gap-3">{[['顯示組別',displayed.length],['有原始計時',displayed.filter(r=>r.valid_count>0).length],['有均攤估計',displayed.filter(r=>r.allocatedOrderCount>0).length],['無可用時間',displayed.filter(r=>r.valid_count===0&&r.allocatedOrderCount===0).length]].map(([label,value])=><div key={label} className="p-4 bg-white border rounded-xl"><p className="text-xs text-slate-500">{label}</p><p className="text-2xl font-bold mt-1">{value}</p></div>)}</div>}
-      <details className="bg-white border rounded-xl p-4"><summary className="cursor-pointer text-sm font-semibold">排程標準時間（{examDurationStandards.length} 項，{EXAM_DURATION_STANDARD_VERSION}）</summary><p className="text-xs text-slate-500 mt-2">依你提供的標準設定；整套與單項分開，MR／US／CT 彙總依有效檢查組合加權。未知項目不補估標準。</p><div className="overflow-auto max-h-72 mt-3"><table className="text-sm w-full text-left"><thead><tr><th>檢查項目</th><th>單位</th><th>標準分鐘</th></tr></thead><tbody>{examDurationStandards.map(s=><tr key={s.key} className="border-t"><td className="py-2">{s.label}</td><td>{s.unit}</td><td>{getExamStandardMinutes(s.key)===null?'不列入耗時':s.minutes}</td></tr>)}</tbody></table></div></details>
+      {standardsError&&<p role="alert" className="rounded-lg bg-amber-50 text-amber-900 p-3 text-sm">{standardsError}</p>}
+      {standardsLoading&&<p className="text-xs text-slate-500">正在讀取全科標準…</p>}
+      <ExamDurationStandardSettings values={standards} user={currentUser} onSaved={reloadStandards} disabled={standardsLoading||Boolean(standardsError)}/>
+
       <details className="bg-white border rounded-xl p-4"><summary className="cursor-pointer text-sm font-semibold">來源時間品質明細</summary><p className="text-xs text-slate-500 mt-2">包含流程、單項與後處理各自的來源紀錄，不將它們相加作為檢查量。</p><div className="flex flex-wrap gap-3 mt-3 text-sm">{reasons.map(([key,label])=><span key={key} className="bg-slate-50 rounded px-3 py-2">{label}：{totals[key]}</span>)}</div></details>
-      {view!=='details'&&<ExamDurationComparison entries={comparison} staff={staff} onStaff={name=>{setStaff(name);setView('person');}} view={view} period={`${from}～${to}`} filters={`類別：${category||'全部'}｜工作量分類：${definitions.find(d=>d.key===field)?.label||'全部'}｜院區：${location||'全部'}｜設備：${resource||'全部'}${personal&&cycle?'｜依個人週期':''}${missing.length?`｜${missing.length}天未同步`:''}`} periodByStaff={personal&&cycle?Object.fromEntries(Object.entries(ranges).map(([name,r])=>[name,`${r.startDate}～${r.endDate}`])):{}}/>}
+      {view!=='details'&&!standardsLoading&&!standardsError&&<ExamDurationComparison entries={comparison} staff={staff} onStaff={name=>{setStaff(name);setView('person');}} view={view} period={`${from}～${to}`} filters={`類別：${category||'全部'}｜工作量分類：${definitions.find(d=>d.key===field)?.label||'全部'}｜院區：${location||'全部'}｜設備：${resource||'全部'}${personal&&cycle?'｜依個人週期':''}${missing.length?`｜${missing.length}天未同步`:''}`} periodByStaff={personal&&cycle?Object.fromEntries(Object.entries(ranges).map(([name,r])=>[name,`${r.startDate}～${r.endDate}`])):{}}/>}
       {view==='details'&&<div className="bg-white border rounded-xl overflow-x-auto max-h-[65vh]"><table className="min-w-full text-sm text-left"><thead className="bg-slate-100 sticky top-0"><tr>{['放射師','類別','工作量分類','檢查量參考','有效計時（次）','原平均（分）','原中位數（分）','均攤醫令（項）','每醫令分攤估計（分）','時間口徑','提示'].map(t=><th key={t} className="px-3 py-3 whitespace-nowrap">{t}</th>)}</tr></thead><tbody>
         {groups.map(row=><tr key={row.key} className={`border-t ${row.category==='MR'&&row.valid_count<2?'bg-slate-100 text-slate-400':''}`}><td className="px-3 py-3 whitespace-nowrap">{row.radiographer_name}{personal&&cycle&&<span className="block text-[10px] text-slate-500">{ranges[row.radiographer_name]?.startDate||from}～{ranges[row.radiographer_name]?.endDate||to}</span>}</td><td className="px-3 py-3">{row.category}</td><td className="px-3 py-3 whitespace-nowrap font-medium">{row.label}</td><td className="px-3 py-3 whitespace-nowrap">{row.quantity} {row.quantityUnit}</td><td className="px-3 py-3">{row.valid_count}</td><td className="px-3 py-3 font-semibold">{fmt(row.averageMinutes)}</td><td className="px-3 py-3">{fmt(row.medianMinutes)}</td><td className="px-3 py-3">{row.allocationApplicable?row.allocatedOrderCount:'不適用'}</td><td className="px-3 py-3 font-semibold">{row.allocationApplicable?fmt(row.allocatedAverageMinutes):'獨立計時'}</td><td className="px-3 py-3 whitespace-nowrap text-xs text-slate-500">{row.timeBasis}</td><td className={`px-3 py-3 text-xs min-w-[170px] ${row.category==='MR'&&row.valid_count<2?'text-slate-400':row.reliable?'text-teal-700':'text-amber-700'}`}>{row.note}{row.allocatedOrderCount>0?'；另有均攤估計':''}{missing.length>0&&row.valid_count>0?'；期間未完整同步':''}</td></tr>)}
         {groups.length===0&&<tr><td colSpan={11} className="p-8 text-center text-slate-500">{days.length?'此篩選範圍沒有已同步的檢查紀錄。':'尚無同步資料，完成耗時同步後即可查看。'}</td></tr>}
