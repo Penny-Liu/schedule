@@ -1,8 +1,8 @@
 import { normalizeMrDurationSessions, mrDurationLabel } from './mr-duration-sessions.mjs';
-import { getUsDurationSubtype } from '../services/examDurationSubtype.mjs';
+import { getUsDurationSubtype, getUsDurationAllocation } from '../services/examDurationSubtype.mjs';
 export const DURATION_CATEGORIES = ['MR', 'CT', 'US', 'BMD', 'MG', 'DX'];
 export const MAX_DURATION_SECONDS = 4 * 60 * 60;
-export const DURATION_ALGORITHM = 'actual-flow-v3';
+export const DURATION_ALGORITHM = 'actual-flow-v4';
 
 // 不將多項醫令共用的區間拆成單項耗時；同項、同人、同室、同區間只取一次。
 export function buildExamDurationSummaries(records, syncedAt = new Date().toISOString()) {
@@ -161,7 +161,9 @@ export function buildAllocatedExamDurationSummaries(records, syncedAt = new Date
   for (const root of records) {
     if (!root.Id || seen.has(root.Id) || !registration(root) || !DURATION_CATEGORIES.includes(root.ResourceCategory__c) || root.End__c === false || (root.Checkup_Status__c != null && root.Checkup_Status__c !== '10')) continue;
     seen.add(root.Id);
-    const items = [...(children.get(root.Id)?.values() || [])].filter(r => r.ResourceCategory__c === root.ResourceCategory__c);
+    const linkedItems = [...(children.get(root.Id)?.values() || [])].filter(r => r.ResourceCategory__c === root.ResourceCategory__c);
+    const usAllocation=root.ResourceCategory__c==='US'?getUsDurationAllocation(linkedItems):null;
+    const items=usAllocation?usAllocation.items.map(r=>r.item):linkedItems;
     if (!items.length) continue;
     const people = new Map();
     for (const r of [root, ...items]) if (r.Radiologist__c) people.set(r.Radiologist__c, r.Radiologist__r?.Name);
@@ -176,8 +178,8 @@ export function buildAllocatedExamDurationSummaries(records, syncedAt = new Date
       Id: `allocated:${root.Id}:${item.Id}`, Order__c: `allocated:${root.Id}:${item.Id}`,
       Checkup__c: item.Checkup__c, CheckupName__c: `${root.ResourceCategory__c} ${sourceFlows ? '來源' : '均攤'}｜${label}｜${item.CheckupName__c || '未填項目'}`,
       Radiologist__c: only?.[0] || null, Radiologist__r: {Name: only?.[1] || (people.size > 1 ? '多人共同（未拆分）' : '未填放射師')},
-      durationSecondsOverride: sourceFlows ? seconds : seconds / items.length,
-      durationIssue: root.durationIssue || (people.size > 1 ? 'shared' : seconds > MAX_DURATION_SECONDS ? 'outlier' : undefined),
+      durationSecondsOverride: sourceFlows ? seconds : usAllocation&&!usAllocation.unsupported?seconds*usAllocation.items.find(r=>r.item.Id===item.Id).weight/usAllocation.totalWeight:seconds/items.length,
+      durationIssue: root.durationIssue || (usAllocation?.unsupported ? 'shared' : people.size > 1 ? 'shared' : seconds > MAX_DURATION_SECONDS ? 'outlier' : undefined),
     });
   }
   return buildExamDurationSummaries(allocated, syncedAt).map(row => ({...row, metric_scope: sourceFlows ? 'allocation_flow' : 'allocated'}));
