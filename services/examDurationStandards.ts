@@ -24,16 +24,18 @@ export const examDurationStandards=[
  {key:'mg',label:'MG',unit:'每項醫令',minutes:15},
  {key:'bmd',label:'BMD',unit:'每項醫令',minutes:7},
 ] as const;
-export function getExamStandardMinutes(key:string):number|null{const standard=examDurationStandards.find(s=>s.key===key);return !standard||('excludedFromTiming' in standard&&standard.excludedFromTiming)?null:standard.minutes;}
+export type DurationStandardOverrides=Record<string,number>;
+export const isDurationStandardValue=(value:unknown):value is number=>typeof value==='number'&&Number.isFinite(value)&&value>=0.1&&value<=1440&&Math.abs(value*10-Math.round(value*10))<1e-8;
+export function getExamStandardMinutes(key:string,overrides:DurationStandardOverrides={}):number|null{const standard=examDurationStandards.find(s=>s.key===key);return !standard||('excludedFromTiming' in standard&&standard.excludedFromTiming)?null:isDurationStandardValue(overrides[key])?overrides[key]:standard.minutes;}
 function mrKey(label:string) {
  if(label.includes('大型套（未含乳房）'))return 'mrLargeFemaleNoBreast';
  if(label.includes('大型套'))return /・(女|F|Female)$/i.test(label)?'mrLargeFemale':/・(男|M|Male)$/i.test(label)?'mrLargeMale':'';
  if(label.includes('中型套'))return 'mrMedium';
  return label.includes('小型套')?'mrSmall':'';
 }
-export function resolveDurationStandard(rows:ExamDurationRow[],fieldKey:string,sampleCount:number) {
- const direct=getExamStandardMinutes(fieldKey);
- if(direct!==null)return {standardMinutes:direct,standardBasis:'使用者提供的排程標準'};
+export function resolveDurationStandard(rows:ExamDurationRow[],fieldKey:string,sampleCount:number,overrides:DurationStandardOverrides={}) {
+ const direct=getExamStandardMinutes(fieldKey,overrides);
+ if(direct!==null)return {standardMinutes:direct,standardBasis:isDurationStandardValue(overrides[fieldKey])?'全科共用排程標準':'使用者提供的排程標準'};
  if(!sampleCount)return {standardMinutes:null,standardBasis:'缺少可加權樣本'};
  const category=fieldKey.toUpperCase();
  const allocated=rows.filter(r=>r.metric_scope==='allocated'&&r.category===category&&r.valid_count>0);
@@ -41,15 +43,15 @@ export function resolveDurationStandard(rows:ExamDurationRow[],fieldKey:string,s
  if(allocated.reduce((n,r)=>n+r.valid_count,0)!==sampleCount)return {standardMinutes:null,standardBasis:'檢查組合尚未完整連結'};
  let total=0;
  if(fieldKey==='us') {
-  for(const r of allocated){const key=getUsDurationSubtype(r.exam_name.split('｜').slice(2).join('｜'));const minutes=getExamStandardMinutes(key||'');if(minutes===null)return {standardMinutes:null,standardBasis:'部分 US 部位尚無標準'};total+=minutes*r.valid_count;}
+  for(const r of allocated){const key=getUsDurationSubtype(r.exam_name.split('｜').slice(2).join('｜'));const minutes=getExamStandardMinutes(key||'',overrides);if(minutes===null)return {standardMinutes:null,standardBasis:'部分 US 部位尚無標準'};total+=minutes*r.valid_count;}
  }else if(fieldKey==='mr') {
   if(!sources.length)return {standardMinutes:null,standardBasis:'MR 套別來源待同步'};
-  for(const r of sources){const minutes=getExamStandardMinutes(mrKey(r.exam_name.split('｜')[1]));if(minutes===null)return {standardMinutes:null,standardBasis:'部分 MR 套別尚無標準'};total+=minutes*r.valid_count;}
+  for(const r of sources){const minutes=getExamStandardMinutes(mrKey(r.exam_name.split('｜')[1]),overrides);if(minutes===null)return {standardMinutes:null,standardBasis:'部分 MR 套別尚無標準'};total+=minutes*r.valid_count;}
  }else if(fieldKey==='ct') {
   const ctaOrders=allocated.filter(r=>r.exam_name.split('｜')[1]==='CTA流程').reduce((n,r)=>n+r.valid_count,0);
   const ctaFlows=sources.filter(r=>r.exam_name.split('｜')[1]==='CTA流程').reduce((n,r)=>n+r.valid_count,0);
   if(ctaOrders&&!ctaFlows)return {standardMinutes:null,standardBasis:'CTA 流程來源待同步'};
-  total=(sampleCount-ctaOrders)*getExamStandardMinutes('ctGeneral')!+ctaFlows*getExamStandardMinutes('cta')!;
+  total=(sampleCount-ctaOrders)*getExamStandardMinutes('ctGeneral',overrides)!+ctaFlows*getExamStandardMinutes('cta',overrides)!;
  }else return {standardMinutes:null,standardBasis:'尚未設定排程標準'};
  return {standardMinutes:total/sampleCount,standardBasis:'依有效檢查組合加權'};
 }

@@ -1,9 +1,9 @@
-import {resolveDurationStandard,EXAM_DURATION_STANDARD_VERSION} from './examDurationStandards';
+import {resolveDurationStandard,EXAM_DURATION_STANDARD_VERSION,type DurationStandardOverrides} from './examDurationStandards';
 import type { ExamDurationRow } from './radiographerExamDuration';
 import { groupWorkloadDurations } from './workloadDurationGroups';
 import { summarizeExamDurations } from './examDurationMetrics';
 
-export function buildDurationComparison(rows: ExamDurationRow[], selectedKey = '', incomplete = false) {
+export function buildDurationComparison(rows: ExamDurationRow[], selectedKey = '', incomplete = false,standards:DurationStandardOverrides={}) {
   const groups = groupWorkloadDurations(rows, selectedKey).filter(group=>group.fieldKey!=='usFibrosis');
   const entries = groups.map(group => {
     const perFlow = ['mrLargeMale','mrLargeFemale','mrLargeFemaleNoBreast','mrMedium','mrSmall','cta'].includes(group.fieldKey);
@@ -30,7 +30,7 @@ export function buildDurationComparison(rows: ExamDurationRow[], selectedKey = '
     const basis = !group.allocationApplicable ? '後處理實測' : perFlow ? '整次流程' : group.category==='US'?'比例分攤估計':'均攤估計';
     const eligible=value!==null && sampleCount>0 && (group.category!=='MR'||flowCount>=2);
     const reference = group.fieldKey==='usFibrosis'?'不列入耗時':value===null ? '無可用時間' : !eligible ? '樣本數不足' : flowCount===0 ? '來源流程待同步' : coverage<0.8 ? '資料覆蓋偏低' : incomplete ? '期間未完整同步' : flowCount<10 ? '可供參考' : '樣本較充足';
-    const standard=resolveDurationStandard(rows.filter(r=>r.radiographer_id===group.radiographer_id&&r.radiographer_name===group.radiographer_name),group.fieldKey,sampleCount);
+    const standard=resolveDurationStandard(rows.filter(r=>r.radiographer_id===group.radiographer_id&&r.radiographer_name===group.radiographer_name),group.fieldKey,sampleCount,standards);
     return {...group,...standard,claustrophobiaCount:careStats.claustrophobiaCount,careNotesComplete:careStats.careNotesComplete,standardVersion:EXAM_DURATION_STANDARD_VERSION,eligible,value,basis,flowCount,sampleCount,coverage,reference,sampleUnit:original?'次':'項',comparisonUnit:original?'分／次':'分／醫令'};
   });
   // 全科參考從總時間／總有效樣本計算，不能直接平均每位同仁的平均。
