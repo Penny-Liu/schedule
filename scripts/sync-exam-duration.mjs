@@ -2,7 +2,7 @@ import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import { pathToFileURL } from 'node:url';
 import { getSalesforceSession, runSoqlQuery } from './salesforce-utils.mjs';
-import { buildAllExamDurationSummaries } from './exam-duration-summary.mjs';
+import { buildAllExamDurationSummaries, DURATION_ALGORITHM } from './exam-duration-summary.mjs';
 
 const taipeiToday = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 export function dateRange(from, to) {
@@ -13,8 +13,21 @@ export function dateRange(from, to) {
   return days;
 }
 
+export async function assertDurationWriteCompatibility(db) {
+ const {data,error}=await db.rpc('supports_exam_duration_algorithm',{p_algorithm:DURATION_ALGORITHM});
+ if(error||data!==true)throw new Error('US 比例算法尚未完成資料庫部署，請先套用對應 migration，再重新同步；未寫入任何統計資料。');
+}
+
 export async function syncExamDuration({ from, to, write = false }) {
   const days = dateRange(from, to);
+  let db;
+  if(write) {
+    const url=process.env.SUPABASE_URL||process.env.VITE_SUPABASE_URL;
+    const key=process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if(!url||!key)throw new Error('寫入耗時統計需要伺服器端 SUPABASE_SERVICE_ROLE_KEY。');
+    db=createClient(url,key,{auth:{persistSession:false,autoRefreshToken:false}});
+    await assertDurationWriteCompatibility(db);
+  }
   const capturedAt = new Date().toISOString();
   const session = await getSalesforceSession();
   const { records } = await runSoqlQuery({ ...session, soql: `
@@ -35,10 +48,6 @@ export async function syncExamDuration({ from, to, write = false }) {
   }
   console.log(JSON.stringify({ from, to, mode: write ? 'write' : 'audit', diagnostics }, null, 2));
   if (!write) return { summaries, diagnostics };
-  const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) throw new Error('寫入耗時統計需要伺服器端 SUPABASE_SERVICE_ROLE_KEY。');
-  const db = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
   for (const day of days) {
     const { error } = await db.rpc('replace_radiographer_exam_duration_day', {
       p_date: day, p_rows: summaries.filter(row => row.exam_date === day), p_captured_at: capturedAt,

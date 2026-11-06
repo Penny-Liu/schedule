@@ -1,7 +1,7 @@
 import {it,expect} from 'vitest';
 import {sortDurationPeople,sortDurationRows,formatExamDurationLineSummary} from './examDurationLineSummary';
 import type {DurationComparison} from './examDurationComparison';
-const row=(changes:Partial<DurationComparison>={}):DurationComparison=>({radiographer_name:'甲',fieldKey:'usA',category:'US',label:'腹',value:5,basis:'均攤估計',quantity:20,quantityUnit:'醫令',sampleCount:18,sampleUnit:'項',flowCount:12,coverage:.9,benchmark:6,benchmarkSamples:40,benchmarkPeople:2,comparisonUnit:'分／醫令',reference:'樣本較充足',eligible:true,comparable:true,key:JSON.stringify([changes.radiographer_name||'甲',changes.fieldKey||'usA']),...changes} as DurationComparison);
+const row=(changes:Partial<DurationComparison>={}):DurationComparison=>({radiographer_name:'甲',fieldKey:'usA',category:'US',label:'腹',value:5,basis:'均攤估計',quantity:20,quantityUnit:'醫令',sampleCount:18,sampleUnit:'項',flowCount:12,coverage:.9,standardMinutes:15,benchmark:6,referenceMedian:6,durationZone:'normal',benchmarkSamples:40,benchmarkPeople:2,comparisonUnit:'分／醫令',reference:'樣本較充足',eligible:true,comparable:true,key:JSON.stringify([changes.radiographer_name||'甲',changes.fieldKey||'usA']),...changes} as DurationComparison);
 it('sorts department by a chosen exam and always puts missing values last',()=>{
  const rows=[row({radiographer_name:'甲',value:10}),row({radiographer_name:'乙',value:5}),row({radiographer_name:'丙',value:null}),row({radiographer_name:'丁',fieldKey:'mrSmall',value:1})];
  expect(sortDurationPeople(rows,'usA','value','asc').slice(0,2)).toEqual(['乙','甲']);
@@ -16,22 +16,29 @@ it('sorts personal classifications by counts without mutating the inputs',()=>{
 });
 it('exports only category average, time order and names, omitting insufficient records',()=>{
  const text=formatExamDurationLineSummary({rows:[row({radiographer_name:'甲',value:7}),row({radiographer_name:'乙',value:5}),row({radiographer_name:'不足',comparable:false,eligible:false,value:4})],period:'2026-10-04～2026-11-02',filters:'院區：北投'});
- expect(text).toContain('US・腹｜全科平均 6.0分／醫令');
- expect(text).toContain('1. 乙 5.0分');expect(text).toContain('2. 甲 7.0分');
+ expect(text).toContain('US・腹｜排程標準 15.0分／醫令');
+ expect(text).toContain('・乙 5.0分｜標準15.0分｜標準時間內');expect(text).toContain('・甲 7.0分｜標準15.0分｜標準時間內');
  expect(text).not.toContain('不足');expect(text).not.toContain('來源');expect(text).not.toContain('覆蓋');expect(text).not.toContain('有效');
 });
 it('keeps the department rank when exporting just one person',()=>{
  const peers=[row({radiographer_name:'甲',value:7}),row({radiographer_name:'乙',value:5})];
  const text=formatExamDurationLineSummary({rows:[peers[0]],rankingRows:peers,period:'今日',filters:''});
- expect(text).toContain('2. 甲 7.0分');expect(text).not.toContain('乙 5.0分');
+ expect(text).toContain('・甲 7.0分｜標準15.0分｜標準時間內');expect(text).not.toContain('乙 5.0分');
 });
 it('omits noncomparable categories and uses equal ranks for equal displayed times',()=>{
  expect(formatExamDurationLineSummary({rows:[row({comparable:false})],period:'今日',filters:''})).toBe('');
  const text=formatExamDurationLineSummary({rows:[row({radiographer_name:'甲',value:5.01}),row({radiographer_name:'乙',value:5.02}),row({radiographer_name:'丙',value:6})],period:'今日',filters:''});
- expect(text).toContain('1. 甲 5.0分');expect(text).toContain('1. 乙 5.0分');expect(text).toContain('3. 丙 6.0分');
+ expect(text).toContain('・甲 5.0分｜標準15.0分｜標準時間內');expect(text).toContain('・乙 5.0分｜標準15.0分｜標準時間內');expect(text).toContain('・丙 6.0分｜標準15.0分｜標準時間內');
 });
 it('sorts insufficient MR after eligible times in both directions',()=>{
  const rows=[row({radiographer_name:'甲',value:30,eligible:false}),row({radiographer_name:'乙',value:60})];
  expect(sortDurationPeople(rows,'usA','value','asc')[0]).toBe('乙');
  expect(sortDurationPeople(rows,'usA','value','desc')[0]).toBe('乙');
+});
+it('does not change LINE name order when durations are reversed',()=>{
+ const rows=[row({radiographer_name:'甲',value:1}),row({radiographer_name:'乙',value:20})];
+ const first=formatExamDurationLineSummary({rows,period:'今日',filters:''});
+ const second=formatExamDurationLineSummary({rows:rows.map(r=>({...r,value:21-r.value!})),period:'今日',filters:''});
+ const names=(text:string)=>text.split('\n').filter(l=>l.startsWith('・')).map(l=>l.split(' ')[0]);
+ expect(names(first)).toEqual(names(second));
 });

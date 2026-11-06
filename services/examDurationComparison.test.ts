@@ -31,18 +31,27 @@ it('includes MR at exactly two flows and excludes insufficient staff from its we
  const records=[['甲',2,1800],['乙',2,3600],['不足',1,600]].map(([name,n,seconds])=>row({radiographer_id:String(name),radiographer_name:String(name),metric_scope:'flow',category:'MR',exam_name:'MR 整次｜小型套（1～3 項）・女',total_count:Number(n),valid_count:Number(n),duration_histogram:{[String(seconds)]:Number(n)}}));
  const all=buildDurationComparison(records,'mrSmall');
  const entries=['甲','乙','不足'].map(name=>all.find(r=>r.radiographer_name===name)!);
- expect(entries[0].benchmark).toBe(45);expect(entries[0].benchmarkPeople).toBe(2);expect(entries[0].comparable).toBe(true);expect(entries[0].differenceMinutes).toBe(-15);
- expect(formatDurationDifference(entries[0])).toBe('低於全科平均 15.0 分');
- expect(formatDurationDifference(entries[1])).toBe('高於全科平均 15.0 分');
+ expect(entries[0].benchmark).toBe(45);expect(entries[0].benchmarkPeople).toBe(2);expect(entries[0].comparable).toBe(true);
+ expect(formatDurationDifference(entries[0])).toBe('標準時間內');
  expect(entries[2].comparable).toBe(false);
 });
 it('shows a single valid US or CT order but needs another person for comparison',()=>{
  for(const category of ['US','CT']) {
   const rows=[row({category,total_count:1,valid_count:1,exam_name:`${category} 均攤｜單次流程｜腹部`,duration_histogram:{'300':1}})];
   const r=buildDurationComparison(rows,category.toLowerCase())[0];
-  expect(r.eligible).toBe(true);expect(r.value).toBe(5);expect(r.comparable).toBe(false);expect(formatDurationDifference(r)).toBe('無其他人員可比較');
+  expect(r.eligible).toBe(true);expect(r.value).toBe(5);expect(r.comparable).toBe(true);expect(formatDurationDifference(r)).toBe('標準時間內');
   rows.push({...rows[0],radiographer_id:'b',radiographer_name:'乙',duration_histogram:{'600':1}});
   const compared=buildDurationComparison(rows,category.toLowerCase())[0];
   expect(compared.comparable).toBe(true);expect(compared.benchmark).toBe(7.5);
  }
+});
+
+it('uses the provided standard even when a colleague differs from the peer median',()=>{
+ const records=[5,5,5,15].map((minutes,index)=>row({radiographer_id:String(index),radiographer_name:`人${index}`,duration_histogram:{[String(minutes*60)]:1}}));
+ const compared=buildDurationComparison(records,'usA');
+ expect(compared.find(r=>r.radiographer_name==='人3')?.referenceMedian).toBe(5);
+ expect(compared.find(r=>r.radiographer_name==='人3')?.standardMinutes).toBe(15);
+ expect(compared.find(r=>r.radiographer_name==='人3')?.durationZone).toBe('normal');
+ const over=buildDurationComparison([row({duration_histogram:{'1200':1}})],'usA')[0];
+ expect(over.comparable).toBe(true);expect(over.standardDifferenceMinutes).toBe(5);expect(over.durationZone).toBe('slower');
 });
