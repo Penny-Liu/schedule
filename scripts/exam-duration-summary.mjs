@@ -1,3 +1,4 @@
+import {hasClaustrophobiaCare} from './exam-duration-care.mjs';
 import { normalizeMrDurationSessions, mrDurationLabel } from './mr-duration-sessions.mjs';
 import { getUsDurationSubtype, getUsDurationAllocation } from '../services/examDurationSubtype.mjs';
 export const DURATION_CATEGORIES = ['MR', 'CT', 'US', 'BMD', 'MG', 'DX'];
@@ -35,7 +36,7 @@ export function buildExamDurationSummaries(records, syncedAt = new Date().toISOS
     const g = groups.get(key) || { ...base, total_count: 0, valid_count: 0,
       missing_time_count: 0, invalid_time_count: 0, zero_count: 0, negative_count: 0,
       shared_interval_count: 0, duplicate_count: 0, outlier_count: 0, missing_staff_count: 0,
-      duration_histogram: {}, algorithm: DURATION_ALGORITHM, synced_at: syncedAt };
+      claustrophobia_count: 0, duration_histogram: {}, algorithm: DURATION_ALGORITHM, synced_at: syncedAt };
     groups.set(key, g);
     g.total_count++;
     if (r.durationIssue === "shared") { g.shared_interval_count++; continue; }
@@ -57,6 +58,7 @@ export function buildExamDurationSummaries(records, syncedAt = new Date().toISOS
     if (uniqueKey && seen.has(uniqueKey)) { g.duplicate_count++; continue; }
     if (uniqueKey) seen.add(uniqueKey);
     g.valid_count++;
+    if(r.ResourceCategory__c==='MR'&&!String(r.CheckupName__c||'').includes('後處理')&&hasClaustrophobiaCare(r))g.claustrophobia_count++;
     g.duration_histogram[seconds] = (g.duration_histogram[seconds] || 0) + 1;
   }
   return [...groups.values()];
@@ -85,7 +87,7 @@ export function buildExamFlowSummaries(records, syncedAt = new Date().toISOStrin
       label = root._mrSessionLabel || mrDurationLabel(root,items);
     }
     const onlyPerson = people.size === 1 ? [...people.entries()][0] : null;
-    sessions.push({ ...root,
+    sessions.push({ ...root, _claustrophobiaCare:[root,...items].some(hasClaustrophobiaCare),
       // 不同主預約是不同流程，即使同客戶、同儀器、同時間也不擅自合併。
       Order__c: root.Id, Checkup__c: label,
       CheckupName__c: `${root.ResourceCategory__c} 整次｜${label}`,

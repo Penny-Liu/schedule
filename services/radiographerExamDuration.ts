@@ -19,6 +19,7 @@ export interface ExamDurationRow {
   duplicate_count: number;
   outlier_count: number;
   missing_staff_count: number;
+  claustrophobia_count?: number | null;
   duration_histogram: Record<string, number>;
   synced_at: string;
   algorithm: string;

@@ -2,11 +2,11 @@ import type {ExamDurationRow} from './radiographerExamDuration';
 import {getUsDurationSubtype} from './examDurationSubtype.mjs';
 export const EXAM_DURATION_STANDARD_VERSION='2026-11-06-us-weighted';
 export const examDurationStandards=[
- {key:'mrLargeMale',label:'MR 大男',unit:'每套',minutes:70},
+ {key:'mrLargeMale',label:'MR 大男',unit:'每套',minutes:75},
  {key:'mrLargeFemale',label:'MR 大女（含乳房）',unit:'每套',minutes:90},
- {key:'mrLargeFemaleNoBreast',label:'MR 大女（未含乳房）',unit:'每套',minutes:55},
+ {key:'mrLargeFemaleNoBreast',label:'MR 大女（未含乳房）',unit:'每套',minutes:60},
  {key:'mrMedium',label:'MR 中套',unit:'每套',minutes:55},
- {key:'mrSmall',label:'MR 小套',unit:'每套',minutes:30},
+ {key:'mrSmall',label:'MR 小套',unit:'每套',minutes:40},
  {key:'mrPostProcessing',label:'MR 後處理',unit:'每次',minutes:10},
  {key:'usA',label:'US 腹部',unit:'每項醫令',minutes:15},
  {key:'usBreast',label:'US 乳房',unit:'每項醫令',minutes:15},

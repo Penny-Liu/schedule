@@ -1,3 +1,4 @@
+import {formatDurationCareNote} from './examDurationCareNote';
 import type { DurationComparison } from './examDurationComparison';
 import { workloadDurationDefinitions } from './workloadDurationGroups';
 export type DurationWorkState='normal'|'attention'|'observe'|'data';
@@ -29,7 +30,7 @@ export function formatDurationOverviewReport(rows:DurationComparison[],period:st
   for(const state of ['attention','normal','observe','data'] as DurationWorkState[]){
    const items=person.states[state];
    if(!items.length)continue;
-   lines.push(`${durationWorkLabels[state]}：${items.map(r=>`${r.category}・${r.label}${r.value===null?'':` ${r.value.toFixed(1)}${r.comparisonUnit}／標準${r.standardMinutes==null?'待設定':r.standardMinutes.toFixed(1)}`}`).join('、')}`);
+   lines.push(`${durationWorkLabels[state]}：${items.map(r=>`${r.category}・${r.label}${r.value===null?'':` ${r.value.toFixed(1)}${r.comparisonUnit}／標準${r.standardMinutes==null?'待設定':r.standardMinutes.toFixed(1)}`}${formatDurationCareNote(r)?`（${formatDurationCareNote(r)}）`:''}`).join('、')}`);
   }
  }
  lines.push('','建議了解項目可先核對個案難度、設備、等待與支援情形，再安排協助；標準內項目仍需搭配品質確認。');

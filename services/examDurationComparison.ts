@@ -22,6 +22,7 @@ export function buildDurationComparison(rows: ExamDurationRow[], selectedKey = '
       if(group.fieldKey==='mrLargeFemale')return label.includes('大型套（7 項以上）')&&/・(女|F|Female)$/i.test(label);
       return true;
     });
+    const careStats=original?group:summarizeExamDurations(sourceRows);
     const flowCount = original ? group.valid_count : summarizeExamDurations(sourceRows).valid_count;
     const sampleCount = original ? group.valid_count : group.allocatedOrderCount;
     const coverage = group.quantity ? Math.min(1,sampleCount/group.quantity) : 0;
@@ -30,7 +31,7 @@ export function buildDurationComparison(rows: ExamDurationRow[], selectedKey = '
     const eligible=value!==null && sampleCount>0 && (group.category!=='MR'||flowCount>=2);
     const reference = group.fieldKey==='usFibrosis'?'不列入耗時':value===null ? '無可用時間' : !eligible ? '樣本數不足' : flowCount===0 ? '來源流程待同步' : coverage<0.8 ? '資料覆蓋偏低' : incomplete ? '期間未完整同步' : flowCount<10 ? '可供參考' : '樣本較充足';
     const standard=resolveDurationStandard(rows.filter(r=>r.radiographer_id===group.radiographer_id&&r.radiographer_name===group.radiographer_name),group.fieldKey,sampleCount);
-    return {...group,...standard,standardVersion:EXAM_DURATION_STANDARD_VERSION,eligible,value,basis,flowCount,sampleCount,coverage,reference,sampleUnit:original?'次':'項',comparisonUnit:original?'分／次':'分／醫令'};
+    return {...group,...standard,claustrophobiaCount:careStats.claustrophobiaCount,careNotesComplete:careStats.careNotesComplete,standardVersion:EXAM_DURATION_STANDARD_VERSION,eligible,value,basis,flowCount,sampleCount,coverage,reference,sampleUnit:original?'次':'項',comparisonUnit:original?'分／次':'分／醫令'};
   });
   // 全科參考從總時間／總有效樣本計算，不能直接平均每位同仁的平均。
   return entries.map(entry=>{

@@ -1,17 +1,17 @@
+import {formatDurationCareNote} from './examDurationCareNote';
 import {workloadDurationDefinitions} from './workloadDurationGroups';
 import type {DurationComparison} from './examDurationComparison';
 import {getDurationWorkState,durationWorkLabels,type DurationWorkState} from './examDurationOverview';
-export interface DurationCardRow {name:string;label:string;value:number|null;standard:number|null;unit:string;difference:number|null;sampleCount:number;sampleUnit:string;flowCount:number;coverage:number;basis:string;state:DurationWorkState;status:string;}
+export interface DurationCardRow {name:string;label:string;value:number|null;standard:number|null;unit:string;difference:number|null;sampleCount:number;sampleUnit:string;flowCount:number;coverage:number;basis:string;state:DurationWorkState;status:string;careNote?:string;}
 export interface DurationCardPage {title:string;period:string;filters:string;page:number;pageCount:number;rows:DurationCardRow[];}
-export function buildDurationCardPages(entries:DurationComparison[],options:{mode:'category'|'person';fieldKey:string;staff:string;period:string;filters:string;pageSize?:number}) {
- const size=Math.max(1,Math.min(10,Math.floor(options.pageSize||8)));
- const selected=entries.filter(r=>r.radiographer_id&&r.fieldKey!=='usFibrosis'&&(options.mode==='category'?r.fieldKey===options.fieldKey:r.radiographer_name===options.staff));
+export function buildDurationCardPages(entries:DurationComparison[],options:{mode:'category'|'person';fieldKey:string;staff:string;period:string;filters:string;excludedStaffIds?:string[]}) {
+ const selected=entries.filter(r=>r.radiographer_id&&r.fieldKey!=='usFibrosis'&&(options.mode==='category'?r.fieldKey===options.fieldKey&&!options.excludedStaffIds?.includes(r.radiographer_id):r.radiographer_name===options.staff));
  // 分類依原本工作量順序；人員固定姓名順序，不按時間／狀態重排。
  if(options.mode==='category')selected.sort((a,b)=>a.radiographer_name.localeCompare(b.radiographer_name,'zh-Hant'));
  else selected.sort((a,b)=>workloadDurationDefinitions.findIndex(d=>d.key===a.fieldKey)-workloadDurationDefinitions.findIndex(d=>d.key===b.fieldKey));
- const rows=selected.map(r=>{const state=getDurationWorkState(r);return {name:r.radiographer_name,label:`${r.category}・${r.label}`,value:r.value,standard:r.standardMinutes,unit:r.comparisonUnit,difference:r.standardDifferenceMinutes,sampleCount:r.sampleCount,sampleUnit:r.sampleUnit,flowCount:r.flowCount,coverage:r.coverage,basis:r.basis,state,status:durationWorkLabels[state]};});
- const count=Math.ceil(rows.length/size);
- return Array.from({length:count},(_,page):DurationCardPage=>({title:options.mode==='person'?`${options.staff}｜作業概況`:`${selected[0]?.label||'檢查耗時'}｜作業概況`,period:options.period,filters:options.filters,page:page+1,pageCount:count,rows:rows.slice(page*size,(page+1)*size)}));
+ const rows=selected.map(r=>{const state=getDurationWorkState(r);return {name:r.radiographer_name,label:`${r.category}・${r.label}`,value:r.value,standard:r.standardMinutes,unit:r.comparisonUnit,difference:r.standardDifferenceMinutes,sampleCount:r.sampleCount,sampleUnit:r.sampleUnit,flowCount:r.flowCount,coverage:r.coverage,basis:r.basis,state,status:durationWorkLabels[state],careNote:formatDurationCareNote(r)};});
+ if(!rows.length)return [];
+ return [{title:options.mode==='person'?`${options.staff}｜作業概況`:`${selected[0]?.label||'檢查耗時'}｜作業概況`,period:options.period,filters:options.filters,page:1,pageCount:1,rows}];
 }
 const C={navy:'#102b46',blue:'#2563eb',ink:'#16324b',muted:'#64778c',line:'#dce5ee',bg:'#f0f5fa',white:'#ffffff'};
 const palettes:Record<DurationWorkState,{ink:string;bg:string;bar:string}>={normal:{ink:'#06745b',bg:'#e8f7f1',bar:'#19a883'},attention:{ink:'#a05c13',bg:'#fff4df',bar:'#e8a541'},observe:{ink:'#376b9b',bg:'#ebf3fc',bar:'#81a9d6'},data:{ink:'#6b7788',bg:'#eef1f5',bar:'#a8b3c1'}};
@@ -49,6 +49,7 @@ export function drawDurationReportCard(canvas:HTMLCanvasElement,page:DurationCar
   box(plotX,y+56,plotWidth,16,'#edf2f7',8);
   if(row.value!==null&&row.standard!==null&&row.standard>0){const ratio=row.value/row.standard;box(plotX,y+56,Math.max(2,position(ratio)-plotX),16,p.bar,8);text(`${Math.round(ratio*100)}%`,plotX,y+40,20,p.ink,true);}
   if(row.standard!==null){ctx.strokeStyle=C.navy;ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(position(1),y+48);ctx.lineTo(position(1),y+82);ctx.stroke();}
+  if(row.careNote)text(fit(row.careNote,490,18),plotX,y+96,18,'#705394');
   text(fit(`有效 ${row.sampleCount}${row.sampleUnit} · 來源 ${row.flowCount} 次 · 覆蓋 ${Math.round(row.coverage*100)}%`,490,18),plotX,y+117,18,C.muted);
   box(920,y+22,220,42,p.bg,12);text(row.state==='attention'?'超出標準，建議了解':row.status,934,y+50,row.state==='attention'?18:20,p.ink,true);
   text(row.difference===null?'暫不判定差異':`${row.difference>0?'+':''}${row.difference.toFixed(1)} 分`,936,y+94,27,p.ink,true);
@@ -58,6 +59,6 @@ export function drawDurationReportCard(canvas:HTMLCanvasElement,page:DurationCar
  text('依姓名／分類固定順序呈現，不作快慢排名。標準時間內不等同影像品質合格。',44,foot+35,20,C.ink);
  text('需了解項目請先核對個案難度、設備與等待情形；單次或資料不足先觀察。',44,foot+67,19,C.muted);
  text('US 為排除肝纖維後的比例估計；MR 為完整流程。圖卡僅代表所選範圍與已同步資料。',44,foot+96,17,C.muted);
- text(`${page.page} / ${page.pageCount}`,1085,foot+126,18,C.muted,true);
+ text('完整長圖',1050,foot+126,18,C.muted,true);
  return {width:canvas.width,height:canvas.height};
 }
