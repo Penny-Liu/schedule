@@ -10,7 +10,7 @@ it('keeps uncaptured snapshots distinct from a confirmed zero and marks partial 
  expect(summarizeExamDurations([row({claustrophobia_count:undefined})]).claustrophobiaCount).toBeNull();
  const stats=summarizeExamDurations([row(),row({claustrophobia_count:null})]);
  expect(stats.careNotesComplete).toBe(false);expect(stats.claustrophobiaCount).toBe(1);
- expect(formatDurationCareNote({category:'MR',fieldKey:'mr',...stats})).toBe('關懷：幽閉 1 次（部分資料）');
+ expect(formatDurationCareNote({category:'MR',fieldKey:'mr',...stats})).toBe('幽閉：1例（部分資料）');
  expect(formatDurationCareNote({category:'MR',fieldKey:'mr',claustrophobiaCount:0,careNotesComplete:true})).toBe('');
  expect(formatDurationCareNote({category:'MR',fieldKey:'mr',claustrophobiaCount:null})).toBe('關懷註記待同步');
  expect(formatDurationCareNote({category:'US',fieldKey:'us',...stats})).toBe('');
@@ -26,8 +26,8 @@ it('includes the care annotation in both the image model and LINE text',()=>{
  const flow=row({metric_scope:'flow',exam_name:'MR 整次｜小型套（1～3 項）・男',valid_count:2,total_count:2,duration_histogram:{'1800':2}});
  const entries=buildDurationComparison([flow],'mrSmall');
  const pages=buildDurationCardPages(entries,{mode:'category',fieldKey:'mrSmall',staff:'',period:'本期',filters:'全部'});
- expect(pages[0].rows[0].careNote).toBe('關懷：幽閉 1 次');
- expect(formatExamDurationLineSummary({rows:entries,period:'本期',filters:''})).toContain('關懷：幽閉 1 次');
+ expect(pages[0].rows[0].careNote).toBe('幽閉：1例');
+ expect(formatExamDurationLineSummary({rows:entries,period:'本期',filters:''})).toContain('幽閉：1例');
 });
 
 it('highlights actual claustrophobia notes red while pending synchronization stays gray',async()=>{
