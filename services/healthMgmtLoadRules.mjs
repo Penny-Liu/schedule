@@ -12,7 +12,7 @@ export const HM_LOAD_RULES=[
  {key:'abi',label:'基礎 B・ABI',slots:0.5,names:['ABI','週邊血管動脈檢查ABI']},
  {key:'hrv',label:'基礎 B・HRV',slots:0.5,names:['HRV','自律神經檢查HRV']},
  {key:'hpv',label:'HPV',slots:1,names:['HPV','人類乳突狀病毒分型','人類乳突狀病毒分型(癌篩)']},
- {key:'carbon13',label:'碳13',slots:4,names:['碳13','碳13-尿素呼吸試驗']},
+ {key:'carbon13',label:'碳13',slots:0.5,names:['碳13','碳13-尿素呼吸試驗']},
  {key:'pap',label:'基礎 B・婦科會診抹片',slots:1,names:['婦科會診-抹片','子宮頸抹片檢查','子宮頸抹片檢查(癌篩)','新柏氏超薄抹片','液基薄層抹片']},
 ];
 const normalized=value=>String(value||'').trim().replace(/（/g,'(').replace(/）/g,')');
