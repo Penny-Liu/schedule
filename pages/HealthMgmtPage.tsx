@@ -1,3 +1,4 @@
+import HealthMgmtLoad from '../components/healthMgmt/HealthMgmtLoad';
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import {
   User,
@@ -121,6 +122,9 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
   useEffect(() => {
     db.loadDataForMonth(currentDate.getFullYear(), currentDate.getMonth() + 1);
   }, [currentDate]);
+  useEffect(() => {
+    if (activeTab === 'today') void db.loadDataForMonth(todayDate.getFullYear(), todayDate.getMonth() + 1);
+  }, [activeTab, todayDate]);
   const [shifts, setShifts] = useState<HealthMgmtShift[]>([]);
   const [hmStations, setHmStations] = useState<string[]>(
     db.getHealthMgmtStations(),
@@ -166,31 +170,8 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
 
   const [geneHShifts, setGeneHShifts] = useState<any[]>([]);
 
-  useEffect(() => {
-    const fetchGeneHShifts = async () => {
-      const year = currentDate.getFullYear();
-      const month = currentDate.getMonth() + 1;
-      const startDate = `${year}-${String(month).padStart(2, "0")}-01`;
-      const lastDay = new Date(year, month, 0).getDate();
-      const endDate = `${year}-${String(month).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+  const [geneHLoadedKey,setGeneHLoadedKey]=useState('');
 
-      try {
-        const { data, error } = await supabase
-          .from("administrative_shifts")
-          .select("*")
-          .eq("category", "H班")
-          .gte("date", startDate)
-          .lte("date", endDate);
-
-        if (!error && data) {
-          setGeneHShifts(data);
-        }
-      } catch (err) {
-        console.error("Failed to fetch Gene H shifts", err);
-      }
-    };
-    fetchGeneHShifts();
-  }, [currentDate]);
 
   const [newStaffName, setNewStaffName] = useState(""); // For adding new staff
   const [newStaffAlias, setNewStaffAlias] = useState(""); // For adding new staff alias
@@ -537,6 +518,23 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
     }
     return dates;
   }, [currentDate, selectedCycleId, currentCycle]);
+
+  const geneHFrom=activeTab==='today'?toLocalISOString(todayDate):dateRange[0];
+  const geneHTo=activeTab==='today'?toLocalISOString(todayDate):dateRange[dateRange.length-1];
+  const geneHKey=`${geneHFrom}:${geneHTo}`;
+  const geneHReady=geneHLoadedKey===geneHKey;
+  useEffect(()=>{
+    let active=true,generation=0;const controller=new AbortController();setGeneHLoadedKey('');setGeneHShifts([]);
+    const reload=async()=>{
+      const request=++generation;
+      try{const {data,error}=await supabase.from('administrative_shifts').select('*').eq('category','H班').gte('date',geneHFrom).lte('date',geneHTo).abortSignal(controller.signal);
+        if(!active||request!==generation)return;
+        if(error){setGeneHLoadedKey('');return;}setGeneHShifts(data||[]);setGeneHLoadedKey(geneHKey);
+      }catch{if(active&&request===generation)setGeneHLoadedKey('');}
+    };
+    void reload();window.addEventListener('focus',reload);
+    return()=>{active=false;controller.abort();window.removeEventListener('focus',reload);};
+  },[geneHFrom,geneHTo,geneHKey]);
 
   const handleUpdateShift = async (
     userId: string,
@@ -2715,12 +2713,14 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
         ) : activeTab === "today" ? (
           <div className="flex flex-col relative w-full h-full overflow-hidden pb-10">
             <HMTodayView
+              authUserId={currentUser.authUserId}
               date={todayDate}
               onDateChange={setTodayDate}
               location={currentUserLocation}
               shifts={shifts}
               staff={healthMgmtStaff}
               geneHShifts={geneHShifts}
+              geneHReady={geneHReady}
               canEdit={!isHmReadOnly}
               onSaveShift={async (userId, date, time) => {
                 const existing = shifts.find(
@@ -3990,6 +3990,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200">
+                  <HealthMgmtLoad supportShifts={geneHShifts} supportReady={geneHReady} dates={dateRange} location={currentUserLocation} shifts={shifts} staff={healthMgmtStaff} authUserId={currentUser.authUserId}/>
                   {Object.entries(STATION_CATEGORY_LABELS).map(
                     ([groupId, groupLabel]) => {
                       const groupData = stationViewData[groupId];
@@ -4604,21 +4605,25 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
 
 // --- Today View Component ---
 const HMTodayView: React.FC<{
+  authUserId?: string;
   date: Date;
   onDateChange: (d: Date) => void;
   location: string;
   shifts: HealthMgmtShift[];
   staff: HealthMgmtStaff[];
   geneHShifts?: any[];
+  geneHReady?: boolean;
   canEdit?: boolean;
   onSaveShift?: (userId: string, date: string, time: string) => Promise<void>;
 }> = ({
+  authUserId,
   date,
   onDateChange,
   location,
   shifts,
   staff,
   geneHShifts = [],
+  geneHReady = false,
   canEdit = false,
   onSaveShift,
 }) => {
@@ -4984,6 +4989,7 @@ const HMTodayView: React.FC<{
       </div>
 
       <div className="flex-1 overflow-auto pr-2 pb-8 scrolling-touch">
+        <HealthMgmtLoad supportShifts={geneHShifts} supportReady={geneHReady} dates={[dateStr]} location={location} shifts={shifts} staff={staff} authUserId={authUserId} cards/>
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
           {groups.map((group) => {
             const members = getGroupAssignments(group);

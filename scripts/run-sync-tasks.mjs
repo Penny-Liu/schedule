@@ -15,6 +15,8 @@ export function buildSyncPlan(payload, today = new Intl.DateTimeFormat('en-CA', 
     const to=duration.end || today;
     plan.push({script:'sync-exam-duration.mjs',args:['--from',from,'--to',to,'--write']});
   }
+  const health=tasks.find(task=>task.id===6);
+  if(health){const from=health.start||today,to=health.end||new Date(Date.parse(today)+60*86400000).toISOString().slice(0,10);plan.push({script:'sync-health-mgmt-load.mjs',args:['--from',from,'--to',to,'--write']});}
   return plan;
 }
 

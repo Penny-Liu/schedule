@@ -26,8 +26,8 @@ export const validateSyncPayload = (payloadStr) => {
     throw new Error("syncPayload must contain valid JSON");
   }
 
-  if (!Array.isArray(tasks) || tasks.length === 0 || tasks.length > 5) {
-    throw new Error("syncPayload must contain between 1 and 5 tasks");
+  if (!Array.isArray(tasks) || tasks.length === 0 || tasks.length > 6) {
+    throw new Error("syncPayload must contain between 1 and 6 tasks");
   }
 
   const seenIds = new Set();
@@ -36,8 +36,8 @@ export const validateSyncPayload = (payloadStr) => {
       throw new Error("Each sync task must be an object");
     }
 
-    if (!Number.isInteger(task.id) || task.id < 1 || task.id > 5 || seenIds.has(task.id)) {
-      throw new Error("Task ids must be unique integers between 1 and 5");
+    if (!Number.isInteger(task.id) || task.id < 1 || task.id > 6 || seenIds.has(task.id)) {
+      throw new Error("Task ids must be unique integers between 1 and 6");
     }
     seenIds.add(task.id);
 
@@ -45,8 +45,8 @@ export const validateSyncPayload = (payloadStr) => {
       throw new Error("Each task must include a boolean selected value");
     }
 
-    if (task.id === 5 && task.selected && ((task.start === undefined) !== (task.end === undefined))) {
-      throw new Error("Task duration sync requires both start and end dates");
+    if ([5,6].includes(task.id) && task.selected && ((task.start === undefined) !== (task.end === undefined))) {
+      throw new Error("Task detailed sync requires both start and end dates");
     }
     const startTimestamp = parseDate(task.start, "start");
     const endTimestamp = parseDate(task.end, "end");
