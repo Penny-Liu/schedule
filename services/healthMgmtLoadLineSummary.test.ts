@@ -39,7 +39,7 @@ it('removes confirmed report-only items from legacy pending counts without chang
 it('includes the confirmed HPV/carbon13 slots and rejects old snapshots lacking the new customer counts',()=>{
  const current={...snapshot,counts:{...snapshot.counts,hpv:3,carbon13:2},unmapped_count:0,items:[]};
  const text=formatHealthMgmtSlotLineSummary('2026-11-13',[{location:'大直',synced:true,snapshot:current,capacity:capacity()}]);
- expect(text).toContain('HPV：3組 × 1＝3 slot');expect(text).toContain('碳13：2組 × 4＝8 slot');expect(text).toContain('需求 S 合計：152 slot');
+ expect(text).toContain('HPV：3組 × 1＝3 slot');expect(text).toContain('碳13：2組 × 0.5＝1 slot');expect(text).toContain('需求 S 合計：145 slot');
  const old={...snapshot,counts:{preparation:23}};
  expect(formatHealthMgmtSlotLineSummary('2026-11-13',[{location:'大直',synced:true,snapshot:old,capacity:capacity()}])).toContain('需求 S：尚未同步');
 });
