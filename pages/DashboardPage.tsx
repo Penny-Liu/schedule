@@ -4481,7 +4481,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                           color: u.color,
                           workTime: storedShift?.workTime,
                           specialRoles: s.specialRoles,
-                          note: isRemoteDualBmd ? "(遠班兼職)" : s.station !== stationName && coversStation(s, stationName) ? `(兼任；主崗 ${s.station})` : undefined,
+                          note: isRemoteDualBmd || (s.station !== stationName && coversStation(s, stationName)) ? "兼" : undefined,
                         });
                       }
                     });
@@ -4863,7 +4863,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                         </span>
                                         {u.specialRoles.length > 0 && (
                                           <div className="flex flex-wrap gap-0.5">
-                                            {u.specialRoles.map((r) => (
+                                            {u.specialRoles.filter((r) => u.note !== "兼" || !isConcurrentRole(r)).map((r) => (
                                               <span
                                                 key={r}
                                                 className={`text-[9px] font-medium leading-none ${
@@ -6436,22 +6436,21 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                               </div>
                                             )}
 
+                                            {row.type === "STATION" && item.shift.station === row.label && item.shift.specialRoles.filter(isConcurrentRole).map((role) => (
+                                              <span key={role} className="w-full text-center text-[9px] text-purple-700">{role}</span>
+                                            ))}
                                             {row.type === "STATION" && item.shift.station !== row.label && coversStation(item.shift, row.label) && (
-                                              <span className="text-[9px] text-purple-700">兼任・主崗 {item.shift.station}</span>
+                                              <span className="w-full text-center text-[9px] text-purple-700">兼</span>
                                             )}
                                             {showSuffix &&
                                               (isOpening ||
                                                 isLate ||
                                                 isAssist ||
                                                 isScheduler ||
-                                                item.shift.specialRoles.some(isConcurrentRole) ||
                                                 isDualBMD ||
                                                 isDazhiSupport ||
                                                 isCoopCancel) && (
                                                 <div className="flex flex-col gap-0.5 mt-0.5 w-full items-center">
-                                                  {item.shift.specialRoles.filter(isConcurrentRole).filter((r) => r !== SPECIAL_ROLES.DUAL_BMD).map((r) => (
-                                                    <span key={r} className="w-full text-center bg-purple-100 text-purple-900 rounded text-[10px]">{r}</span>
-                                                  ))}
                                                   {isOpening && (
                                                     <span className="w-full text-center bg-blue-100/80 px-0.5 rounded-[2px] text-[10px] leading-tight text-blue-900 font-extrabold border border-blue-200/50">
                                                       開機
@@ -6472,7 +6471,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                       排班
                                                     </span>
                                                   )}
-                                                  {isDualBMD && (
+                                                  {isDualBMD && row.type !== "STATION" && (
                                                     <span className="w-full text-center bg-purple-100/80 px-0.5 rounded-[2px] text-[10px] leading-tight text-purple-900 font-extrabold border border-purple-200/50">
                                                       兼BMD/DX
                                                     </span>
@@ -6563,7 +6562,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                     {u.alias || u.name[0]})
                                                     {(() => {
                                                       const assigned = shifts.find((s) => s.userId === u.id && s.date === date);
-                                                      return assigned && isExamStation(assigned.station) && assigned.station !== row.label ? `（兼任；主崗 ${assigned.station}）` : "";
+                                                      return assigned && isExamStation(assigned.station) && assigned.station !== row.label ? "（兼）" : "";
                                                     })()}
                                                   </option>
                                                 ))
