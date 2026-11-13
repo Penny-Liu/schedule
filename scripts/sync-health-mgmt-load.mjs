@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import {defaultHealthMgmtSyncRange} from '../services/healthMgmtSyncRange.mjs';
 import {createClient} from '@supabase/supabase-js';
 import {pathToFileURL} from 'node:url';
 import {getSalesforceSession,runSoqlQuery} from './salesforce-utils.mjs';
@@ -27,5 +28,5 @@ export async function syncHealthMgmtLoad({from,to,write=false}){
 }
 if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
  const args=process.argv.slice(2),arg=name=>args[args.indexOf(name)+1];const today=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Taipei',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
- syncHealthMgmtLoad({from:args.includes('--from')?arg('--from'):today,to:args.includes('--to')?arg('--to'):new Date(Date.parse(today)+60*86400000).toISOString().slice(0,10),write:args.includes('--write')}).catch(e=>{console.error(e.message);process.exitCode=1;});
+ syncHealthMgmtLoad({from:args.includes('--from')?arg('--from'):today,to:args.includes('--to')?arg('--to'):defaultHealthMgmtSyncRange(today).to,write:args.includes('--write')}).catch(e=>{console.error(e.message);process.exitCode=1;});
 }

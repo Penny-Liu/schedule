@@ -1,5 +1,5 @@
 import {supabase} from './supabaseClient';
-import type {HMLoadSnapshot,HMLoadSyncDay} from './healthMgmtLoad';
+import {normalizeHealthMgmtReportOrders,type HMLoadSnapshot,type HMLoadSyncDay} from './healthMgmtLoad';
 export async function fetchHealthMgmtLoad(from:string,to:string,expectedAuthUserId:string|undefined,signal?:AbortSignal){
  if(!expectedAuthUserId)throw new Error('請完成安全登入後查看健管負載。');
  const {data:auth,error:authError}=await supabase.auth.getUser();
@@ -12,5 +12,5 @@ export async function fetchHealthMgmtLoad(from:string,to:string,expectedAuthUser
    (target as unknown[]).push(...data||[]);if(!data||data.length<1000)break;
   }
  }
- return {rows,days};
+ return {rows:rows.map(normalizeHealthMgmtReportOrders),days};
 }

@@ -23,7 +23,13 @@ it('rejects malformed dates before starting any tasks',()=>{
  expect(()=>buildSyncPlan('[{"id":5,"selected":true,"start":"2026-11-05","end":"2026-11-04"}]')).toThrow('before');
 });
 it('supports health-management-only sync with future defaults and rejects a half date range',()=>{
- expect(buildSyncPlan('[{"id":6,"selected":true}]','2026-11-13')).toEqual([{script:'sync-health-mgmt-load.mjs',args:['--from','2026-11-13','--to','2027-01-12','--write']}]);
+ expect(buildSyncPlan('[{"id":6,"selected":true}]','2026-11-13')).toEqual([{script:'sync-health-mgmt-load.mjs',args:['--from','2026-11-13','--to','2026-11-27','--write']}]);
  expect(()=>buildSyncPlan('[{"id":6,"selected":true,"start":"2026-11-13"}]')).toThrow('both start and end');
  expect(buildSyncPlan('[{"id":6,"selected":true,"start":"2026-11-01","end":"2026-11-30"}]')[0].args).toEqual(['--from','2026-11-01','--to','2026-11-30','--write']);
+});
+
+it('uses the confirmed two-week HM window without changing radiographer duration or manually requested ranges',()=>{
+ const plan=buildSyncPlan('[{"id":5,"selected":true},{"id":6,"selected":true}]','2026-12-25');
+ expect(plan[0].args).toEqual(['--from','2026-11-11','--to','2026-12-25','--write']);
+ expect(plan[1].args).toEqual(['--from','2026-12-25','--to','2027-01-08','--write']);
 });

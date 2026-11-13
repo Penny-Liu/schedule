@@ -1,3 +1,4 @@
+import {HM_LOAD_RULES} from './healthMgmtLoadRules.mjs';
 import {it,expect} from 'vitest';
 import {calculateHealthMgmtCapacity,calculateHealthMgmtLoad,isHealthMgmtSnapshotReady,hmCapacityStation,type HMLoadSnapshot} from './healthMgmtLoad';
 import type {HealthMgmtShift,HealthMgmtStaff} from '../types';
@@ -37,7 +38,7 @@ it('uses the same green/yellow/red boundaries as the radiographer position view'
 });
 
 it('does not display stale or missing campus rows as a newly synchronized zero-demand day',()=>{
- const snapshot={algorithm:'hm-slots-v1',synced_at:'2026-11-13T01:00:00Z'} as HMLoadSnapshot;
+ const snapshot={algorithm:'hm-slots-v1',synced_at:'2026-11-13T01:00:00Z',counts:Object.fromEntries(HM_LOAD_RULES.map(rule=>[rule.key,0]))} as HMLoadSnapshot;
  const day={exam_date:'2026-11-13',algorithm:'hm-slots-v1',synced_at:'2026-11-13T02:00:00Z'};
  expect(isHealthMgmtSnapshotReady(undefined,day)).toBe(false);expect(isHealthMgmtSnapshotReady(snapshot,day)).toBe(false);
  expect(isHealthMgmtSnapshotReady({...snapshot,synced_at:'2026-11-13T02:00:00+00:00'},day)).toBe(true);

@@ -1,11 +1,16 @@
 import type {HealthMgmtShift,HealthMgmtStaff} from '../types';
-import {HM_STAFF_SLOTS,healthMgmtDemandSlots} from './healthMgmtLoadRules.mjs';
+import {HM_STAFF_SLOTS,healthMgmtDemandSlots,isHealthMgmtReportOnly,hasCurrentHealthMgmtCounts} from './healthMgmtLoadRules.mjs';
 export type HealthMgmtCampus='北投'|'大直';
-export interface HMLoadItem {name:string;category:string;kind:'mapped'|'unmapped';key:string|null;order_count:number;}
+export interface HMLoadItem {name:string;category:string;kind:'mapped'|'unmapped'|'report';key:string|null;order_count:number;}
 export interface HMLoadSnapshot {exam_date:string;location:string;counts:Record<string,number>;customer_count:number;source_count:number;unmapped_count:number;missing_identity_count:number;fallback_identity_count:number;items:HMLoadItem[];algorithm:string;synced_at:string;}
 export interface HMHSupportShift {id?:string;date:string;location?:string;staff_names?:string;category?:string;task?:string;}
+// Existing snapshots already excluded report orders from demand; update annotations only.
+export function normalizeHealthMgmtReportOrders(snapshot:HMLoadSnapshot):HMLoadSnapshot {
+ const removed=snapshot.items.filter(item=>item.kind==='unmapped'&&isHealthMgmtReportOnly(item.name)).reduce((sum,item)=>sum+item.order_count,0);
+ return {...snapshot,unmapped_count:Math.max(0,snapshot.unmapped_count-removed),items:snapshot.items.map(item=>isHealthMgmtReportOnly(item.name)?{...item,kind:'report',key:null}:item)};
+}
 export interface HMLoadSyncDay {exam_date:string;algorithm:string;synced_at:string;}
-export const isHealthMgmtSnapshotReady=(snapshot:HMLoadSnapshot|undefined,day:HMLoadSyncDay|undefined)=>Boolean(snapshot&&day&&snapshot.algorithm===day.algorithm&&Date.parse(snapshot.synced_at)===Date.parse(day.synced_at));
+export const isHealthMgmtSnapshotReady=(snapshot:HMLoadSnapshot|undefined,day:HMLoadSyncDay|undefined)=>Boolean(snapshot&&day&&hasCurrentHealthMgmtCounts(snapshot.counts)&&snapshot.algorithm===day.algorithm&&Date.parse(snapshot.synced_at)===Date.parse(day.synced_at));
 export function hmCapacityStation(station:string){
  const text=String(station||'').trim();
  const base=text.split(/[\s,]+/).find(p=>!p.includes(':'))||text;

@@ -11,15 +11,22 @@ export const HM_LOAD_RULES=[
  {key:'lung',label:'基礎 B・肺功能',slots:0.5,names:['肺功能','肺活量、最大吐氣量']},
  {key:'abi',label:'基礎 B・ABI',slots:0.5,names:['ABI','週邊血管動脈檢查ABI']},
  {key:'hrv',label:'基礎 B・HRV',slots:0.5,names:['HRV','自律神經檢查HRV']},
+ {key:'hpv',label:'HPV',slots:1,names:['HPV','人類乳突狀病毒分型','人類乳突狀病毒分型(癌篩)']},
+ {key:'carbon13',label:'碳13',slots:4,names:['碳13','碳13-尿素呼吸試驗']},
  {key:'pap',label:'基礎 B・婦科會診抹片',slots:1,names:['婦科會診-抹片','子宮頸抹片檢查','子宮頸抹片檢查(癌篩)','新柏氏超薄抹片','液基薄層抹片']},
 ];
 const normalized=value=>String(value||'').trim().replace(/（/g,'(').replace(/）/g,')');
+export const HM_REPORT_ONLY_NAMES=['眼科檢查','耳鼻喉科檢查','婦科檢查','婦科檢查(自費子抹報告用)'];
+export const isHealthMgmtReportOnly=name=>HM_REPORT_ONLY_NAMES.some(value=>normalized(value)===normalized(name));
 export function classifyHealthMgmtOrder(record) {
  const name=normalized(record.CheckupName__c);
  if(/報到/.test(name+' '+(record.ProcessType__c||'')))return {kind:'flow',key:null};
+ if(isHealthMgmtReportOnly(name))return {kind:'report',key:null};
  const rule=HM_LOAD_RULES.find(rule=>rule.names.some(alias=>normalized(alias)===name));
  if(rule)return {kind:'mapped',key:rule.key};
  const relevant=['檢備','OphE','OphC','EntC','GynC','聽-肺','HRV-ABI'].includes(record.ResourceCategory__c)||/^(眼科檢查|耳鼻喉科檢查|婦科檢查)/.test(name);
  return {kind:relevant?'unmapped':'outside',key:null};
 }
 export const healthMgmtDemandSlots=counts=>HM_LOAD_RULES.reduce((sum,rule)=>sum+Math.max(0,Number(counts?.[rule.key])||0)*rule.slots,0);
+
+export const hasCurrentHealthMgmtCounts=counts=>HM_LOAD_RULES.every(rule=>Number.isInteger(counts?.[rule.key])&&counts[rule.key]>=0);
