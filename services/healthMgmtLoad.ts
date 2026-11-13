@@ -57,6 +57,6 @@ export function calculateHealthMgmtLoad(snapshot:HMLoadSnapshot|undefined,synced
  const rate=demand===null||capacity.supplySlots===0?null:demand/capacity.supplySlots*100;
  const unresolved=Boolean(snapshot&&(snapshot.unmapped_count||snapshot.missing_identity_count||snapshot.fallback_identity_count));
  const unknownCapacity=capacity.excluded.some(e=>/未指定|跨院區|未對應|對應不明|名單未就緒/.test(e.reason));
- const status=demand===null?'尚未同步':unknownCapacity?'人力待確認':demand>0&&capacity.staffCount===0?'無可用人力':unresolved?'資料待確認':rate===null?'無需求／無人力':rate<75?'綠區':rate<=90?'黃區':'紅區';
+ const status=demand===null?'尚未同步':unknownCapacity?'人力待確認':demand>0&&capacity.staffCount===0?'無可用人力':unresolved?'資料待確認':rate===null?'-':rate<75?'綠區':rate<=90?'黃區':'紅區';
  return {...capacity,demand,rate,status,unresolved,unknownCapacity,remainingSlots:demand===null?null:capacity.supplySlots-demand,additionalStaff:demand===null?null:Math.max(0,Math.ceil(demand/HM_STAFF_SLOTS)-capacity.staffCount)};
 }
