@@ -1,3 +1,4 @@
+import { CONCURRENT_STATIONS, concurrentRole, isConcurrentRole, isExamStation, coversStation, normalizeConcurrentRoles, uniqueDailyShifts } from "../services/radiographerConcurrentStations";
 import { MrUtilizationChart } from "../components/dashboard/MrUtilizationChart";
 import { copyTextToClipboard } from "../services/clipboard";
 import { getFloorControlRoleDecision } from "../services/floorControlSchedulerOverride";
@@ -187,7 +188,7 @@ export const calculateDailyLoadRate = (
   let demandExtra = 0;
   let supplySlots = 0;
 
-  shifts.forEach((s) => {
+  uniqueDailyShifts(shifts, targetDate).forEach((s) => {
     if (s.date !== targetDate) return;
     if (s.station === SYSTEM_OFF || s.station === StationDefault.UNASSIGNED)
       return;
@@ -2502,7 +2503,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
       userId,
       date: dateStr,
       station,
-      specialRoles,
+      specialRoles: normalizeConcurrentRoles(station, specialRoles),
       workTime: existingShift?.workTime,
       learningStation:
         learningStation !== undefined
@@ -2674,6 +2675,16 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
     currentStation: string,
     currentRoles: string[],
   ) => {
+    if (isConcurrentRole(role) && !currentRoles.includes(role)) {
+      const target = role.slice(1);
+      const user = users.find((u) => u.id === userId);
+      const assigned = shifts.find((s) => s.userId === userId && s.date === dateStr);
+      if (!isExamStation(currentStation) || assigned?.learningStation || currentStation === target || !user ||
+          !isUserCertifiedOnDate(user, target, dateStr)) {
+        showToast("兼任須有主檢查崗位，且具備該兼任崗位的獨立資格", "error");
+        return;
+      }
+    }
     let newRoles = [...currentRoles];
 
     // 0. Validation Constraints
@@ -2701,25 +2712,25 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
 
     // 2. Enforce Conflicts
     if (newRoles.includes(role)) {
-      if (role === "配合銷假") {
+      if (role === "配合銷假" || isConcurrentRole(role)) {
         // 「配合銷假」可以與任何其他任務共存，不作過濾
       } else if (role === SPECIAL_ROLES.OPENING) {
         newRoles = newRoles.filter(
           (r) =>
             r === SPECIAL_ROLES.OPENING ||
             r === SPECIAL_ROLES.ASSIST ||
-            r === "配合銷假",
+            r === "配合銷假" || isConcurrentRole(r),
         );
       } else if (role === SPECIAL_ROLES.ASSIST) {
         newRoles = newRoles.filter(
           (r) =>
             r === SPECIAL_ROLES.ASSIST ||
             r === SPECIAL_ROLES.OPENING ||
-            r === "配合銷假",
+            r === "配合銷假" || isConcurrentRole(r),
         );
       } else {
         // 其他任務互斥，但保留「配合銷假」
-        newRoles = newRoles.filter((r) => r === role || r === "配合銷假");
+        newRoles = newRoles.filter((r) => r === role || r === "配合銷假" || isConcurrentRole(r));
       }
     }
     handleUpdateShift(
@@ -2755,7 +2766,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
     return shifts
       .filter((s) => {
         if (s.date !== dateStr) return false;
-        if (s.station === stationName) return true;
+        if (coversStation(s, stationName)) return true;
         if (s.learningStation && stationName.includes(s.learningStation)) {
           // If they have a teacher selected, they should ONLY appear in the teacher's station
           if (s.learningTeacherId) {
@@ -2953,6 +2964,9 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
           shift.station.includes("遠班") || shift.station.includes("遠距");
         const isDualTarget = station.includes("BMD") || station.includes("DX");
         const isDazhiTarget = station.includes("大直");
+        if (isExamStation(shift.station) && isExamStation(station)) {
+          return isCertified && !shift.learningStation && !coversStation(shift, station);
+        }
         if (!(isRemoteShift && (isDualTarget || isDazhiTarget))) {
           return false;
         }
@@ -2999,6 +3013,17 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
     );
     let roles = existingShift ? [...existingShift.specialRoles] : [];
 
+    if (existingShift && isExamStation(existingShift.station) &&
+        isExamStation(station) && existingShift.station !== station) {
+      const user = users.find((u) => u.id === userId);
+      if (!user || existingShift.learningStation || !isUserCertifiedOnDate(user, station, dateStr)) {
+        showToast("兼任須具備該崗位的獨立資格", "error");
+        return;
+      }
+      handleUpdateShift(userId, dateStr, existingShift.station,
+        [...new Set([...roles, concurrentRole(station)])]);
+      return;
+    }
     if (existingShift) {
       const isRemoteShift =
         existingShift.station.includes("遠距") ||
@@ -3037,6 +3062,12 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
     );
 
     let roles = existingShift ? [...existingShift.specialRoles] : [];
+    if (existingShift && stationLabel && existingShift.station !== stationLabel &&
+        coversStation(existingShift, stationLabel)) {
+      handleUpdateShift(userId, dateStr, existingShift.station,
+        roles.filter((r) => r !== concurrentRole(stationLabel)));
+      return;
+    }
     const isDualBMDTarget =
       stationLabel &&
       (stationLabel.includes("BMD") || stationLabel.includes("DX"));
@@ -3204,6 +3235,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
     SPECIAL_ROLES.SCHEDULER,
     SPECIAL_ROLES.DAZHI_SUPPORT,
     SPECIAL_ROLES.DUAL_BMD,
+    ...CONCURRENT_STATIONS.filter((s) => s !== StationDefault.BMD_DX).map(concurrentRole),
     "配合銷假",
   ];
 
@@ -4435,7 +4467,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                           s.specialRoles.includes(SPECIAL_ROLES.DAZHI_SUPPORT)
                         )
                           match = true;
-                      } else if (s.station === stationName) match = true;
+                      } else if (coversStation(s, stationName)) match = true;
 
                       if (match) {
                         const isRemoteDualBmd =
@@ -4449,7 +4481,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                           color: u.color,
                           workTime: storedShift?.workTime,
                           specialRoles: s.specialRoles,
-                          note: isRemoteDualBmd ? "(遠班兼職)" : undefined,
+                          note: isRemoteDualBmd || (s.station !== stationName && coversStation(s, stationName)) ? "兼" : undefined,
                         });
                       }
                     });
@@ -4831,7 +4863,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                         </span>
                                         {u.specialRoles.length > 0 && (
                                           <div className="flex flex-wrap gap-0.5">
-                                            {u.specialRoles.map((r) => (
+                                            {u.specialRoles.filter((r) => u.note !== "兼" || !isConcurrentRole(r)).map((r) => (
                                               <span
                                                 key={r}
                                                 className={`text-[9px] font-medium leading-none ${
@@ -5908,7 +5940,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                       ? "大直"
                                                       : role === "配合銷假"
                                                         ? "銷假"
-                                                        : role[0]}
+                                                        : isConcurrentRole(role) ? role : role[0]}
                                                 </span>
                                                 <button
                                                   type="button"
@@ -6404,6 +6436,12 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                               </div>
                                             )}
 
+                                            {row.type === "STATION" && item.shift.station === row.label && item.shift.specialRoles.filter(isConcurrentRole).map((role) => (
+                                              <span key={role} className="w-full text-center text-[9px] text-purple-700">{role}</span>
+                                            ))}
+                                            {row.type === "STATION" && item.shift.station !== row.label && coversStation(item.shift, row.label) && (
+                                              <span className="w-full text-center text-[9px] text-purple-700">兼</span>
+                                            )}
                                             {showSuffix &&
                                               (isOpening ||
                                                 isLate ||
@@ -6433,7 +6471,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                       排班
                                                     </span>
                                                   )}
-                                                  {isDualBMD && (
+                                                  {isDualBMD && row.type !== "STATION" && (
                                                     <span className="w-full text-center bg-purple-100/80 px-0.5 rounded-[2px] text-[10px] leading-tight text-purple-900 font-extrabold border border-purple-200/50">
                                                       兼BMD/DX
                                                     </span>
@@ -6522,6 +6560,10 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                   >
                                                     {u.name} (
                                                     {u.alias || u.name[0]})
+                                                    {(() => {
+                                                      const assigned = shifts.find((s) => s.userId === u.id && s.date === date);
+                                                      return assigned && isExamStation(assigned.station) && assigned.station !== row.label ? "（兼）" : "";
+                                                    })()}
                                                   </option>
                                                 ))
                                               : getCandidatesForRole(
@@ -6905,6 +6947,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                   <div className="flex items-center gap-2">
                     <LayoutList size={14} />
                     <span>崗位視角說明：</span>
+                    <span className="text-purple-700">兼任保留主崗，人力只計一人；可由＋選人兼任，或在人員視角＋任務設定。</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="w-3 h-3 bg-teal-100 border border-teal-200 rounded-sm"></span>{" "}
@@ -8043,7 +8086,7 @@ BMD :{{bmd}}
     let beitouSupplySlots = 0;
     let dazhiSupplySlots = 0;
 
-    shifts.forEach((s) => {
+    uniqueDailyShifts(shifts, date).forEach((s) => {
       if (s.date !== date) return;
       if (s.station === SYSTEM_OFF) return;
       if (!s.learningStation && s.station === StationDefault.UNASSIGNED) return;
