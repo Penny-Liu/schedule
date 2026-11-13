@@ -1,3 +1,4 @@
+import {defaultHealthMgmtSyncRange} from '../services/healthMgmtSyncRange.mjs';
 import { validateSyncPayload } from "./syncValidation";
 import React, { useState, useMemo, useEffect, useRef } from "react";
 import { isDeveloperSandboxActive, SANDBOX_BLOCKED, sandboxFetch as fetch } from '../services/developerSandbox';
@@ -207,7 +208,7 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
         start: new Date(Date.parse(todayStr) - 44 * 86400000).toISOString().slice(0, 10),
         end: todayStr,
       },
-      {id:6,name:'健管檢查量（H／HA 負載與醫令對照）',selected:false,start:todayStr,end:new Date(Date.parse(todayStr)+60*86400000).toISOString().slice(0,10)},
+      {id:6,name:'健管檢查量（H／HA 負載與醫令對照）',selected:false,start:todayStr,end:defaultHealthMgmtSyncRange(todayStr).to},
     ];
   });
 
@@ -772,7 +773,7 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
                           更新今年尚未結算的設備人次；已結算月份會自動跳過，目前月份更新至 Salesforce 最新資料。
                         </div>
                       ) : (<>
-                      {task.id===6&&<p className="text-sm text-teal-900 bg-teal-50 border border-teal-200 rounded-lg p-3">同步有效安排醫令，不限已完成。依日期與院區統計健管服務，檢備／基礎 A 合併計次；待確認醫令暫不計 slot。完成後至健管崗位視角重新讀取，預設今天起 61 天。</p>}
+                      {task.id===6&&<p className="text-sm text-teal-900 bg-teal-50 border border-teal-200 rounded-lg p-3">同步有效安排醫令，不限已完成。依日期與院區統計健管服務，檢備／基礎 A 合併計次；待確認醫令暫不計 slot。完成後至健管崗位視角重新讀取，預設今天至第 14 天（含今天共 15 天）。</p>}
                       {task.id===5&&<p className="text-sm text-cyan-900 bg-cyan-50 border border-cyan-200 rounded-lg p-3">同步已完成檢查的原始耗時、均攤估計、來源流程與資料品質。預設最近 45 天，最多 367 天；完成後到「檢查耗時」按「重新讀取」。</p>}
                       <div className="flex items-center gap-3 flex-wrap">
                         <span className="text-sm font-medium text-slate-600 w-20">

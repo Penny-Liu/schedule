@@ -13,6 +13,7 @@ export function buildHealthMgmtLoadSnapshots(records,capturedAt=new Date().toISO
   const itemKey=JSON.stringify([record.CheckupName__c||'未填醫令',record.ResourceCategory__c||'未分類',classification.kind,classification.key]);
   const item=g.items.get(itemKey)||{name:record.CheckupName__c||'未填醫令',category:record.ResourceCategory__c||'未分類',kind:classification.kind,key:classification.key,order_count:0};item.order_count++;g.items.set(itemKey,item);
   if(classification.kind==='unmapped'){g.unmapped_count++;continue;}
+  if(classification.kind==='report')continue;
   // Same customer/date/campus: each bucket once, regardless of medical-order count.
   const contact=record.Order__r?.Contact__c;
   const identity=contact?`contact:${contact}`:record.Order__c?`order:${record.Order__c}`:null;
