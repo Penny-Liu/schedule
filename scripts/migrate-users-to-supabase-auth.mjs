@@ -13,6 +13,7 @@ const args = new Set(process.argv.slice(2));
 const applyChanges = args.has("--apply");
 const confirmedPasswordMigration = args.has("--confirm-existing-passwords");
 const listNonCompliantUsers = args.has("--list-noncompliant-users");
+const excludedUsernames = new Set(process.argv.slice(2).filter((arg) => arg.startsWith("--exclude-user=")).map((arg) => arg.slice("--exclude-user=".length)));
 const rolesArg = process.argv.slice(2).find((arg) => arg.startsWith("--roles="));
 const selectedRoles = rolesArg
   ? new Set(
@@ -37,6 +38,9 @@ if (args.has("--help")) {
 
   npm run auth:migrate -- --roles=SUPERVISOR,SYSTEM_ADMIN
       Limits preflight or apply to the listed application roles.
+
+  npm run auth:migrate -- --roles=HM_SUPERVISOR,HM_STAFF --exclude-user=USERNAME
+      Excludes the exact username from preflight, apply, and final verification.
 
 Required environment:
   SUPABASE_URL (or VITE_SUPABASE_URL)
@@ -151,7 +155,8 @@ const validateLegacyUsers = (users) => {
 const run = async () => {
   console.log(`[Auth migration] 模式：${applyChanges ? "APPLY" : "DRY RUN"}`);
 
-  const allLegacyUsers = await loadLegacyUsers(applyChanges);
+  const allLegacyUsers = (await loadLegacyUsers(applyChanges)).filter((user) => !excludedUsernames.has(user.username));
+  console.log(`[Auth migration] 明確排除帳號：${excludedUsernames.size} 筆`);
   const legacyUsers = selectedRoles
     ? allLegacyUsers.filter((user) => selectedRoles.has(user.role))
     : allLegacyUsers;
@@ -254,7 +259,7 @@ const run = async () => {
   }
 
   const verifiedUsers = (await loadLegacyUsers(true)).filter(
-    (user) => !selectedRoles || selectedRoles.has(user.role),
+    (user) => (!selectedRoles || selectedRoles.has(user.role)) && !excludedUsernames.has(user.username),
   );
   const unlinkedCount = verifiedUsers.filter((user) => !user.auth_user_id).length;
   if (unlinkedCount > 0) {
