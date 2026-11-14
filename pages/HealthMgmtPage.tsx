@@ -1850,7 +1850,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
       .toUpperCase();
     if (rawTask.includes("主控")) return 1;
     if (rawTask.includes("輔控")) return 2;
-    if (rawTask.includes("問診")) return 3;
+    if (/問診|問[12１２]/.test(rawTask)) return 3;
     if (rawTask.includes("抽1")) return 4;
     if (rawTask.includes("抽2")) return 5;
     if (rawTask.includes("抽血")) return 5.5;
@@ -1886,7 +1886,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
     if (rawTask.includes("耳鼻喉")) return { label: "耳", borderClass: "border-indigo-500", textClass: "text-indigo-700" };
     if (rawTask.includes("超音波") || rawTask.includes("超") || rawTask.includes("女超") || rawTask.includes("乳超") || rawTask.includes("腹超") || rawTask.includes("甲超")) return { label: "超", borderClass: "border-pink-500", textClass: "text-pink-700" };
     if (rawTask.includes("排班")) return { label: "排", borderClass: "border-amber-500", textClass: "text-amber-700" };
-    if (rawTask.includes("問診")) return { label: "問", borderClass: "border-emerald-500", textClass: "text-emerald-700" };
+    if (/問診|問[12１２]/.test(rawTask)) return { label: "問", borderClass: "border-emerald-500", textClass: "text-emerald-700" };
     if (rawTask.includes("基礎")) return { label: "基", borderClass: "border-cyan-500", textClass: "text-cyan-700" };
     if (rawTask.includes("行政") || rawTask.includes("櫃台") || rawTask.includes("客服") || rawTask.includes("報到") || rawTask.includes("出納") || rawTask.includes("發報")) return { label: "行", borderClass: "border-slate-500", textClass: "text-slate-700" };
     if (rawTask.includes("麻評") || rawTask.includes("麻")) return { label: "麻", borderClass: "border-rose-500", textClass: "text-rose-700" };

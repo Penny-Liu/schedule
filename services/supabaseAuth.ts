@@ -7,11 +7,14 @@ import { supabase } from "./supabaseClient";
 export const isProtectedEditorRole = (role: UserRole | string): boolean =>
   role === UserRole.SUPERVISOR || role === UserRole.SYSTEM_ADMIN;
 
+export const requiresSupabaseLogin = (role: UserRole | string): boolean =>
+  isProtectedEditorRole(role) || role === UserRole.HM_SUPERVISOR || role === UserRole.HM_STAFF;
+
 export const signInProtectedEditor = async (
   user: User,
   password: string,
 ): Promise<void> => {
-  if (!isProtectedEditorRole(user.role)) return;
+  if (!requiresSupabaseLogin(user.role)) return;
   if (!user.authUserId) {
     throw new Error("此管理帳號尚未完成安全登入設定，請聯絡系統管理員");
   }
