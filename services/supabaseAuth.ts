@@ -30,13 +30,18 @@ export const signInProtectedEditor = async (
     password: authPassword,
   });
   if (error || !data.user || data.user.id !== user.authUserId) {
-    await supabase.auth.signOut();
+    await supabase.auth.signOut({ scope: "local" });
     throw new Error("安全登入失敗，請確認密碼或聯絡系統管理員");
+  }
+  const verified = await supabase.auth.getUser();
+  if (verified.error || verified.data.user?.id !== user.authUserId) {
+    await supabase.auth.signOut({ scope: "local" });
+    throw new Error("登入憑證未能完成驗證，請重新登入；若持續發生，請確認瀏覽器連線與儲存設定");
   }
 };
 
 export const signOutSupabaseAuth = async (): Promise<void> => {
-  const { error } = await supabase.auth.signOut();
+  const { error } = await supabase.auth.signOut({ scope: "local" });
   if (error) console.warn("Supabase Auth sign-out failed:", error.message);
 };
 
