@@ -145,13 +145,13 @@ const App: React.FC = () => {
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     if (isDeveloperSandboxActive()) {
       // Reload clears both the simulation journal and all module caches.
       window.location.reload();
       return;
     }
-    void signOutSupabaseAuth();
+    await signOutSupabaseAuth();
     db.logout();
     setCurrentUser(null);
   };

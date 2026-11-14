@@ -3,7 +3,12 @@ import {normalizeHealthMgmtReportOrders,type HMLoadSnapshot,type HMLoadSyncDay} 
 export async function fetchHealthMgmtLoad(from:string,to:string,expectedAuthUserId:string|undefined,signal?:AbortSignal){
  if(!expectedAuthUserId)throw new Error('請完成安全登入後查看健管負載。');
  const {data:auth,error:authError}=await supabase.auth.getUser();
- if(authError||auth.user?.id!==expectedAuthUserId)throw new Error('登入已變更，請重新登入。');
+ if(authError){
+  if(authError.name==='AuthSessionMissingError')throw new Error('目前沒有有效登入憑證，請重新登入後查看健管負載。');
+  throw new Error(`登入驗證失敗：${authError.message}。請重新登入；無需重新同步檢查量。`);
+ }
+ if(!auth.user)throw new Error('目前沒有有效登入憑證，請重新登入後查看健管負載。');
+ if(auth.user.id!==expectedAuthUserId)throw new Error('登入身分與目前帳號不符，請重新登入後查看健管負載。');
  const rows:HMLoadSnapshot[]=[],days:HMLoadSyncDay[]=[];
  for(const [table,target]of [['health_mgmt_load_daily',rows],['health_mgmt_load_sync_days',days]] as const){
   for(let offset=0;;offset+=1000){
