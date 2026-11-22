@@ -1,3 +1,4 @@
+import { validatePreLeavePriority } from "./preLeavePriority";
 import {
   User,
   Shift,
@@ -585,8 +586,22 @@ class Store {
 
   // New method to fetch all data from Supabase
   
+  private authLoadInFlight: Promise<void> | null = null;
+
   async initializeAuthData(force: boolean = false) {
+    // Share only the ongoing request; forced login refreshes still run after it settles.
+    if (this.authLoadInFlight) return this.authLoadInFlight;
     if (this.isLoaded && !force) return;
+    const pending = this.loadAuthData();
+    this.authLoadInFlight = pending;
+    try {
+      await pending;
+    } finally {
+      if (this.authLoadInFlight === pending) this.authLoadInFlight = null;
+    }
+  }
+
+  private async loadAuthData() {
     this.authLoadError = null;
 
     try {
@@ -2189,6 +2204,7 @@ class Store {
       isRadiographer: "is_radiographer",
       isPartTime: "is_part_time",
       isHealthMgmt: "is_health_mgmt",
+      preLeavePriority: "pre_leave_priority",
       authUserId: "auth_user_id",
       healthMgmtLocation: "health_mgmt_location",
       isActive: "is_active",
@@ -2269,6 +2285,7 @@ class Store {
       is_radiographer: "isRadiographer",
       is_part_time: "isPartTime",
       is_health_mgmt: "isHealthMgmt",
+      pre_leave_priority: "preLeavePriority",
       auth_user_id: "authUserId",
       health_mgmt_location: "healthMgmtLocation",
       is_active: "isActive",
@@ -3054,6 +3071,19 @@ class Store {
       .eq("id", id);
     if (error) console.error("Failed to update leave target approval:", error);
 
+    this.notifyListeners();
+  }
+
+  async updatePreLeavePriority(id: string, priority: number | null) {
+    const actor = this.currentUser;
+    if (!actor || ![UserRole.SUPERVISOR, UserRole.SYSTEM_ADMIN].includes(actor.role)) throw new Error("只有放射師主管或系統管理員可設定優先休順序");
+    const leave = this.leaves.find(l => l.id === id);
+    const user = leave && this.users.find(u => u.id === leave.userId);
+    validatePreLeavePriority(leave, user, priority, this.leaves);
+    const { data, error } = await supabase.from("leaves").update({ pre_leave_priority: priority }).eq("id", id).select("id").maybeSingle();
+    if (error) throw new Error(error.code === "23505" ? "同一天已有相同順位，請先清除原順位再調整" : error.code === "42703" || error.code === "PGRST204" ? "優先休順序尚未完成資料庫 SQL 更新" : error.message);
+    if (!data) throw new Error("未能儲存，請確認登入與修改權限");
+    this.leaves = this.leaves.map(l => l.id === id ? { ...l, preLeavePriority: priority } : l);
     this.notifyListeners();
   }
 

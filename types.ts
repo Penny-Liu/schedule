@@ -264,6 +264,7 @@ export enum LeaveStatus {
 }
 
 export interface LeaveRequest {
+  preLeavePriority?: number | null; // Supervisor-entered lottery order; annotation only.
   id: string;
   userId: string;
   targetUserId?: string; // For Swap Shift

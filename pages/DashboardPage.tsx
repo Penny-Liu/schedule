@@ -3193,13 +3193,13 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
     return "bg-teal-100 text-teal-900 border-teal-200"; // Default
   };
 
-  const getLeaveBadge = (type: LeaveType) => {
+  const getLeaveBadge = (type: LeaveType, priority?: number | null) => {
     let color = "bg-gray-400";
     let label = "申";
     switch (type) {
       case LeaveType.PRE_SCHEDULED:
         color = "bg-blue-500";
-        label = "預";
+        label = priority ? `預${priority}` : "預";
         break;
       case LeaveType.CANCEL_LEAVE:
         color = "bg-pink-500";
@@ -3220,8 +3220,8 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
     }
     return (
       <div
-        className={`absolute top-0 right-0 w-3 h-3 ${color} rounded-bl text-[8px] flex items-center justify-center text-white font-bold z-10 leading-none`}
-        title={`${type} 申請中`}
+        className={`absolute top-0 right-0 min-w-3 px-0.5 h-3 ${color} rounded-bl text-[8px] flex items-center justify-center text-white font-bold z-10 leading-none`}
+        title={`${type} 申請中${type === LeaveType.PRE_SCHEDULED && priority ? `・優先休第 ${priority} 順位` : ""}`}
       >
         {label}
       </div>
@@ -5320,7 +5320,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                     {renderConsecutiveWorkWarning(currentUser.id, date)}
                     {pendingReq && (
                       <div className="mb-2">
-                        {getLeaveBadge(pendingReq.type)}
+                        {getLeaveBadge(pendingReq.type, pendingReq.preLeavePriority)}
                       </div>
                     )}
 
@@ -5750,7 +5750,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                 className={`p-0.5 border-r border-slate-100 align-top h-16 ${isToday ? "bg-teal-50/10" : ""} ${isOff ? "bg-slate-100/60" : isClosed ? "bg-slate-100/30" : isCoopCancel ? "bg-pink-50" : ""} relative`}
                               >
                                 {renderConsecutiveWorkWarning(user.id, date)}
-                                {pendingReq && getLeaveBadge(pendingReq.type)}
+                                {pendingReq && getLeaveBadge(pendingReq.type, pendingReq.preLeavePriority)}
                                 {isNotHired ? (
                                   <div className="h-full w-full flex flex-col items-center justify-center">
                                     <span className="text-slate-200 font-normal select-none text-[12px]">
@@ -6409,7 +6409,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                   <span
                                                     className={`text-[8px] ${isPending ? "bg-blue-300" : "bg-blue-500"} text-white px-0.5 rounded leading-none scale-90`}
                                                   >
-                                                    預
+                                                    {activeLeave?.preLeavePriority ? `預${activeLeave.preLeavePriority}` : "預"}
                                                   </span>
                                                 )}
                                                 {isCancelLeave && (

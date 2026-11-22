@@ -1,3 +1,5 @@
+import PreLeavePriorityEditor from "../components/leave/PreLeavePriorityEditor";
+import { isRadiographerPreLeave } from "../services/preLeavePriority";
 import React, { useState, useEffect, useRef } from "react";
 import {
   User,
@@ -1149,6 +1151,7 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
                         )}
                     </div>
                   </div>
+                  {isRadiographerPreLeave(leave, requestor) && <PreLeavePriorityEditor leave={leave} canEdit={currentUser.role === UserRole.SUPERVISOR || currentUser.role === UserRole.SYSTEM_ADMIN} onSave={priority=>db.updatePreLeavePriority(leave.id, priority)}/>}
                   {leave.reason && (
                     <p className="text-sm text-gray-600 italic bg-white px-1">
                       "{leave.reason}"
