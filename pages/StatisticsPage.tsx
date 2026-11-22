@@ -1,3 +1,4 @@
+import { dispatchBackendSync } from "../services/backendSync";
 import {defaultHealthMgmtSyncRange} from '../services/healthMgmtSyncRange.mjs';
 import { validateSyncPayload } from "./syncValidation";
 import React, { useState, useMemo, useEffect, useRef } from "react";
@@ -552,9 +553,8 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
     }
 
     setIsSyncing(true);
-    let payloadStr: string;
     try {
-      payloadStr = validateSyncPayload(JSON.stringify(selectedTasks));
+      validateSyncPayload(JSON.stringify(selectedTasks));
     } catch {
       alert("請確認同步日期有效、開始日不晚於結束日，且範圍最多 367 天。");
       setIsSyncing(false);
@@ -562,77 +562,12 @@ const StatisticsPage: React.FC<StatisticsPageProps> = ({ currentUser }) => {
     }
 
     try {
-      // 開發版透過 Vite proxy 呼叫本機後端；正式版沿用 GitHub Actions。
-      const isLocalhost = Boolean(import.meta.env.DEV);
-
-      if (isLocalhost) {
-        // 本地端維持原本打本機排程伺服器的邏輯
-        const response = await fetch("/api/sync-stats", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ syncPayload: payloadStr }),
-        });
-        if (!response.ok) {
-          const result = await response.json().catch(() => null);
-          throw new Error(result?.error || "同步請求失敗，請確認後端服務狀態。");
-        }
-        alert(`[本地端] 後台同步已完成！可至檢查耗時或健管負載明細按「重新讀取」查看最新資料。`);
-        setSyncModalOpen(false);
-      } else {
-        // 線上版觸發 GitHub Actions
-        let ghToken = localStorage.getItem("GITHUB_PAT");
-        if (!ghToken) {
-          ghToken = window.prompt(
-            "請輸入您的 GitHub Personal Access Token (PAT) 來觸發雲端同步：\n(只需輸入一次，會儲存在您的瀏覽器中)",
-          );
-          if (!ghToken) {
-            setIsSyncing(false);
-            return;
-          }
-          localStorage.setItem("GITHUB_PAT", ghToken.trim());
-        }
-
-        // 🔴 請將 YOUR_GITHUB_USERNAME 換成您的 GitHub 帳號名稱！
-        const owner = "Penny-Liu";
-        const repo = "schedule";
-        const workflowId = "sync-stats.yml";
-
-        const response = await fetch(
-          `https://api.github.com/repos/${owner}/${repo}/actions/workflows/${workflowId}/dispatches`,
-          {
-            method: "POST",
-            headers: {
-              Accept: "application/vnd.github.v3+json",
-              Authorization: `Bearer ${ghToken}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              ref: "main", // 若您的 GitHub 預設分支是 master，請將這裡改為 master
-              inputs: {
-                sync_payload: payloadStr,
-              },
-            }),
-          },
-        );
-
-        if (
-          response.status === 401 ||
-          response.status === 403 ||
-          response.status === 404
-        ) {
-          localStorage.removeItem("GITHUB_PAT");
-          throw new Error(
-            "GitHub Token 無效、沒有 repo 權限，或找不到該儲存庫。請重新整理頁面後再試一次！",
-          );
-        }
-        if (!response.ok)
-          throw new Error(`GitHub API 請求失敗 (狀態碼: ${response.status})`);
-
-        alert(
-          `[雲端] 已成功觸發 GitHub Actions 同步！\n由於雲端背景執行需要時間，請稍後幾分鐘再重新整理頁面查看最新資料。`,
-        );
-        setSyncModalOpen(false);
-      }
+      const result = await dispatchBackendSync(selectedTasks);
+      if (result.mode === "cancelled") return;
+      alert(result.mode === "local"
+        ? "[本地端] 後台同步已完成！可重新讀取最新資料。"
+        : "[雲端] 已成功送出背景同步，尚未完成。請稍後幾分鐘再重新整理頁面查看最新資料。");
+      setSyncModalOpen(false);
     } catch (err: any) {
       alert(`同步發生錯誤: ${err.message}`);
     } finally {
