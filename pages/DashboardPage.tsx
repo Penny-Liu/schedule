@@ -1,3 +1,4 @@
+import DailyBackendSync from "../components/dashboard/DailyBackendSync";
 import { CONCURRENT_STATIONS, concurrentRole, isConcurrentRole, isExamStation, coversStation, normalizeConcurrentRoles, uniqueDailyShifts } from "../services/radiographerConcurrentStations";
 import { MrUtilizationChart } from "../components/dashboard/MrUtilizationChart";
 import { copyTextToClipboard } from "../services/clipboard";
@@ -3797,7 +3798,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
       <div className="flex-none bg-white border-b border-slate-200 shadow-sm z-10">
         <div className="flex flex-col xl:flex-row items-center justify-between px-4 py-2 gap-y-2 gap-x-4">
           {/* LEFT GROUP: Title + View Toggles */}
-          <div className="flex items-center gap-4 w-full xl:w-auto justify-between xl:justify-start">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 w-full xl:w-auto justify-start">
             {/* Title (Moved to Far Left) */}
             <h2 className="text-lg font-bold text-slate-800 tracking-tight flex items-center gap-2 whitespace-nowrap">
               {!isMobile && getCycleTitle()}
@@ -4212,7 +4213,13 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                 </button>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <DailyBackendSync date={toLocalISOString(dailyDate)} currentUser={currentUser} onRefresh={async()=>{
+                  const result=await db.refreshSettings();
+                  if(result.error)throw new Error(result.error.message);
+                  const start=scheduleRange.start||toLocalISOString(dailyDate);
+                  setDailyWorkloads(await db.fetchDailyWorkloadsByRange(start,scheduleRange.end||start));
+                }}/>
                 {canEditRadiographerWorkTime && (
                   <button
                     type="button"
@@ -8471,7 +8478,7 @@ BMD :{{bmd}}
       buildForecastWeek(title, startOffset, endOffset),
     );
 
-    const section6 = [
+    const section7 = [
       formatForecastDate(reportDate),
       `未來1個月 (${formatShortDate(futureStart)} - ${formatShortDate(futureEnd)})`,
       "MR 預約排程 /MR運用率",
@@ -8510,7 +8517,7 @@ BMD :{{bmd}}
         return [{ date: targetDate, utilizationPercent: forecast.utilizationPercent }];
       }),
     );
-    const section7 = formatRadiographerDailyLineSummary(date, stats);
+    const section6 = formatRadiographerDailyLineSummary(date, stats);
 
     return {
       full: finalText,
@@ -8519,11 +8526,11 @@ BMD :{{bmd}}
       section3,
       section4,
       section5,
-      section6,
       section7,
+      section6,
       section8,
       section9,
-      section6HighlightedDateLabels: highlightedForecastDateLabels,
+      section7HighlightedDateLabels: highlightedForecastDateLabels,
     };
   }, [date, shifts, manpower, users, stats, doctorShifts, physicianWorkload]);
 
@@ -8684,15 +8691,43 @@ BMD :{{bmd}}
           />
         </div>
 
-        {/* Section 6: Future one-month MR capacity forecast */}
-        <div className="bg-gradient-to-br from-sky-50 to-indigo-50 border border-sky-200 rounded-lg p-3 mt-4">
+        {/* Section 6: Daily workload line summary */}
+        <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 mt-4">
           <div className="flex justify-between items-center mb-2">
-            <div className="text-xs text-sky-700 font-bold">
-              區塊 6：未來一個月 MR 排程狀況
+            <div className="text-xs text-emerald-700 font-bold">
+              區塊 6：每日工作量 Line 摘要
             </div>
             <button
               type="button"
-              onClick={() => handleCopy(copyText.section6)}
+              onClick={async () => {
+                await db.refreshSettings();
+                const latestStats = db.getDailyStats(date) || stats;
+                handleCopy(
+                  formatRadiographerDailyLineSummary(date, latestStats),
+                );
+              }}
+              className="text-xs bg-emerald-100 hover:bg-emerald-200 text-emerald-800 px-2 py-1 rounded-lg flex items-center gap-1"
+            >
+              <Copy size={12} /> 複製
+            </button>
+          </div>
+          <textarea
+            className="w-full h-44 text-sm font-mono text-slate-700 bg-transparent outline-none resize-none"
+            aria-label="每日工作量 Line 摘要"
+            readOnly
+            value={copyText.section6}
+          />
+        </div>
+
+        {/* Section 7: Future one-month MR capacity forecast */}
+        <div className="bg-gradient-to-br from-sky-50 to-indigo-50 border border-sky-200 rounded-lg p-3 mt-4">
+          <div className="flex justify-between items-center mb-2">
+            <div className="text-xs text-sky-700 font-bold">
+              區塊 7：未來一個月 MR 排程狀況
+            </div>
+            <button
+              type="button"
+              onClick={() => handleCopy(copyText.section7)}
               className="text-xs bg-sky-100 hover:bg-sky-200 text-sky-800 px-2 py-1 rounded-lg flex items-center gap-1"
             >
               <Copy size={12} /> 複製
@@ -8702,13 +8737,13 @@ BMD :{{bmd}}
             className="w-full min-h-[34rem] text-sm font-mono text-slate-700 bg-transparent leading-relaxed whitespace-pre-wrap"
             aria-label="未來一個月 MR 排程內容"
           >
-            {copyText.section6.split("\n").map((line, index) => {
+            {copyText.section7.split("\n").map((line, index) => {
               const dateMatch = line.match(
                 /^(\d{1,2}\/\d{1,2} )(w[1-7])(\s{2}.*)$/,
               );
               const shouldHighlightWeekday =
                 !!dateMatch &&
-                copyText.section6HighlightedDateLabels.some((label) =>
+                copyText.section7HighlightedDateLabels.some((label) =>
                   line.startsWith(`${label}  `),
                 );
               const isAvailableLine = line.startsWith("- 再安插");
@@ -8737,34 +8772,6 @@ BMD :{{bmd}}
               );
             })}
           </div>
-        </div>
-
-        {/* Section 7: Daily workload line summary */}
-        <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 mt-4">
-          <div className="flex justify-between items-center mb-2">
-            <div className="text-xs text-emerald-700 font-bold">
-              區塊 7：每日工作量 Line 摘要
-            </div>
-            <button
-              type="button"
-              onClick={async () => {
-                await db.refreshSettings();
-                const latestStats = db.getDailyStats(date) || stats;
-                handleCopy(
-                  formatRadiographerDailyLineSummary(date, latestStats),
-                );
-              }}
-              className="text-xs bg-emerald-100 hover:bg-emerald-200 text-emerald-800 px-2 py-1 rounded-lg flex items-center gap-1"
-            >
-              <Copy size={12} /> 複製
-            </button>
-          </div>
-          <textarea
-            className="w-full h-44 text-sm font-mono text-slate-700 bg-transparent outline-none resize-none"
-            aria-label="每日工作量 Line 摘要"
-            readOnly
-            value={copyText.section7}
-          />
         </div>
 
         {/* Section 8: Compact MR utilization forecast */}

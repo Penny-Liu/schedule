@@ -270,7 +270,10 @@ const App: React.FC = () => {
         }
         return <CloudSchedulePage currentUser={currentUser} />;
       case "health_mgmt":
-        return <HealthMgmtPage currentUser={currentUser} />;
+        return <HealthMgmtPage key="hm-schedule" currentUser={currentUser} />;
+      case "health_mgmt_statistics":
+        if(currentUser.role!==UserRole.SYSTEM_ADMIN&&!currentUser.permissions?.includes(PERMISSIONS.VIEW_HEALTH_MGMT))return <div className="p-6">權限不足</div>;
+        return <HealthMgmtPage key="hm-statistics" currentUser={currentUser} section="statistics" />;
       case "administrative_schedule":
         return (
           <AdministrativeSchedulePage

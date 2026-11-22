@@ -133,6 +133,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           icon: Calendar,
           permission: PERMISSIONS.VIEW_HEALTH_MGMT,
         },
+        { id:"health_mgmt_statistics", label:"統計", icon:BarChart3, permission:PERMISSIONS.VIEW_HEALTH_MGMT },
       ],
     },
     {

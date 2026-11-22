@@ -25,6 +25,7 @@ describe("radiographer daily line summary", () => {
         "",
         "客戶：16人",
         "解說：14人",
+        "",
         "MR：8人（5大・1中・2小）",
         "CT：12人",
         "CTA：2人",
@@ -42,7 +43,7 @@ describe("radiographer daily line summary", () => {
         dazhi_clients: 0,
       }),
     ).toContain(
-      "9/6 w7\n\n客戶：0人\n解說：0人\nMR：0人（0大・0中・0小）",
+      "9/6 w7\n\n客戶：0人\n解說：0人\n\nMR：0人（0大・0中・0小）",
     );
   });
 
@@ -56,4 +57,13 @@ describe("radiographer daily line summary", () => {
       }),
     ).toContain("客戶：18人\n解說：17人");
   });
+  it("matches the requested November 23 layout exactly", () => {
+    expect(formatRadiographerDailyLineSummary("2026-11-23", {
+      beitou_clients: 25, dazhi_clients: 0, beitou_health_explanations: 23,
+      beitou_mr: 15, beitou_mr_large_male: 4, beitou_mr_large_female: 5,
+      beitou_mr_medium: 2, beitou_mr_small: 4, beitou_ct: 13,
+      beitou_cta: 1, beitou_ultrasound_clients: 18, beitou_gi: 16,
+    })).toBe("11/23 w1\n\n客戶：25人\n解說：23人\n\nMR：15人（9大・2中・4小）\nCT：13人\nCTA：1人\nUS：18人\nGI：16台");
+  });
+
 });
