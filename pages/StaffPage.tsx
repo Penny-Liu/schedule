@@ -1,3 +1,5 @@
+import StaffPermissionCopy from "../components/staff/StaffPermissionCopy";
+import { matchesStaffDirectory } from "../services/staffDirectory";
 import React, { useState } from "react";
 import { DEVELOPER_SANDBOX, isDeveloperSandboxActive } from '../services/developerSandbox';
 import {
@@ -42,6 +44,7 @@ import {
   EMPLOYMENT_PAUSE_KEY,
   generateUUID,
   getEmploymentPause,
+  getRoleLabel,
   toLocalISOString,
 } from "../services/utils";
 import {
@@ -61,7 +64,12 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
       setUsers(db.getUsers());
     };
     const unsubscribe = db.subscribe(loadData);
+    return unsubscribe;
   }, []);
+  const [directorySearch, setDirectorySearch] = useState("");
+  const [departmentFilter, setDepartmentFilter] = useState("全部");
+  const [campusFilter, setCampusFilter] = useState("全部");
+  const [roleFilter, setRoleFilter] = useState("全部");
   const [error, setError] = useState<string | null>(null);
   const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -534,6 +542,39 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
       u.role === UserRole.RADIOGRAPHER_STAFF || u.role === UserRole.SUPERVISOR,
   ).length;
 
+  const directoryUsers = users
+            .filter(user => matchesStaffDirectory(user, {search:directorySearch,department:departmentFilter,campus:campusFilter,role:roleFilter}))
+            .filter((user) => {
+              // Department isolation for supervisors
+              if (
+                currentUser.role === UserRole.SUPERVISOR &&
+                !user.isRadiographer
+              )
+                return false;
+              // HM Supervisor isolation with Location Awareness
+              if (currentUser.role === UserRole.HM_SUPERVISOR) {
+                if (!user.isHealthMgmt) return false;
+                // If the supervisor is restricted to a location, only show staff in that location
+                if (
+                  currentUser.healthMgmtLocation &&
+                  currentUser.healthMgmtLocation !== "全部"
+                ) {
+                  return (
+                    user.healthMgmtLocation === currentUser.healthMgmtLocation
+                  );
+                }
+              }
+
+              // Hide resigned users once their resignation date is effective
+              if (user.isActive === false) {
+                if (!user.resignationDate) return false;
+                return (
+                  toLocalISOString(new Date()) <= user.resignationDate
+                );
+              }
+              return true;
+            });
+
   return (
     <div className="p-4 md:p-6 max-w-7xl mx-auto h-full min-h-0 flex flex-col overflow-hidden">
       <ConfirmModal
@@ -584,7 +625,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 flex-1 min-h-0 overflow-y-auto xl:overflow-hidden">
         {/* Form Section (Sticky) - Only show if has EDIT_STAFF permission */}
         {currentUser.permissions?.includes(PERMISSIONS.EDIT_STAFF) && (
-          <div className="xl:col-span-1 min-h-0 h-[min(52rem,calc(100dvh-14rem))] xl:h-full">
+          <div className="xl:col-span-1 xl:order-2 min-h-0 h-[min(52rem,calc(100dvh-14rem))] xl:h-full">
             <div
               className={`bg-white p-5 rounded-xl shadow-[0_2px_12px_rgba(0,0,0,0.03)] border transition-all duration-300 h-full min-h-0 flex flex-col overflow-hidden ${editingId ? "border-teal-400 ring-1 ring-teal-100" : "border-gray-100"}`}
             >
@@ -621,14 +662,14 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
               </div>
 
               <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
-                <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden space-y-4 px-1">
-                {error && (
+                <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden space-y-4 px-1">{error && (
                   <div className="bg-red-50 text-red-600 p-3 rounded-lg text-xs flex items-center gap-2 border border-red-100 animate-pulse">
                     <AlertCircle size={14} className="shrink-0" />
                     <div className="flex-1 break-all font-mono">{error}</div>
                   </div>
                 )}
-                <div className="flex gap-3">
+<div className="rounded-lg bg-teal-50 border border-teal-100 p-3 text-xs space-y-1"><p className="font-bold text-teal-900">{formData.name || "尚未填寫姓名"} · {getRoleLabel(formData.role)}</p><p className="text-teal-800">{formData.isHealthMgmt ? formData.healthMgmtLocation === "全部" ? "健管・跨院區" : '健管・' + formData.healthMgmtLocation : formData.isRadiographer ? "放射師" : "其他業務"} · 已選 {formData.permissions.length} 項權限</p></div>
+<section aria-label="基本資料" className="rounded-xl border border-slate-200 bg-white p-3 space-y-4"><div><h4 className="text-sm font-bold text-slate-800">基本資料</h4><p className="text-xs text-slate-500 mt-1">設定姓名、登入帳號與排班識別。</p></div><div className="flex gap-3">
                   <div className="flex-1">
                     <label className="text-xs font-semibold text-gray-500 mb-1 block">
                       姓名
@@ -662,7 +703,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                     />
                   </div>
                 </div>
-                <div>
+<div>
                   <label className="text-xs font-semibold text-gray-500 mb-1 block">
                     帳號 (Username)
                   </label>
@@ -677,8 +718,63 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                     placeholder="請輸入登入帳號"
                   />
                 </div>
-
-                <div className="flex flex-col gap-2 mb-2 p-3 bg-gray-50 rounded-lg border border-gray-100">
+{formData.isRadiographer && (
+                  <div className="mb-3 rounded-lg border border-cyan-200 bg-cyan-50 p-3">
+                    <label
+                      htmlFor="birthDate"
+                      className="mb-1 block text-xs font-bold text-cyan-800"
+                    >
+                      出生年月日（放射師必填）
+                    </label>
+                    <input
+                      id="birthDate"
+                      type="date"
+                      required
+                      max={toLocalISOString(new Date())}
+                      value={formData.birthDate}
+                      onChange={(e) =>
+                        setFormData({ ...formData, birthDate: e.target.value })
+                      }
+                      className="w-full rounded-lg border border-cyan-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-cyan-500"
+                    />
+                    <p className="mt-1.5 text-[11px] text-cyan-700">
+                      此資料獨立加密傳輸並受權限控管；月報只帶入年紀，不匯出出生年月日。
+                    </p>
+                  </div>
+                )}
+<details className="rounded-lg border border-slate-200 p-3"><summary className="cursor-pointer text-xs font-bold text-slate-700">代表顏色</summary><div className="pt-3 space-y-4"><div>
+                  <div className="flex justify-between items-center mb-2">
+                    <label className="text-xs font-semibold text-gray-500 block">
+                      代表顏色
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <div
+                        className="w-6 h-6 rounded-full flex items-center justify-center text-white font-bold text-xs shadow-sm"
+                        style={{ backgroundColor: formData.color }}
+                      >
+                        {formData.alias ||
+                          (formData.name ? formData.name.charAt(0) : "?")}
+                      </div>
+                      <span className="text-[10px] text-gray-400">預覽</span>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {COLOR_PALETTE.map((color) => (
+                      <button
+                        key={color}
+                        type="button"
+                        onClick={() => setFormData({ ...formData, color })}
+                        className={`w-6 h-6 rounded-full border-2 transition-all ${
+                          formData.color === color
+                            ? "border-gray-600 scale-110"
+                            : "border-transparent hover:scale-110"
+                        }`}
+                        style={{ backgroundColor: color }}
+                      />
+                    ))}
+                  </div>
+                </div></div></details></section>
+<section aria-label="工作身分" className="rounded-xl border border-slate-200 bg-white p-3 space-y-4"><div><h4 className="text-sm font-bold text-slate-800">工作身分</h4><p className="text-xs text-slate-500 mt-1">設定所屬業務、管理院區、角色與排班資格。</p></div><div className="flex flex-col gap-2 mb-2 p-3 bg-gray-50 rounded-lg border border-gray-100">
                   <div className="flex items-center gap-2">
                     <input
                       type="checkbox"
@@ -788,139 +884,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                     </div>
                   )}
                 </div>
-
-                {formData.isRadiographer && (
-                  <div className="mb-3 rounded-lg border border-cyan-200 bg-cyan-50 p-3">
-                    <label
-                      htmlFor="birthDate"
-                      className="mb-1 block text-xs font-bold text-cyan-800"
-                    >
-                      出生年月日（放射師必填）
-                    </label>
-                    <input
-                      id="birthDate"
-                      type="date"
-                      required
-                      max={toLocalISOString(new Date())}
-                      value={formData.birthDate}
-                      onChange={(e) =>
-                        setFormData({ ...formData, birthDate: e.target.value })
-                      }
-                      className="w-full rounded-lg border border-cyan-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-cyan-500"
-                    />
-                    <p className="mt-1.5 text-[11px] text-cyan-700">
-                      此資料獨立加密傳輸並受權限控管；月報只帶入年紀，不匯出出生年月日。
-                    </p>
-                  </div>
-                )}
-
-                <div className="flex items-center gap-2 mb-2 bg-gray-50 p-2 rounded border border-gray-100">
-                  <input
-                    type="checkbox"
-                    id="isActive"
-                    checked={formData.isActive}
-                    onChange={(e) =>
-                      setFormData({ ...formData, isActive: e.target.checked })
-                    }
-                    className="w-4 h-4 text-teal-600 border-gray-300 rounded focus:ring-teal-500"
-                  />
-                  <label
-                    htmlFor="isActive"
-                    className={`text-xs font-bold cursor-pointer flex items-center gap-2 ${formData.isActive ? "text-teal-700" : "text-gray-500"}`}
-                  >
-                    {formData.isActive ? <Check size={14} /> : <X size={14} />}
-                    {formData.isActive
-                      ? "在職中 (Active)"
-                      : "已離職 (Resigned)"}
-                  </label>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3 mb-3">
-                  <div>
-                    <label className="text-xs font-bold text-teal-700 mb-1 block">
-                      到職日期 (此日期前不排班)
-                    </label>
-                    <input
-                      type="date"
-                      value={formData.hireDate}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          hireDate: e.target.value,
-                        })
-                      }
-                      className="w-full px-3 py-2 border border-teal-200 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs font-bold text-red-700 mb-1 block">
-                      離職日期 (此日期後不排班)
-                    </label>
-                    <input
-                      type="date"
-                      value={formData.resignationDate}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          resignationDate: e.target.value,
-                        })
-                      }
-                      className="w-full px-3 py-2 border border-red-200 rounded-lg text-sm focus:ring-2 focus:ring-red-500 outline-none"
-                    />
-                  </div>
-                </div>
-
-                <div className="bg-indigo-50 p-3 rounded-lg border border-indigo-100 mb-2">
-                  <div className="flex items-center justify-between gap-2 mb-2">
-                    <label className="text-xs font-bold text-indigo-700">
-                      留職停薪期間
-                    </label>
-                    {(formData.employmentPauseStartDate ||
-                      formData.employmentPauseEndDate) && (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setFormData({
-                            ...formData,
-                            employmentPauseStartDate: "",
-                            employmentPauseEndDate: "",
-                          })
-                        }
-                        className="text-[10px] text-indigo-600 hover:text-indigo-800 font-bold"
-                      >
-                        清除
-                      </button>
-                    )}
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <input
-                      type="date"
-                      value={formData.employmentPauseStartDate}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          employmentPauseStartDate: e.target.value,
-                        })
-                      }
-                      className="w-full px-3 py-2 border border-indigo-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-                    />
-                    <input
-                      type="date"
-                      value={formData.employmentPauseEndDate}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          employmentPauseEndDate: e.target.value,
-                        })
-                      }
-                      className="w-full px-3 py-2 border border-indigo-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-                    />
-                  </div>
-                  <p className="text-[11px] text-indigo-600 mt-2">
-                    留停期間此人員不會出現在排班表與候選名單，結束後會自動恢復顯示。
-                  </p>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
+<div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="text-xs font-semibold text-gray-500 mb-1 block">
                       身份
@@ -1120,43 +1084,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                     </div>
                   )}
                 </div>
-
-                {/* Color Selection */}
-                <div>
-                  <div className="flex justify-between items-center mb-2">
-                    <label className="text-xs font-semibold text-gray-500 block">
-                      代表顏色
-                    </label>
-                    <div className="flex items-center gap-2">
-                      <div
-                        className="w-6 h-6 rounded-full flex items-center justify-center text-white font-bold text-xs shadow-sm"
-                        style={{ backgroundColor: formData.color }}
-                      >
-                        {formData.alias ||
-                          (formData.name ? formData.name.charAt(0) : "?")}
-                      </div>
-                      <span className="text-[10px] text-gray-400">預覽</span>
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {COLOR_PALETTE.map((color) => (
-                      <button
-                        key={color}
-                        type="button"
-                        onClick={() => setFormData({ ...formData, color })}
-                        className={`w-6 h-6 rounded-full border-2 transition-all ${
-                          formData.color === color
-                            ? "border-gray-600 scale-110"
-                            : "border-transparent hover:scale-110"
-                        }`}
-                        style={{ backgroundColor: color }}
-                      />
-                    ))}
-                  </div>
-                </div>
-
-                {/* Gamified Skills Selection */}
-                {(formData.isRadiographer || formData.role === UserRole.SYSTEM_ADMIN) && (
+<details className="rounded-lg border border-slate-200 p-3"><summary className="cursor-pointer text-xs font-bold text-slate-700">專業技能與學習設定</summary><div className="pt-3 space-y-4">{(formData.isRadiographer || formData.role === UserRole.SYSTEM_ADMIN) && (
                   <div className="bg-slate-800 rounded-xl p-4 mb-4 border border-slate-700 shadow-inner">
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-2 text-teal-400">
@@ -1207,10 +1135,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                       ))}
                     </div>
                   </div>
-                )}
-
-                {/* Capabilities Selection (Only for Radiographers) */}
-                {(formData.isRadiographer ||
+                )}{(formData.isRadiographer ||
                   formData.role === UserRole.SYSTEM_ADMIN) && (
                   <div>
                     <div className="flex justify-between items-center mb-2">
@@ -1305,31 +1230,10 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                       </div>
                     )}
                   </div>
-                )}
-
-                {currentUser.role === UserRole.SYSTEM_ADMIN && (
-                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
-                    <label className="flex items-center gap-2 text-sm font-bold text-amber-950">
-                      <input
-                        type="checkbox"
-                        checked={formData.permissions.includes(DEVELOPER_SANDBOX)}
-                        onChange={e => setFormData(prev => ({
-                          ...prev,
-                          permissions: e.target.checked
-                            ? [...new Set([...prev.permissions, DEVELOPER_SANDBOX])]
-                            : prev.permissions.filter(permission => permission !== DEVELOPER_SANDBOX),
-                        }))}
-                      />
-                      開發沙盒（僅本機模擬）
-                    </label>
-                    <p className="mt-2 text-xs text-amber-900">
-                      下次登入生效。可依下方權限查看及操作，儲存後只改變本次操作的模擬資料，不寫入正式資料庫；重新整理或登出即清除。對外同步、上傳及無法模擬的操作停用。
-                      此模式用於防止網站操作誤寫，不取代獨立測試資料庫或 API 權限隔離。
-                    </p>
-                  </div>
-                )}
-
-                <div>
+                )}</div></details></section>
+<section aria-label="操作權限" className="rounded-xl border border-slate-200 bg-white p-3 space-y-4"><div><h4 className="text-sm font-bold text-slate-800">操作權限</h4><p className="text-xs text-slate-500 mt-1">角色會套用既有預設權限；需要例外時再展開逐項調整。</p></div>
+<StaffPermissionCopy key={editingId||'new'} actor={currentUser} users={users} targetId={editingId} currentPermissions={formData.permissions} onApply={permissions=>setFormData(prev=>({...prev,permissions}))}/>
+<details className="rounded-lg border border-slate-200 p-3"><summary className="cursor-pointer text-xs font-bold text-slate-700">進階功能權限（{formData.permissions.length} 項已選）</summary><div className="pt-3 space-y-4"><div>
                   <div className="flex justify-between items-center mb-2">
                     <label className="text-xs font-semibold text-gray-500 block">
                       功能權限控管
@@ -1478,9 +1382,133 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                       </div>
                     ))}
                   </div>
+                </div></div></details></section>
+<section aria-label="帳號狀態" className="rounded-xl border border-slate-200 bg-white p-3 space-y-4"><div><h4 className="text-sm font-bold text-slate-800">帳號狀態</h4><p className="text-xs text-slate-500 mt-1">檢查在職日期、留職停薪與安全登入狀態。</p></div><div className="rounded-lg bg-slate-50 p-3 text-xs space-y-1"><p>安全登入：{editingId ? users.find(u => u.id === editingId)?.authUserId ? "已綁定" : "尚未綁定" : "建立帳號後另行設定"}</p><p className="text-slate-500">登入綁定與功能權限分開設定；此處儲存不會自動建立安全登入。</p></div>
+<div className="flex items-center gap-2 mb-2 bg-gray-50 p-2 rounded border border-gray-100">
+                  <input
+                    type="checkbox"
+                    id="isActive"
+                    checked={formData.isActive}
+                    onChange={(e) =>
+                      setFormData({ ...formData, isActive: e.target.checked })
+                    }
+                    className="w-4 h-4 text-teal-600 border-gray-300 rounded focus:ring-teal-500"
+                  />
+                  <label
+                    htmlFor="isActive"
+                    className={`text-xs font-bold cursor-pointer flex items-center gap-2 ${formData.isActive ? "text-teal-700" : "text-gray-500"}`}
+                  >
+                    {formData.isActive ? <Check size={14} /> : <X size={14} />}
+                    {formData.isActive
+                      ? "在職中 (Active)"
+                      : "已離職 (Resigned)"}
+                  </label>
                 </div>
-
+<div className="grid grid-cols-2 gap-3 mb-3">
+                  <div>
+                    <label className="text-xs font-bold text-teal-700 mb-1 block">
+                      到職日期 (此日期前不排班)
+                    </label>
+                    <input
+                      type="date"
+                      value={formData.hireDate}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          hireDate: e.target.value,
+                        })
+                      }
+                      className="w-full px-3 py-2 border border-teal-200 rounded-lg text-sm focus:ring-2 focus:ring-teal-500 outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-red-700 mb-1 block">
+                      離職日期 (此日期後不排班)
+                    </label>
+                    <input
+                      type="date"
+                      value={formData.resignationDate}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          resignationDate: e.target.value,
+                        })
+                      }
+                      className="w-full px-3 py-2 border border-red-200 rounded-lg text-sm focus:ring-2 focus:ring-red-500 outline-none"
+                    />
+                  </div>
                 </div>
+<div className="bg-indigo-50 p-3 rounded-lg border border-indigo-100 mb-2">
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <label className="text-xs font-bold text-indigo-700">
+                      留職停薪期間
+                    </label>
+                    {(formData.employmentPauseStartDate ||
+                      formData.employmentPauseEndDate) && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setFormData({
+                            ...formData,
+                            employmentPauseStartDate: "",
+                            employmentPauseEndDate: "",
+                          })
+                        }
+                        className="text-[10px] text-indigo-600 hover:text-indigo-800 font-bold"
+                      >
+                        清除
+                      </button>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      type="date"
+                      value={formData.employmentPauseStartDate}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          employmentPauseStartDate: e.target.value,
+                        })
+                      }
+                      className="w-full px-3 py-2 border border-indigo-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                    />
+                    <input
+                      type="date"
+                      value={formData.employmentPauseEndDate}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          employmentPauseEndDate: e.target.value,
+                        })
+                      }
+                      className="w-full px-3 py-2 border border-indigo-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                    />
+                  </div>
+                  <p className="text-[11px] text-indigo-600 mt-2">
+                    留停期間此人員不會出現在排班表與候選名單，結束後會自動恢復顯示。
+                  </p>
+                </div>
+{currentUser.role === UserRole.SYSTEM_ADMIN && (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                    <label className="flex items-center gap-2 text-sm font-bold text-amber-950">
+                      <input
+                        type="checkbox"
+                        checked={formData.permissions.includes(DEVELOPER_SANDBOX)}
+                        onChange={e => setFormData(prev => ({
+                          ...prev,
+                          permissions: e.target.checked
+                            ? [...new Set([...prev.permissions, DEVELOPER_SANDBOX])]
+                            : prev.permissions.filter(permission => permission !== DEVELOPER_SANDBOX),
+                        }))}
+                      />
+                      開發沙盒（僅本機模擬）
+                    </label>
+                    <p className="mt-2 text-xs text-amber-900">
+                      下次登入生效。可依下方權限查看及操作，儲存後只改變本次操作的模擬資料，不寫入正式資料庫；重新整理或登出即清除。對外同步、上傳及無法模擬的操作停用。
+                      此模式用於防止網站操作誤寫，不取代獨立測試資料庫或 API 權限隔離。
+                    </p>
+                  </div>
+                )}</section></div>
                 <div className="pt-3 mt-3 border-t border-gray-100 shrink-0 flex flex-col gap-2 bg-white">
                   <div className="flex gap-2">
                     {editingId && (
@@ -1536,40 +1564,19 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
         )}
 
         {/* User List */}
+        <div className={`${currentUser.permissions?.includes(PERMISSIONS.EDIT_STAFF) ? "xl:col-span-2" : "xl:col-span-3"} xl:order-1 min-h-0 flex flex-col gap-3`}>
+          <div className="bg-white rounded-xl border border-slate-200 p-3 grid grid-cols-2 md:grid-cols-4 gap-2 shrink-0">
+            <input aria-label="搜尋姓名或帳號" placeholder="搜尋姓名／帳號" value={directorySearch} onChange={e=>setDirectorySearch(e.target.value)} className="border rounded-lg px-2 py-2 text-xs min-w-0" />
+            <select aria-label="篩選部門" value={departmentFilter} onChange={e=>setDepartmentFilter(e.target.value)} className="border rounded-lg px-2 text-xs"><option value="全部">全部部門</option><option>健管</option><option>放射師</option><option>其他</option></select>
+            <select aria-label="篩選管理院區" value={campusFilter} onChange={e=>setCampusFilter(e.target.value)} className="border rounded-lg px-2 text-xs"><option value="全部">全部院區</option><option value="北投">北投</option><option value="大直">大直</option><option value="跨院">跨院區</option></select>
+            <select aria-label="篩選角色" value={roleFilter} onChange={e=>setRoleFilter(e.target.value)} className="border rounded-lg px-2 text-xs"><option value="全部">全部角色</option>{Object.values(UserRole).map(role=><option key={role} value={role}>{getRoleLabel(role)}</option>)}</select>
+            <button type="button" onClick={()=>{setDirectorySearch("");setDepartmentFilter("全部");setCampusFilter("全部");setRoleFilter("全部");}} className="col-span-full text-xs text-teal-700 text-right">清除篩選</button>
+          </div>
         <div
-          className={`${currentUser.permissions?.includes(PERMISSIONS.EDIT_STAFF) ? "xl:col-span-2" : "xl:col-span-3"} grid grid-cols-1 md:grid-cols-2 gap-4 auto-rows-min pb-6 min-h-0 xl:overflow-y-auto`}
+          className="grid grid-cols-1 md:grid-cols-2 gap-4 auto-rows-min pb-6 min-h-0 xl:overflow-y-auto"
         >
-          {users
-            .filter((user) => {
-              // Department isolation for supervisors
-              if (
-                currentUser.role === UserRole.SUPERVISOR &&
-                !user.isRadiographer
-              )
-                return false;
-              // HM Supervisor isolation with Location Awareness
-              if (currentUser.role === UserRole.HM_SUPERVISOR) {
-                if (!user.isHealthMgmt) return false;
-                // If the supervisor is restricted to a location, only show staff in that location
-                if (
-                  currentUser.healthMgmtLocation &&
-                  currentUser.healthMgmtLocation !== "全部"
-                ) {
-                  return (
-                    user.healthMgmtLocation === currentUser.healthMgmtLocation
-                  );
-                }
-              }
-
-              // Hide resigned users once their resignation date is effective
-              if (user.isActive === false) {
-                if (!user.resignationDate) return false;
-                return (
-                  toLocalISOString(new Date()) <= user.resignationDate
-                );
-              }
-              return true;
-            })
+          {directoryUsers.length === 0 && <p className="col-span-full rounded-lg bg-white border border-slate-200 p-6 text-center text-sm text-slate-500">沒有符合條件的人員，請調整或清除篩選。</p>}
+          {directoryUsers
             .map((user) => {
               const isEditingThisUser = editingId === user.id;
               const employmentPause = getEmploymentPause(user);
@@ -1798,6 +1805,7 @@ const StaffPage: React.FC<StaffPageProps> = ({ currentUser }) => {
                 </div>
               );
             })}
+        </div>
         </div>
       </div>
     </div>
