@@ -1,6 +1,6 @@
 import {validateSyncPayload} from '../pages/syncValidation';
 import {isDeveloperSandboxActive,SANDBOX_BLOCKED} from './developerSandbox';
-export type BackendSyncResult={mode:'local'|'cloud'|'cancelled';workflowUrl?:string};
+export type BackendSyncResult={mode:'local'|'cloud'|'cancelled'};
 export async function dispatchBackendSync(tasks:unknown[]):Promise<BackendSyncResult>{
  if(isDeveloperSandboxActive())throw new Error(SANDBOX_BLOCKED);
  const payload=validateSyncPayload(JSON.stringify(tasks));
@@ -21,5 +21,5 @@ export async function dispatchBackendSync(tasks:unknown[]):Promise<BackendSyncRe
  });
  if([401,403,404].includes(response.status)){localStorage.removeItem('GITHUB_PAT');throw new Error('GitHub Token 無效、權限不足或找不到儲存庫，請重新設定後再試。');}
  if(!response.ok)throw new Error(`GitHub API 請求失敗（狀態碼：${response.status}）`);
- return {mode:'cloud',workflowUrl:'https://github.com/Penny-Liu/schedule/actions/workflows/sync-stats.yml'};
+ return {mode:'cloud'};
 }

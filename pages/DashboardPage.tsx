@@ -4214,12 +4214,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
-                <DailyBackendSync date={toLocalISOString(dailyDate)} currentUser={currentUser} onRefresh={async()=>{
-                  const result=await db.refreshSettings();
-                  if(result.error)throw new Error(result.error.message);
-                  const start=scheduleRange.start||toLocalISOString(dailyDate);
-                  setDailyWorkloads(await db.fetchDailyWorkloadsByRange(start,scheduleRange.end||start));
-                }}/>
+                <DailyBackendSync currentUser={currentUser}/>
                 {canEditRadiographerWorkTime && (
                   <button
                     type="button"
