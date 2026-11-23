@@ -5724,7 +5724,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                               className={`text-[10px] font-bold mx-1.5 py-0.5 rounded-lg border ${isPersonalCycleCustomized ? "text-amber-700 bg-amber-50 border-amber-300" : "text-slate-600 bg-slate-100 border-slate-200"}`}
                               title={
                                 effectiveStartDate && effectiveEndDate
-                                  ? `週期範圍：${effectiveStartDate} ~ ${effectiveEndDate}`
+                                  ? `週期範圍：${effectiveStartDate} ~ ${effectiveEndDate}（共 ${effectiveDateRange.length} 天）`
                                   : undefined
                               }
                             >
