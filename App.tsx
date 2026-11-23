@@ -74,27 +74,33 @@ const App: React.FC = () => {
 
   // Init Data from Supabase & Auto-Refresh Setup
   useEffect(() => {
+    let disposed = false;
+    let removeResumeListener: (() => Promise<void>) | undefined;
     const init = async () => {
       try {
         await db.initializeAuthData();
-        setAuthError(db.authLoadError);
+        if (!disposed) setAuthError(db.authLoadError);
       } catch (error) {
-        setAuthError(error instanceof Error ? error.message : "無法載入登入資料");
+        if (!disposed) setAuthError(error instanceof Error ? error.message : "無法載入登入資料");
       } finally {
-        setIsLoading(false);
+        if (!disposed) setIsLoading(false);
       }
     };
     init();
 
-    // Auto-refresh on resume
-    import("@capacitor/app").then(({ App: CapApp }) => {
-      CapApp.addListener("appStateChange", ({ isActive }) => {
-        if (isActive) {
-          console.log("App resumed, refreshing data...");
-          db.initializeAuthData(true);
-        }
+    // StrictMode and remounts must not leave duplicate native resume listeners.
+    import("@capacitor/app").then(async ({ App: CapApp }) => {
+      if (disposed) return;
+      const listener = await CapApp.addListener("appStateChange", ({ isActive }) => {
+        if (isActive && !disposed) void db.initializeAuthData(true);
       });
-    });
+      if (disposed) await listener.remove();
+      else removeResumeListener = () => listener.remove();
+    }).catch(error => console.warn("Unable to register app resume listener", error));
+    return () => {
+      disposed = true;
+      void removeResumeListener?.();
+    };
   }, []);
 
   const handleLogin = async (user: User) => {
@@ -145,13 +151,13 @@ const App: React.FC = () => {
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     if (isDeveloperSandboxActive()) {
       // Reload clears both the simulation journal and all module caches.
       window.location.reload();
       return;
     }
-    void signOutSupabaseAuth();
+    await signOutSupabaseAuth();
     db.logout();
     setCurrentUser(null);
   };
@@ -264,7 +270,10 @@ const App: React.FC = () => {
         }
         return <CloudSchedulePage currentUser={currentUser} />;
       case "health_mgmt":
-        return <HealthMgmtPage currentUser={currentUser} />;
+        return <HealthMgmtPage key="hm-schedule" currentUser={currentUser} />;
+      case "health_mgmt_statistics":
+        if(currentUser.role!==UserRole.SYSTEM_ADMIN&&!currentUser.permissions?.includes(PERMISSIONS.VIEW_HEALTH_MGMT))return <div className="p-6">權限不足</div>;
+        return <HealthMgmtPage key="hm-statistics" currentUser={currentUser} section="statistics" />;
       case "administrative_schedule":
         return (
           <AdministrativeSchedulePage

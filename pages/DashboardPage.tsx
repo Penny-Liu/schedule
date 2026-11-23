@@ -1,3 +1,5 @@
+import DailyBackendSync from "../components/dashboard/DailyBackendSync";
+import { CONCURRENT_STATIONS, concurrentRole, isConcurrentRole, isExamStation, coversStation, normalizeConcurrentRoles, uniqueDailyShifts } from "../services/radiographerConcurrentStations";
 import { MrUtilizationChart } from "../components/dashboard/MrUtilizationChart";
 import { copyTextToClipboard } from "../services/clipboard";
 import { getFloorControlRoleDecision } from "../services/floorControlSchedulerOverride";
@@ -187,7 +189,7 @@ export const calculateDailyLoadRate = (
   let demandExtra = 0;
   let supplySlots = 0;
 
-  shifts.forEach((s) => {
+  uniqueDailyShifts(shifts, targetDate).forEach((s) => {
     if (s.date !== targetDate) return;
     if (s.station === SYSTEM_OFF || s.station === StationDefault.UNASSIGNED)
       return;
@@ -2502,7 +2504,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
       userId,
       date: dateStr,
       station,
-      specialRoles,
+      specialRoles: normalizeConcurrentRoles(station, specialRoles),
       workTime: existingShift?.workTime,
       learningStation:
         learningStation !== undefined
@@ -2674,6 +2676,16 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
     currentStation: string,
     currentRoles: string[],
   ) => {
+    if (isConcurrentRole(role) && !currentRoles.includes(role)) {
+      const target = role.slice(1);
+      const user = users.find((u) => u.id === userId);
+      const assigned = shifts.find((s) => s.userId === userId && s.date === dateStr);
+      if (!isExamStation(currentStation) || assigned?.learningStation || currentStation === target || !user ||
+          !isUserCertifiedOnDate(user, target, dateStr)) {
+        showToast("兼任須有主檢查崗位，且具備該兼任崗位的獨立資格", "error");
+        return;
+      }
+    }
     let newRoles = [...currentRoles];
 
     // 0. Validation Constraints
@@ -2701,25 +2713,25 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
 
     // 2. Enforce Conflicts
     if (newRoles.includes(role)) {
-      if (role === "配合銷假") {
+      if (role === "配合銷假" || isConcurrentRole(role)) {
         // 「配合銷假」可以與任何其他任務共存，不作過濾
       } else if (role === SPECIAL_ROLES.OPENING) {
         newRoles = newRoles.filter(
           (r) =>
             r === SPECIAL_ROLES.OPENING ||
             r === SPECIAL_ROLES.ASSIST ||
-            r === "配合銷假",
+            r === "配合銷假" || isConcurrentRole(r),
         );
       } else if (role === SPECIAL_ROLES.ASSIST) {
         newRoles = newRoles.filter(
           (r) =>
             r === SPECIAL_ROLES.ASSIST ||
             r === SPECIAL_ROLES.OPENING ||
-            r === "配合銷假",
+            r === "配合銷假" || isConcurrentRole(r),
         );
       } else {
         // 其他任務互斥，但保留「配合銷假」
-        newRoles = newRoles.filter((r) => r === role || r === "配合銷假");
+        newRoles = newRoles.filter((r) => r === role || r === "配合銷假" || isConcurrentRole(r));
       }
     }
     handleUpdateShift(
@@ -2755,7 +2767,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
     return shifts
       .filter((s) => {
         if (s.date !== dateStr) return false;
-        if (s.station === stationName) return true;
+        if (coversStation(s, stationName)) return true;
         if (s.learningStation && stationName.includes(s.learningStation)) {
           // If they have a teacher selected, they should ONLY appear in the teacher's station
           if (s.learningTeacherId) {
@@ -2953,6 +2965,9 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
           shift.station.includes("遠班") || shift.station.includes("遠距");
         const isDualTarget = station.includes("BMD") || station.includes("DX");
         const isDazhiTarget = station.includes("大直");
+        if (isExamStation(shift.station) && isExamStation(station)) {
+          return isCertified && !shift.learningStation && !coversStation(shift, station);
+        }
         if (!(isRemoteShift && (isDualTarget || isDazhiTarget))) {
           return false;
         }
@@ -2999,6 +3014,17 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
     );
     let roles = existingShift ? [...existingShift.specialRoles] : [];
 
+    if (existingShift && isExamStation(existingShift.station) &&
+        isExamStation(station) && existingShift.station !== station) {
+      const user = users.find((u) => u.id === userId);
+      if (!user || existingShift.learningStation || !isUserCertifiedOnDate(user, station, dateStr)) {
+        showToast("兼任須具備該崗位的獨立資格", "error");
+        return;
+      }
+      handleUpdateShift(userId, dateStr, existingShift.station,
+        [...new Set([...roles, concurrentRole(station)])]);
+      return;
+    }
     if (existingShift) {
       const isRemoteShift =
         existingShift.station.includes("遠距") ||
@@ -3037,6 +3063,12 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
     );
 
     let roles = existingShift ? [...existingShift.specialRoles] : [];
+    if (existingShift && stationLabel && existingShift.station !== stationLabel &&
+        coversStation(existingShift, stationLabel)) {
+      handleUpdateShift(userId, dateStr, existingShift.station,
+        roles.filter((r) => r !== concurrentRole(stationLabel)));
+      return;
+    }
     const isDualBMDTarget =
       stationLabel &&
       (stationLabel.includes("BMD") || stationLabel.includes("DX"));
@@ -3162,13 +3194,13 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
     return "bg-teal-100 text-teal-900 border-teal-200"; // Default
   };
 
-  const getLeaveBadge = (type: LeaveType) => {
+  const getLeaveBadge = (type: LeaveType, priority?: number | null) => {
     let color = "bg-gray-400";
     let label = "申";
     switch (type) {
       case LeaveType.PRE_SCHEDULED:
         color = "bg-blue-500";
-        label = "預";
+        label = priority ? `預${priority}` : "預";
         break;
       case LeaveType.CANCEL_LEAVE:
         color = "bg-pink-500";
@@ -3189,8 +3221,8 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
     }
     return (
       <div
-        className={`absolute top-0 right-0 w-3 h-3 ${color} rounded-bl text-[8px] flex items-center justify-center text-white font-bold z-10 leading-none`}
-        title={`${type} 申請中`}
+        className={`absolute top-0 right-0 min-w-3 px-0.5 h-3 ${color} rounded-bl text-[8px] flex items-center justify-center text-white font-bold z-10 leading-none`}
+        title={`${type} 申請中${type === LeaveType.PRE_SCHEDULED && priority ? `・優先休第 ${priority} 順位` : ""}`}
       >
         {label}
       </div>
@@ -3204,6 +3236,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
     SPECIAL_ROLES.SCHEDULER,
     SPECIAL_ROLES.DAZHI_SUPPORT,
     SPECIAL_ROLES.DUAL_BMD,
+    ...CONCURRENT_STATIONS.filter((s) => s !== StationDefault.BMD_DX).map(concurrentRole),
     "配合銷假",
   ];
 
@@ -3765,7 +3798,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
       <div className="flex-none bg-white border-b border-slate-200 shadow-sm z-10">
         <div className="flex flex-col xl:flex-row items-center justify-between px-4 py-2 gap-y-2 gap-x-4">
           {/* LEFT GROUP: Title + View Toggles */}
-          <div className="flex items-center gap-4 w-full xl:w-auto justify-between xl:justify-start">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 w-full xl:w-auto justify-start">
             {/* Title (Moved to Far Left) */}
             <h2 className="text-lg font-bold text-slate-800 tracking-tight flex items-center gap-2 whitespace-nowrap">
               {!isMobile && getCycleTitle()}
@@ -4180,7 +4213,13 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                 </button>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <DailyBackendSync date={toLocalISOString(dailyDate)} currentUser={currentUser} onRefresh={async()=>{
+                  const result=await db.refreshSettings();
+                  if(result.error)throw new Error(result.error.message);
+                  const start=scheduleRange.start||toLocalISOString(dailyDate);
+                  setDailyWorkloads(await db.fetchDailyWorkloadsByRange(start,scheduleRange.end||start));
+                }}/>
                 {canEditRadiographerWorkTime && (
                   <button
                     type="button"
@@ -4435,7 +4474,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                           s.specialRoles.includes(SPECIAL_ROLES.DAZHI_SUPPORT)
                         )
                           match = true;
-                      } else if (s.station === stationName) match = true;
+                      } else if (coversStation(s, stationName)) match = true;
 
                       if (match) {
                         const isRemoteDualBmd =
@@ -4449,7 +4488,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                           color: u.color,
                           workTime: storedShift?.workTime,
                           specialRoles: s.specialRoles,
-                          note: isRemoteDualBmd ? "(遠班兼職)" : undefined,
+                          note: isRemoteDualBmd || (s.station !== stationName && coversStation(s, stationName)) ? "兼" : undefined,
                         });
                       }
                     });
@@ -4831,7 +4870,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                         </span>
                                         {u.specialRoles.length > 0 && (
                                           <div className="flex flex-wrap gap-0.5">
-                                            {u.specialRoles.map((r) => (
+                                            {u.specialRoles.filter((r) => u.note !== "兼" || !isConcurrentRole(r)).map((r) => (
                                               <span
                                                 key={r}
                                                 className={`text-[9px] font-medium leading-none ${
@@ -5288,7 +5327,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                     {renderConsecutiveWorkWarning(currentUser.id, date)}
                     {pendingReq && (
                       <div className="mb-2">
-                        {getLeaveBadge(pendingReq.type)}
+                        {getLeaveBadge(pendingReq.type, pendingReq.preLeavePriority)}
                       </div>
                     )}
 
@@ -5718,7 +5757,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                 className={`p-0.5 border-r border-slate-100 align-top h-16 ${isToday ? "bg-teal-50/10" : ""} ${isOff ? "bg-slate-100/60" : isClosed ? "bg-slate-100/30" : isCoopCancel ? "bg-pink-50" : ""} relative`}
                               >
                                 {renderConsecutiveWorkWarning(user.id, date)}
-                                {pendingReq && getLeaveBadge(pendingReq.type)}
+                                {pendingReq && getLeaveBadge(pendingReq.type, pendingReq.preLeavePriority)}
                                 {isNotHired ? (
                                   <div className="h-full w-full flex flex-col items-center justify-center">
                                     <span className="text-slate-200 font-normal select-none text-[12px]">
@@ -5908,7 +5947,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                       ? "大直"
                                                       : role === "配合銷假"
                                                         ? "銷假"
-                                                        : role[0]}
+                                                        : isConcurrentRole(role) ? role : role[0]}
                                                 </span>
                                                 <button
                                                   type="button"
@@ -6377,7 +6416,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                   <span
                                                     className={`text-[8px] ${isPending ? "bg-blue-300" : "bg-blue-500"} text-white px-0.5 rounded leading-none scale-90`}
                                                   >
-                                                    預
+                                                    {activeLeave?.preLeavePriority ? `預${activeLeave.preLeavePriority}` : "預"}
                                                   </span>
                                                 )}
                                                 {isCancelLeave && (
@@ -6404,6 +6443,12 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                               </div>
                                             )}
 
+                                            {row.type === "STATION" && item.shift.station === row.label && item.shift.specialRoles.filter(isConcurrentRole).map((role) => (
+                                              <span key={role} className="w-full text-center text-[9px] text-purple-700">{role}</span>
+                                            ))}
+                                            {row.type === "STATION" && item.shift.station !== row.label && coversStation(item.shift, row.label) && (
+                                              <span className="w-full text-center text-[9px] text-purple-700">兼</span>
+                                            )}
                                             {showSuffix &&
                                               (isOpening ||
                                                 isLate ||
@@ -6433,7 +6478,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                       排班
                                                     </span>
                                                   )}
-                                                  {isDualBMD && (
+                                                  {isDualBMD && row.type !== "STATION" && (
                                                     <span className="w-full text-center bg-purple-100/80 px-0.5 rounded-[2px] text-[10px] leading-tight text-purple-900 font-extrabold border border-purple-200/50">
                                                       兼BMD/DX
                                                     </span>
@@ -6522,6 +6567,10 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                   >
                                                     {u.name} (
                                                     {u.alias || u.name[0]})
+                                                    {(() => {
+                                                      const assigned = shifts.find((s) => s.userId === u.id && s.date === date);
+                                                      return assigned && isExamStation(assigned.station) && assigned.station !== row.label ? "（兼）" : "";
+                                                    })()}
                                                   </option>
                                                 ))
                                               : getCandidatesForRole(
@@ -6905,6 +6954,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                   <div className="flex items-center gap-2">
                     <LayoutList size={14} />
                     <span>崗位視角說明：</span>
+                    <span className="text-purple-700">兼任保留主崗，人力只計一人；可由＋選人兼任，或在人員視角＋任務設定。</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="w-3 h-3 bg-teal-100 border border-teal-200 rounded-sm"></span>{" "}
@@ -8043,7 +8093,7 @@ BMD :{{bmd}}
     let beitouSupplySlots = 0;
     let dazhiSupplySlots = 0;
 
-    shifts.forEach((s) => {
+    uniqueDailyShifts(shifts, date).forEach((s) => {
       if (s.date !== date) return;
       if (s.station === SYSTEM_OFF) return;
       if (!s.learningStation && s.station === StationDefault.UNASSIGNED) return;
@@ -8428,7 +8478,7 @@ BMD :{{bmd}}
       buildForecastWeek(title, startOffset, endOffset),
     );
 
-    const section6 = [
+    const section7 = [
       formatForecastDate(reportDate),
       `未來1個月 (${formatShortDate(futureStart)} - ${formatShortDate(futureEnd)})`,
       "MR 預約排程 /MR運用率",
@@ -8467,7 +8517,7 @@ BMD :{{bmd}}
         return [{ date: targetDate, utilizationPercent: forecast.utilizationPercent }];
       }),
     );
-    const section7 = formatRadiographerDailyLineSummary(date, stats);
+    const section6 = formatRadiographerDailyLineSummary(date, stats);
 
     return {
       full: finalText,
@@ -8476,11 +8526,11 @@ BMD :{{bmd}}
       section3,
       section4,
       section5,
-      section6,
       section7,
+      section6,
       section8,
       section9,
-      section6HighlightedDateLabels: highlightedForecastDateLabels,
+      section7HighlightedDateLabels: highlightedForecastDateLabels,
     };
   }, [date, shifts, manpower, users, stats, doctorShifts, physicianWorkload]);
 
@@ -8641,15 +8691,43 @@ BMD :{{bmd}}
           />
         </div>
 
-        {/* Section 6: Future one-month MR capacity forecast */}
-        <div className="bg-gradient-to-br from-sky-50 to-indigo-50 border border-sky-200 rounded-lg p-3 mt-4">
+        {/* Section 6: Daily workload line summary */}
+        <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 mt-4">
           <div className="flex justify-between items-center mb-2">
-            <div className="text-xs text-sky-700 font-bold">
-              區塊 6：未來一個月 MR 排程狀況
+            <div className="text-xs text-emerald-700 font-bold">
+              區塊 6：每日工作量 Line 摘要
             </div>
             <button
               type="button"
-              onClick={() => handleCopy(copyText.section6)}
+              onClick={async () => {
+                await db.refreshSettings();
+                const latestStats = db.getDailyStats(date) || stats;
+                handleCopy(
+                  formatRadiographerDailyLineSummary(date, latestStats),
+                );
+              }}
+              className="text-xs bg-emerald-100 hover:bg-emerald-200 text-emerald-800 px-2 py-1 rounded-lg flex items-center gap-1"
+            >
+              <Copy size={12} /> 複製
+            </button>
+          </div>
+          <textarea
+            className="w-full h-44 text-sm font-mono text-slate-700 bg-transparent outline-none resize-none"
+            aria-label="每日工作量 Line 摘要"
+            readOnly
+            value={copyText.section6}
+          />
+        </div>
+
+        {/* Section 7: Future one-month MR capacity forecast */}
+        <div className="bg-gradient-to-br from-sky-50 to-indigo-50 border border-sky-200 rounded-lg p-3 mt-4">
+          <div className="flex justify-between items-center mb-2">
+            <div className="text-xs text-sky-700 font-bold">
+              區塊 7：未來一個月 MR 排程狀況
+            </div>
+            <button
+              type="button"
+              onClick={() => handleCopy(copyText.section7)}
               className="text-xs bg-sky-100 hover:bg-sky-200 text-sky-800 px-2 py-1 rounded-lg flex items-center gap-1"
             >
               <Copy size={12} /> 複製
@@ -8659,13 +8737,13 @@ BMD :{{bmd}}
             className="w-full min-h-[34rem] text-sm font-mono text-slate-700 bg-transparent leading-relaxed whitespace-pre-wrap"
             aria-label="未來一個月 MR 排程內容"
           >
-            {copyText.section6.split("\n").map((line, index) => {
+            {copyText.section7.split("\n").map((line, index) => {
               const dateMatch = line.match(
                 /^(\d{1,2}\/\d{1,2} )(w[1-7])(\s{2}.*)$/,
               );
               const shouldHighlightWeekday =
                 !!dateMatch &&
-                copyText.section6HighlightedDateLabels.some((label) =>
+                copyText.section7HighlightedDateLabels.some((label) =>
                   line.startsWith(`${label}  `),
                 );
               const isAvailableLine = line.startsWith("- 再安插");
@@ -8694,34 +8772,6 @@ BMD :{{bmd}}
               );
             })}
           </div>
-        </div>
-
-        {/* Section 7: Daily workload line summary */}
-        <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 mt-4">
-          <div className="flex justify-between items-center mb-2">
-            <div className="text-xs text-emerald-700 font-bold">
-              區塊 7：每日工作量 Line 摘要
-            </div>
-            <button
-              type="button"
-              onClick={async () => {
-                await db.refreshSettings();
-                const latestStats = db.getDailyStats(date) || stats;
-                handleCopy(
-                  formatRadiographerDailyLineSummary(date, latestStats),
-                );
-              }}
-              className="text-xs bg-emerald-100 hover:bg-emerald-200 text-emerald-800 px-2 py-1 rounded-lg flex items-center gap-1"
-            >
-              <Copy size={12} /> 複製
-            </button>
-          </div>
-          <textarea
-            className="w-full h-44 text-sm font-mono text-slate-700 bg-transparent outline-none resize-none"
-            aria-label="每日工作量 Line 摘要"
-            readOnly
-            value={copyText.section7}
-          />
         </div>
 
         {/* Section 8: Compact MR utilization forecast */}

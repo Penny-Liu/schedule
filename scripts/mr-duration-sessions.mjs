@@ -1,3 +1,4 @@
+import {hasClaustrophobiaCare} from './exam-duration-care.mjs';
 const registration=r=>/報到/.test(`${r.ProcessType__c||''} ${r.CheckupName__c||''}`);
 const completed=r=>r.End__c!==false&&(r.Checkup_Status__c==null||r.Checkup_Status__c==='10');
 const genderOf=(root,items)=>root.Gender__c||items.find(r=>r.Gender__c)?.Gender__c||'';
@@ -48,7 +49,7 @@ export function normalizeMrDurationSessions(records) {
   const people=new Map();for(const r of [...list,...items])if(r.Radiologist__c)people.set(r.Radiologist__c,r.Radiologist__r?.Name);
   const genders=new Set([...list,...items].map(r=>r.Gender__c).filter(Boolean).map(g=>/^(女|F|Female)$/i.test(g)?'女':/^(男|M|Male)$/i.test(g)?'男':g));
   const resources=[...new Set(list.map(r=>r.Resource__r?.Name).filter(Boolean))].sort();
-  const merged={...first,Id:`mr-session:${list.map(r=>r.Id).sort().join(':')}`,Gender__c:genders.size===1?[...genders][0]:undefined,
+  const merged={...first,_claustrophobiaCare:[...list,...items].some(hasClaustrophobiaCare),Id:`mr-session:${list.map(r=>r.Id).sort().join(':')}`,Gender__c:genders.size===1?[...genders][0]:undefined,
    Resource__c:list.length>1?JSON.stringify([...new Set(list.map(r=>r.Resource__c))].sort()):first.Resource__c,
    Resource__r:{Name:resources.join('＋')||first.Resource__r?.Name},
    durationSecondsOverride:actual.seconds,

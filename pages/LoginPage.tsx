@@ -1,8 +1,9 @@
+import { refreshLoginAccount } from "../services/loginAccount";
 import React, { useState, useEffect } from 'react';
 import { User, UserRole } from '../types';
 import { db } from '../services/store';
 import { LogIn, User as UserIcon, Lock, ChevronLeft, Shield, Calendar, Activity, Eye, ChevronDown } from 'lucide-react';
-import { getRoleLabel, isUserOnEmploymentPause, toLocalISOString } from '../services/utils';
+import { getRoleLabel, toLocalISOString } from '../services/utils';
 import { getDefaultPasswordForRole, getTemporaryPasswordHint, isDefaultOrMissingPassword } from '../services/passwordPolicy.mjs';
 import { signInProtectedEditor } from '../services/supabaseAuth';
 import { isLoginEligible } from '../services/loginEligibility';
@@ -77,26 +78,24 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (selectedUser) {
-            if (isUserOnEmploymentPause(selectedUser, todayStr)) {
-                setError('此帳號目前為留職停薪期間，暫不開放登入');
+        if (!selectedUser || isAuthenticating) return;
+        setIsAuthenticating(true);
+        setError('');
+        try {
+            const user = await refreshLoginAccount(db, selectedUser.id, toLocalISOString(new Date()));
+            setSelectedUser(user);
+            const targetPassword = user.password || getDefaultPasswordForRole(user.role);
+            if (password !== targetPassword) {
+                setError('密碼錯誤，請重試');
                 return;
             }
-            const targetPassword = selectedUser.password || getDefaultPasswordForRole(selectedUser.role);
-            if (password === targetPassword) {
-                setIsAuthenticating(true);
-                try {
-                    await signInProtectedEditor(selectedUser, password);
-                    await onLogin(selectedUser);
-                    localStorage.setItem('last_user_id', selectedUser.id);
-                } catch (authError) {
-                    setError(authError instanceof Error ? authError.message : '安全登入失敗');
-                } finally {
-                    setIsAuthenticating(false);
-                }
-            } else {
-                setError('密碼錯誤，請重試');
-            }
+            await signInProtectedEditor(user, password);
+            await onLogin(user);
+            localStorage.setItem('last_user_id', user.id);
+        } catch (authError) {
+            setError(authError instanceof Error ? authError.message : '安全登入失敗');
+        } finally {
+            setIsAuthenticating(false);
         }
     };
 

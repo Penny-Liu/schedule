@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import {defaultHealthMgmtSyncRange} from '../services/healthMgmtSyncRange.mjs';
 import { spawn } from 'node:child_process';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import { validateSyncPayload } from '../pages/syncValidation.js';
@@ -15,6 +16,8 @@ export function buildSyncPlan(payload, today = new Intl.DateTimeFormat('en-CA', 
     const to=duration.end || today;
     plan.push({script:'sync-exam-duration.mjs',args:['--from',from,'--to',to,'--write']});
   }
+  const health=tasks.find(task=>task.id===6);
+  if(health){const from=health.start||today,to=health.end||defaultHealthMgmtSyncRange(today).to;plan.push({script:'sync-health-mgmt-load.mjs',args:['--from',from,'--to',to,'--write']});}
   return plan;
 }
 

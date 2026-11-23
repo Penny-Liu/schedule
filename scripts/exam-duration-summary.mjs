@@ -1,8 +1,9 @@
+import {hasClaustrophobiaCare} from './exam-duration-care.mjs';
 import { normalizeMrDurationSessions, mrDurationLabel } from './mr-duration-sessions.mjs';
-import { getUsDurationSubtype } from '../services/examDurationSubtype.mjs';
+import { getUsDurationSubtype, getUsDurationAllocation } from '../services/examDurationSubtype.mjs';
 export const DURATION_CATEGORIES = ['MR', 'CT', 'US', 'BMD', 'MG', 'DX'];
 export const MAX_DURATION_SECONDS = 4 * 60 * 60;
-export const DURATION_ALGORITHM = 'actual-flow-v3';
+export const DURATION_ALGORITHM = 'actual-flow-v4';
 
 // 不將多項醫令共用的區間拆成單項耗時；同項、同人、同室、同區間只取一次。
 export function buildExamDurationSummaries(records, syncedAt = new Date().toISOString()) {
@@ -35,7 +36,7 @@ export function buildExamDurationSummaries(records, syncedAt = new Date().toISOS
     const g = groups.get(key) || { ...base, total_count: 0, valid_count: 0,
       missing_time_count: 0, invalid_time_count: 0, zero_count: 0, negative_count: 0,
       shared_interval_count: 0, duplicate_count: 0, outlier_count: 0, missing_staff_count: 0,
-      duration_histogram: {}, algorithm: DURATION_ALGORITHM, synced_at: syncedAt };
+      claustrophobia_count: 0, duration_histogram: {}, algorithm: DURATION_ALGORITHM, synced_at: syncedAt };
     groups.set(key, g);
     g.total_count++;
     if (r.durationIssue === "shared") { g.shared_interval_count++; continue; }
@@ -57,6 +58,7 @@ export function buildExamDurationSummaries(records, syncedAt = new Date().toISOS
     if (uniqueKey && seen.has(uniqueKey)) { g.duplicate_count++; continue; }
     if (uniqueKey) seen.add(uniqueKey);
     g.valid_count++;
+    if(r.ResourceCategory__c==='MR'&&!String(r.CheckupName__c||'').includes('後處理')&&hasClaustrophobiaCare(r))g.claustrophobia_count++;
     g.duration_histogram[seconds] = (g.duration_histogram[seconds] || 0) + 1;
   }
   return [...groups.values()];
@@ -85,7 +87,7 @@ export function buildExamFlowSummaries(records, syncedAt = new Date().toISOStrin
       label = root._mrSessionLabel || mrDurationLabel(root,items);
     }
     const onlyPerson = people.size === 1 ? [...people.entries()][0] : null;
-    sessions.push({ ...root,
+    sessions.push({ ...root, _claustrophobiaCare:[root,...items].some(hasClaustrophobiaCare),
       // 不同主預約是不同流程，即使同客戶、同儀器、同時間也不擅自合併。
       Order__c: root.Id, Checkup__c: label,
       CheckupName__c: `${root.ResourceCategory__c} 整次｜${label}`,
@@ -161,7 +163,9 @@ export function buildAllocatedExamDurationSummaries(records, syncedAt = new Date
   for (const root of records) {
     if (!root.Id || seen.has(root.Id) || !registration(root) || !DURATION_CATEGORIES.includes(root.ResourceCategory__c) || root.End__c === false || (root.Checkup_Status__c != null && root.Checkup_Status__c !== '10')) continue;
     seen.add(root.Id);
-    const items = [...(children.get(root.Id)?.values() || [])].filter(r => r.ResourceCategory__c === root.ResourceCategory__c);
+    const linkedItems = [...(children.get(root.Id)?.values() || [])].filter(r => r.ResourceCategory__c === root.ResourceCategory__c);
+    const usAllocation=root.ResourceCategory__c==='US'?getUsDurationAllocation(linkedItems):null;
+    const items=usAllocation?usAllocation.items.map(r=>r.item):linkedItems;
     if (!items.length) continue;
     const people = new Map();
     for (const r of [root, ...items]) if (r.Radiologist__c) people.set(r.Radiologist__c, r.Radiologist__r?.Name);
@@ -176,8 +180,8 @@ export function buildAllocatedExamDurationSummaries(records, syncedAt = new Date
       Id: `allocated:${root.Id}:${item.Id}`, Order__c: `allocated:${root.Id}:${item.Id}`,
       Checkup__c: item.Checkup__c, CheckupName__c: `${root.ResourceCategory__c} ${sourceFlows ? '來源' : '均攤'}｜${label}｜${item.CheckupName__c || '未填項目'}`,
       Radiologist__c: only?.[0] || null, Radiologist__r: {Name: only?.[1] || (people.size > 1 ? '多人共同（未拆分）' : '未填放射師')},
-      durationSecondsOverride: sourceFlows ? seconds : seconds / items.length,
-      durationIssue: root.durationIssue || (people.size > 1 ? 'shared' : seconds > MAX_DURATION_SECONDS ? 'outlier' : undefined),
+      durationSecondsOverride: sourceFlows ? seconds : usAllocation&&!usAllocation.unsupported?seconds*usAllocation.items.find(r=>r.item.Id===item.Id).weight/usAllocation.totalWeight:seconds/items.length,
+      durationIssue: root.durationIssue || (usAllocation?.unsupported ? 'shared' : people.size > 1 ? 'shared' : seconds > MAX_DURATION_SECONDS ? 'outlier' : undefined),
     });
   }
   return buildExamDurationSummaries(allocated, syncedAt).map(row => ({...row, metric_scope: sourceFlows ? 'allocation_flow' : 'allocated'}));

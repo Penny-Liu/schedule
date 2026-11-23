@@ -1,3 +1,8 @@
+import HealthMgmtCycleSettings from "../components/healthMgmt/HealthMgmtCycleSettings";
+import { fetchHMPersonalCycles } from "../services/healthMgmtPersonalCycleData";
+import { hmCampusCycles, hmCycleDates, resolveHMDefaultCycle, canManageHMStaff, type HMPersonalCycle } from "../services/healthMgmtPersonalCycles";
+import { calculateHMCycleStatistics } from "../services/healthMgmtCycleStatistics";
+import HealthMgmtLoad from '../components/healthMgmt/HealthMgmtLoad';
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import {
   User,
@@ -106,21 +111,29 @@ export const getMatchedGroupId = (sText: string) => {
 };
 
 interface HealthMgmtPageProps {
+  section?: "schedule" | "statistics";
   currentUser: User;
 }
 
-const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
+const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser, section = "schedule" }) => {
   const isMobile =
     typeof window !== "undefined" ? window.innerWidth < 1024 : false;
   const [activeTab, setActiveTab] = useState<
-    "schedule" | "today" | "staff" | "stats" | "anesthesia" | "station"
-  >("schedule");
+    "schedule" | "today" | "staff" | "stats" | "anesthesia" | "station" | "cycles"
+  >(section === "statistics" ? "stats" : "schedule");
+  const [personalCycles,setPersonalCycles]=useState<HMPersonalCycle[]>([]);
+  const [personalReady,setPersonalReady]=useState(false);
+  const [personalError,setPersonalError]=useState("");
+  const autoCycleCampus=useRef("");
   const [todayDate, setTodayDate] = useState(new Date());
   const [currentDate, setCurrentDate] = useState(new Date());
 
   useEffect(() => {
     db.loadDataForMonth(currentDate.getFullYear(), currentDate.getMonth() + 1);
   }, [currentDate]);
+  useEffect(() => {
+    if (activeTab === 'today') void db.loadDataForMonth(todayDate.getFullYear(), todayDate.getMonth() + 1);
+  }, [activeTab, todayDate]);
   const [shifts, setShifts] = useState<HealthMgmtShift[]>([]);
   const [hmStations, setHmStations] = useState<string[]>(
     db.getHealthMgmtStations(),
@@ -166,31 +179,8 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
 
   const [geneHShifts, setGeneHShifts] = useState<any[]>([]);
 
-  useEffect(() => {
-    const fetchGeneHShifts = async () => {
-      const year = currentDate.getFullYear();
-      const month = currentDate.getMonth() + 1;
-      const startDate = `${year}-${String(month).padStart(2, "0")}-01`;
-      const lastDay = new Date(year, month, 0).getDate();
-      const endDate = `${year}-${String(month).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+  const [geneHLoadedKey,setGeneHLoadedKey]=useState('');
 
-      try {
-        const { data, error } = await supabase
-          .from("administrative_shifts")
-          .select("*")
-          .eq("category", "H班")
-          .gte("date", startDate)
-          .lte("date", endDate);
-
-        if (!error && data) {
-          setGeneHShifts(data);
-        }
-      } catch (err) {
-        console.error("Failed to fetch Gene H shifts", err);
-      }
-    };
-    fetchGeneHShifts();
-  }, [currentDate]);
 
   const [newStaffName, setNewStaffName] = useState(""); // For adding new staff
   const [newStaffAlias, setNewStaffAlias] = useState(""); // For adding new staff alias
@@ -449,6 +439,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
     currentDate,
   ]);
 
+  const managedHealthMgmtStaff=activeHealthMgmtStaff.filter(s=>currentUserLocation==="全部"||!s.location||s.location==="全部"||s.location===currentUserLocation);
   const activeAnesthesiaStaff = useMemo(() => {
     const staff = anesthesiaStaff.filter((s) => s.isActive !== false);
     return [...staff].sort((a, b) => {
@@ -537,6 +528,50 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
     }
     return dates;
   }, [currentDate, selectedCycleId, currentCycle]);
+
+  const reloadPersonalCycles=async(signal?:AbortSignal)=>{
+    if(section!=="statistics"||!currentCycle||(currentUserLocation!=="北投"&&currentUserLocation!=="大直"))return;
+    setPersonalReady(false);setPersonalError("");
+    try{
+      const records=await fetchHMPersonalCycles(currentUser,currentUserLocation,currentCycle.id,signal);
+      const months=new Set<string>();
+      for(const [start,end] of [[currentCycle.startDate,currentCycle.endDate],...records.map(r=>[r.start_date,r.end_date])])for(const date of hmCycleDates(start,end))months.add(date.slice(0,7));
+      for(const month of months){if(signal?.aborted)return;const [year,m]=month.split('-').map(Number);await db.loadDataForMonth(year,m,{requireComplete:true});}
+      if(!signal?.aborted){setPersonalCycles(records);setPersonalReady(true);}
+    }catch(e){if(!signal?.aborted){setPersonalError((e as Error).message);throw e;}}
+  };
+  useEffect(()=>{
+    if(section!=="statistics"||(currentUserLocation!=="北投"&&currentUserLocation!=="大直"))return;
+    if(autoCycleCampus.current===currentUserLocation)return;
+    const cycles=hmCampusCycles(hmCycles,currentUserLocation);
+    if(!cycles.length)return;
+    autoCycleCampus.current=currentUserLocation;
+    const today=toLocalISOString(new Date());
+    const cycle=resolveHMDefaultCycle(cycles,currentUserLocation,toLocalISOString(currentDate).slice(0,7),today)||cycles[0];
+    setSelectedCycleId(cycle.id);
+  },[section,currentUserLocation,hmCycles]);
+  useEffect(()=>{
+    const controller=new AbortController();setPersonalCycles([]);setPersonalReady(false);setPersonalError("");
+    void reloadPersonalCycles(controller.signal).catch(()=>{});
+    return()=>controller.abort();
+  },[section,currentUserLocation,currentCycle?.id,currentCycle?.startDate,currentCycle?.endDate,currentUser.authUserId]);
+
+  const geneHFrom=activeTab==='today'?toLocalISOString(todayDate):dateRange[0];
+  const geneHTo=activeTab==='today'?toLocalISOString(todayDate):dateRange[dateRange.length-1];
+  const geneHKey=`${geneHFrom}:${geneHTo}`;
+  const geneHReady=geneHLoadedKey===geneHKey;
+  useEffect(()=>{
+    let active=true,generation=0;const controller=new AbortController();setGeneHLoadedKey('');setGeneHShifts([]);
+    const reload=async()=>{
+      const request=++generation;
+      try{const {data,error}=await supabase.from('administrative_shifts').select('*').eq('category','H班').gte('date',geneHFrom).lte('date',geneHTo).abortSignal(controller.signal);
+        if(!active||request!==generation)return;
+        if(error){setGeneHLoadedKey('');return;}setGeneHShifts(data||[]);setGeneHLoadedKey(geneHKey);
+      }catch{if(active&&request===generation)setGeneHLoadedKey('');}
+    };
+    void reload();window.addEventListener('focus',reload);
+    return()=>{active=false;controller.abort();window.removeEventListener('focus',reload);};
+  },[geneHFrom,geneHTo,geneHKey]);
 
   const handleUpdateShift = async (
     userId: string,
@@ -774,6 +809,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
   };
 
   const handleExportStats = async () => {
+    if(section==="statistics"&&selectedCycleId!=="month"&&!personalReady){alert("請先完成個人週期與排班資料讀取");return;}
     const ExcelJS = await loadExcelJS();
     const label =
       selectedCycleId === "month"
@@ -786,18 +822,21 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
     const ws = workbook.addWorksheet("健管排班統計");
     initializeExcelWorkbook(workbook, `健管排班統計 ${rangeStr}`);
 
-    styleExcelTitle(ws, "健管排班統計", 9 + hmStations.length);
+    styleExcelTitle(ws, "健管排班統計", 12 + hmStations.length);
     const titleRow = ws.addRow([`統計區間：${rangeStr}`]);
     titleRow.font = {
       name: "微軟正黑體",
       italic: true,
       color: { argb: "FF475569" },
     };
-    ws.mergeCells(2, 1, 2, 9 + hmStations.length);
+    ws.mergeCells(2, 1, 2, 12 + hmStations.length);
 
     // Header row
     const headers = [
       "姓名",
+      "週期開始",
+      "週期結束",
+      "備註",
       "上班天數",
       "平日",
       "假日班",
@@ -821,72 +860,9 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
     });
 
     // Data rows
-    activeHealthMgmtStaff.forEach((staff) => {
-      let totalWorkDays = 0;
-      let weekdayWorkDays = 0;
-      let holidayWorkDays = 0;
-      const dateCounts: Record<string, number> = {};
-      hmStations.forEach((st) => (dateCounts[st] = 0));
-      const roleCounts: Record<string, number> = {
-        主控: 0,
-        輔控: 0,
-        晚班: 0,
-        call班: 0,
-        排班: 0,
-      };
-
-      dateRange.forEach((date) => {
-        const shift = shifts.find(
-          (s) => s.userId === staff.id && s.date === date,
-        );
-        if (shift && (shift.station || shift.task || shift.location)) {
-          // 上班天數：崗位有值且不是「假」
-          const stationVal = shift.station || "";
-          const parts = stationVal.split(" ");
-          const stationLabel =
-            parts.length > 1 && parts[0].includes(":")
-              ? parts.slice(1).join(" ")
-              : stationVal;
-
-          if (stationLabel && stationLabel !== "假") {
-            totalWorkDays++;
-            const d = new Date(date);
-            const holiday = holidays.find(
-              (h) =>
-                h.date === date &&
-                (h.type === "NATIONAL" || h.type === "CLOSED"),
-            );
-            const isWeekend = d.getDay() === 0 || d.getDay() === 6;
-            if (holiday || isWeekend) holidayWorkDays++;
-            else weekdayWorkDays++;
-
-            if (dateCounts[stationLabel] !== undefined)
-              dateCounts[stationLabel]++;
-          }
-
-          const combinedText = `${shift.station} ${shift.task || ""}`;
-          if (combinedText.includes("主控")) roleCounts["主控"]++;
-          if (combinedText.includes("輔控")) roleCounts["輔控"]++;
-          if (combinedText.includes("晚班")) roleCounts["晚班"]++;
-          if (combinedText.includes("call班")) roleCounts["call班"]++;
-          if (combinedText.includes("排班")) roleCounts["排班"]++;
-        }
-      });
-
-      const row = ws.addRow([
-        staff.name,
-        totalWorkDays,
-        weekdayWorkDays,
-        holidayWorkDays,
-        roleCounts["主控"],
-        roleCounts["輔控"],
-        roleCounts["晚班"],
-        roleCounts["call班"],
-        roleCounts["排班"],
-        ...hmStations.map((st) => dateCounts[st]),
-      ]);
-      row.alignment = { horizontal: "center" };
-      row.getCell(1).alignment = { horizontal: "left" };
+    stats.forEach(({staff,counts,total,weekday,holidayCount,roleCounts,effective}) => {
+      const row=ws.addRow([staff.name,effective.startDate,effective.endDate,effective.memo,total,weekday,holidayCount,roleCounts["主控"],roleCounts["輔控"],roleCounts["晚班"],roleCounts["call班"],roleCounts["排班"],...hmStations.map(st=>counts[st]||0)]);
+      row.alignment={horizontal:"center"};row.getCell(1).alignment={horizontal:"left"};
     });
 
     // Column widths
@@ -1083,65 +1059,11 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
   };
 
   const stats = useMemo(() => {
-    return activeHealthMgmtStaff.map((staff) => {
-      const counts: Record<string, number> = {};
-      let total = 0;
-      let weekday = 0;
-      let holidayCount = 0;
-      const roleCounts: Record<string, number> = {
-        主控: 0,
-        輔控: 0,
-        晚班: 0,
-        call班: 0,
-        排班: 0,
-      };
-
-      dateRange.forEach((date) => {
-        const shift = shifts.find(
-          (s) => s.userId === staff.id && s.date === date,
-        );
-        if (shift && (shift.station || shift.task || shift.location)) {
-          // 上班天數：崗位有值且不是「假」
-          const stationVal = shift.station || "";
-          const parts = stationVal.split(" ");
-          const stationLabel =
-            parts.length > 1 && parts[0].includes(":")
-              ? parts.slice(1).join(" ")
-              : stationVal;
-
-          if (stationLabel && stationLabel !== "假") {
-            total++;
-            const d = new Date(date);
-            const holiday = holidays.find(
-              (h) =>
-                h.date === date &&
-                (h.type === "NATIONAL" || h.type === "CLOSED"),
-            );
-            const isWeekend = d.getDay() === 0 || d.getDay() === 6;
-            if (holiday || isWeekend) {
-              holidayCount++;
-            } else {
-              weekday++;
-            }
-
-            if (hmStations.includes(stationLabel)) {
-              counts[stationLabel] = (counts[stationLabel] || 0) + 1;
-            }
-          }
-
-          // Count specific roles in both station and task
-          const combinedText = `${shift.station} ${shift.task || ""}`;
-          if (combinedText.includes("主控")) roleCounts["主控"]++;
-          if (combinedText.includes("輔控")) roleCounts["輔控"]++;
-          if (combinedText.includes("晚班")) roleCounts["晚班"]++;
-          if (combinedText.includes("call班")) roleCounts["call班"]++;
-          if (combinedText.includes("排班")) roleCounts["排班"]++;
-        }
-      });
-
-      return { staff, counts, total, weekday, holidayCount, roleCounts };
-    });
-  }, [activeHealthMgmtStaff, hmStations, shifts, dateRange, holidays]);
+    const staff=section==="statistics"&&currentCycle
+      ?healthMgmtStaff.filter(s=>s.isActive!==false&&(!s.location||s.location==="全部"||s.location===currentUserLocation||shifts.some(shift=>shift.userId===s.id&&shift.location===currentUserLocation&&shift.date>=currentCycle.startDate&&shift.date<=currentCycle.endDate)))
+      :activeHealthMgmtStaff;
+    return calculateHMCycleStatistics(staff,shifts,hmStations,holidays,dateRange,currentUserLocation,section==="statistics"?currentCycle:undefined,personalCycles);
+  },[section,healthMgmtStaff,activeHealthMgmtStaff,shifts,hmStations,holidays,dateRange,currentUserLocation,currentCycle,personalCycles]);
 
   const getDesignationByStaffId = (staffId: string) => {
     const staff = healthMgmtStaff.find((s) => s.id === staffId);
@@ -1232,6 +1154,8 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
   const updateStaff = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isHmReadOnly) return;
+    const originalStaff=healthMgmtStaff.find(s=>s.id===editingId);
+    if(!originalStaff||!canManageHMStaff(currentUser,originalStaff)){setError("沒有此人員所屬院區的管理權限");return;}
     if (!editingId || !editingStaffName.trim()) {
       setError("請輸入人員名稱");
       return;
@@ -1247,6 +1171,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
         location:
           currentUserLocation === "全部"
             ? editingStaffLocation
+            : originalStaff.location === "全部" ? "全部"
             : currentUserLocation === "北投" || currentUserLocation === "大直"
               ? currentUserLocation
               : editingStaffLocation,
@@ -1270,7 +1195,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
   };
 
   const handleEditStaff = (staff: HealthMgmtStaff) => {
-    if (isHmReadOnly) return;
+    if (isHmReadOnly || !canManageHMStaff(currentUser,staff)) {setError("沒有此人員所屬院區的管理權限；跨院人員資料請由跨院管理者調整");return;}
     setEditingId(staff.id);
     setEditingStaffName(staff.name);
     setEditingStaffAlias(staff.alias || "");
@@ -1286,6 +1211,8 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
   const handleDeleteStaff = async () => {
     if (isHmReadOnly) return;
     if (deleteTargetId) {
+      const target=healthMgmtStaff.find(s=>s.id===deleteTargetId);
+      if(!target||!canManageHMStaff(currentUser,target)){setError("沒有此人員所屬院區的管理權限");setDeleteTargetId(null);return;}
       await db.updateHealthMgmtStaff(deleteTargetId, { isActive: false }); // Deactivate instead of delete
       setDeleteTargetId(null);
     }
@@ -1852,7 +1779,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
       .toUpperCase();
     if (rawTask.includes("主控")) return 1;
     if (rawTask.includes("輔控")) return 2;
-    if (rawTask.includes("問診")) return 3;
+    if (/問診|問[12１２]/.test(rawTask)) return 3;
     if (rawTask.includes("抽1")) return 4;
     if (rawTask.includes("抽2")) return 5;
     if (rawTask.includes("抽血")) return 5.5;
@@ -1888,7 +1815,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
     if (rawTask.includes("耳鼻喉")) return { label: "耳", borderClass: "border-indigo-500", textClass: "text-indigo-700" };
     if (rawTask.includes("超音波") || rawTask.includes("超") || rawTask.includes("女超") || rawTask.includes("乳超") || rawTask.includes("腹超") || rawTask.includes("甲超")) return { label: "超", borderClass: "border-pink-500", textClass: "text-pink-700" };
     if (rawTask.includes("排班")) return { label: "排", borderClass: "border-amber-500", textClass: "text-amber-700" };
-    if (rawTask.includes("問診")) return { label: "問", borderClass: "border-emerald-500", textClass: "text-emerald-700" };
+    if (/問診|問[12１２]/.test(rawTask)) return { label: "問", borderClass: "border-emerald-500", textClass: "text-emerald-700" };
     if (rawTask.includes("基礎")) return { label: "基", borderClass: "border-cyan-500", textClass: "text-cyan-700" };
     if (rawTask.includes("行政") || rawTask.includes("櫃台") || rawTask.includes("客服") || rawTask.includes("報到") || rawTask.includes("出納") || rawTask.includes("發報")) return { label: "行", borderClass: "border-slate-500", textClass: "text-slate-700" };
     if (rawTask.includes("麻評") || rawTask.includes("麻")) return { label: "麻", borderClass: "border-rose-500", textClass: "text-rose-700" };
@@ -2003,7 +1930,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
         <div>
           <h2 className="text-base md:text-xl font-bold text-gray-800 flex items-center gap-1.5 md:gap-2">
             <LayoutDashboard className="text-teal-600" size={24} />
-            健管業務管理
+            {section === "statistics" ? "健管統計管理" : "健管業務管理"}
             {(currentUser.role === UserRole.SYSTEM_ADMIN ||
               currentUser.permissions?.includes(
                 PERMISSIONS.EDIT_HEALTH_MGMT,
@@ -2038,7 +1965,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
 
         <div className="flex bg-gray-100 p-1 rounded-xl w-fit">
           {/* Desktop: text + icon; Mobile: icon + ultra-short label */}
-          <button
+          {section==="schedule"&&(          <button
             onClick={() => setActiveTab("schedule")}
             className={
               "px-2 md:px-4 py-2 rounded-lg text-xs md:text-sm font-bold transition-all flex items-center gap-1 md:gap-2 " +
@@ -2051,8 +1978,8 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
             <Calendar size={15} />
             <span className="hidden md:inline">健管排班總覽</span>
             <span className="md:hidden text-[10px]">總覽</span>
-          </button>
-          <button
+          </button>)}
+          {section==="schedule"&&(          <button
             onClick={() => setActiveTab("today")}
             className={
               "px-2 md:px-4 py-2 rounded-lg text-xs md:text-sm font-bold transition-all flex items-center gap-1 md:gap-2 " +
@@ -2065,8 +1992,8 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
             <LayoutDashboard size={15} />
             <span className="hidden md:inline">今日崗位</span>
             <span className="md:hidden text-[10px]">今日</span>
-          </button>
-          <button
+          </button>)}
+          {section==="statistics"&&(          <button
             onClick={() => setActiveTab("stats")}
             className={
               "px-2 md:px-4 py-2 rounded-lg text-xs md:text-sm font-bold transition-all flex items-center gap-1 md:gap-2 " +
@@ -2079,8 +2006,8 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
             <BarChart3 size={15} />
             <span className="hidden md:inline">健管統計數據</span>
             <span className="md:hidden text-[10px]">統計</span>
-          </button>
-          <button
+          </button>)}
+          {section==="schedule"&&(          <button
             onClick={() => setActiveTab("station")}
             className={
               "px-2 md:px-4 py-2 rounded-lg text-xs md:text-sm font-bold transition-all flex items-center gap-1 md:gap-2 " +
@@ -2093,8 +2020,8 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
             <LayoutList size={15} />
             <span className="hidden md:inline">崗位總覽</span>
             <span className="md:hidden text-[10px]">崗位</span>
-          </button>
-          <button
+          </button>)}
+          {section==="statistics"&&(          <button
             onClick={() => setActiveTab("staff")}
             className={
               "px-2 md:px-4 py-2 rounded-lg text-xs md:text-sm font-bold transition-all flex items-center gap-1 md:gap-2 " +
@@ -2107,8 +2034,10 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
             <Users size={15} />
             <span className="hidden md:inline">健管人員管理</span>
             <span className="md:hidden text-[10px]">人員</span>
-          </button>
-          <button
+          </button>)}
+          {section==="statistics"&&<button type="button" onClick={()=>setActiveTab("cycles")} className={`px-3 py-2 rounded-lg text-sm font-bold ${activeTab==="cycles"?"bg-white text-teal-700 shadow-sm":"text-gray-500"}`}>個人週期</button>}
+
+          {section==="schedule"&&(          <button
             onClick={() => setActiveTab("anesthesia")}
             className={
               "px-2 md:px-4 py-2 rounded-lg text-xs md:text-sm font-bold transition-all flex items-center gap-1 md:gap-2 " +
@@ -2121,12 +2050,16 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
             <Calendar size={15} />
             <span className="hidden md:inline">麻護排班</span>
             <span className="md:hidden text-[10px]">麻護</span>
-          </button>
+          </button>)}
         </div>
       </div>
 
       <div className="flex-1 flex flex-col overflow-hidden w-full pb-2 md:pb-4 custom-scrollbar">
-        {activeTab === "anesthesia" ? (
+        {section==="statistics"&&(currentUserLocation!=="北投"&&currentUserLocation!=="大直")?<div className="p-6 bg-white rounded-xl">請先選擇北投或大直院區，再查看統計與個人週期。</div>:activeTab==="cycles"?<>
+          {personalError&&<p role="alert" className="p-3 bg-red-50 text-red-700">{personalError}</p>}
+          {currentCycle&&!personalReady&&!personalError&&<p className="p-3">個人週期與排班資料讀取中…</p>}
+          <HealthMgmtCycleSettings user={currentUser} campus={currentUserLocation} cycles={hmCycles} cycleId={selectedCycleId} onCycleChange={setSelectedCycleId} staff={healthMgmtStaff} records={personalCycles} ready={personalReady} refresh={()=>reloadPersonalCycles()}/>
+        </>:activeTab==="stats"&&selectedCycleId!=="month"&&!personalReady?<div className="p-6 bg-white rounded-xl"><p role="status">{personalError||"個人週期與排班資料讀取中…"}</p>{personalError&&<button type="button" onClick={()=>void reloadPersonalCycles().catch(()=>{})} className="border rounded px-3 py-2 mt-3">重新讀取</button>}<button type="button" onClick={()=>setActiveTab("cycles")} className="border rounded px-3 py-2 mt-3 ml-2">管理週期</button></div>:activeTab === "anesthesia" ? (
           <div className="flex-1 flex flex-col gap-6 overflow-y-auto pr-2 pb-20 min-h-0">
             {/* Anesthesia Schedule Grid */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 flex flex-col overflow-hidden max-h-[65vh]">
@@ -2715,12 +2648,14 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
         ) : activeTab === "today" ? (
           <div className="flex flex-col relative w-full h-full overflow-hidden pb-10">
             <HMTodayView
+              authUserId={currentUser.authUserId}
               date={todayDate}
               onDateChange={setTodayDate}
               location={currentUserLocation}
               shifts={shifts}
               staff={healthMgmtStaff}
               geneHShifts={geneHShifts}
+              geneHReady={geneHReady}
               canEdit={!isHmReadOnly}
               onSaveShift={async (userId, date, time) => {
                 const existing = shifts.find(
@@ -3990,6 +3925,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200">
+                  <HealthMgmtLoad supportShifts={geneHShifts} supportReady={geneHReady} dates={dateRange} location={currentUserLocation} shifts={shifts} staff={healthMgmtStaff} authUserId={currentUser.authUserId}/>
                   {Object.entries(STATION_CATEGORY_LABELS).map(
                     ([groupId, groupLabel]) => {
                       const groupData = stationViewData[groupId];
@@ -4157,6 +4093,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
               </button>
             </div>
 
+            <div className="flex flex-wrap items-center gap-3 mb-4"><label className="text-sm">統計週期 <select aria-label="健管統計週期" value={selectedCycleId} onChange={e=>setSelectedCycleId(e.target.value)} className="border rounded p-2"><option value="month">月曆月份（不套用個人週期）</option>{filteredHmCycles.filter(c=>c.location===currentUserLocation).map(c=><option key={c.id} value={c.id}>{c.name}（{c.startDate}～{c.endDate}）</option>)}</select></label>{selectedCycleId==="month"&&<input aria-label="健管統計月份" type="month" value={toLocalISOString(currentDate).slice(0,7)} onChange={e=>{if(e.target.value)setCurrentDate(new Date(e.target.value+'-01T12:00:00'));}} className="border rounded p-2"/>}<button type="button" onClick={()=>setActiveTab("cycles")} className="text-teal-700 text-sm underline">設定院區預設與個人週期</button>{selectedCycleId!=="month"&&<button type="button" onClick={()=>void reloadPersonalCycles().catch(()=>{})} className="text-teal-700 text-sm underline">重新讀取週期</button>}</div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -4167,6 +4104,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                     <th className="p-4 text-left font-bold text-slate-500">
                       身份
                     </th>
+                    <th className="p-4 text-left font-bold">統計週期／天數</th><th className="p-4 text-left font-bold">備註</th>
                     <th className="p-4 text-center font-bold text-teal-600">
                       上班
                     </th>
@@ -4207,6 +4145,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                       weekday,
                       holidayCount,
                       roleCounts,
+                      effective,
                     }) => (
                       <tr
                         key={staff.id}
@@ -4218,6 +4157,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                         <td className="p-4 text-slate-500 font-medium">
                           {staff.designation || "-"}
                         </td>
+                        <td className="p-4 text-xs whitespace-nowrap">{effective.startDate}～{effective.endDate}<span className="block text-teal-700">{effective.dates.length} 天・{effective.customized?"個人調整":"預設週期"}</span></td><td className="p-4 text-xs">{effective.memo||"—"}</td>
                         <td className="p-4 text-center">
                           <span className="font-extrabold text-teal-700 bg-teal-50 px-3 py-1.5 rounded-lg border border-teal-100">
                             {total}
@@ -4439,7 +4379,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
                 {/* Beitou Section */}
-                <div className="bg-white rounded-xl border border-teal-100 p-5 shadow-sm">
+                {(currentUserLocation==="全部"||currentUserLocation==="北投")&&(<div className="bg-white rounded-xl border border-teal-100 p-5 shadow-sm">
                   <h4 className="font-bold text-teal-800 mb-4 flex items-center justify-between border-b border-teal-100 pb-3">
                     <div className="flex items-center gap-2">
                       <span className="w-2.5 h-5 bg-teal-500 rounded-sm"></span>{" "}
@@ -4447,7 +4387,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                     </div>
                     <span className="text-xs font-bold text-teal-700 bg-teal-50 px-2.5 py-1 rounded-full border border-teal-100">
                       {
-                        activeHealthMgmtStaff.filter(
+                        managedHealthMgmtStaff.filter(
                           (s) =>
                             s.location === "北投" ||
                             s.location === "全部" ||
@@ -4458,7 +4398,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                     </span>
                   </h4>
                   <div className="space-y-3">
-                    {activeHealthMgmtStaff
+                    {managedHealthMgmtStaff
                       .filter(
                         (s) =>
                           s.location === "北投" ||
@@ -4505,7 +4445,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                           </div>
                         </div>
                       ))}
-                    {activeHealthMgmtStaff.filter(
+                    {managedHealthMgmtStaff.filter(
                       (s) =>
                         s.location === "北投" ||
                         s.location === "全部" ||
@@ -4516,10 +4456,10 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                       </div>
                     )}
                   </div>
-                </div>
+                </div>)}
 
                 {/* Dazhi Section */}
-                <div className="bg-white rounded-xl border border-rose-100 p-5 shadow-sm">
+                {(currentUserLocation==="全部"||currentUserLocation==="大直")&&(<div className="bg-white rounded-xl border border-rose-100 p-5 shadow-sm">
                   <h4 className="font-bold text-rose-800 mb-4 flex items-center justify-between border-b border-rose-100 pb-3">
                     <div className="flex items-center gap-2">
                       <span className="w-2.5 h-5 bg-rose-500 rounded-sm"></span>{" "}
@@ -4527,7 +4467,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                     </div>
                     <span className="text-xs font-bold text-rose-700 bg-rose-50 px-2.5 py-1 rounded-full border border-rose-100">
                       {
-                        activeHealthMgmtStaff.filter(
+                        managedHealthMgmtStaff.filter(
                           (s) => s.location === "大直" || s.location === "全部",
                         ).length
                       }{" "}
@@ -4535,7 +4475,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                     </span>
                   </h4>
                   <div className="space-y-3">
-                    {activeHealthMgmtStaff
+                    {managedHealthMgmtStaff
                       .filter(
                         (s) => s.location === "大直" || s.location === "全部",
                       )
@@ -4584,7 +4524,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                           </div>
                         </div>
                       ))}
-                    {activeHealthMgmtStaff.filter(
+                    {managedHealthMgmtStaff.filter(
                       (s) => s.location === "大直" || s.location === "全部",
                     ).length === 0 && (
                       <div className="text-center text-sm text-rose-600/50 py-6 font-bold bg-rose-50/50 rounded-xl border border-rose-100/50">
@@ -4592,7 +4532,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
                       </div>
                     )}
                   </div>
-                </div>
+                </div>)}
               </div>
             </div>
           </div>
@@ -4604,21 +4544,25 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser }) => {
 
 // --- Today View Component ---
 const HMTodayView: React.FC<{
+  authUserId?: string;
   date: Date;
   onDateChange: (d: Date) => void;
   location: string;
   shifts: HealthMgmtShift[];
   staff: HealthMgmtStaff[];
   geneHShifts?: any[];
+  geneHReady?: boolean;
   canEdit?: boolean;
   onSaveShift?: (userId: string, date: string, time: string) => Promise<void>;
 }> = ({
+  authUserId,
   date,
   onDateChange,
   location,
   shifts,
   staff,
   geneHShifts = [],
+  geneHReady = false,
   canEdit = false,
   onSaveShift,
 }) => {
@@ -4984,6 +4928,7 @@ const HMTodayView: React.FC<{
       </div>
 
       <div className="flex-1 overflow-auto pr-2 pb-8 scrolling-touch">
+        <HealthMgmtLoad supportShifts={geneHShifts} supportReady={geneHReady} dates={[dateStr]} location={location} shifts={shifts} staff={staff} authUserId={authUserId} cards/>
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
           {groups.map((group) => {
             const members = getGroupAssignments(group);

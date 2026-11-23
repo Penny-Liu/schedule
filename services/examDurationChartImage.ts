@@ -24,13 +24,9 @@ export const drawExamDurationChart = (
   };
 
   text(title, 32, 58, 32, '#0f172a', true);
-  text(`統計期間：${period}`, 32, 94, 20, '#64748b');
-  text('圓點：個人耗時 　灰色區間：正常變異範圍 　直線：參考中位數', 32, 126, 18, '#64748b');
-  const reference = rows.find(row => row.referenceMedian !== null)?.referenceMedian ?? 0;
-  const comparable = rows.find(row => row.comparable);
-  const lower = Math.max(0, comparable?.robustLower ?? 0);
-  const upper = comparable?.robustUpper ?? 0;
-  const max = Math.ceil(Math.max(...rows.flatMap(row => [row.value ?? 0, upper]), reference, 1) * 1.12);
+  text(`統計期間：${period}｜依姓名排列，耗時不代表品質`, 32, 94, 20, '#64748b');
+  text('圓點：目前平均耗時　直線：排程標準（彙總依檢查組合加權）', 32, 126, 18, '#64748b');
+  const max = Math.ceil(Math.max(...rows.flatMap(row=>[row.value??0,row.standardMinutes??0]),1)*1.12);
   const left = 170;
   const plotWidth = 790;
   const position = (value: number) => left + value / max * plotWidth;
@@ -53,19 +49,11 @@ export const drawExamDurationChart = (
     text(row.radiographer_name, 32, y + 7, 20, '#334155', true);
     ctx.fillStyle = '#f1f5f9';
     ctx.fillRect(left, y - 10, plotWidth, 12);
-    if (row.comparable) {
-      ctx.fillStyle = '#e2e8f0';
-      ctx.fillRect(position(lower), y - 10, position(upper) - position(lower), 12);
+    if (row.standardMinutes != null) {
+      ctx.strokeStyle='#334155';ctx.lineWidth=2;ctx.beginPath();
+      ctx.moveTo(position(row.standardMinutes),y-18);ctx.lineTo(position(row.standardMinutes),y+10);ctx.stroke();
     }
-    if (reference > 0) {
-      ctx.strokeStyle = '#334155';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(position(reference), y - 18);
-      ctx.lineTo(position(reference), y + 10);
-      ctx.stroke();
-    }
-    if (row.value !== null) {
+    if (row.eligible && row.value !== null) {
       ctx.fillStyle = row.durationZone === 'faster' ? '#059669' : row.durationZone === 'slower' ? '#d97706' : '#0284c7';
       ctx.beginPath();
       ctx.arc(position(row.value), y - 4, 7, 0, Math.PI * 2);
@@ -76,7 +64,7 @@ export const drawExamDurationChart = (
       ctx.fill();
       text(`${row.value.toFixed(1)}分`, position(row.value) + 12, y + 2, 17, '#334155', true);
     }
-    const zone = row.comparable ? (row.durationZone === 'faster' ? '偏快' : row.durationZone === 'slower' ? '偏慢' : '正常') : '樣本不足';
+    const zone = row.eligible ? (row.comparable ? (row.durationZone === 'faster' ? '標準時間內' : row.durationZone === 'slower' ? '超出標準' : '標準時間內') : '持續觀察') : row.reference;
     ctx.textAlign = 'right';
     text(zone, width - 32, y + 3, 18, '#64748b');
     ctx.textAlign = 'left';

@@ -1,0 +1,33 @@
+import React,{useEffect,useState} from 'react';
+import type {HealthMgmtStaff,RosterCycle,User} from '../../types';
+import {canEditHMCampus,effectiveHMCycle,hmCampusCycles,type HMCampus,type HMPersonalCycle} from '../../services/healthMgmtPersonalCycles';
+import {saveHMPersonalCycle,saveHMDefaultCycle} from '../../services/healthMgmtPersonalCycleData';
+import {db} from '../../services/store';
+import {generateUUID} from '../../services/utils';
+function PersonalRow({staff,cycle,campus,records,user,refresh}:{staff:HealthMgmtStaff;cycle:RosterCycle;campus:HMCampus;records:HMPersonalCycle[];user:User;refresh:()=>Promise<void>}){
+ const effective=effectiveHMCycle(staff,cycle,campus,records);
+ const [start,setStart]=useState(effective.startDate),[end,setEnd]=useState(effective.endDate),[memo,setMemo]=useState(effective.memo),[busy,setBusy]=useState(false),[message,setMessage]=useState('');
+ useEffect(()=>{setStart(effective.startDate);setEnd(effective.endDate);setMemo(effective.memo);setMessage('');},[staff.id,cycle.id,effective.startDate,effective.endDate,effective.memo]);
+ const edit=canEditHMCampus(user,campus);
+ const save=async(reset=false)=>{setBusy(true);setMessage('');try{await saveHMPersonalCycle(user,staff,cycle,campus,reset?null:{startDate:start,endDate:end,memo});await refresh();setMessage(reset?'已恢復院區預設':'已儲存');}catch(e){setMessage((e as Error).message);}finally{setBusy(false);}};
+ return <tr className="border-b align-top"><td className="p-3 font-bold whitespace-nowrap">{staff.name}<span className="block text-xs font-normal text-teal-700">{effective.customized?'個人調整':'院區預設'}</span></td><td className="p-3"><input aria-label={`${staff.name}週期開始`} type="date" value={start} disabled={!edit||busy} onChange={e=>setStart(e.target.value)} className="border rounded p-2 text-xs"/></td><td className="p-3"><input aria-label={`${staff.name}週期結束`} type="date" value={end} disabled={!edit||busy} onChange={e=>setEnd(e.target.value)} className="border rounded p-2 text-xs"/></td><td className="p-3"><input aria-label={`${staff.name}週期備註`} value={memo} maxLength={500} disabled={!edit||busy} onChange={e=>setMemo(e.target.value)} className="border rounded p-2 text-xs min-w-40" placeholder="備註"/></td><td className="p-3 min-w-40">{edit&&<div className="flex gap-2"><button type="button" disabled={busy} onClick={()=>save()} className="bg-teal-700 text-white rounded px-3 py-2 text-xs disabled:opacity-50">儲存</button><button type="button" disabled={busy||!effective.customized} onClick={()=>save(true)} className="border rounded px-2 py-2 text-xs disabled:opacity-50">恢復預設</button></div>}{message&&<p role="status" className="text-xs mt-2 text-slate-600">{message}</p>}</td></tr>;
+}
+export default function HealthMgmtCycleSettings({user,campus,cycles,cycleId,onCycleChange,staff,records,ready,refresh}:{user:User;campus:string;cycles:RosterCycle[];cycleId:string;onCycleChange:(id:string)=>void;staff:HealthMgmtStaff[];records:HMPersonalCycle[];ready:boolean;refresh:()=>Promise<void>}){
+ const validCampus=campus==='北投'||campus==='大直';
+ const choices=validCampus?hmCampusCycles(cycles,campus):[];
+ const cycle=choices.find(c=>c.id===cycleId);
+ const [name,setName]=useState(''),[start,setStart]=useState(''),[end,setEnd]=useState(''),[isNew,setIsNew]=useState(false),[busy,setBusy]=useState(false),[message,setMessage]=useState('');
+ useEffect(()=>{setName(cycle?.name||'');setStart(cycle?.startDate||'');setEnd(cycle?.endDate||'');setIsNew(false);setMessage('');},[cycle?.id,cycle?.name,cycle?.startDate,cycle?.endDate,campus]);
+ if(!validCampus)return <div className="p-6 bg-white rounded-xl">請先選擇北投或大直院區，再設定預設與個人週期。</div>;
+ const edit=canEditHMCampus(user,campus);
+ const saveDefault=async()=>{setBusy(true);setMessage('');try{
+  const value:RosterCycle={...(isNew?{}:cycle),id:isNew?generateUUID():cycle?.id||generateUUID(),name:name.trim(),startDate:start,endDate:end,location:campus};
+  await saveHMDefaultCycle(user,value,campus);const result=await db.refreshSettings();if(result.error)throw new Error(result.error.message);onCycleChange(value.id);setIsNew(false);setMessage('院區預設週期已儲存');
+ }catch(e){setMessage((e as Error).message);}finally{setBusy(false);}};
+ return <div className="bg-white rounded-xl border p-4 flex-1 overflow-y-auto space-y-4">
+  <div className="flex flex-wrap items-center gap-3"><h3 className="font-bold text-lg">{campus}・預設與個人週期</h3><select aria-label="健管週期" value={cycleId} onChange={e=>onCycleChange(e.target.value)} className="border rounded p-2 text-sm"><option value="month">請選擇院區週期</option>{choices.map(c=><option key={c.id} value={c.id}>{c.name}（{c.startDate}～{c.endDate}）</option>)}</select>{edit&&<button type="button" onClick={()=>{setIsNew(true);setName('');setStart('');setEnd('');setMessage('');}} className="border rounded px-3 py-2 text-sm">新增院區預設週期</button>}</div>
+  <p className="text-sm text-slate-600">沒有個人調整時，統計沿用目前院區預設；個人週期只調整統計日期，不改動已排好的班表。跨院區資料各自保存。</p>
+  {(cycle||isNew)&&<details open={isNew} className="border rounded-lg p-3"><summary className="font-bold text-sm cursor-pointer">院區預設週期 {cycle&&!isNew?`：${cycle.startDate}～${cycle.endDate}`:''}</summary><fieldset disabled={!edit||busy||(!isNew&&cycle?.isConfirmed)} className="grid grid-cols-1 md:grid-cols-4 gap-3 mt-3"><label className="text-xs">名稱<input value={name} onChange={e=>setName(e.target.value)} maxLength={100} className="border rounded p-2 block w-full"/></label><label className="text-xs">開始<input type="date" value={start} onChange={e=>setStart(e.target.value)} className="border rounded p-2 block w-full"/></label><label className="text-xs">結束<input type="date" value={end} onChange={e=>setEnd(e.target.value)} className="border rounded p-2 block w-full"/></label>{edit&&<button type="button" onClick={saveDefault} className="bg-teal-700 text-white rounded p-2 text-sm">儲存院區預設</button>}</fieldset>{cycle?.isConfirmed&&!isNew&&<p className="text-xs text-amber-800 mt-2">週期已鎖定，請先由排班設定解除鎖定再調整預設日期。</p>}{message&&<p role="status" className="text-sm mt-2">{message}</p>}</details>}
+  {cycle&&ready&&<div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="bg-slate-50"><th className="p-3 text-left">人員</th><th className="p-3 text-left">週期開始</th><th className="p-3 text-left">週期結束</th><th className="p-3 text-left">備註</th><th className="p-3 text-left">操作</th></tr></thead><tbody>{staff.filter(s=>s.isActive!==false&&(!s.location||s.location==='全部'||s.location===campus)).map(s=><PersonalRow key={s.id} staff={s} cycle={cycle} campus={campus} records={records} user={user} refresh={refresh}/>)}</tbody></table></div>}
+ </div>;
+}

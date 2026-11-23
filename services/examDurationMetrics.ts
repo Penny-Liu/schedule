@@ -23,7 +23,10 @@ export function summarizeExamDurations(rows: ExamDurationRow[]) {
   const averageMinutes = n ? values.reduce((sum, value) => sum + value.seconds * value.n, 0) / n / 60 : null;
   const medianMinutes = n ? (at(Math.floor((n - 1) / 2)) + at(Math.floor(n / 2))) / 2 / 60 : null;
   const validRate = counts.total_count ? counts.valid_count / counts.total_count : 0;
-  return { ...counts, averageMinutes, medianMinutes, validRate, reliable: counts.valid_count >= 10 && validRate >= 0.8 };
+  const careRows=rows.filter(row=>row.valid_count>0);
+  const careNotesComplete=careRows.length>0&&careRows.every(row=>row.claustrophobia_count!=null);
+  const claustrophobiaCount=careRows.some(row=>row.claustrophobia_count!=null)?careRows.reduce((sum,row)=>sum+(row.claustrophobia_count||0),0):null;
+  return { ...counts, careNotesComplete, claustrophobiaCount, averageMinutes, medianMinutes, validRate, reliable: counts.valid_count >= 10 && validRate >= 0.8 };
 }
 
 export function groupExamDurations(rows: ExamDurationRow[]) {

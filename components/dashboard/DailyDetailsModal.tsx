@@ -36,10 +36,10 @@ interface DailyDetailsModalProps {
 
 const FIELDS = [
   { key: "mr", label: "MR醫令數(mr)" },
-  { key: "mrLargeMale", label: "mr大男" },
-  { key: "mrLargeFemale", label: "mr大女" },
-  { key: "mrMedium", label: "mr中" },
-  { key: "mrSmall", label: "mr小" },
+  { key: "mrLargeMale", label: "MR大男" },
+  { key: "mrLargeFemale", label: "MR大女" },
+  { key: "mrMedium", label: "MR中" },
+  { key: "mrSmall", label: "MR小" },
   { key: "mrPostProcessing", label: "MR後處理" },
   { key: "us", label: "US" },
   { key: "usBreast", label: "乳超" },
