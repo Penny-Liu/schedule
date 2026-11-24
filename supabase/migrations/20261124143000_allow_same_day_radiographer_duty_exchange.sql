@@ -1,5 +1,8 @@
 alter table public.leaves
- drop constraint leaves_duty_exchange_fields_check;
+ add column if not exists "targetRoleToSwap" text;
+
+alter table public.leaves
+ drop constraint if exists leaves_duty_exchange_fields_check;
 
 alter table public.leaves
  add constraint leaves_duty_exchange_fields_check
