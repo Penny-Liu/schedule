@@ -2477,6 +2477,12 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
   const getPendingRequest = (userId: string, dateStr: string) => {
     return pendingLeaves.find((l) => {
       const isDateInRange = dateStr >= l.startDate && dateStr <= l.endDate;
+      if (l.type === LeaveType.DUTY_EXCHANGE) {
+        return (
+          (l.userId === userId || l.targetUserId === userId) &&
+          (dateStr === l.startDate || dateStr === l.returnDate)
+        );
+      }
       if (!isDateInRange) return false;
       if (l.type === LeaveType.DUTY_SWAP) return l.userId === userId;
       if (l.type === LeaveType.SWAP_SHIFT)
@@ -3213,6 +3219,10 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
       case LeaveType.DUTY_SWAP:
         color = "bg-indigo-500";
         label = "任";
+        break;
+      case LeaveType.DUTY_EXCHANGE:
+        color = "bg-purple-500";
+        label = "互";
         break;
       case LeaveType.LONG_LEAVE:
         color = "bg-orange-500";
@@ -6324,7 +6334,8 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                               date === l.returnDate;
 
                                             if (
-                                              l.type === LeaveType.SWAP_SHIFT
+                                              l.type === LeaveType.SWAP_SHIFT ||
+                                              l.type === LeaveType.DUTY_EXCHANGE
                                             ) {
                                               return (
                                                 inDateRange || isReturnDate
@@ -6346,6 +6357,9 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                         const isSwapShift =
                                           activeLeave?.type ===
                                           LeaveType.SWAP_SHIFT;
+                                        const isDutyExchange =
+                                          activeLeave?.type ===
+                                          LeaveType.DUTY_EXCHANGE;
                                         const isPending =
                                           activeLeave?.status ===
                                           LeaveStatus.PENDING;
@@ -6436,6 +6450,13 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
                                                     className={`text-[8px] ${isPending ? "bg-amber-300" : "bg-amber-500"} text-white px-0.5 rounded leading-none scale-90`}
                                                   >
                                                     換
+                                                  </span>
+                                                )}
+                                                {isDutyExchange && (
+                                                  <span
+                                                    className={`text-[8px] ${isPending ? "bg-purple-300" : "bg-purple-500"} text-white px-0.5 rounded leading-none scale-90`}
+                                                  >
+                                                    互
                                                   </span>
                                                 )}
                                               </div>
