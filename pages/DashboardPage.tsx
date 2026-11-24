@@ -3201,6 +3201,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
   };
 
   const getLeaveBadge = (type: LeaveType, priority?: number | null) => {
+    const typeLabel = type === LeaveType.DUTY_SWAP ? "任務轉交" : type;
     let color = "bg-gray-400";
     let label = "申";
     switch (type) {
@@ -3218,7 +3219,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
         break;
       case LeaveType.DUTY_SWAP:
         color = "bg-indigo-500";
-        label = "任";
+        label = "轉";
         break;
       case LeaveType.DUTY_EXCHANGE:
         color = "bg-purple-500";
@@ -3232,7 +3233,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ currentUser }) => {
     return (
       <div
         className={`absolute top-0 right-0 min-w-3 px-0.5 h-3 ${color} rounded-bl text-[8px] flex items-center justify-center text-white font-bold z-10 leading-none`}
-        title={`${type} 申請中${type === LeaveType.PRE_SCHEDULED && priority ? `・優先休第 ${priority} 順位` : ""}`}
+        title={`${typeLabel} 申請中${type === LeaveType.PRE_SCHEDULED && priority ? `・優先休第 ${priority} 順位` : ""}`}
       >
         {label}
       </div>

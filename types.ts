@@ -254,7 +254,7 @@ export enum LeaveType {
   LONG_LEAVE = "長假",
   SWAP_SHIFT = "換假", // 雙向換假 (User A Work D1/Off D2 <-> User B Off D1/Work D2)
   ASK_LEAVE = "要假", // 單向要假 (User A Work D1 -> User B Off D1)
-  DUTY_SWAP = "任務換班", // 特殊任務換班 (開機/晚班)
+  DUTY_SWAP = "任務換班", // Persisted category; display it as "任務轉交".
   DUTY_EXCHANGE = "任務互換",
 }
 
