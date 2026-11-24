@@ -1,5 +1,9 @@
 import { validatePreLeavePriority } from "./preLeavePriority";
 import {
+  buildDutyTaskExchangeUpdates,
+  type DutyTaskExchangeInput,
+} from "./dutyTaskExchange";
+import {
   User,
   Shift,
   HealthMgmtShift,
@@ -2230,6 +2234,7 @@ class Store {
       approverId: "approver_id",
       processedAt: "processed_at",
       roleToSwap: "role_to_swap",
+      targetRoleToSwap: "target_role_to_swap",
       targetApproval: "target_approval",
       permissions: "permissions",
       workTime: "work_time",
@@ -2310,6 +2315,7 @@ class Store {
       approver_id: "approverId",
       processed_at: "processedAt",
       role_to_swap: "roleToSwap",
+      target_role_to_swap: "targetRoleToSwap",
       target_approval: "targetApproval",
       permissions: "permissions",
       user_id: "userId",
@@ -3033,12 +3039,12 @@ class Store {
   }
 
   async addLeave(leave: LeaveRequest) {
-    this.leaves.push(leave);
     const { error } = await supabase.from("leaves").insert(leave);
     if (error) {
       console.error("Failed to insert leave:", error);
-      // Optional: Rollback local state if needed, but for now just log
+      throw error;
     }
+    this.leaves.push(leave);
     this.notifyListeners();
   }
 
@@ -3063,14 +3069,19 @@ class Store {
       approvalStatus === "REJECTED" ? LeaveStatus.REJECTED : leave.status;
 
     const updates = { targetApproval: approvalStatus, status: newStatus };
-    this.leaves[leaveIndex] = { ...leave, ...updates };
 
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from("leaves")
       .update(updates)
-      .eq("id", id);
-    if (error) console.error("Failed to update leave target approval:", error);
+      .eq("id", id)
+      .eq("status", LeaveStatus.PENDING)
+      .eq("targetApproval", "PENDING")
+      .select("id")
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) throw new Error("此申請已回覆或處理，請重新整理後確認。");
 
+    this.leaves[leaveIndex] = { ...leave, ...updates };
     this.notifyListeners();
   }
 
@@ -3095,6 +3106,16 @@ class Store {
     const processedAt = new Date().toISOString();
     const updatedLeave = { ...leave, status, approverId, processedAt };
 
+    if (
+      status === LeaveStatus.APPROVED &&
+      leave.type === LeaveType.DUTY_EXCHANGE
+    ) {
+      await this.approveDutyTaskExchange(updatedLeave);
+      this.leaves[leaveIndex] = updatedLeave;
+      this.notifyListeners();
+      return;
+    }
+
     // Apply every schedule update before marking the request approved. This
     // prevents a request from appearing completed when only part of its swap
     // was persisted.
@@ -3110,6 +3131,68 @@ class Store {
 
     this.leaves[leaveIndex] = updatedLeave;
     this.notifyListeners();
+  }
+
+  private async approveDutyTaskExchange(leave: LeaveRequest) {
+    const requestor = this.users.find((user) => user.id === leave.userId);
+    const target = leave.targetUserId
+      ? this.users.find((user) => user.id === leave.targetUserId)
+      : undefined;
+    if (!requestor || !target || !leave.returnDate) {
+      throw new Error("任務互換資料不完整，請重新整理後確認申請內容。");
+    }
+
+    const shifts = this.getShifts(
+      [leave.startDate, leave.returnDate].sort()[0],
+      [leave.startDate, leave.returnDate].sort()[1],
+    );
+    const exchangeInput: DutyTaskExchangeInput = {
+      requestor,
+      target,
+      startDate: leave.startDate,
+      returnDate: leave.returnDate,
+      roleToSwap: leave.roleToSwap || "",
+      targetRoleToSwap: leave.targetRoleToSwap || "",
+      requestorAtStart: shifts.find(
+        (shift) => shift.userId === requestor.id && shift.date === leave.startDate,
+      ),
+      targetAtStart: shifts.find(
+        (shift) => shift.userId === target.id && shift.date === leave.startDate,
+      ),
+      requestorAtReturn: shifts.find(
+        (shift) => shift.userId === requestor.id && shift.date === leave.returnDate,
+      ),
+      targetAtReturn: shifts.find(
+        (shift) => shift.userId === target.id && shift.date === leave.returnDate,
+      ),
+    };
+    const updates = buildDutyTaskExchangeUpdates(exchangeInput);
+
+    const { error } = await supabase.rpc("approve_radiographer_duty_exchange", {
+      p_leave_id: leave.id,
+    });
+    if (error) {
+      if (error.code === "PGRST202" || error.code === "42883") {
+        throw new Error("任務互換資料庫更新尚未套用，請先執行最新 Supabase migration。");
+      }
+      throw error;
+    }
+
+    const updatesByShift = new Map(
+      updates.map((shift) => [`${shift.userId}-${shift.date}`, shift]),
+    );
+    this.shifts = this.shifts.map(
+      (shift) => updatesByShift.get(`${shift.userId}-${shift.date}`) || shift,
+    );
+    this.logOperation("update", "radiographer", {
+      operation: "特殊任務互換核准",
+      leaveId: leave.id,
+      requestorId: leave.userId,
+      targetId: leave.targetUserId,
+      startDate: leave.startDate,
+      returnDate: leave.returnDate,
+      note: `任務互換核准：${requestor.name} 與 ${target.name} 交換 ${leave.startDate} 的「${leave.roleToSwap}」及 ${leave.returnDate} 的「${leave.targetRoleToSwap}」`,
+    });
   }
 
   // Helper to apply approved leave to shifts

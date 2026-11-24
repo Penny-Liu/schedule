@@ -255,6 +255,7 @@ export enum LeaveType {
   SWAP_SHIFT = "換假", // 雙向換假 (User A Work D1/Off D2 <-> User B Off D1/Work D2)
   ASK_LEAVE = "要假", // 單向要假 (User A Work D1 -> User B Off D1)
   DUTY_SWAP = "任務換班", // 特殊任務換班 (開機/晚班)
+  DUTY_EXCHANGE = "任務互換",
 }
 
 export enum LeaveStatus {
@@ -280,6 +281,7 @@ export interface LeaveRequest {
 
   // New fields for Duty Swap specificity & 2-step approval
   roleToSwap?: string; // E.g., '開機' or '晚班'
+  targetRoleToSwap?: string;
   targetApproval?: "PENDING" | "AGREED" | "REJECTED"; // Status of the target user's agreement
 }
 
