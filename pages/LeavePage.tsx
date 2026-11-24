@@ -14,6 +14,10 @@ import { generateUUID } from "../services/utils";
 import { getLongLeaveApplicationMinDate, getLongLeaveApplicationError, isLongLeaveBeyondReviewWindow } from "../services/longLeavePolicy";
 import { isEligibleLeaveSwapCandidate } from "../services/leaveSwapCandidates";
 import {
+  DUTY_EXCHANGE_ROLES,
+  getDutyTaskExchangeError,
+} from "../services/dutyTaskExchange";
+import {
   Calendar,
   Clock,
   User as UserIcon,
@@ -249,11 +253,14 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
     reason: "",
     targetUserId: "",
     roleToSwap: "", // For specific role selection
+    targetRoleToSwap: "",
   });
 
   const [validationMsg, setValidationMsg] = useState("");
   const [swapCandidates, setSwapCandidates] = useState<User[]>([]);
   const [mySwappableRoles, setMySwappableRoles] = useState<string[]>([]);
+  const [targetSwappableRoles, setTargetSwappableRoles] = useState<string[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Reset form when modal opens
   useEffect(() => {
@@ -266,10 +273,12 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
         reason: "",
         targetUserId: "",
         roleToSwap: "",
+        targetRoleToSwap: "",
       });
       setValidationMsg("");
       setSwapCandidates([]);
       setMySwappableRoles([]);
+      setTargetSwappableRoles([]);
     }
   }, [isModalOpen]);
 
@@ -278,6 +287,7 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
     setValidationMsg("");
     setSwapCandidates([]);
     setMySwappableRoles([]);
+    setTargetSwappableRoles([]);
 
     if (!formData.startDate) return;
 
@@ -491,6 +501,130 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
           setSwapCandidates(validCandidates);
         }
       }
+    } else if (formData.type === LeaveType.DUTY_EXCHANGE) {
+      if (!formData.returnDate) return;
+      if (formData.startDate === formData.returnDate) {
+        setValidationMsg("任務互換的兩個日期不可相同。");
+        return;
+      }
+
+      const startDate = [formData.startDate, formData.returnDate].sort()[0];
+      const endDate = [formData.startDate, formData.returnDate].sort()[1];
+      const shifts = db.getShifts(startDate, endDate);
+      const requestorAtStart = shifts.find(
+        (shift) =>
+          shift.userId === currentUser.id && shift.date === formData.startDate,
+      );
+      const requestorAtReturn = shifts.find(
+        (shift) =>
+          shift.userId === currentUser.id && shift.date === formData.returnDate,
+      );
+      const myRoles = (requestorAtStart?.specialRoles || []).filter((role) =>
+        DUTY_EXCHANGE_ROLES.includes(
+          role as (typeof DUTY_EXCHANGE_ROLES)[number],
+        ),
+      );
+
+      if (myRoles.length === 0) {
+        setValidationMsg(
+          `您在 ${formData.startDate} 沒有可互換的特殊任務（開機、晚班、輔班或排班）。`,
+        );
+        return;
+      }
+      if (!requestorAtReturn) {
+        setValidationMsg(`您在 ${formData.returnDate} 沒有排班資料。`);
+        return;
+      }
+      setMySwappableRoles(myRoles);
+
+      const roleToCheck = formData.roleToSwap || (myRoles.length === 1 ? myRoles[0] : "");
+      if (!roleToCheck) {
+        setValidationMsg("請先選擇您要互換的任務。");
+        return;
+      }
+      if (myRoles.length === 1 && !formData.roleToSwap) {
+        setFormData((previous) => ({ ...previous, roleToSwap: myRoles[0] }));
+      }
+      const workingBothDates = db
+        .getUsersWorkingOnDate(formData.startDate)
+        .filter((user) =>
+          db
+            .getUsersWorkingOnDate(formData.returnDate)
+            .some((returnUser) => returnUser.id === user.id),
+        )
+        .filter((user) =>
+          isEligibleLeaveSwapCandidate(user, currentUser.id, [
+            formData.startDate,
+            formData.returnDate,
+          ]),
+        );
+      const getRolesCandidateCanGive = (candidate: User) => {
+        const targetAtStart = shifts.find(
+          (shift) =>
+            shift.userId === candidate.id && shift.date === formData.startDate,
+        );
+        const targetAtReturn = shifts.find(
+          (shift) =>
+            shift.userId === candidate.id && shift.date === formData.returnDate,
+        );
+        return (targetAtReturn?.specialRoles || []).filter(
+          (role) =>
+            DUTY_EXCHANGE_ROLES.includes(
+              role as (typeof DUTY_EXCHANGE_ROLES)[number],
+            ) &&
+            candidate.capabilities?.includes(roleToCheck) &&
+            currentUser.capabilities?.includes(role) &&
+            !getDutyTaskExchangeError({
+              requestor: currentUser,
+              target: candidate,
+              startDate: formData.startDate,
+              returnDate: formData.returnDate,
+              roleToSwap: roleToCheck,
+              targetRoleToSwap: role,
+              requestorAtStart,
+              targetAtStart,
+              requestorAtReturn,
+              targetAtReturn,
+            }),
+        );
+      };
+      const potentialCandidates = workingBothDates.filter(
+        (candidate) => getRolesCandidateCanGive(candidate).length > 0,
+      );
+
+      if (!formData.targetUserId) {
+        setSwapCandidates(potentialCandidates);
+        if (potentialCandidates.length === 0) {
+          setValidationMsg("找不到雙方均上班、具備資格且任務可互換的同仁。");
+        }
+        return;
+      }
+
+      const selectedTarget = db
+        .getUsers()
+        .find((user) => user.id === formData.targetUserId);
+      if (!selectedTarget) return;
+      const targetRoles = getRolesCandidateCanGive(selectedTarget);
+      setTargetSwappableRoles(targetRoles);
+      const candidates = formData.targetRoleToSwap
+        ? potentialCandidates.filter((candidate) =>
+            getRolesCandidateCanGive(candidate).includes(
+              formData.targetRoleToSwap,
+            ),
+          )
+        : potentialCandidates;
+      setSwapCandidates(candidates);
+
+      if (targetRoles.length === 0) {
+        setValidationMsg(
+          `對方在 ${formData.returnDate} 沒有您具備資格且可互換的特殊任務。`,
+        );
+      } else if (
+        formData.targetRoleToSwap &&
+        !targetRoles.includes(formData.targetRoleToSwap)
+      ) {
+        setValidationMsg("對方目前沒有這項可互換的任務，請重新選擇。");
+      }
     } else if (formData.type === LeaveType.LONG_LEAVE) {
       setValidationMsg(getLongLeaveApplicationError(formData.startDate, db.getCycles()) || "");
     }
@@ -499,18 +633,25 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
     formData.returnDate,
     formData.type,
     formData.roleToSwap,
+    formData.targetRoleToSwap,
+    formData.targetUserId,
     currentUser.id,
+    currentUser.capabilities,
   ]);
 
   useEffect(() => {
     if (formData.targetUserId && !swapCandidates.some((user) => user.id === formData.targetUserId)) {
-      setFormData((previous) => ({ ...previous, targetUserId: "" }));
+      setFormData((previous) => ({
+        ...previous,
+        targetUserId: "",
+        targetRoleToSwap: "",
+      }));
     }
   }, [swapCandidates, formData.targetUserId]);
 
-  const handleCreateLeave = (e: React.FormEvent) => {
+  const handleCreateLeave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (validationMsg) return;
+    if (validationMsg || isSubmitting) return;
 
     // Date Logic Fixes
     let finalEndDate = formData.endDate;
@@ -552,6 +693,7 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
     if (
       formData.type === LeaveType.SWAP_SHIFT ||
       formData.type === LeaveType.DUTY_SWAP ||
+      formData.type === LeaveType.DUTY_EXCHANGE ||
       formData.type === LeaveType.ASK_LEAVE
     ) {
       if (!formData.targetUserId) {
@@ -562,6 +704,15 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
         setValidationMsg("請選擇要交換的任務類型。");
         return;
       }
+      if (
+        formData.type === LeaveType.DUTY_EXCHANGE &&
+        (!formData.returnDate ||
+          !formData.roleToSwap ||
+          !formData.targetRoleToSwap)
+      ) {
+        setValidationMsg("請選擇兩個任務日期及雙方要互換的任務。");
+        return;
+      }
       if (formData.type === LeaveType.SWAP_SHIFT && !formData.returnDate) {
         setValidationMsg("雙向換假必須選擇「換假日期」。");
         return;
@@ -569,12 +720,48 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
       const target = db.getUsers().find((user) => user.id === formData.targetUserId);
       const swapDates = formData.type === LeaveType.SWAP_SHIFT
         ? [formData.startDate, formData.returnDate]
+        : formData.type === LeaveType.DUTY_EXCHANGE
+          ? [formData.startDate, formData.returnDate]
         : [formData.startDate];
       if (!target || !isEligibleLeaveSwapCandidate(target, currentUser.id, swapDates) ||
           !swapCandidates.some((user) => user.id === target.id)) {
         setValidationMsg("該對象已不符合換班資格，請重新選擇在職人員。");
         setFormData((previous) => ({ ...previous, targetUserId: "" }));
         return;
+      }
+      if (formData.type === LeaveType.DUTY_EXCHANGE) {
+        const exchangeDates = [formData.startDate, formData.returnDate].sort();
+        const shifts = db.getShifts(exchangeDates[0], exchangeDates[1]);
+        const exchangeError = getDutyTaskExchangeError({
+          requestor: currentUser,
+          target,
+          startDate: formData.startDate,
+          returnDate: formData.returnDate,
+          roleToSwap: formData.roleToSwap,
+          targetRoleToSwap: formData.targetRoleToSwap,
+          requestorAtStart: shifts.find(
+            (shift) =>
+              shift.userId === currentUser.id &&
+              shift.date === formData.startDate,
+          ),
+          targetAtStart: shifts.find(
+            (shift) =>
+              shift.userId === target.id && shift.date === formData.startDate,
+          ),
+          requestorAtReturn: shifts.find(
+            (shift) =>
+              shift.userId === currentUser.id &&
+              shift.date === formData.returnDate,
+          ),
+          targetAtReturn: shifts.find(
+            (shift) =>
+              shift.userId === target.id && shift.date === formData.returnDate,
+          ),
+        });
+        if (exchangeError) {
+          setValidationMsg(exchangeError);
+          return;
+        }
       }
     }
 
@@ -584,7 +771,8 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
       startDate: formData.startDate,
       endDate: finalEndDate,
       returnDate:
-        formData.type === LeaveType.SWAP_SHIFT
+        formData.type === LeaveType.SWAP_SHIFT ||
+        formData.type === LeaveType.DUTY_EXCHANGE
           ? formData.returnDate
           : undefined,
       type: formData.type,
@@ -592,18 +780,33 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
       reason: formData.reason,
       targetUserId: formData.targetUserId || undefined,
       roleToSwap: formData.roleToSwap || undefined,
+      targetRoleToSwap:
+        formData.type === LeaveType.DUTY_EXCHANGE
+          ? formData.targetRoleToSwap
+          : undefined,
       targetApproval:
         formData.type === LeaveType.SWAP_SHIFT ||
         formData.type === LeaveType.DUTY_SWAP ||
+        formData.type === LeaveType.DUTY_EXCHANGE ||
         formData.type === LeaveType.ASK_LEAVE
           ? "PENDING"
           : undefined,
       createdAt: new Date().toISOString(),
     };
 
-    db.addLeave(newLeave);
-    setLeaves([...db.getLeaves()]); // Fix: Force new array for re-render
-    setIsModalOpen(false);
+    setIsSubmitting(true);
+    try {
+      await db.addLeave(newLeave);
+      setLeaves([...db.getLeaves()]);
+      setIsModalOpen(false);
+    } catch (error) {
+      console.error("Failed to create leave request:", error);
+      setValidationMsg(
+        error instanceof Error ? `申請送出失敗：${error.message}` : "申請送出失敗，請稍後再試。",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Helper: Analyze Conflict Resolution (Day-by-Day)
@@ -652,6 +855,47 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
     if (status === LeaveStatus.APPROVED) {
       const leave = leaves.find((l) => l.id === id);
       if (leave) {
+        if (leave.type === LeaveType.DUTY_EXCHANGE) {
+          const requestor = users.find((user) => user.id === leave.userId);
+          const target = leave.targetUserId
+            ? users.find((user) => user.id === leave.targetUserId)
+            : undefined;
+          if (!requestor || !target || !leave.returnDate) {
+            window.alert("任務互換資料不完整，無法核准。");
+            return;
+          }
+          const exchangeDates = [leave.startDate, leave.returnDate].sort();
+          const shifts = db.getShifts(exchangeDates[0], exchangeDates[1]);
+          const exchangeError = getDutyTaskExchangeError({
+            requestor,
+            target,
+            startDate: leave.startDate,
+            returnDate: leave.returnDate,
+            roleToSwap: leave.roleToSwap || "",
+            targetRoleToSwap: leave.targetRoleToSwap || "",
+            requestorAtStart: shifts.find(
+              (shift) =>
+                shift.userId === leave.userId && shift.date === leave.startDate,
+            ),
+            targetAtStart: shifts.find(
+              (shift) =>
+                shift.userId === target.id && shift.date === leave.startDate,
+            ),
+            requestorAtReturn: shifts.find(
+              (shift) =>
+                shift.userId === leave.userId && shift.date === leave.returnDate,
+            ),
+            targetAtReturn: shifts.find(
+              (shift) =>
+                shift.userId === target.id && shift.date === leave.returnDate,
+            ),
+          });
+          if (exchangeError) {
+            window.alert(`無法核准任務互換：${exchangeError}`);
+            return;
+          }
+        }
+
         // --- Conflict Detection for Long Leaves ---
         if (leave.type === LeaveType.LONG_LEAVE) {
           const start = new Date(leave.startDate);
@@ -736,7 +980,10 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
             );
             if (blockingRoles && blockingRoles.length > 0) {
               // Exception: Duty Swap is meant to swap these roles, so don't block.
-              if (leave.type !== LeaveType.DUTY_SWAP) {
+              if (
+                leave.type !== LeaveType.DUTY_SWAP &&
+                leave.type !== LeaveType.DUTY_EXCHANGE
+              ) {
                 window.alert(
                   `無法核准：該員在 ${dateStr} 仍有特殊任務 (${blockingRoles.join(", ")})。請先要求該員完成換班/交接任務，確認無任務後再行核准。`,
                 );
@@ -768,20 +1015,33 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
       }
     } catch (error) {
       console.error("Failed to update leave status:", error);
-      window.alert("核准失敗，排班尚未完整更新，請稍後再試。");
+      window.alert(
+        error instanceof Error
+          ? `核准失敗：${error.message}`
+          : "核准失敗，排班尚未完整更新，請稍後再試。",
+      );
     }
   };
 
-  const handleTargetApproval = (
+  const handleTargetApproval = async (
     id: string,
     approvalStatus: "AGREED" | "REJECTED",
   ) => {
-    db.updateLeaveTargetApproval(id, approvalStatus);
-    setLeaves([...db.getLeaves()]); // Fix: Force new array for re-render
-    if (approvalStatus === "AGREED") {
-      window.alert("您已同意此換班申請，該申請將送交主管審核。");
-    } else {
-      window.alert("您已拒絕此換班申請，該申請將被標記為駁回。");
+    try {
+      await db.updateLeaveTargetApproval(id, approvalStatus);
+      setLeaves([...db.getLeaves()]);
+      if (approvalStatus === "AGREED") {
+        window.alert("您已同意此換班申請，該申請將送交主管審核。");
+      } else {
+        window.alert("您已拒絕此換班申請，該申請將被標記為駁回。");
+      }
+    } catch (error) {
+      console.error("Failed to update leave target approval:", error);
+      window.alert(
+        error instanceof Error
+          ? `回覆申請失敗：${error.message}`
+          : "回覆申請失敗，請稍後再試。",
+      );
     }
   };
 
@@ -792,6 +1052,7 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
       case LeaveType.SWAP_SHIFT:
         return <ArrowRightLeft size={14} />;
       case LeaveType.DUTY_SWAP:
+      case LeaveType.DUTY_EXCHANGE:
         return <UserCheck size={14} />;
       case LeaveType.ASK_LEAVE:
         return <UserIcon size={14} />; // Using existing UserIcon for "Ask User"
@@ -814,6 +1075,7 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
       case LeaveType.SWAP_SHIFT:
         return "bg-indigo-50 text-indigo-700 border-indigo-200";
       case LeaveType.DUTY_SWAP:
+      case LeaveType.DUTY_EXCHANGE:
         return "bg-purple-50 text-purple-700 border-purple-200";
       case LeaveType.ASK_LEAVE:
         return "bg-cyan-50 text-cyan-700 border-cyan-200";
@@ -930,6 +1192,7 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
           const isSwap =
             leave.type === LeaveType.SWAP_SHIFT ||
             leave.type === LeaveType.DUTY_SWAP ||
+            leave.type === LeaveType.DUTY_EXCHANGE ||
             leave.type === LeaveType.ASK_LEAVE;
           const needsTargetAction =
             isSwap &&
@@ -972,11 +1235,15 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
                     >
                       {getTypeIcon(leave.type)}
                       <span>{leave.type}</span>
-                      {leave.roleToSwap && (
+                      {leave.type === LeaveType.DUTY_EXCHANGE ? (
+                        <span className="text-gray-600 font-normal">
+                          ({leave.roleToSwap} ⇄ {leave.targetRoleToSwap})
+                        </span>
+                      ) : leave.roleToSwap ? (
                         <span className="text-gray-600 font-normal">
                           ({leave.roleToSwap})
                         </span>
-                      )}
+                      ) : null}
                     </div>
                   </div>
                 </div>
@@ -1131,17 +1398,23 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
                         </span>
                       </div>
 
-                      {/* Show Return Date for Swap Shift */}
-                      {leave.type === LeaveType.SWAP_SHIFT &&
+                      {/* Show second date for two-date requests */}
+                      {(leave.type === LeaveType.SWAP_SHIFT ||
+                        leave.type === LeaveType.DUTY_EXCHANGE) &&
                         leave.returnDate && (
                           <div className="mt-2 pt-2 border-t border-gray-200 flex items-center justify-between text-indigo-600">
                             <div className="flex items-center gap-1">
                               <ArrowRightLeft size={10} />
                               <span>
-                                換假: {leave.returnDate}{" "}
+                                {leave.type === LeaveType.DUTY_EXCHANGE
+                                  ? "互換:"
+                                  : "換假:"}{" "}
+                                {leave.returnDate}{" "}
                                 <span className="text-xs opacity-75">
                                   {getWeekday(leave.returnDate)}
                                 </span>
+                                {leave.type === LeaveType.DUTY_EXCHANGE &&
+                                  `（${leave.targetRoleToSwap} ⇄ ${leave.roleToSwap}）`}
                               </span>
                             </div>
                             <span className="text-[10px] bg-white px-1 py-0.5 rounded-lg border border-indigo-100">
@@ -1330,7 +1603,15 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
                     <button
                       key={t}
                       type="button"
-                      onClick={() => setFormData({ ...formData, type: t })}
+                      onClick={() =>
+                        setFormData({
+                          ...formData,
+                          type: t,
+                          targetUserId: "",
+                          roleToSwap: "",
+                          targetRoleToSwap: "",
+                        })
+                      }
                       className={`py-2 text-xs rounded-lg border font-bold transition-all ${formData.type === t ? "bg-teal-50 text-teal-700 border-teal-200 ring-1 ring-teal-200" : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"}`}
                     >
                       {t}
@@ -1360,14 +1641,25 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
                     formData.type === LeaveType.SWAP_SHIFT ||
                     formData.type === LeaveType.ASK_LEAVE ||
                     formData.type === LeaveType.DUTY_SWAP ||
+                    formData.type === LeaveType.DUTY_EXCHANGE ||
                     formData.type === LeaveType.PRE_SCHEDULED;
 
                   return (
                     <CalendarPicker
-                      label="想休日期"
+                      label={
+                        formData.type === LeaveType.DUTY_EXCHANGE
+                          ? "第一個任務日期"
+                          : "想休日期"
+                      }
                       value={formData.startDate}
                       onChange={(d) =>
-                        setFormData({ ...formData, startDate: d })
+                        setFormData({
+                          ...formData,
+                          startDate: d,
+                          targetUserId: "",
+                          roleToSwap: "",
+                          targetRoleToSwap: "",
+                        })
                       }
                       userId={currentUser.id}
                       validStatus={
@@ -1376,7 +1668,8 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
                           : formData.type === LeaveType.CANCEL_LEAVE
                             ? "OFF"
                             : formData.type === LeaveType.SWAP_SHIFT ||
-                                formData.type === LeaveType.DUTY_SWAP
+                                formData.type === LeaveType.DUTY_SWAP ||
+                                formData.type === LeaveType.DUTY_EXCHANGE
                               ? "WORK"
                               : undefined
                       }
@@ -1400,15 +1693,27 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
                 )}
 
                 {/* Return Date (Two-Way Swap Only) */}
-                {formData.type === LeaveType.SWAP_SHIFT && (
+                {(formData.type === LeaveType.SWAP_SHIFT ||
+                  formData.type === LeaveType.DUTY_EXCHANGE) && (
                   <CalendarPicker
-                    label="對換日期"
+                    label={
+                      formData.type === LeaveType.DUTY_EXCHANGE
+                        ? "第二個任務日期"
+                        : "對換日期"
+                    }
                     value={formData.returnDate}
                     onChange={(d) =>
-                      setFormData({ ...formData, returnDate: d })
+                      setFormData({
+                        ...formData,
+                        returnDate: d,
+                        targetUserId: "",
+                        targetRoleToSwap: "",
+                      })
                     }
                     userId={currentUser.id}
-                    validStatus="OFF" // I must be OFF on return date
+                    validStatus={
+                      formData.type === LeaveType.DUTY_EXCHANGE ? "WORK" : "OFF"
+                    }
                     // RESTRICTION: Return Date must also be Tomorrow or later (can be earlier than StartDate, but must be future)
                     minDate={(() => {
                       const t = new Date();
@@ -1420,11 +1725,14 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
               </div>
 
               {/* Duty Swap: Select specific role if needed */}
-              {formData.type === LeaveType.DUTY_SWAP &&
+              {(formData.type === LeaveType.DUTY_SWAP ||
+                formData.type === LeaveType.DUTY_EXCHANGE) &&
                 mySwappableRoles.length > 0 && (
                   <div className="animate-in fade-in duration-300">
                     <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">
-                      選擇要交換的任務
+                      {formData.type === LeaveType.DUTY_EXCHANGE
+                        ? "選擇您第一個日期的任務"
+                        : "選擇要交換的任務"}
                     </label>
                     <div className="flex gap-2">
                       {mySwappableRoles.map((role) => (
@@ -1446,17 +1754,24 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
               {/* Swap Shift / Ask Leave Target Selection */}
               {(formData.type === LeaveType.SWAP_SHIFT ||
                 formData.type === LeaveType.DUTY_SWAP ||
+                formData.type === LeaveType.DUTY_EXCHANGE ||
                 formData.type === LeaveType.ASK_LEAVE) && (
                 <div className="animate-in fade-in duration-300">
                   <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">
                     {formData.type === LeaveType.ASK_LEAVE
                       ? "選擇要假對象"
-                      : "選擇換假對象"}
+                        : formData.type === LeaveType.DUTY_EXCHANGE
+                          ? "選擇任務互換對象"
+                          : "選擇換假對象"}
                   </label>
                   <select
                     value={formData.targetUserId}
                     onChange={(e) =>
-                      setFormData({ ...formData, targetUserId: e.target.value })
+                      setFormData({
+                        ...formData,
+                        targetUserId: e.target.value,
+                        targetRoleToSwap: "",
+                      })
                     }
                     className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-teal-500 outline-none text-sm bg-white cursor-pointer"
                     disabled={swapCandidates.length === 0}
@@ -1483,6 +1798,33 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
                   )}
                 </div>
               )}
+
+              {formData.type === LeaveType.DUTY_EXCHANGE &&
+                formData.targetUserId &&
+                targetSwappableRoles.length > 0 && (
+                  <div className="animate-in fade-in duration-300">
+                    <label className="block text-xs font-bold text-gray-500 mb-1 uppercase">
+                      選擇對方第二個日期的任務
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                      {targetSwappableRoles.map((role) => (
+                        <button
+                          key={role}
+                          type="button"
+                          onClick={() =>
+                            setFormData({
+                              ...formData,
+                              targetRoleToSwap: role,
+                            })
+                          }
+                          className={`flex-1 py-2 text-xs rounded-lg border font-bold transition-all ${formData.targetRoleToSwap === role ? "bg-indigo-50 text-indigo-700 border-indigo-200" : "bg-white text-gray-500 border-gray-200"}`}
+                        >
+                          {role}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
               {/* Validation Message Display */}
               {validationMsg && (
@@ -1511,12 +1853,16 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
                 <button
                   type="submit"
                   disabled={
+                    isSubmitting ||
                     !!validationMsg ||
                     !formData.startDate ||
                     ((formData.type === LeaveType.SWAP_SHIFT ||
                       formData.type === LeaveType.DUTY_SWAP ||
+                      formData.type === LeaveType.DUTY_EXCHANGE ||
                       formData.type === LeaveType.ASK_LEAVE) &&
-                      !formData.targetUserId)
+                      !formData.targetUserId) ||
+                    (formData.type === LeaveType.DUTY_EXCHANGE &&
+                      !formData.targetRoleToSwap)
                   }
                   className={`w-full font-bold py-3 rounded-lg transition-colors shadow-sm ${
                     !!validationMsg || !formData.startDate
@@ -1524,7 +1870,7 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
                       : "bg-teal-600 hover:bg-teal-700 text-white shadow-teal-200"
                   }`}
                 >
-                  送出申請
+                  {isSubmitting ? "送出中..." : "送出申請"}
                 </button>
               </div>
             </form>
