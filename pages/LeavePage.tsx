@@ -52,6 +52,9 @@ const getWeekday = (dateStr: string) => {
   return `(${weekDays[d.getDay()]})`;
 };
 
+const getLeaveTypeLabel = (type: LeaveType) =>
+  type === LeaveType.DUTY_SWAP ? "任務轉交" : type;
+
 // --- Helper Component: Calendar Picker ---
 interface CalendarPickerProps {
   label: string;
@@ -329,7 +332,7 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
           myShift.specialRoles.filter((r) => r !== "配合銷假").length > 0
         ) {
           setValidationMsg(
-            "您在該日期已有排定特殊任務，無法申請一般代班 (請使用「任務換班」)。",
+            "您在該日期已有排定特殊任務，無法申請一般代班 (請使用「任務轉交」)。",
           );
         } else {
           // Find candidates OFF
@@ -362,7 +365,7 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
         myShift &&
         myShift.specialRoles.filter((r) => r !== "配合銷假").length > 0
       ) {
-        setValidationMsg("您在換假日期(1)已有特殊任務，請使用「任務換班」。");
+        setValidationMsg("您在換假日期(1)已有特殊任務，請使用「任務轉交」。");
         return;
       }
 
@@ -426,7 +429,7 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
 
       if (myRoles.length === 0) {
         setValidationMsg(
-          "您在該日期沒有被分配特殊任務（如開機、晚班、輔班、排班），無法申請任務換班。",
+          "您在該日期沒有被分配特殊任務（如開機、晚班、輔班、排班），無法申請任務轉交。",
         );
       } else {
         setMySwappableRoles(myRoles);
@@ -1234,7 +1237,7 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
                       className={`text-xs font-medium flex items-center gap-1 mt-0.5 px-2 py-0.5 rounded-lg border w-fit ${getTypeStyles(leave.type)}`}
                     >
                       {getTypeIcon(leave.type)}
-                      <span>{leave.type}</span>
+                      <span>{getLeaveTypeLabel(leave.type)}</span>
                       {leave.type === LeaveType.DUTY_EXCHANGE ? (
                         <span className="text-gray-600 font-normal">
                           ({leave.roleToSwap} ⇄ {leave.targetRoleToSwap})
@@ -1614,7 +1617,7 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
                       }
                       className={`py-2 text-xs rounded-lg border font-bold transition-all ${formData.type === t ? "bg-teal-50 text-teal-700 border-teal-200 ring-1 ring-teal-200" : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"}`}
                     >
-                      {t}
+                      {getLeaveTypeLabel(t)}
                     </button>
                   ))}
                 </div>

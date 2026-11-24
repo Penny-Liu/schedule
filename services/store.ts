@@ -3219,7 +3219,7 @@ class Store {
         operationDesc = "換班申請核准";
         break;
       case LeaveType.DUTY_SWAP:
-        operationDesc = "任務換班核准";
+        operationDesc = "任務轉交核准";
         break;
       default:
         operationDesc = "請假核准";
@@ -3377,13 +3377,13 @@ class Store {
           );
           this.logOperation("update", "radiographer", {
             date: dateStr,
-            operation: "任務換班",
+            operation: "任務轉交",
             requestorId: leave.userId,
             requestorName: requestorUser?.name || leave.userId,
             targetId: leave.targetUserId,
             targetName: targetUser?.name || leave.targetUserId,
             task: leave.roleToSwap || rolesToSwap.join(", "),
-            note: `任務換班：${requestorUser?.name || leave.userId} 將 ${leave.roleToSwap || rolesToSwap.join(", ")} 任務轉給 ${targetUser?.name || leave.targetUserId}`,
+            note: `任務轉交：${requestorUser?.name || leave.userId} 將 ${leave.roleToSwap || rolesToSwap.join(", ")} 任務轉給 ${targetUser?.name || leave.targetUserId}`,
           });
         }
       }
