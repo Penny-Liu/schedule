@@ -506,10 +506,6 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
       }
     } else if (formData.type === LeaveType.DUTY_EXCHANGE) {
       if (!formData.returnDate) return;
-      if (formData.startDate === formData.returnDate) {
-        setValidationMsg("任務互換的兩個日期不可相同。");
-        return;
-      }
 
       const startDate = [formData.startDate, formData.returnDate].sort()[0];
       const endDate = [formData.startDate, formData.returnDate].sort()[1];
@@ -1726,6 +1722,11 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
                   />
                 )}
               </div>
+              {formData.type === LeaveType.DUTY_EXCHANGE && (
+                <p className="text-[10px] text-gray-500">
+                  同一天互換任務時，兩個日期請選擇相同日期。
+                </p>
+              )}
 
               {/* Duty Swap: Select specific role if needed */}
               {(formData.type === LeaveType.DUTY_SWAP ||
