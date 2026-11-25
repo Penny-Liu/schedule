@@ -3173,7 +3173,9 @@ class Store {
     });
     if (error) {
       if (error.code === "PGRST202" || error.code === "42883") {
-        throw new Error("任務互換資料庫更新尚未套用，請先執行最新 Supabase migration。");
+        throw new Error(
+          `任務互換核准 RPC 失敗（${error.code}）：${error.message}`,
+        );
       }
       throw error;
     }
