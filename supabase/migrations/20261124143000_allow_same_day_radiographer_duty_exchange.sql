@@ -29,6 +29,10 @@ declare
  v_pause jsonb;
  v_pause_start text;
  v_pause_end text;
+ v_requestor_hire_date date;
+ v_requestor_resignation_date date;
+ v_target_hire_date date;
+ v_target_resignation_date date;
  v_requestor_roles_after_exchange text[];
  v_target_roles_after_exchange text[];
  v_updated_rows integer;
@@ -77,6 +81,23 @@ begin
  select to_jsonb(u) into v_target_user from public.users u where u.id=v_leave."targetUserId";
  if not found then raise exception '找不到互換對象資料';end if;
 
+ v_requestor_hire_date:=coalesce(
+  nullif(btrim(v_requestor_user->>'hire_date'),''),
+  nullif(btrim(v_requestor_user->>'hireDate'),'')
+ )::date;
+ v_requestor_resignation_date:=coalesce(
+  nullif(btrim(v_requestor_user->>'resignation_date'),''),
+  nullif(btrim(v_requestor_user->>'resignationDate'),'')
+ )::date;
+ v_target_hire_date:=coalesce(
+  nullif(btrim(v_target_user->>'hire_date'),''),
+  nullif(btrim(v_target_user->>'hireDate'),'')
+ )::date;
+ v_target_resignation_date:=coalesce(
+  nullif(btrim(v_target_user->>'resignation_date'),''),
+  nullif(btrim(v_target_user->>'resignationDate'),'')
+ )::date;
+
  if not coalesce((v_requestor_user->>'is_active')::boolean,(v_requestor_user->>'isActive')::boolean,true)
   or not coalesce((v_requestor_user->>'is_radiographer')::boolean,(v_requestor_user->>'isRadiographer')::boolean,false)
   or not (coalesce(v_requestor_user->'capabilities','[]'::jsonb) ? v_leave."targetRoleToSwap")
@@ -86,18 +107,18 @@ begin
   or not (coalesce(v_target_user->'capabilities','[]'::jsonb) ? v_leave."roleToSwap") then
   raise exception '互換對象或申請人已不具備任務資格';
  end if;
- if (coalesce(v_requestor_user->>'hire_date',v_requestor_user->>'hireDate') is not null
-   and (v_leave."startDate"::text<coalesce(v_requestor_user->>'hire_date',v_requestor_user->>'hireDate')
-     or v_leave."returnDate"::text<coalesce(v_requestor_user->>'hire_date',v_requestor_user->>'hireDate')))
-  or (coalesce(v_requestor_user->>'resignation_date',v_requestor_user->>'resignationDate') is not null
-   and (v_leave."startDate"::text>coalesce(v_requestor_user->>'resignation_date',v_requestor_user->>'resignationDate')
-     or v_leave."returnDate"::text>coalesce(v_requestor_user->>'resignation_date',v_requestor_user->>'resignationDate')))
-  or (coalesce(v_target_user->>'hire_date',v_target_user->>'hireDate') is not null
-   and (v_leave."startDate"::text<coalesce(v_target_user->>'hire_date',v_target_user->>'hireDate')
-     or v_leave."returnDate"::text<coalesce(v_target_user->>'hire_date',v_target_user->>'hireDate')))
-  or (coalesce(v_target_user->>'resignation_date',v_target_user->>'resignationDate') is not null
-   and (v_leave."startDate"::text>coalesce(v_target_user->>'resignation_date',v_target_user->>'resignationDate')
-     or v_leave."returnDate"::text>coalesce(v_target_user->>'resignation_date',v_target_user->>'resignationDate'))) then
+ if (v_requestor_hire_date is not null
+   and (v_leave."startDate"::date<v_requestor_hire_date
+     or v_leave."returnDate"::date<v_requestor_hire_date))
+  or (v_requestor_resignation_date is not null
+   and (v_leave."startDate"::date>v_requestor_resignation_date
+     or v_leave."returnDate"::date>v_requestor_resignation_date))
+  or (v_target_hire_date is not null
+   and (v_leave."startDate"::date<v_target_hire_date
+     or v_leave."returnDate"::date<v_target_hire_date))
+  or (v_target_resignation_date is not null
+   and (v_leave."startDate"::date>v_target_resignation_date
+     or v_leave."returnDate"::date>v_target_resignation_date)) then
   raise exception '互換日期超出任一方的在職期間';
  end if;
 
