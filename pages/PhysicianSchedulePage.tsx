@@ -60,6 +60,7 @@ import {
   formatPhysicianDazhiLineStaffBlock,
   formatPhysicianDazhiLineStaffBlockThree,
   formatPhysicianDazhiLineStats,
+  isDazhiLineRemoteImageShift,
 } from "../services/physicianDazhiLineSummary";
 import {
   downloadExcelBuffer,
@@ -262,9 +263,7 @@ GI：${stats?.beitou_gi || 0} 台`;
         .filter(
           (s) =>
             s.date === dateStr &&
-            ["遠班", "遠距", "遠"].includes(
-              s.scheduled_station || s.station || "",
-            ),
+            isDazhiLineRemoteImageShift(s),
         )
         .map((s) => {
           const d = doctors.find((doc) => doc.id === s.doctorId);
