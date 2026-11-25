@@ -62,12 +62,14 @@ import {
 } from "../services/excelReportUtils";
 
 // 統一且精準的站點分類器：保證「統計區」與「卡片區」分類絕對一致
-export const getMatchedGroupId = (sText: string) => {
+export const getMatchedGroupId = (sText: string, location?: string) => {
   const stationParts = sText.split(/[\s,]+/);
   const baseStation =
     stationParts.find((p) => !p.includes(":")) ||
     stationParts[stationParts.length - 1] ||
     "";
+
+  if (location === "北投" && ["B班", "D班"].includes(baseStation)) return "HA";
 
   // 1. 強制前綴鎖定：如果開頭是 H,G,R,D,M,P 且後面接的是空白或中文（如 "M" 或 "M抽血櫃"），直接鎖定該組
   const prefixMatch = baseStation.match(/^([HGRDMP])($|[^A-Z])/);
@@ -1884,7 +1886,10 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser, section = 
       let baseStation =
         shift.station?.split(/[\s,]+/).find((p) => !p.includes(":")) ||
         shift.station;
-      let groupId = getMatchedGroupId(shift.station) || "OTHER";
+      const shiftLocation =
+        shift.location ||
+        (user.location === "全部" ? currentLoc : user.location || currentLoc);
+      let groupId = getMatchedGroupId(shift.station, shiftLocation) || "OTHER";
 
       // Group unassigned or off shifts
       if (
@@ -2855,12 +2860,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser, section = 
                     <span className="text-[10px] text-indigo-400 font-black mr-1 whitespace-nowrap">
                       班時：
                     </span>
-                    {[
-                      "07:30-15:30",
-                      "08:00-16:00",
-                      "08:30-16:30",
-                      "09:00-17:00",
-                    ].map((tm) => (
+                    {hmTimes.map((tm) => (
                       <button
                         key={tm}
                         onClick={() =>
@@ -2933,7 +2933,7 @@ const HealthMgmtPage: React.FC<HealthMgmtPageProps> = ({ currentUser, section = 
                     .find((st) => st.id === s.userId);
                   if (!u || u.isActive === false) return;
 
-                  const matchedKey = getMatchedGroupId(sText);
+                  const matchedKey = getMatchedGroupId(sText, loc);
                   if (matchedKey) {
                     stationCounts[matchedKey] =
                       (stationCounts[matchedKey] || 0) + 1;
@@ -4606,6 +4606,22 @@ const HMTodayView: React.FC<{
   const groups = useMemo(() => {
     // User Request: Use categorized view for ALL locations (Beitou, Dazhi, All)
     // This ensures R (Counter) and D (Metabolism) are always categorized/found properly
+    const beitouAssistantStations = db
+      .getHealthMgmtStations("北投")
+      .filter((station) => ["B班", "D班"].includes(station));
+    const dazhiStations = db.getHealthMgmtStations("大直");
+    const beitouOnlyAssistantStations =
+      location === "北投"
+        ? beitouAssistantStations
+        : location === "全部"
+          ? beitouAssistantStations.filter(
+              (station) => !dazhiStations.includes(station),
+            )
+          : [];
+    const dazhiMetabolicStations =
+      location === "大直" || location === "全部"
+        ? dazhiStations.filter((station) => station === "D班")
+        : [];
     const baseGroups = [
       {
         id: "H",
@@ -4617,7 +4633,12 @@ const HMTodayView: React.FC<{
       {
         id: "HA",
         label: "醫務助理(HA)",
-        stations: ["HA", "HA班", "醫務助理"],
+        stations: [
+          "HA",
+          "HA班",
+          "醫務助理",
+          ...beitouOnlyAssistantStations,
+        ],
         icon: <Users size={18} />,
         color: "slate",
       },
@@ -4659,7 +4680,7 @@ const HMTodayView: React.FC<{
       {
         id: "D",
         label: "代謝(D)",
-        stations: ["D", "代謝", "營養", "營1", "營2"],
+        stations: ["D", "代謝", "營養", "營1", "營2", ...dazhiMetabolicStations],
         icon: <Apple size={18} />,
         color: "sky",
         taskOrder: ["營1", "營2"],
@@ -4733,10 +4754,12 @@ const HMTodayView: React.FC<{
           "";
 
         // Location filter: if view is 北投/大直, only show that location. If 全部, show all.
-        const shiftLoc = s.location || u.location || "";
+        const shiftLoc =
+          s.location ||
+          (u.location === "全部" ? location : u.location || "");
         if (location !== "全部" && shiftLoc !== location) return false;
 
-        const matchedId = getMatchedGroupId(sText);
+        const matchedId = getMatchedGroupId(sText, shiftLoc);
         if (matchedId) return matchedId === group.id;
 
         const groupIdUpper = (group.id || "").toUpperCase();
