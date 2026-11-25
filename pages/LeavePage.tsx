@@ -55,6 +55,26 @@ const getWeekday = (dateStr: string) => {
 const getLeaveTypeLabel = (type: LeaveType) =>
   type === LeaveType.DUTY_SWAP ? "任務轉交" : type;
 
+const getErrorMessage = (error: unknown): string | undefined => {
+  if (error instanceof Error) return error.message;
+  if (typeof error !== "object" || error === null) return undefined;
+
+  const parts: string[] = [];
+  if ("code" in error && typeof error.code === "string") {
+    parts.push(`代碼 ${error.code}`);
+  }
+  if ("message" in error && typeof error.message === "string") {
+    parts.push(error.message);
+  }
+  if ("details" in error && typeof error.details === "string" && error.details) {
+    parts.push(`詳情：${error.details}`);
+  }
+  if ("hint" in error && typeof error.hint === "string" && error.hint) {
+    parts.push(`提示：${error.hint}`);
+  }
+  return parts.length > 0 ? parts.join("；") : undefined;
+};
+
 // --- Helper Component: Calendar Picker ---
 interface CalendarPickerProps {
   label: string;
@@ -1014,9 +1034,10 @@ const LeavePage: React.FC<LeavePageProps> = ({ currentUser }) => {
       }
     } catch (error) {
       console.error("Failed to update leave status:", error);
+      const errorMessage = getErrorMessage(error);
       window.alert(
-        error instanceof Error
-          ? `核准失敗：${error.message}`
+        errorMessage
+          ? `核准失敗：${errorMessage}`
           : "核准失敗，排班尚未完整更新，請稍後再試。",
       );
     }
