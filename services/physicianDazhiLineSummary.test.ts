@@ -4,9 +4,32 @@ import {
   formatPhysicianDazhiLineStaffBlock,
   formatPhysicianDazhiLineStaffBlockThree,
   formatPhysicianDazhiLineStats,
+  isDazhiLineRemoteImageShift,
 } from "./physicianDazhiLineSummary";
 
 describe("physician Dazhi LINE summary", () => {
+  it("omits remote image shifts located in Taichung from the Dazhi copy block", () => {
+    expect(
+      isDazhiLineRemoteImageShift({
+        location: "台中",
+        station: "遠班",
+      }),
+    ).toBe(false);
+    expect(
+      isDazhiLineRemoteImageShift({
+        location: "北投",
+        scheduled_station: "遠班",
+        station: "",
+      }),
+    ).toBe(true);
+    expect(
+      isDazhiLineRemoteImageShift({
+        location: "大直",
+        station: "遠距",
+      }),
+    ).toBe(true);
+  });
+
   it("uses the synchronized 9/10 Beitou client and explanation counts", () => {
     expect(
       formatPhysicianBeitouLineStats({

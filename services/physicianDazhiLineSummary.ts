@@ -1,8 +1,17 @@
 import type {
   DailyManpowerStats,
+  DoctorShift,
   HealthMgmtShift,
   HealthMgmtStaff,
 } from "../types";
+
+export const isDazhiLineRemoteImageShift = (
+  shift: Pick<DoctorShift, "location" | "scheduled_station" | "station">,
+): boolean =>
+  shift.location !== "台中" &&
+  ["遠班", "遠距", "遠"].includes(
+    shift.scheduled_station || shift.station || "",
+  );
 
 const displayCount = (value: number | undefined): string => {
   if (value == null) return "";
