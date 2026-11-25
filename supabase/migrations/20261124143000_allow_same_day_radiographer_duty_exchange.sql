@@ -49,16 +49,16 @@ begin
   or not coalesce(v_leave."targetRoleToSwap" in ('開機','晚班','輔班','排班'),false) then raise exception '任務互換類型無效';end if;
 
  select * into v_requestor_start from public.shifts
-  where "userId"=v_leave."userId" and date=v_leave."startDate" for update;
+  where "userId"=v_leave."userId" and date=v_leave."startDate"::date for update;
  if not found then raise exception '申請人在第一個日期沒有排班';end if;
  select * into v_target_start from public.shifts
-  where "userId"=v_leave."targetUserId" and date=v_leave."startDate" for update;
+  where "userId"=v_leave."targetUserId" and date=v_leave."startDate"::date for update;
  if not found then raise exception '互換對象在第一個日期沒有排班';end if;
  select * into v_requestor_return from public.shifts
-  where "userId"=v_leave."userId" and date=v_leave."returnDate" for update;
+  where "userId"=v_leave."userId" and date=v_leave."returnDate"::date for update;
  if not found then raise exception '申請人在第二個日期沒有排班';end if;
  select * into v_target_return from public.shifts
-  where "userId"=v_leave."targetUserId" and date=v_leave."returnDate" for update;
+  where "userId"=v_leave."targetUserId" and date=v_leave."returnDate"::date for update;
  if not found then raise exception '互換對象在第二個日期沒有排班';end if;
 
  if v_requestor_start.station in ('休假','OFF','SYSTEM_OFF')
