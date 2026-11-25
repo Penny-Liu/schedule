@@ -1,12 +1,18 @@
 import React from 'react';
 import {afterEach,describe,expect,it} from 'vitest';
 import {renderToStaticMarkup} from 'react-dom/server';
-import HealthMgmtPage from './HealthMgmtPage';
+import HealthMgmtPage, {getMatchedGroupId} from './HealthMgmtPage';
 import {db} from '../services/store';
 import {UserRole,PERMISSIONS as P,type User} from '../types';
 const user={id:'n',name:'測試主管',role:UserRole.HM_SUPERVISOR,isHealthMgmt:true,healthMgmtLocation:'北投',permissions:[P.VIEW_HEALTH_MGMT,P.EDIT_HEALTH_MGMT]} as User;
 afterEach(()=>{db.settings.healthMgmtCycles=[];});
 describe('health management scheduling and statistics navigation',()=>{
+ it('groups Beitou B/D shifts under medical assistants without changing Dazhi codes',()=>{
+  expect(getMatchedGroupId('08:00-16:00 B班','北投')).toBe('HA');
+  expect(getMatchedGroupId('08:00-16:00 D班','北投')).toBe('HA');
+  expect(getMatchedGroupId('08:00-16:00 B班','大直')).toBeNull();
+  expect(getMatchedGroupId('08:00-16:00 D班','大直')).toBe('D');
+ });
  it('keeps statistics and staff management out of the schedule navigation',()=>{
   const html=renderToStaticMarkup(<HealthMgmtPage currentUser={user}/>);
   expect(html).toContain('健管排班總覽');expect(html).toContain('今日崗位');
