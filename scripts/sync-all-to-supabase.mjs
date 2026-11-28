@@ -16,6 +16,7 @@ import {
 } from "./daily-stats-counting.mjs";
 import { getPostProcessingWorkloadField } from "./post-processing-classification.mjs";
 import { VALID_MEDICAL_ORDER_STATUS_SOQL } from "./medical-order-status.mjs";
+import { getPhysicianWorkloadCounts } from "./physician-workload-counts.mjs";
 import readline from "readline";
 import { fileURLToPath } from "url";
 
@@ -1201,12 +1202,7 @@ async function syncPhysicianWorkload(session, startDate, endDate) {
         mr_count: stats.totalMR,
         has_special_ct: categorySummary.includes("套"),
         category: categorySummary,
-        count_da_tao_5: stats.categories["大套5"] || 0,
-        count_xiao_tao_4: stats.categories["小套4"] || 0,
-        count_xiao_tao_3: stats.categories["小套3"] || 0,
-        count_wu_2: stats.categories["無2"] || 0,
-        count_wu_1: stats.categories["無1"] || 0,
-        count_dazhi_1: stats.categories["大直1"] || 0,
+        ...getPhysicianWorkloadCounts(stats.categories),
         updated_at: new Date().toISOString(),
       });
     });
